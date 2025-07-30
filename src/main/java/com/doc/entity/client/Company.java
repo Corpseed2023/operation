@@ -1,17 +1,15 @@
 package com.doc.entity.client;
 
-import java.util.Date;
-
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
-/**
- * Represents a registered company in the system.
- * Contains GST details, contact, address, and industry classification.
- */
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
 @Entity
 @Getter
 @Setter
@@ -27,12 +25,10 @@ public class Company {
     @Comment("Company Name")
     private String name;
 
-    /** GST Type (e.g., Regular, Composition) */
     @Column(name = "gst_type", length = 30)
     @Comment("Company GST Registration Type")
     private String companyGstType;
 
-    /** Business Structure (e.g., Pvt Ltd, LLP, Proprietorship) */
     @Column(name = "gst_btype", length = 30)
     @Comment("Business Type under GST")
     private String gstBusinessType;
@@ -50,7 +46,6 @@ public class Company {
     @Comment("Top-level Industry Name")
     private String industry;
 
-    // Address block
     @Column(name = "ads", length = 1000)
     @Comment("Primary Address")
     private String address;
@@ -71,10 +66,9 @@ public class Company {
     @Comment("Primary Pincode")
     private String primaryPinCode;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pcid")
-    @Comment("Primary Contact for the Company")
-    private Contact primaryContact;
+    @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @Comment("List of contacts associated with the company")
+    private List<Contact> contacts = new ArrayList<>();
 
     @Column(name = "inds", length = 100)
     @Comment("Mapped Industry Name or Code")
@@ -87,4 +81,18 @@ public class Company {
     @Column(name = "subsubi", length = 100)
     @Comment("Sub-Sub Industry Name or Code")
     private String subSubIndustry;
+
+    @Column(name = "is_deleted", nullable = false)
+    @Comment("Soft delete flag")
+    private boolean isDeleted = false;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_date")
+    @Comment("Creation Date")
+    private Date createdDate;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_date")
+    @Comment("Update Date")
+    private Date updatedDate;
 }

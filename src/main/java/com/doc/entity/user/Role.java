@@ -22,9 +22,4 @@ public class Role {
 	@Column(name = "name", nullable = false, unique = true)
 	private String name;
 
-
-//    @ManyToMany(mappedBy = "userRole", fetch = FetchType.LAZY)
-//    private List<User> users;
-//
-
 }

@@ -50,6 +50,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         department = departmentRepository.save(department);
         return mapToResponseDto(department);
+
     }
 
     @Override
@@ -109,5 +110,25 @@ public class DepartmentServiceImpl implements DepartmentService {
         dto.setCreatedDate(department.getCreatedDate());
         dto.setUpdatedDate(department.getUpdatedDate());
         return dto;
+    }
+
+
+    @Override
+    public DepartmentResponseDto createMasterDepartment(String departmentName) {
+        if (departmentName == null || departmentName.trim().isEmpty()) {
+            throw new ValidationException("Department name cannot be empty");
+        }
+
+        if (departmentRepository.existsByNameAndIsDeletedFalse(departmentName)) {
+            throw new ValidationException("Department with name " + departmentName + " already exists");
+        }
+
+        Department department = new Department();
+        department.setName(departmentName.trim());
+        department.setCreatedDate(new Date());
+        department.setUpdatedDate(new Date());
+
+        department = departmentRepository.save(department);
+        return mapToResponseDto(department);
     }
 }

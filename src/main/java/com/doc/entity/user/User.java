@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.List;
 
 @Entity
+@Table(name = "users")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,6 +28,7 @@ public class User {
     private String designation;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "designation_id")
     private Designation userDesignation;
 
     @ManyToMany(fetch = FetchType.LAZY)
@@ -40,7 +42,7 @@ public class User {
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<UserProductMap> userProductMaps;
 
-    private boolean isManager = false; // True if user is a department manager
+    private boolean isManager = false;
 
     @Temporal(TemporalType.TIMESTAMP)
     private Date createdDate = new Date();

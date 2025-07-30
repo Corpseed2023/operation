@@ -2,7 +2,6 @@ package com.doc.entity.product;
 
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
-import com.doc.entity.project.RequiredDocuments;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,15 +52,15 @@ public class Product {
     @Column(nullable = false)
     private boolean isActive = true;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    @JoinTable(name = "product_required_documents",
-            joinColumns = @JoinColumn(name = "product_id"),
-            inverseJoinColumns = @JoinColumn(name = "required_document_id"))
-    private List<RequiredDocuments> requiredDocuments;
 
     @OneToMany(mappedBy = "product", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<UserProductMap> userProductMaps;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<ProductMilestoneMap> milestoneSteps;
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<ProductRequiredDocuments> requiredDocuments;
+
+
 }

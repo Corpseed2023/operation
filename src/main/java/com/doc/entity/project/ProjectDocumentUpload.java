@@ -1,5 +1,6 @@
 package com.doc.entity.project;
 
+import com.doc.entity.product.ProductRequiredDocuments;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -30,7 +31,7 @@ public class ProjectDocumentUpload {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rdid", nullable = false)
-    private RequiredDocuments requiredDocument;
+    private ProductRequiredDocuments requiredDocument;
 
     @Column(name = "file_url", nullable = false, length = 1000)
     private String fileUrl;

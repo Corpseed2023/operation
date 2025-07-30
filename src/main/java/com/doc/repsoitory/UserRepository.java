@@ -26,7 +26,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Page<User> findByIsManagerAndIsDeletedFalse(boolean isManager, Pageable pageable);
 
-
-
-
+    @Query("SELECT u FROM User u WHERE " +
+            "(:fullName IS NULL OR u.fullName LIKE %:fullName%) AND " +
+            "(:email IS NULL OR u.email = :email) AND " +
+            "(:isManager IS NULL OR u.isManager = :isManager) AND " +
+            "u.isDeleted = false")
+    Page<User> findByFilters(
+            @Param("fullName") String fullName,
+            @Param("email") String email,
+            @Param("isManager") Boolean isManager,
+            Pageable pageable);
 }

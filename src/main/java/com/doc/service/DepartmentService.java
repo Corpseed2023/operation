@@ -12,4 +12,6 @@ public interface DepartmentService {
     List<DepartmentResponseDto> getAllDepartments(int page, int size);
     DepartmentResponseDto updateDepartment(Long id, String departmentName);
     void deleteDepartment(Long id);
+
+    DepartmentResponseDto createMasterDepartment(String name);
 }

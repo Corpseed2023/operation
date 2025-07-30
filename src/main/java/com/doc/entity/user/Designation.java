@@ -7,9 +7,6 @@ import lombok.Setter;
 
 import java.util.Date;
 
-/**
- * Represents a designation or title within a department.
- */
 @Entity
 @Getter
 @Setter
@@ -25,6 +22,10 @@ public class Designation {
 
     private Long weightValue;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id", nullable = false)
+    private Department department;
+
     private boolean isDeleted = false;
 
     @Temporal(TemporalType.TIMESTAMP)
@@ -32,4 +33,6 @@ public class Designation {
 
     @Temporal(TemporalType.TIMESTAMP)
     private Date updatedDate;
+
+
 }

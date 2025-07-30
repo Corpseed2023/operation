@@ -10,6 +10,7 @@ import java.util.Date;
 import java.util.List;
 
 @Entity
+@Table(name = "departments")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -21,7 +22,6 @@ public class Department {
 
     @Column(name = "nm", nullable = false, unique = true)
     private String name;
-
 
     @Column(name = "isd", nullable = false)
     private boolean isDeleted = false;
@@ -37,12 +37,7 @@ public class Department {
     @ManyToMany(mappedBy = "departments", fetch = FetchType.LAZY)
     private List<User> users;
 
-    @OneToMany(cascade = CascadeType.ALL)
-    @JoinTable(
-            name = "corp_dept_desg",
-            joinColumns = @JoinColumn(name = "deptid", referencedColumnName = "id"),
-            inverseJoinColumns = @JoinColumn(name = "desgid", referencedColumnName = "id")
-    )
+    @OneToMany(mappedBy = "department", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Designation> designations;
 
     @Temporal(TemporalType.TIMESTAMP)
@@ -52,7 +47,6 @@ public class Department {
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "udt")
     private Date updatedDate;
-
 
 
 }
