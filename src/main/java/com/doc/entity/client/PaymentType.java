@@ -14,6 +14,8 @@ import java.util.Date;
 @NoArgsConstructor
 public class PaymentType {
 
+
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Comment("Primary Key: Unique identifier for payment type")

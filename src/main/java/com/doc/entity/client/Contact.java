@@ -14,6 +14,8 @@ import java.util.Date;
 @NoArgsConstructor
 public class Contact {
 
+
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Comment("Primary key: Contact ID")

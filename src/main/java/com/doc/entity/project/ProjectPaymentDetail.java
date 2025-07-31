@@ -11,6 +11,7 @@ import org.hibernate.annotations.Comment;
 import java.util.Date;
 
 @Entity
+@Table(name = "project_payment_detail")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +19,7 @@ public class ProjectPaymentDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Comment("Primary Key: Unique identifier for payment details")
+    @Comment("Primary key: Unique identifier for payment details")
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
@@ -44,36 +45,28 @@ public class ProjectPaymentDetail {
     private User approvedBy;
 
     @Column(name = "payment_status", nullable = false)
-    @Comment("Payment Status: PENDING, APPROVED, REJECTED")
+    @Comment("Payment status: PENDING, APPROVED, REJECTED")
     private String paymentStatus = "PENDING";
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "cdt", updatable = false)
-    @Comment("Created Date")
+    @Comment("Created date")
     private Date createdDate = new Date();
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "udt")
-    @Comment("Updated Date")
+    @Comment("Updated date")
     private Date updatedDate;
 
-    @Column(name = "cb")
-    @Comment("Created By User ID")
+    @Comment("Created by user ID")
     private Long createdBy;
 
-    @Column(name = "ub")
-    @Comment("Updated By User ID")
+    @Comment("Updated by user ID")
     private Long updatedBy;
 
-    @Column(name = "isd", nullable = false)
-    @Comment("Is Deleted flag (soft delete)")
+    @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_type_id", nullable = false)
-    @Comment("Associated Payment Type")
+    @Comment("Associated payment type")
     private PaymentType paymentType;
-
-
-
-    }
+}

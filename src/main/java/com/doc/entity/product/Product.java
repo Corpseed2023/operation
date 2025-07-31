@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.Comment;
 
 import java.time.LocalDate;
 import java.util.Date;
@@ -20,47 +21,57 @@ public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Comment("Primary key: Product ID")
     private Long id;
 
     @Column(nullable = false, unique = true)
+    @Comment("Product name, unique")
     private String productName;
 
     @Column(length = 1000)
+    @Comment("Product description")
     private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
+    @Comment("User who created the product")
     private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "updated_by")
+    @Comment("User who updated the product")
     private User updatedBy;
 
+    @Comment("Product date")
     private LocalDate date;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", updatable = false)
+    @Comment("Creation date")
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "updated_date")
+    @Comment("Update date")
     private Date updatedDate;
 
     @Column(nullable = false)
+    @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
     @Column(nullable = false)
+    @Comment("Active status flag")
     private boolean isActive = true;
 
-
     @OneToMany(mappedBy = "product", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @Comment("List of user product mappings")
     private List<UserProductMap> userProductMaps;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @Comment("List of milestone steps")
     private List<ProductMilestoneMap> milestoneSteps;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @Comment("List of required documents")
     private List<ProductRequiredDocuments> requiredDocuments;
-
-
 }

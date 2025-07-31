@@ -27,7 +27,7 @@ public class UserProductMap {
     private Product product;
 
     @Column(name = "rating")
-    private Double rating; // User rating for the product (e.g., 4.5)
+    private Double rating;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "cdt", updatable = false)
@@ -39,6 +39,9 @@ public class UserProductMap {
 
     @Column(name = "isd", nullable = false)
     private boolean isDeleted = false;
+
+
+
 
 
 }

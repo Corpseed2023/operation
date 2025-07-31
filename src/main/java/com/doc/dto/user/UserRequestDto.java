@@ -37,7 +37,10 @@ public class UserRequestDto {
     @NotNull(message = "Department ID for designation cannot be null")
     private Long departmentId;
 
-    private Boolean isManager;
+    @NotNull(message = "Role IDs cannot be null")
+    private List<Long> roleIds;
 
+    private Long managerId;
 
+    private Boolean managerFlag; // Changed from isManager
 }

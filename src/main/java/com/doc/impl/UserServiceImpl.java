@@ -1,16 +1,20 @@
-        package com.doc.impl;
+package com.doc.impl;
 
 import com.doc.dto.user.UserRequestDto;
 import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.user.Department;
 import com.doc.entity.user.Designation;
+import com.doc.entity.user.Role;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repsoitory.DepartmentRepository;
 import com.doc.repsoitory.DesignationRepository;
+import com.doc.repsoitory.RoleRepository;
 import com.doc.repsoitory.UserRepository;
 import com.doc.service.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +30,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class UserServiceImpl implements UserService {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
+
     @Autowired
     private UserRepository userRepository;
 
@@ -35,35 +41,29 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private DepartmentRepository departmentRepository;
 
+    @Autowired
+    private RoleRepository roleRepository;
+
     @Override
     public UserResponseDto createUser(UserRequestDto requestDto) {
+        logger.info("Creating user with email: {}, roleIds: {}", requestDto.getEmail(), requestDto.getRoleIds());
         validateRequestDto(requestDto);
 
         if (userRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail().trim())) {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
         }
 
-        // Validate designation name and department
+        // Validate designation and department
         Designation designation = validateDesignation(requestDto.getDesignationId(), requestDto.getDesignation(), requestDto.getDepartmentId());
 
         // Validate department IDs
-        List<Department> departments = new ArrayList<>();
-        if (requestDto.getDepartmentIds() != null && !requestDto.getDepartmentIds().isEmpty()) {
-            departments = departmentRepository.findAllById(requestDto.getDepartmentIds())
-                    .stream()
-                    .filter(d -> !d.isDeleted())
-                    .collect(Collectors.toList());
-            if (departments.size() != requestDto.getDepartmentIds().size()) {
-                throw new ResourceNotFoundException("One or more departments not found");
-            }
-            // Ensure the designation's department is included in departmentIds
-            if (!requestDto.getDepartmentIds().contains(requestDto.getDepartmentId())) {
-                throw new ValidationException("Designation's department ID " + requestDto.getDepartmentId() + " must be included in departmentIds");
-            }
-        } else {
-            // If no departmentIds provided, use the designation's department
-            departments.add(designation.getDepartment());
-        }
+        List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), requestDto.getDepartmentId());
+
+        // Validate role IDs
+        List<Role> roles = validateRoles(requestDto.getRoleIds());
+
+        // Validate manager ID
+        User manager = validateManager(requestDto.getManagerId(), roles);
 
         User user = new User();
         mapRequestDtoToEntity(user, requestDto);
@@ -72,6 +72,8 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(false);
         user.setUserDesignation(designation);
         user.setDepartments(departments);
+        user.setRoles(roles);
+        user.setManager(manager);
 
         user = userRepository.save(user);
         return mapToResponseDto(user);
@@ -79,18 +81,21 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponseDto getUserById(Long id) {
+        logger.info("Fetching user with ID: {}", id);
         User user = userRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found"));
         return mapToResponseDto(user);
     }
 
     @Override
-    public List<UserResponseDto> getAllUsers(int page, int size, String fullName, String email, Boolean isManager) {
+    public List<UserResponseDto> getAllUsers(int page, int size, String fullName, String email, Boolean managerFlag) {
+        logger.info("Fetching users, page: {}, size: {}, fullName: {}, email: {}, managerFlag: {}",
+                page, size, fullName, email, managerFlag);
         PageRequest pageable = PageRequest.of(page, size);
         Page<User> userPage;
 
-        if (fullName != null || email != null || isManager != null) {
-            userPage = userRepository.findByFilters(fullName, email, isManager, pageable);
+        if (fullName != null || email != null || managerFlag != null) {
+            userPage = userRepository.findByFilters(fullName, email, managerFlag, pageable);
         } else {
             userPage = userRepository.findByIsDeletedFalse(pageable);
         }
@@ -103,6 +108,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponseDto updateUser(Long id, UserRequestDto requestDto) {
+        logger.info("Updating user with ID: {}, email: {}, roleIds: {}", id, requestDto.getEmail(), requestDto.getRoleIds());
         validateRequestDto(requestDto);
 
         User user = userRepository.findByIdAndIsDeletedFalse(id)
@@ -113,30 +119,24 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
         }
 
-        // Validate designation name and department
+        // Validate designation and department
         Designation designation = validateDesignation(requestDto.getDesignationId(), requestDto.getDesignation(), requestDto.getDepartmentId());
 
         // Validate department IDs
-        List<Department> departments = new ArrayList<>();
-        if (requestDto.getDepartmentIds() != null && !requestDto.getDepartmentIds().isEmpty()) {
-            departments = departmentRepository.findAllById(requestDto.getDepartmentIds())
-                    .stream()
-                    .filter(d -> !d.isDeleted())
-                    .collect(Collectors.toList());
-            if (departments.size() != requestDto.getDepartmentIds().size()) {
-                throw new ResourceNotFoundException("One or more departments not found");
-            }
-            if (!requestDto.getDepartmentIds().contains(requestDto.getDepartmentId())) {
-                throw new ValidationException("Designation's department ID " + requestDto.getDepartmentId() + " must be included in departmentIds");
-            }
-        } else {
-            departments.add(designation.getDepartment());
-        }
+        List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), requestDto.getDepartmentId());
+
+        // Validate role IDs
+        List<Role> roles = validateRoles(requestDto.getRoleIds());
+
+        // Validate manager ID
+        User manager = validateManager(requestDto.getManagerId(), roles);
 
         mapRequestDtoToEntity(user, requestDto);
         user.setUpdatedDate(new Date());
         user.setUserDesignation(designation);
         user.setDepartments(departments);
+        user.setRoles(roles);
+        user.setManager(manager);
 
         user = userRepository.save(user);
         return mapToResponseDto(user);
@@ -144,6 +144,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void deleteUser(Long id) {
+        logger.info("Deleting user with ID: {}", id);
         User user = userRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found"));
         user.setDeleted(true);
@@ -170,6 +171,9 @@ public class UserServiceImpl implements UserService {
         if (requestDto.getDepartmentIds() == null) {
             throw new ValidationException("Department IDs cannot be null");
         }
+        if (requestDto.getRoleIds() == null || requestDto.getRoleIds().isEmpty()) {
+            throw new ValidationException("Role IDs cannot be null or empty");
+        }
     }
 
     private Designation validateDesignation(Long designationId, String designationName, Long departmentId) {
@@ -191,12 +195,54 @@ public class UserServiceImpl implements UserService {
         return designation;
     }
 
+    private List<Department> validateDepartments(List<Long> departmentIds, Long designationDepartmentId) {
+        List<Department> departments = new ArrayList<>();
+        if (departmentIds != null && !departmentIds.isEmpty()) {
+            departments = departmentRepository.findAllById(departmentIds)
+                    .stream()
+                    .filter(d -> !d.isDeleted())
+                    .collect(Collectors.toList());
+            if (departments.size() != departmentIds.size()) {
+                throw new ResourceNotFoundException("One or more departments not found");
+            }
+            if (!departmentIds.contains(designationDepartmentId)) {
+                throw new ValidationException("Designation's department ID " + designationDepartmentId + " must be included in departmentIds");
+            }
+        } else {
+            Department department = departmentRepository.findById(designationDepartmentId)
+                    .filter(d -> !d.isDeleted())
+                    .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + designationDepartmentId + " not found"));
+            departments.add(department);
+        }
+        return departments;
+    }
+
+    private List<Role> validateRoles(List<Long> roleIds) {
+        List<Role> roles = roleRepository.findAllById(roleIds);
+        if (roles.size() != roleIds.size()) {
+            throw new ResourceNotFoundException("One or more roles not found");
+        }
+        return roles;
+    }
+
+    private User validateManager(Long managerId, List<Role> roles) {
+        boolean hasAdminRole = roles.stream().anyMatch(role -> role.getName().equalsIgnoreCase("ADMIN"));
+        if (!hasAdminRole && managerId == null) {
+            throw new ValidationException("Manager ID is required for non-ADMIN roles");
+        }
+        if (managerId != null) {
+            return userRepository.findByIdAndIsDeletedFalse(managerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Manager with ID " + managerId + " not found"));
+        }
+        return null;
+    }
+
     private void mapRequestDtoToEntity(User user, UserRequestDto requestDto) {
         user.setFullName(requestDto.getFullName().trim());
         user.setEmail(requestDto.getEmail().trim());
         user.setContactNo(requestDto.getContactNo() != null ? requestDto.getContactNo().trim() : null);
         user.setDesignation(requestDto.getDesignation().trim());
-        user.setManager(requestDto.getIsManager() != null ? requestDto.getIsManager() : false);
+        user.setManagerFlag(requestDto.getManagerFlag() != null ? requestDto.getManagerFlag() : false);
     }
 
     private UserResponseDto mapToResponseDto(User user) {
@@ -206,11 +252,15 @@ public class UserServiceImpl implements UserService {
         dto.setEmail(user.getEmail());
         dto.setContactNo(user.getContactNo());
         dto.setDesignation(user.getDesignation());
-
         dto.setDesignationId(user.getUserDesignation() != null ? user.getUserDesignation().getId() : null);
-
-
-        dto.setManager(user.isManager());
+        dto.setDepartmentIds(user.getDepartments().stream()
+                .map(Department::getId)
+                .collect(Collectors.toList()));
+        dto.setRoleIds(user.getRoles().stream()
+                .map(Role::getId)
+                .collect(Collectors.toList()));
+        dto.setManagerId(user.getManager() != null ? user.getManager().getId() : null);
+        dto.setManagerFlag(user.isManagerFlag());
         dto.setCreatedDate(user.getCreatedDate());
         dto.setUpdatedDate(user.getUpdatedDate());
         return dto;
