@@ -39,24 +39,19 @@ public class UserProductMap {
     private Double rating;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "cdt", updatable = false)
     @Comment("Created date")
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "udt")
     @Comment("Updated date")
     private Date updatedDate;
 
-    @Column(name = "crby")
     @Comment("Created by user ID")
     private Long createdBy;
 
-    @Column(name = "upby")
     @Comment("Updated by user ID")
     private Long updatedBy;
 
-    @Column(name = "isd", nullable = false)
     @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
 }

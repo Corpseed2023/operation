@@ -7,7 +7,8 @@ import java.util.List;
 
 public interface DesignationService {
 
-    DesignationResponseDto createDesignation(String name, Long weightValue, Long departmentId, Long createdBy);
+    DesignationResponseDto createDesignation(String name, Long weightValue, Long departmentId,
+                                             Long createdBy);
 
     DesignationResponseDto getDesignationById(Long id);
 
@@ -18,4 +19,6 @@ public interface DesignationService {
     void deleteDesignation(Long id);
 
     DesignationResponseDto createMasterDesignation(String name, Long weightValue, Long departmentId);
+
+
 }

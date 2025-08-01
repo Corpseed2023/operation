@@ -9,7 +9,9 @@ import com.doc.entity.client.PaymentType;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectPaymentDetail;
 import com.doc.entity.project.ProjectPaymentTransaction;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.product.Product;
+import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
@@ -24,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -64,6 +67,12 @@ public class ProjectServiceImpl implements ProjectService {
     @Autowired
     private UserProductMapRepository userProductMapRepository;
 
+    @Autowired
+    private ProductMilestoneMapRepository productMilestoneMapRepository;
+
+    @Autowired
+    private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+
     @Override
     public ProjectResponseDto createProject(ProjectRequestDto requestDto) {
         logger.info("Creating project with projectNo: {}", requestDto.getProjectNo());
@@ -73,7 +82,6 @@ public class ProjectServiceImpl implements ProjectService {
             logger.warn("Project number {} already exists", requestDto.getProjectNo());
             throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists");
         }
-
 
         Product product = productRepository.findByIdAndIsDeletedFalse(requestDto.getProductId())
                 .orElseThrow(() -> {
@@ -117,16 +125,33 @@ public class ProjectServiceImpl implements ProjectService {
                     return new ResourceNotFoundException("Payment type with ID " + requestDto.getPaymentTypeId() + " not found");
                 });
 
-        // Assign salesperson based on UserProductMap
-        User salesPerson = assignSalesPerson(requestDto.getProductId());
-        if (requestDto.getSalesPersonId() != null && !requestDto.getSalesPersonId().equals(salesPerson.getId())) {
-            logger.warn("Provided salesPersonId {} does not match assigned user {}", requestDto.getSalesPersonId(), salesPerson.getId());
-            throw new ValidationException("Provided salesPersonId does not match the assigned user for the product");
+        // Fetch milestones for the product
+        List<ProductMilestoneMap> milestones = productMilestoneMapRepository.findByProductId(product.getId(), PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        if (milestones.isEmpty()) {
+            logger.warn("No milestones found for product ID: {}", product.getId());
+            throw new ValidationException("No milestones defined for product ID " + product.getId());
         }
+
+        // Check payment for the first milestone
+        ProductMilestoneMap firstMilestone = milestones.stream()
+                .filter(m -> m.getOrder() == 1)
+                .findFirst()
+                .orElseThrow(() -> {
+                    logger.error("First milestone (order=1) not found for product ID: {}", product.getId());
+                    return new ValidationException("First milestone not defined for product ID " + product.getId());
+                });
+
+        double totalAmount = requestDto.getTotalAmount();
+        double paidAmount = totalAmount - requestDto.getDueAmount();
+        double requiredPayment = totalAmount * (firstMilestone.getPaymentPercentage() / 100.0);
+        boolean canUnlockFirstMilestone = paidAmount >= requiredPayment;
+
+        // Assign operation person based on UserProductMap
+        User operationPerson = assignOperationPerson(product.getId());
 
         Project project = new Project();
         mapRequestDtoToProject(project, requestDto);
-        project.setSalesPerson(salesPerson);
+        project.setOperationPerson(operationPerson);
         project.setProduct(product);
         project.setCompany(company);
         project.setContact(contact);
@@ -139,7 +164,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         ProjectPaymentDetail paymentDetail = new ProjectPaymentDetail();
         paymentDetail.setProject(project);
-        paymentDetail.setTotalAmount(requestDto.getTotalAmount());
+        paymentDetail.setTotalAmount(totalAmount);
         paymentDetail.setDueAmount(requestDto.getDueAmount());
         paymentDetail.setPaymentStatus(requestDto.getPaymentStatus());
         paymentDetail.setPaymentType(paymentType);
@@ -155,7 +180,7 @@ public class ProjectServiceImpl implements ProjectService {
         project = projectRepository.save(project);
         logger.debug("Project saved with ID: {}", project.getId());
 
-        double paidAmount = requestDto.getTotalAmount() - requestDto.getDueAmount();
+        // Record initial payment transaction if any payment was made
         if (paidAmount > 0) {
             ProjectPaymentTransaction transaction = new ProjectPaymentTransaction();
             transaction.setProject(project);
@@ -167,50 +192,81 @@ public class ProjectServiceImpl implements ProjectService {
             logger.debug("Initial payment transaction recorded for project ID: {}, amount: {}", project.getId(), paidAmount);
         }
 
+        // Create milestone assignments
+        for (ProductMilestoneMap milestone : milestones) {
+            ProjectMilestoneAssignment assignment = new ProjectMilestoneAssignment();
+            assignment.setProject(project);
+            assignment.setProductMilestoneMap(milestone);
+            assignment.setMilestone(milestone.getMilestone());
+            assignment.setStatus(milestone.getOrder() == 1 && canUnlockFirstMilestone ? "UNLOCKED" : "LOCKED");
+            assignment.setCreatedBy(createdBy.getId());
+            assignment.setUpdatedBy(updatedBy.getId());
+            assignment.setCreatedDate(new Date());
+            assignment.setUpdatedDate(new Date());
+
+            // Assign user based on rating for non-auto-generated milestones
+            if (!milestone.isAutoGenerated()) {
+                User assignedUser = assignMilestoneUser(milestone);
+                assignment.setAssignedUser(assignedUser);
+            }
+
+            projectMilestoneAssignmentRepository.save(assignment);
+            logger.debug("Milestone assignment created for project ID: {}, milestone: {}", project.getId(), milestone.getMilestone().getName());
+        }
+
         logger.info("Project created successfully with projectNo: {}", requestDto.getProjectNo());
         return mapToResponseDto(project);
     }
 
-    private User assignSalesPerson(Long productId) {
-        logger.debug("Assigning salesperson for productId: {}", productId);
+    private User assignOperationPerson(Long productId) {
+        logger.debug("Assigning operation person for productId: {}", productId);
         List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(productId);
         if (mappings.isEmpty()) {
             logger.warn("No user-product mappings found for productId: {}", productId);
             throw new ResourceNotFoundException("No users mapped to product ID " + productId);
         }
 
-        // Try to find an available user (highest rating first)
-        for (UserProductMap mapping : mappings) {
-            User user = mapping.getUser();
-            if (isUserAvailable(user)) {
-                logger.debug("Assigned user: {} (ID: {})", user.getFullName(), user.getId());
-                return user;
-            }
-        }
+        // Sort by rating (highest first, nulls last)
+        return mappings.stream()
+                .filter(m -> isUserAvailable(m.getUser()))
+                .max(Comparator.comparing(m -> m.getRating() != null ? m.getRating() : Double.MIN_VALUE))
+                .map(UserProductMap::getUser)
+                .orElseGet(() -> {
+                    // Fallback to manager
+                    User firstUser = mappings.get(0).getUser();
+                    User manager = firstUser.getManager();
+                    if (manager != null && isUserAvailable(manager)) {
+                        logger.debug("Assigned manager: {} (ID: {})", manager.getFullName(), manager.getId());
+                        return manager;
+                    }
+                    // Fallback to admin
+                    List<User> admins = userRepository.findAdmins();
+                    for (User admin : admins) {
+                        if (isUserAvailable(admin)) {
+                            logger.debug("Assigned admin: {} (ID: {})", admin.getFullName(), admin.getId());
+                            return admin;
+                        }
+                    }
+                    logger.error("No available users, managers, or admins found for productId: {}", productId);
+                    throw new ResourceNotFoundException("No available users, managers, or admins found for product ID " + productId);
+                });
+    }
 
-        // Try to find the manager of the first mapped user
-        User firstUser = mappings.get(0).getUser();
-        User manager = firstUser.getManager();
-        if (manager != null && isUserAvailable(manager)) {
-            logger.debug("Assigned manager: {} (ID: {})", manager.getFullName(), manager.getId());
-            return manager;
-        }
-
-        // Fall back to an admin
-        List<User> admins = userRepository.findAdmins();
-        for (User admin : admins) {
-            if (isUserAvailable(admin)) {
-                logger.debug("Assigned admin: {} (ID: {})", admin.getFullName(), admin.getId());
-                return admin;
-            }
-        }
-
-        logger.error("No available users, managers, or admins found for productId: {}", productId);
-        throw new ResourceNotFoundException("No available users, managers, or admins found for product ID " + productId);
+    private User assignMilestoneUser(ProductMilestoneMap milestone) {
+        logger.debug("Assigning user for milestone: {}, product ID: {}", milestone.getMilestone().getName(), milestone.getProduct().getId());
+        List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(milestone.getProduct().getId());
+        return mappings.stream()
+                .filter(m -> isUserAvailable(m.getUser()))
+                .max(Comparator.comparing(m -> m.getRating() != null ? m.getRating() : Double.MIN_VALUE))
+                .map(UserProductMap::getUser)
+                .orElseThrow(() -> {
+                    logger.error("No available users found for milestone: {}, product ID: {}", milestone.getMilestone().getName(), milestone.getProduct().getId());
+                    return new ResourceNotFoundException("No available users found for milestone " + milestone.getMilestone().getName());
+                });
     }
 
     private boolean isUserAvailable(User user) {
-        return user != null && !user.isDeleted(); // Extend with custom availability logic if needed
+        return user != null && !user.isDeleted();
     }
 
     @Override
@@ -246,11 +302,11 @@ public class ProjectServiceImpl implements ProjectService {
                     return new ResourceNotFoundException("Project with ID " + id + " not found or is deleted");
                 });
 
-        if (projectRepository.existsByProjectNoAndIsDeletedFalse(requestDto.getProjectNo().trim())) {
+        if (!project.getProjectNo().equals(requestDto.getProjectNo().trim()) &&
+                projectRepository.existsByProjectNoAndIsDeletedFalse(requestDto.getProjectNo().trim())) {
             logger.warn("Project number {} already exists", requestDto.getProjectNo());
             throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists");
         }
-
 
         User salesPerson = userRepository.findByIdAndIsDeletedFalse(requestDto.getSalesPersonId())
                 .orElseThrow(() -> {
@@ -390,6 +446,32 @@ public class ProjectServiceImpl implements ProjectService {
         projectPaymentTransactionRepository.save(transaction);
         projectPaymentDetailRepository.save(paymentDetail);
         logger.info("Payment transaction added for project ID: {}, amount: {}", projectId, transactionDto.getAmount());
+
+        // Check if additional payment unlocks the first milestone
+        List<ProductMilestoneMap> milestones = productMilestoneMapRepository.findByProductId(project.getProduct().getId(), PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        ProductMilestoneMap firstMilestone = milestones.stream()
+                .filter(m -> m.getOrder() == 1)
+                .findFirst()
+                .orElse(null);
+        if (firstMilestone != null) {
+            double totalAmount = paymentDetail.getTotalAmount();
+            double paidAmount = totalAmount - paymentDetail.getDueAmount();
+            double requiredPayment = totalAmount * (firstMilestone.getPaymentPercentage() / 100.0);
+            if (paidAmount >= requiredPayment) {
+                ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findAll().stream()
+                        .filter(a -> a.getProject().getId().equals(project.getId()) && a.getProductMilestoneMap().getId().equals(firstMilestone.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (assignment != null && "LOCKED".equals(assignment.getStatus())) {
+                    assignment.setStatus("UNLOCKED");
+                    assignment.setUpdatedBy(createdBy.getId());
+                    assignment.setUpdatedDate(new Date());
+                    projectMilestoneAssignmentRepository.save(assignment);
+                    logger.debug("Unlocked first milestone for project ID: {}, milestone: {}", project.getId(), firstMilestone.getMilestone().getName());
+                }
+            }
+        }
+
         return mapToResponseDto(project);
     }
 
