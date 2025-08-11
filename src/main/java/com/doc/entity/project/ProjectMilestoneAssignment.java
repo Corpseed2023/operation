@@ -69,4 +69,7 @@ public class ProjectMilestoneAssignment {
     @Column(name = "is_deleted", nullable = false)
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
+
+
+
 }

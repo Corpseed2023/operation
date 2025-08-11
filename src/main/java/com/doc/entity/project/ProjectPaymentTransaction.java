@@ -1,6 +1,5 @@
 package com.doc.entity.project;
 
-import com.doc.entity.project.Project;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

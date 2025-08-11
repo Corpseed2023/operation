@@ -21,8 +21,6 @@ public class CompanyController {
     @Autowired
     private CompanyService companyService;
 
-
-
     @PostMapping
     public ResponseEntity<CompanyResponseDto> createCompany(@Valid @RequestBody CompanyRequestDto requestDto) {
         CompanyResponseDto response = companyService.createCompany(requestDto);

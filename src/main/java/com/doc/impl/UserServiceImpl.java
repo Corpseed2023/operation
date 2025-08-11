@@ -26,6 +26,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
+
 @Service
 @Transactional
 public class UserServiceImpl implements UserService {
@@ -53,16 +54,9 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
         }
 
-        // Validate designation and department
-        Designation designation = validateDesignation(requestDto.getDesignationId(), requestDto.getDesignation(), requestDto.getDepartmentId());
-
-        // Validate department IDs
-        List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), requestDto.getDepartmentId());
-
-        // Validate role IDs
+        Designation designation = validateDesignation(requestDto.getDesignationId());
+        List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), designation.getDepartment().getId());
         List<Role> roles = validateRoles(requestDto.getRoleIds());
-
-        // Validate manager ID
         User manager = validateManager(requestDto.getManagerId(), roles);
 
         User user = new User();
@@ -119,16 +113,9 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
         }
 
-        // Validate designation and department
-        Designation designation = validateDesignation(requestDto.getDesignationId(), requestDto.getDesignation(), requestDto.getDepartmentId());
-
-        // Validate department IDs
-        List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), requestDto.getDepartmentId());
-
-        // Validate role IDs
+        Designation designation = validateDesignation(requestDto.getDesignationId());
+        List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), designation.getDepartment().getId());
         List<Role> roles = validateRoles(requestDto.getRoleIds());
-
-        // Validate manager ID
         User manager = validateManager(requestDto.getManagerId(), roles);
 
         mapRequestDtoToEntity(user, requestDto);
@@ -159,60 +146,34 @@ public class UserServiceImpl implements UserService {
         if (requestDto.getEmail() == null || requestDto.getEmail().trim().isEmpty()) {
             throw new ValidationException("Email cannot be empty");
         }
-        if (requestDto.getDesignation() == null || requestDto.getDesignation().trim().isEmpty()) {
-            throw new ValidationException("Designation name cannot be empty");
-        }
         if (requestDto.getDesignationId() == null) {
             throw new ValidationException("Designation ID cannot be null");
         }
-        if (requestDto.getDepartmentId() == null) {
-            throw new ValidationException("Department ID for designation cannot be null");
-        }
-        if (requestDto.getDepartmentIds() == null) {
-            throw new ValidationException("Department IDs cannot be null");
+        if (requestDto.getDepartmentIds() == null || requestDto.getDepartmentIds().isEmpty()) {
+            throw new ValidationException("Department IDs cannot be null or empty");
         }
         if (requestDto.getRoleIds() == null || requestDto.getRoleIds().isEmpty()) {
             throw new ValidationException("Role IDs cannot be null or empty");
         }
     }
 
-    private Designation validateDesignation(Long designationId, String designationName, Long departmentId) {
-        Department department = departmentRepository.findById(departmentId)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + departmentId + " not found"));
-
-        Designation designation = designationRepository.findById(designationId)
+    private Designation validateDesignation(Long designationId) {
+        return designationRepository.findById(designationId)
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Designation with ID " + designationId + " not found"));
-
-        if (!designation.getName().equalsIgnoreCase(designationName.trim())) {
-            throw new ValidationException("Designation name " + designationName + " does not match ID " + designationId);
-        }
-        if (!designation.getDepartment().getId().equals(departmentId)) {
-            throw new ValidationException("Designation with ID " + designationId + " does not belong to department ID " + departmentId);
-        }
-
-        return designation;
     }
 
     private List<Department> validateDepartments(List<Long> departmentIds, Long designationDepartmentId) {
-        List<Department> departments = new ArrayList<>();
-        if (departmentIds != null && !departmentIds.isEmpty()) {
-            departments = departmentRepository.findAllById(departmentIds)
-                    .stream()
-                    .filter(d -> !d.isDeleted())
-                    .collect(Collectors.toList());
-            if (departments.size() != departmentIds.size()) {
-                throw new ResourceNotFoundException("One or more departments not found");
-            }
-            if (!departmentIds.contains(designationDepartmentId)) {
-                throw new ValidationException("Designation's department ID " + designationDepartmentId + " must be included in departmentIds");
-            }
-        } else {
-            Department department = departmentRepository.findById(designationDepartmentId)
-                    .filter(d -> !d.isDeleted())
-                    .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + designationDepartmentId + " not found"));
-            departments.add(department);
+        List<Department> departments = departmentRepository.findAllById(departmentIds)
+                .stream()
+                .filter(d -> !d.isDeleted())
+                .collect(Collectors.toList());
+        if (departments.size() != departmentIds.size()) {
+            throw new ResourceNotFoundException("One or more departments not found");
+        }
+        // Optional: Enforce that designation's department is included in departmentIds
+        if (!departmentIds.contains(designationDepartmentId)) {
+            throw new ValidationException("Designation's department ID " + designationDepartmentId + " must be included in departmentIds");
         }
         return departments;
     }
@@ -241,7 +202,6 @@ public class UserServiceImpl implements UserService {
         user.setFullName(requestDto.getFullName().trim());
         user.setEmail(requestDto.getEmail().trim());
         user.setContactNo(requestDto.getContactNo() != null ? requestDto.getContactNo().trim() : null);
-        user.setDesignation(requestDto.getDesignation().trim());
         user.setManagerFlag(requestDto.getManagerFlag() != null ? requestDto.getManagerFlag() : false);
     }
 
@@ -251,7 +211,8 @@ public class UserServiceImpl implements UserService {
         dto.setFullName(user.getFullName());
         dto.setEmail(user.getEmail());
         dto.setContactNo(user.getContactNo());
-        dto.setDesignation(user.getDesignation());
+        // Use userDesignation instead of designation
+        dto.setDesignation(user.getUserDesignation() != null ? user.getUserDesignation().getName() : null);
         dto.setDesignationId(user.getUserDesignation() != null ? user.getUserDesignation().getId() : null);
         dto.setDepartmentIds(user.getDepartments().stream()
                 .map(Department::getId)

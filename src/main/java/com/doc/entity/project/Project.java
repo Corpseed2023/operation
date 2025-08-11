@@ -37,11 +37,6 @@ public class Project {
     private String projectNo;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "operation_person_id")
-    @Comment("operation executive assigned to the project")
-    private User operationPerson;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sales_person_id")
     @Comment("sales person who bring this project")
     private User salesPerson;

@@ -24,23 +24,16 @@ public class UserRequestDto {
     @Size(max = 20, message = "Contact number cannot exceed 20 characters")
     private String contactNo;
 
-    @NotBlank(message = "Designation name cannot be empty")
-    @Size(max = 50, message = "Designation name cannot exceed 50 characters")
-    private String designation;
-
     @NotNull(message = "Designation ID cannot be null")
     private Long designationId;
 
     @NotNull(message = "Department IDs cannot be null")
     private List<Long> departmentIds;
 
-    @NotNull(message = "Department ID for designation cannot be null")
-    private Long departmentId;
-
     @NotNull(message = "Role IDs cannot be null")
     private List<Long> roleIds;
 
     private Long managerId;
 
-    private Boolean managerFlag; // Changed from isManager
+    private Boolean managerFlag;
 }
