@@ -36,50 +36,57 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     private UserRepository userRepository;
 
     @Override
-    public ProductRequiredDocumentsResponseDto createRequiredDocument(ProductRequiredDocumentsRequestDto requestDto) {
-        validateRequestDto(requestDto);
+    public List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList) {
+        List<ProductRequiredDocumentsResponseDto> responseList = new ArrayList<>();
 
-        // Check for duplicate document name
-        if (requiredDocumentsRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Required document with name " + requestDto.getName() + " already exists");
-        }
+        for (ProductRequiredDocumentsRequestDto requestDto : requestDtoList) {
+            validateRequestDto(requestDto);
 
-        // Validate createdBy and updatedBy users
-        User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
-
-        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
-
-        // Validate product IDs
-        List<Product> products = new ArrayList<>();
-        if (requestDto.getProductIds() != null && !requestDto.getProductIds().isEmpty()) {
-            products = productRepository.findAllById(requestDto.getProductIds())
-                    .stream()
-                    .filter(p -> !p.isDeleted())
-                    .collect(Collectors.toList());
-            if (products.size() != requestDto.getProductIds().size()) {
-                throw new ResourceNotFoundException("One or more products not found");
+            // Check for duplicate document name
+            if (requiredDocumentsRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
+                throw new ValidationException("Required document with name " + requestDto.getName() + " already exists");
             }
+
+            // Validate createdBy and updatedBy users
+            User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
+                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
+
+            User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
+                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
+
+            // Validate product IDs
+            List<Product> products = new ArrayList<>();
+            if (requestDto.getProductIds() != null && !requestDto.getProductIds().isEmpty()) {
+                products = productRepository.findAllById(requestDto.getProductIds())
+                        .stream()
+                        .filter(p -> !p.isDeleted())
+                        .collect(Collectors.toList());
+                if (products.size() != requestDto.getProductIds().size()) {
+                    throw new ResourceNotFoundException("One or more products not found");
+                }
+            }
+
+            // Create new document
+            ProductRequiredDocuments document = new ProductRequiredDocuments();
+            mapRequestDtoToEntity(document, requestDto);
+            document.setCreatedDate(new Date());
+            document.setUpdatedDate(new Date());
+            document.setDeleted(false);
+            document.setProducts(products);
+
+            // Update products to include this document
+            for (Product product : products) {
+                product.getRequiredDocuments().add(document);
+            }
+
+            // Save document
+            document = requiredDocumentsRepository.save(document);
+            productRepository.saveAll(products);
+
+            responseList.add(mapToResponseDto(document));
         }
 
-        // Create new document
-        ProductRequiredDocuments document = new ProductRequiredDocuments();
-        mapRequestDtoToEntity(document, requestDto);
-        document.setCreatedDate(new Date());
-        document.setUpdatedDate(new Date());
-        document.setDeleted(false);
-
-        // Set products for the document
-        for (Product product : products) {
-            document.setProduct(product); // Set the product for the document
-            product.getRequiredDocuments().add(document); // Add document to product's requiredDocuments list
-        }
-
-        // Save the document (cascades to products due to CascadeType.ALL)
-        document = requiredDocumentsRepository.save(document);
-
-        return mapToResponseDto(document);
+        return responseList;
     }
 
     @Override
@@ -138,29 +145,25 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             }
         }
 
+        // Clear existing product mappings
+        for (Product product : document.getProducts()) {
+            product.getRequiredDocuments().remove(document);
+        }
+        productRepository.saveAll(document.getProducts());
+
         // Update document fields
         mapRequestDtoToEntity(document, requestDto);
         document.setUpdatedDate(new Date());
+        document.setProducts(products);
 
-        // Clear existing product mappings
-        Product existingProduct = document.getProduct();
-        if (existingProduct != null) {
-            existingProduct.getRequiredDocuments().remove(document);
-            productRepository.save(existingProduct);
+        // Update products to include this document
+        for (Product product : products) {
+            product.getRequiredDocuments().add(document);
         }
 
-        // Set new product mappings
-        if (!products.isEmpty()) {
-            Product newProduct = products.get(0); // Assuming one product per document for simplicity
-            document.setProduct(newProduct);
-            newProduct.getRequiredDocuments().add(document);
-            productRepository.save(newProduct);
-        } else {
-            document.setProduct(null); // Clear product if no products are provided
-        }
-
-        // Save updated document
+        // Save updated document and products
         document = requiredDocumentsRepository.save(document);
+        productRepository.saveAll(products);
 
         return mapToResponseDto(document);
     }
@@ -171,12 +174,11 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
 
-        // Remove document from associated product
-        Product product = document.getProduct();
-        if (product != null) {
+        // Remove document from associated products
+        for (Product product : document.getProducts()) {
             product.getRequiredDocuments().remove(document);
-            productRepository.save(product);
         }
+        productRepository.saveAll(document.getProducts());
 
         // Soft delete the document
         document.setDeleted(true);
@@ -221,10 +223,10 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         dto.setUpdatedDate(document.getUpdatedDate());
 
         // Set product IDs
-        List<Long> productIds = new ArrayList<>();
-        if (document.getProduct() != null) {
-            productIds.add(document.getProduct().getId());
-        }
+        List<Long> productIds = document.getProducts()
+                .stream()
+                .map(Product::getId)
+                .collect(Collectors.toList());
         dto.setProductIds(productIds);
 
         return dto;

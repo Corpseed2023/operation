@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
@@ -20,10 +21,10 @@ public class Department {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "nm", nullable = false, unique = true)
+    @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(name = "isd", nullable = false)
+    @Column(nullable = false)
     private boolean isDeleted = false;
 
     @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
@@ -41,12 +42,13 @@ public class Department {
     private List<Designation> designations;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "cdt", updatable = false)
+    @Column(updatable = false)
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "udt")
     private Date updatedDate;
+
+    private LocalDate date;
 
 
 }

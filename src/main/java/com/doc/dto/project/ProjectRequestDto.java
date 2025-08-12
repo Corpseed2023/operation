@@ -47,8 +47,8 @@ public class ProjectRequestDto {
     @NotNull(message = "Total amount cannot be null")
     private Double totalAmount;
 
-    @NotNull(message = "Due amount cannot be null")
-    private Double dueAmount;
+    @NotNull(message = "paid amount cannot be null")
+    private Double paidAmount;
 
     @NotBlank(message = "Payment status cannot be empty")
     private String paymentStatus;

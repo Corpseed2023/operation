@@ -28,11 +28,11 @@ public class Project {
     @Comment("Primary key: Unique identifier for the project")
     private Long id;
 
-    @Column(name = "pn_nme", nullable = false)
+    @Column(nullable = false)
     @Comment("Project name")
     private String name;
 
-    @Column(name = "pno", nullable = false, unique = true)
+    @Column(nullable = false, unique = true)
     @Comment("Unique project number")
     private String projectNo;
 
@@ -56,11 +56,10 @@ public class Project {
     private Contact contact;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cmpid")
+    @JoinColumn
     @Comment("Company associated with the project")
     private Company company;
 
-    @Column(name = "lid")
     @Comment("Lead ID from lead service")
     private Long leadId;
 

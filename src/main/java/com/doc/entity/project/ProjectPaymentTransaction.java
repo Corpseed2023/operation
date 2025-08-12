@@ -21,25 +21,25 @@ public class ProjectPaymentTransaction {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pid", nullable = false)
+    @JoinColumn(nullable = false)
     @Comment("Project associated with the transaction")
     private Project project;
 
-    @Column(name = "amt", nullable = false)
+    @Column(nullable = false)
     @Comment("Payment amount")
     private Double amount;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "pdt", nullable = false)
+    @Column(nullable = false)
     @Comment("Payment date")
     private Date paymentDate;
 
-    @Column(name = "cb", nullable = false)
+    @Column(nullable = false)
     @Comment("Created by user ID")
     private Long createdBy;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "cdt", updatable = false)
+    @Column(updatable = false)
     @Comment("Created date")
     private Date createdDate;
 }

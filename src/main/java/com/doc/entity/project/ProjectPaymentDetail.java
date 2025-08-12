@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
+import java.time.LocalDate;
 import java.util.Date;
 
 @Entity
@@ -23,7 +24,7 @@ public class ProjectPaymentDetail {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pid", nullable = false, unique = true)
+    @JoinColumn(nullable = false, unique = true)
     @Comment("Associated project")
     private Project project;
 
@@ -49,12 +50,13 @@ public class ProjectPaymentDetail {
     private String paymentStatus = "PENDING";
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Comment("Created date")
-    private Date createdDate = new Date();
+    @Column(updatable = false)
+    private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Comment("Updated date")
     private Date updatedDate;
+
+    private LocalDate date;
 
     @Comment("Created by user ID")
     private Long createdBy;

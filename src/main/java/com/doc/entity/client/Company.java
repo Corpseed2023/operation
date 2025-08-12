@@ -21,7 +21,7 @@ public class Company {
     @Comment("Primary key: Company ID")
     private Long id;
 
-    @Column(name = "cnm", nullable = false, length = 255)
+    @Column(nullable = false, length = 255)
     @Comment("Company Name")
     private String name;
 
@@ -38,15 +38,14 @@ public class Company {
     private String gstNo;
 
     @Temporal(TemporalType.DATE)
-    @Column(name = "estd")
     @Comment("Establishment Date")
     private Date establishDate;
 
-    @Column(name = "ind", length = 100)
+    @Column(length = 100)
     @Comment("Top-level Industry Name")
     private String industry;
 
-    @Column(name = "ads", length = 1000)
+    @Column(length = 1000)
     @Comment("Primary Address")
     private String address;
 
@@ -54,15 +53,15 @@ public class Company {
     @Comment("City")
     private String city;
 
-    @Column(name = "st", length = 100)
+    @Column(length = 100)
     @Comment("State")
     private String state;
 
-    @Column(name = "cnt", length = 100)
+    @Column(length = 100)
     @Comment("Country")
     private String country;
 
-    @Column(name = "ppc", length = 10)
+    @Column(length = 10)
     @Comment("Primary Pincode")
     private String primaryPinCode;
 
@@ -70,15 +69,15 @@ public class Company {
     @Comment("List of contacts associated with the company")
     private List<Contact> contacts = new ArrayList<>();
 
-    @Column(name = "inds", length = 100)
+    @Column(length = 100)
     @Comment("Mapped Industry Name or Code")
     private String industries;
 
-    @Column(name = "subi", length = 100)
+    @Column(length = 100)
     @Comment("Sub-Industry Name or Code")
     private String subIndustry;
 
-    @Column(name = "subsubi", length = 100)
+    @Column(length = 100)
     @Comment("Sub-Sub Industry Name or Code")
     private String subSubIndustry;
 

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,31 +32,39 @@ public class ProductServiceImpl implements ProductService {
     private UserRepository userRepository;
 
     @Override
-    public ProductResponseDto createProduct(ProductRequestDto requestDto) {
-        validateRequestDto(requestDto);
+    public List<ProductResponseDto> createProducts(List<ProductRequestDto> requestDtoList) {
+        List<ProductResponseDto> responseList = new ArrayList<>();
 
-        if (productRepository.existsByProductNameAndIsDeletedFalse(requestDto.getProductName().trim())) {
-            throw new ValidationException("Product with name " + requestDto.getProductName() + " already exists");
+        for (ProductRequestDto requestDto : requestDtoList) {
+            validateRequestDto(requestDto);
+
+            if (productRepository.existsByProductNameAndIsDeletedFalse(requestDto.getProductName().trim())) {
+                throw new ValidationException("Product with name " + requestDto.getProductName() + " already exists");
+            }
+
+            User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
+                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
+
+            User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
+                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
+
+            Product product = new Product();
+            mapRequestDtoToEntity(product, requestDto);
+            product.setCreatedBy(createdBy);
+            product.setUpdatedBy(updatedBy);
+            product.setCreatedDate(new Date());
+            product.setUpdatedDate(new Date());
+            product.setDeleted(false);
+            product.setActive(requestDto.isActive());
+
+            product = productRepository.save(product);
+
+            responseList.add(mapToResponseDto(product));
         }
 
-        User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
-
-        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
-
-        Product product = new Product();
-        mapRequestDtoToEntity(product, requestDto);
-        product.setCreatedBy(createdBy);
-        product.setUpdatedBy(updatedBy);
-        product.setCreatedDate(new Date());
-        product.setUpdatedDate(new Date());
-        product.setDeleted(false);
-        product.setActive(requestDto.isActive());
-
-        product = productRepository.save(product);
-        return mapToResponseDto(product);
+        return responseList;
     }
+
 
     @Override
     public ProductResponseDto getProductById(Long id) {

@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
+import java.time.LocalDate;
 import java.util.Date;
 
 /**
@@ -51,14 +52,13 @@ public class ProjectMilestoneAssignment {
     private String status = "LOCKED";
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "created_date", updatable = false)
-    @Comment("Creation date")
+    @Column(updatable = false)
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "updated_date")
-    @Comment("Update date")
     private Date updatedDate;
+
+    private LocalDate date;
 
     @Comment("Created by user ID")
     private Long createdBy;

@@ -27,8 +27,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-
-
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -96,6 +94,8 @@ public class ProjectServiceImpl implements ProjectService {
                     return new ResourceNotFoundException("Product with ID " + requestDto.getProductId() + " not found or is deleted");
                 });
 
+
+
         Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
                 .orElseThrow(() -> {
                     logger.error("Company with ID {} not found or is deleted", requestDto.getCompanyId());
@@ -140,7 +140,8 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         double totalAmount = requestDto.getTotalAmount();
-        double paidAmount = totalAmount - requestDto.getDueAmount();
+        double paidAmount = requestDto.getPaidAmount() != null ? requestDto.getPaidAmount() : 0.0;
+        double dueAmount = totalAmount - paidAmount;
 
         Project project = new Project();
         mapRequestDtoToProject(project, requestDto);
@@ -158,7 +159,7 @@ public class ProjectServiceImpl implements ProjectService {
         ProjectPaymentDetail paymentDetail = new ProjectPaymentDetail();
         paymentDetail.setProject(project);
         paymentDetail.setTotalAmount(totalAmount);
-        paymentDetail.setDueAmount(requestDto.getDueAmount());
+        paymentDetail.setDueAmount(dueAmount);
         paymentDetail.setPaymentStatus(requestDto.getPaymentStatus());
         paymentDetail.setPaymentType(paymentType);
         paymentDetail.setApprovedBy(approvedBy);
@@ -290,6 +291,10 @@ public class ProjectServiceImpl implements ProjectService {
                     return new ResourceNotFoundException("Payment type with ID " + requestDto.getPaymentTypeId() + " not found");
                 });
 
+        double totalAmount = requestDto.getTotalAmount();
+        double paidAmount = requestDto.getPaidAmount() != null ? requestDto.getPaidAmount() : 0.0;
+        double dueAmount = totalAmount - paidAmount;
+
         mapRequestDtoToProject(project, requestDto);
         project.setSalesPerson(salesPerson);
         project.setProduct(product);
@@ -299,8 +304,8 @@ public class ProjectServiceImpl implements ProjectService {
         project.setUpdatedDate(new Date());
 
         ProjectPaymentDetail paymentDetail = project.getPaymentDetail();
-        paymentDetail.setTotalAmount(requestDto.getTotalAmount());
-        paymentDetail.setDueAmount(requestDto.getDueAmount());
+        paymentDetail.setTotalAmount(totalAmount);
+        paymentDetail.setDueAmount(dueAmount);
         paymentDetail.setPaymentStatus(requestDto.getPaymentStatus());
         paymentDetail.setPaymentType(paymentType);
         paymentDetail.setApprovedBy(approvedBy);
@@ -309,6 +314,10 @@ public class ProjectServiceImpl implements ProjectService {
 
         project = projectRepository.save(project);
         logger.info("Project updated successfully with ID: {}", id);
+
+        // Update milestone statuses based on new payment
+        updateMilestoneStatuses(project, updatedBy.getId());
+
         return mapToResponseDto(project);
     }
 
@@ -387,7 +396,7 @@ public class ProjectServiceImpl implements ProjectService {
         projectPaymentDetailRepository.save(paymentDetail);
         logger.info("Payment transaction added for project ID: {}, amount: {}", projectId, transactionDto.getAmount());
 
-        // Update milestone statuses based on new payment (unlock and assign if thresholds met)
+        // Update milestone statuses based on new payment
         updateMilestoneStatuses(project, createdBy.getId());
 
         return mapToResponseDto(project);
@@ -415,8 +424,6 @@ public class ProjectServiceImpl implements ProjectService {
                         assignment.setAssignedUser(assignedUser);
                     }
 
-
-
                     projectMilestoneAssignmentRepository.save(assignment);
                     logger.debug("Unlocked milestone for project ID: {}, milestone: {}", project.getId(), map.getMilestone().getName());
                 }
@@ -432,36 +439,42 @@ public class ProjectServiceImpl implements ProjectService {
 
         List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(milestone.getProduct().getId());
 
+        // Try to assign a user from the required department with the highest rating
         Optional<UserProductMap> bestMapping = mappings.stream()
                 .filter(m -> isUserAvailable(m.getUser()))
                 .filter(m -> m.getUser().getDepartments().stream().anyMatch(d -> deptIds.contains(d.getId())))
                 .max(Comparator.comparingDouble(m -> m.getRating() != null ? m.getRating() : Double.MIN_VALUE));
 
         if (bestMapping.isPresent()) {
+            logger.debug("Assigned best user: {} (ID: {}) for milestone: {}",
+                    bestMapping.get().getUser().getFullName(), bestMapping.get().getUser().getId(), milestone.getMilestone().getName());
             return bestMapping.get().getUser();
         }
 
-        // Fallback to manager of the first eligible user
+        // Fallback to the manager of the first eligible user
         if (!mappings.isEmpty()) {
             User firstUser = mappings.get(0).getUser();
             User manager = firstUser.getManager();
-            if (manager != null && isUserAvailable(manager) && manager.getDepartments().stream().anyMatch(d -> deptIds.contains(d.getId()))) {
-                logger.debug("Assigned manager: {} (ID: {}) for milestone: {}", manager.getFullName(), manager.getId(), milestone.getMilestone().getName());
+            if (manager != null && isUserAvailable(manager)) {
+                logger.debug("Assigned manager: {} (ID: {}) for milestone: {}",
+                        manager.getFullName(), manager.getId(), milestone.getMilestone().getName());
                 return manager;
             }
         }
 
-        // Fallback to admin
+        // Fallback to any available admin
         List<User> admins = userRepository.findAdmins();
         for (User admin : admins) {
-            if (isUserAvailable(admin) && admin.getDepartments().stream().anyMatch(d -> deptIds.contains(d.getId()))) {
-                logger.debug("Assigned admin: {} (ID: {}) for milestone: {}", admin.getFullName(), admin.getId(), milestone.getMilestone().getName());
+            if (isUserAvailable(admin)) {
+                logger.debug("Assigned admin: {} (ID: {}) for milestone: {}",
+                        admin.getFullName(), admin.getId(), milestone.getMilestone().getName());
                 return admin;
             }
         }
 
-        logger.error("No available users, managers, or admins found for milestone: {}, product ID: {}", milestone.getMilestone().getName(), milestone.getProduct().getId());
-        throw new ResourceNotFoundException("No available users found for milestone " + milestone.getMilestone().getName());
+        logger.error("No available users, managers, or admins found for milestone: {}, product ID: {}",
+                milestone.getMilestone().getName(), milestone.getProduct().getId());
+        throw new ResourceNotFoundException("No available users, managers, or admins found for milestone " + milestone.getMilestone().getName());
     }
 
     private boolean isUserAvailable(User user) {
@@ -486,13 +499,13 @@ public class ProjectServiceImpl implements ProjectService {
             logger.warn("Invalid total amount: {}", requestDto.getTotalAmount());
             throw new ValidationException("Total amount must be non-negative");
         }
-        if (requestDto.getDueAmount() == null || requestDto.getDueAmount() < 0) {
-            logger.warn("Invalid due amount: {}", requestDto.getDueAmount());
-            throw new ValidationException("Due amount must be non-negative");
+        if (requestDto.getPaidAmount() == null || requestDto.getPaidAmount() < 0) {
+            logger.warn("Invalid paid amount: {}", requestDto.getPaidAmount());
+            throw new ValidationException("Paid amount must be non-negative");
         }
-        if (requestDto.getDueAmount() > requestDto.getTotalAmount()) {
-            logger.warn("Due amount {} exceeds total amount {}", requestDto.getDueAmount(), requestDto.getTotalAmount());
-            throw new ValidationException("Due amount cannot exceed total amount");
+        if (requestDto.getPaidAmount() > requestDto.getTotalAmount()) {
+            logger.warn("Paid amount {} exceeds total amount {}", requestDto.getPaidAmount(), requestDto.getTotalAmount());
+            throw new ValidationException("Paid amount cannot exceed total amount");
         }
         if (!List.of("PENDING", "APPROVED", "REJECTED").contains(requestDto.getPaymentStatus())) {
             logger.warn("Invalid payment status: {}", requestDto.getPaymentStatus());

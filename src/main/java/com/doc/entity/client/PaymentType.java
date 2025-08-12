@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
+import java.time.LocalDate;
 import java.util.Date;
 
 @Entity
@@ -13,8 +14,6 @@ import java.util.Date;
 @Setter
 @NoArgsConstructor
 public class PaymentType {
-
-
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,13 +27,16 @@ public class PaymentType {
     private boolean isDeleted = false;
 
     @Temporal(TemporalType.TIMESTAMP)
+    @Column(updatable = false)
     private Date createdDate;
-
-    @Column(name = "created_by")
-    private Long createdBy;
 
     @Temporal(TemporalType.TIMESTAMP)
     private Date updatedDate;
+
+    private LocalDate date;
+
+    @Column(name = "created_by")
+    private Long createdBy;
 
     @Column(name = "updated_by")
     private Long updatedBy;

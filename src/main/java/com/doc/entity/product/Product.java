@@ -9,6 +9,7 @@ import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -74,7 +75,7 @@ public class Product {
     @Comment("List of milestone steps")
     private List<ProductMilestoneMap> milestoneSteps;
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @ManyToMany(mappedBy = "products", fetch = FetchType.LAZY)
     @Comment("List of required documents")
-    private List<ProductRequiredDocuments> requiredDocuments;
+    private List<ProductRequiredDocuments> requiredDocuments = new ArrayList<>();
 }

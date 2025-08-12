@@ -29,6 +29,7 @@ public class ProjectController {
             @ApiResponse(responseCode = "409", description = "Project number already exists"),
             @ApiResponse(responseCode = "404", description = "Referenced entity not found")
     })
+
     @PostMapping
     public ResponseEntity<ProjectResponseDto> createProject(@Valid @RequestBody ProjectRequestDto requestDto) {
         ProjectResponseDto response = projectService.createProject(requestDto);

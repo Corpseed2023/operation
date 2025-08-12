@@ -22,15 +22,14 @@ public class ProjectDocumentUpload {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "pduid")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pid", nullable = false)
+    @JoinColumn(nullable = false)
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "rdid", nullable = false)
+    @JoinColumn(nullable = false)
     private ProductRequiredDocuments requiredDocument;
 
     @Column(name = "file_url", nullable = false, length = 1000)
@@ -50,6 +49,6 @@ public class ProjectDocumentUpload {
     @Column(name = "upload_time")
     private Date uploadTime;
 
-    @Column(name = "isd", nullable = false)
+    @Column(nullable = false)
     private boolean isDeleted = false;
 }

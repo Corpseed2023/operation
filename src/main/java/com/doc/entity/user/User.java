@@ -56,7 +56,7 @@ public class User {
     @JoinTable(
             name = "user_role",
             joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "rid")
+            inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id")
     )
     @Comment("List of roles assigned to the user")
     private List<Role> roles = new ArrayList<>();

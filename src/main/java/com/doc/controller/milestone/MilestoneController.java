@@ -34,6 +34,7 @@ public class MilestoneController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+
     /**
      * Updates an existing milestone and its department associations.
      *

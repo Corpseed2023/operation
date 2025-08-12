@@ -1,6 +1,5 @@
 package com.doc.controller.product;
 
-
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsResponseDto;
 import com.doc.service.ProductRequiredDocumentsService;
@@ -22,9 +21,10 @@ public class ProductRequiredDocumentsController {
     private ProductRequiredDocumentsService requiredDocumentsService;
 
     @PostMapping
-    public ResponseEntity<ProductRequiredDocumentsResponseDto> createRequiredDocument(@Valid @RequestBody ProductRequiredDocumentsRequestDto requestDto) {
-        ProductRequiredDocumentsResponseDto response = requiredDocumentsService.createRequiredDocument(requestDto);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> createRequiredDocuments(
+            @Valid @RequestBody List<ProductRequiredDocumentsRequestDto> requestDtoList) {
+        List<ProductRequiredDocumentsResponseDto> responses = requiredDocumentsService.createRequiredDocuments(requestDtoList);
+        return new ResponseEntity<>(responses, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")

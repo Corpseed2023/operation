@@ -22,10 +22,11 @@ public class ProductController {
     private ProductService productService;
 
     @PostMapping
-    public ResponseEntity<ProductResponseDto> createProduct(@Valid @RequestBody ProductRequestDto requestDto) {
-        ProductResponseDto response = productService.createProduct(requestDto);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    public ResponseEntity<List<ProductResponseDto>> createProducts(@Valid @RequestBody List<ProductRequestDto> requestDtoList) {
+        List<ProductResponseDto> responseList = productService.createProducts(requestDtoList);
+        return new ResponseEntity<>(responseList, HttpStatus.CREATED);
     }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponseDto> getProductById(@PathVariable Long id) {
@@ -50,4 +51,6 @@ public class ProductController {
         productService.deleteProduct(id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+
 }

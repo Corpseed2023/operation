@@ -8,7 +8,6 @@ import java.util.List;
 
 public interface ProductRequiredDocumentsService {
 
-    ProductRequiredDocumentsResponseDto createRequiredDocument(ProductRequiredDocumentsRequestDto requestDto);
 
     ProductRequiredDocumentsResponseDto getRequiredDocumentById(Long id);
 
@@ -17,4 +16,6 @@ public interface ProductRequiredDocumentsService {
     ProductRequiredDocumentsResponseDto updateRequiredDocument(Long id, ProductRequiredDocumentsRequestDto requestDto);
 
     void deleteRequiredDocument(Long id);
+
+    List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList);
 }

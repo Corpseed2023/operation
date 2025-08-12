@@ -32,7 +32,5 @@ public interface ProductRequiredDocumentsRepository extends JpaRepository<Produc
             @Param("stateName") String stateName,
             Pageable pageable);
 
-    // Added method to find documents by product ID
-    @Query("SELECT d FROM ProductRequiredDocuments d WHERE d.product.id = :productId AND d.isDeleted = false")
-    List<ProductRequiredDocuments> findByProductId(@Param("productId") Long productId);
+
 }
