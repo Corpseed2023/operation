@@ -8,9 +8,9 @@ import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 
-import com.doc.repsoitory.ProductRepository;
-import com.doc.repsoitory.UserProductMapRepository;
-import com.doc.repsoitory.UserRepository;
+import com.doc.repository.ProductRepository;
+import com.doc.repository.UserProductMapRepository;
+import com.doc.repository.UserRepository;
 import com.doc.service.UserProductMapService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

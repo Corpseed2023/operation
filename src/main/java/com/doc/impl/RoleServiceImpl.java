@@ -5,7 +5,7 @@ import com.doc.dto.role.RoleResponseDto;
 import com.doc.entity.user.Role;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-import com.doc.repsoitory.RoleRepository;
+import com.doc.repository.RoleRepository;
 import com.doc.service.RoleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

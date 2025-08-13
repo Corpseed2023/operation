@@ -6,9 +6,9 @@ import com.doc.entity.product.Milestone;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 
-import com.doc.repsoitory.MilestoneRepository;
-import com.doc.repsoitory.ProductMilestoneMapRepository;
-import com.doc.repsoitory.ProductRepository;
+import com.doc.repository.MilestoneRepository;
+import com.doc.repository.ProductMilestoneMapRepository;
+import com.doc.repository.ProductRepository;
 import com.doc.service.ProductMilestoneMapService;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;

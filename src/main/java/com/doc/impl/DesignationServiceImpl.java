@@ -8,9 +8,9 @@ import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 
-import com.doc.repsoitory.DepartmentRepository;
-import com.doc.repsoitory.DesignationRepository;
-import com.doc.repsoitory.UserRepository;
+import com.doc.repository.DepartmentRepository;
+import com.doc.repository.DesignationRepository;
+import com.doc.repository.UserRepository;
 import com.doc.service.DesignationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;

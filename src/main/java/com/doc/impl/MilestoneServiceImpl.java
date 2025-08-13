@@ -4,8 +4,8 @@ import com.doc.dto.milestone.MilestoneRequestDto;
 import com.doc.dto.milestone.MilestoneResponseDto;
 import com.doc.entity.product.Milestone;
 import com.doc.entity.user.Department;
-import com.doc.repsoitory.DepartmentRepository;
-import com.doc.repsoitory.MilestoneRepository;
+import com.doc.repository.DepartmentRepository;
+import com.doc.repository.MilestoneRepository;
 import com.doc.service.MilestoneService;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
@@ -184,4 +184,25 @@ public class MilestoneServiceImpl implements MilestoneService {
                 .collect(Collectors.toList()));
         return dto;
     }
+
+
+    @Override
+    public List<MilestoneResponseDto> getAllMilestones() {
+        logger.info("Fetching all milestones without pagination");
+        List<Milestone> milestones = milestoneRepository.findAll();
+        return milestones.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+
+
+
+
+
+
+
+
+
+
 }

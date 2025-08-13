@@ -8,8 +8,8 @@ import com.doc.entity.client.PaymentType;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 
-import com.doc.repsoitory.PaymentTypeRepository;
-import com.doc.repsoitory.UserRepository;
+import com.doc.repository.PaymentTypeRepository;
+import com.doc.repository.UserRepository;
 import com.doc.service.PaymentTypeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;

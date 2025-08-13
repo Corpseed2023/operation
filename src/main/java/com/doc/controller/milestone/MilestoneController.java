@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * REST Controller for managing Milestone entities.
  */
@@ -49,6 +51,8 @@ public class MilestoneController {
         MilestoneResponseDto response = milestoneService.updateMilestone(id, requestDto);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
+
+
 
     /**
      * Retrieves a milestone by ID.
@@ -99,4 +103,21 @@ public class MilestoneController {
         Page<MilestoneResponseDto> milestones = milestoneService.getMilestonesByDepartment(departmentId, pageable);
         return new ResponseEntity<>(milestones, HttpStatus.OK);
     }
+
+
+    /**
+     * Retrieves all milestones without pagination.
+     *
+     * @return list of all milestones
+     */
+    @GetMapping("/all")
+    public ResponseEntity<List<MilestoneResponseDto>> getAllMilestonesList() {
+        List<MilestoneResponseDto> milestones = milestoneService.getAllMilestones();
+        return new ResponseEntity<>(milestones, HttpStatus.OK);
+    }
+
+
+
+
+
 }

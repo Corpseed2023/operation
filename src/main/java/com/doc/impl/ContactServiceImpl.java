@@ -7,9 +7,9 @@ import com.doc.entity.client.Contact;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 
-import com.doc.repsoitory.CompanyRepository;
-import com.doc.repsoitory.ContactRepository;
-import com.doc.repsoitory.UserRepository;
+import com.doc.repository.CompanyRepository;
+import com.doc.repository.ContactRepository;
+import com.doc.repository.UserRepository;
 import com.doc.service.ContactService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -5,8 +5,8 @@ import com.doc.entity.user.Department;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-import com.doc.repsoitory.DepartmentRepository;
-import com.doc.repsoitory.UserRepository;
+import com.doc.repository.DepartmentRepository;
+import com.doc.repository.UserRepository;
 import com.doc.service.DepartmentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -47,6 +48,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         department.setName(departmentName.trim());
         department.setCreatedDate(new Date());
         department.setUpdatedDate(new Date());
+        department.setDate(LocalDate.now());
 
         department = departmentRepository.save(department);
         return mapToResponseDto(department);
