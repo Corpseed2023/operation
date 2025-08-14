@@ -60,6 +60,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Page<User> findByDepartmentsIdAndIsDeletedFalse(Long departmentId, Pageable pageable);
 
     /**
+     * Finds non-deleted users by department ID (non-paginated).
+     *
+     * @param departmentId the department ID
+     * @return a list of non-deleted users in the specified department
+     */
+    @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id = :departmentId AND u.isDeleted = false")
+    List<User> findByDepartmentsIdAndIsDeletedFalse(@Param("departmentId") Long departmentId);
+
+    /**
      * Finds non-deleted users by manager flag with pagination.
      *
      * @param managerFlag the manager flag
