@@ -21,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -67,6 +68,7 @@ public class UserServiceImpl implements UserService {
         user.setDepartments(departments);
         user.setRoles(roles);
         user.setManager(manager);
+        user.setDate(LocalDate.now());
 
         user = userRepository.save(user);
         return mapToResponseDto(user);

@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -33,10 +34,6 @@ public class User {
     @Column(name = "contact_no")
     @Comment("Users contact number") // Removed single quote
     private String contactNo;
-
-    @Column(name = "designation")
-    @Comment("Users designation name") // Removed single quote
-    private String designation;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "designation_id")
@@ -83,6 +80,8 @@ public class User {
     @Column(name = "updated_date")
     @Comment("Update date")
     private Date updatedDate;
+
+    private LocalDate date;
 
     @Column(name = "is_deleted", nullable = false)
     @Comment("Soft delete flag")
