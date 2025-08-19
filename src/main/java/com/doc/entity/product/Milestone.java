@@ -11,6 +11,8 @@ import java.util.List;
 
 /**
  * Entity representing a reusable milestone.
+ * A milestone is a defined step in a workflow process
+ * (e.g., Documentation, Legal Verification, Certification).
  */
 @Entity
 @Table(name = "milestones")
@@ -28,9 +30,11 @@ public class Milestone {
     @Comment("Milestone name, unique (e.g., Documentation, Auditing)")
     private String name;
 
+    @Column(columnDefinition = "varchar(1000) comment 'Detailed description of the milestone''s purpose and scope'")
+    private String description;
+
+
     @ManyToMany(mappedBy = "milestones", fetch = FetchType.LAZY)
     @Comment("Departments associated with this milestone")
     private List<Department> departments;
-
-
 }

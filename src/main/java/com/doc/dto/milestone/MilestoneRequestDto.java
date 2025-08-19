@@ -18,5 +18,8 @@ public class MilestoneRequestDto {
     @NotBlank(message = "Milestone name cannot be empty")
     private String name;
 
+    private String description;
+
     private List<Long> departmentIds;
+
 }

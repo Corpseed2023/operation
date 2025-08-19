@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -68,15 +69,15 @@ public class MilestoneController {
 
     /**
      * Retrieves all milestones with pagination.
-     *
-     * @param pageable pagination information
-     * @return a page of milestones
-     */
+       */
     @GetMapping
-    public ResponseEntity<Page<MilestoneResponseDto>> getAllMilestones(Pageable pageable) {
-        Page<MilestoneResponseDto> milestones = milestoneService.getAllMilestones(pageable);
-        return new ResponseEntity<>(milestones, HttpStatus.OK);
+    public ResponseEntity<List<MilestoneResponseDto>> getAllMilestones() {
+        List<MilestoneResponseDto> milestones = milestoneService.getAllMilestones();
+        return ResponseEntity.ok(milestones);
     }
+
+
+
 
     /**
      * Deletes a milestone by ID (soft delete).

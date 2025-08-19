@@ -43,7 +43,6 @@ public interface MilestoneService {
      * @param pageable pagination information
      * @return a page of milestones
      */
-    Page<MilestoneResponseDto> getAllMilestones(Pageable pageable);
 
     /**
      * Deletes a milestone by ID (soft delete).

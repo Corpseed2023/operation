@@ -45,6 +45,7 @@ public class MilestoneServiceImpl implements MilestoneService {
 
         Milestone milestone = new Milestone();
         milestone.setName(requestDto.getName().trim());
+        milestone.setDescription(requestDto.getDescription());
 
         // Set departments if provided
         List<Department> departments = new ArrayList<>();
@@ -140,13 +141,6 @@ public class MilestoneServiceImpl implements MilestoneService {
     }
 
     @Override
-    public Page<MilestoneResponseDto> getAllMilestones(Pageable pageable) {
-        logger.info("Fetching all milestones with pageable: {}", pageable);
-        return milestoneRepository.findAll(pageable)
-                .map(this::mapToResponseDto);
-    }
-
-    @Override
     public void deleteMilestone(Long id) {
         logger.info("Deleting milestone with ID: {}", id);
         Milestone milestone = milestoneRepository.findById(id)
@@ -179,6 +173,7 @@ public class MilestoneServiceImpl implements MilestoneService {
         MilestoneResponseDto dto = new MilestoneResponseDto();
         dto.setId(milestone.getId());
         dto.setName(milestone.getName());
+        dto.setDescription(milestone.getDescription());
         dto.setDepartmentIds(milestone.getDepartments().stream()
                 .map(Department::getId)
                 .collect(Collectors.toList()));
@@ -188,21 +183,10 @@ public class MilestoneServiceImpl implements MilestoneService {
 
     @Override
     public List<MilestoneResponseDto> getAllMilestones() {
-        logger.info("Fetching all milestones without pagination");
         List<Milestone> milestones = milestoneRepository.findAll();
+
         return milestones.stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
-
-
-
-
-
-
-
-
-
-
-
 }
