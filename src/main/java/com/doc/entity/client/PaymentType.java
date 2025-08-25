@@ -40,4 +40,5 @@ public class PaymentType {
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
 }

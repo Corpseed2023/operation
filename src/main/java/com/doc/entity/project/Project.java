@@ -11,9 +11,11 @@ import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
-/**
+        /**
  * Entity representing a project in the system.
  */
 @Entity
@@ -100,4 +102,18 @@ public class Project {
 
     @Comment("Primary postal code")
     private String primaryPinCode;
+
+    @OneToMany(mappedBy = "project", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @Comment("List of milestone assignments for this project")
+    private List<ProjectMilestoneAssignment> milestoneAssignments = new ArrayList<>();
+
+
+
+
+
+
+
+
+
+
 }

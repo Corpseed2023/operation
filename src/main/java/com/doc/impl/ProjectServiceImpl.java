@@ -16,6 +16,7 @@ import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.user.Department;
 import com.doc.entity.user.User;
+import com.doc.entity.user.UserLoginStatus;
 import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -80,6 +81,9 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Autowired
     private UserProjectCountRepository userProjectCountRepository;
+
+    @Autowired
+    private UserLoginStatusRepository userOnlineStatusRepository;
 
     private static class AssignmentResult {
         User user;
@@ -711,8 +715,7 @@ public class ProjectServiceImpl implements ProjectService {
         if (departmentUsers.isEmpty()) {
             logger.warn("No users found in department {} (ID: {}) for milestone: {}",
                     primaryDepartment.getName(), primaryDepartment.getId(), milestone.getMilestone().getName());
-            User admin = assignAdmin(milestone);
-            return new AssignmentResult(admin, "Admin assigned due to no users in department");
+            return assignAdmin(milestone);
         } else {
             logger.debug("Users in department {} (ID: {}): {}",
                     primaryDepartment.getName(), primaryDepartment.getId(),
@@ -743,8 +746,7 @@ public class ProjectServiceImpl implements ProjectService {
         if (eligibleMappings.isEmpty()) {
             logger.warn("No eligible users with positive ratings found for product ID: {} in department: {}",
                     milestone.getProduct().getId(), primaryDepartment.getName());
-            User admin = assignAdmin(milestone);
-            return new AssignmentResult(admin, "Admin assigned due to no eligible users with positive ratings");
+            return assignAdmin(milestone);
         }
 
         // Check if all eligible users are assigned
@@ -757,9 +759,15 @@ public class ProjectServiceImpl implements ProjectService {
             });
         }
 
-        // Select the highest-rated unassigned user
+        // Select the highest-rated unassigned user who is online
         Optional<UserProductMap> selectedMappingOpt = eligibleMappings.stream()
                 .filter(m -> !m.isAssigned())
+                .filter(m -> {
+                    Optional<UserLoginStatus> status = userOnlineStatusRepository.findByUserIdAndIsDeletedFalse(m.getUser().getId());
+                    boolean isOnline = status.isPresent() && status.get().isOnline();
+                    logger.debug("User {} (ID: {}) online status: {}", m.getUser().getFullName(), m.getUser().getId(), isOnline);
+                    return isOnline;
+                })
                 .max(Comparator.comparingDouble(m -> m.getRating() != null ? m.getRating() : 0.0));
 
         if (selectedMappingOpt.isPresent()) {
@@ -769,34 +777,54 @@ public class ProjectServiceImpl implements ProjectService {
             userProductMapRepository.save(selectedMapping);
             logger.info("Assigned user: {} (ID: {}, Rating: {}) for milestone: {}",
                     selectedUser.getFullName(), selectedUser.getId(), selectedMapping.getRating(), milestone.getMilestone().getName());
-            return new AssignmentResult(selectedUser, "Highest rating in round-robin");
+            return new AssignmentResult(selectedUser, "Highest rating in round-robin and online");
         }
 
-        // Fallback to manager if no unassigned users (shouldn't happen after reset)
-        Optional<User> bestUserOpt = departmentUsers.stream()
-                .filter(this::isUserAvailable)
-                .max(Comparator.comparingDouble((User u) -> mappings.stream()
-                                .filter(m -> m.getUser().getId().equals(u.getId()))
-                                .findFirst()
-                                .map(m -> m.getRating() != null ? m.getRating() : 0.0)
-                                .orElse(0.0))
-                        .thenComparingLong(User::getId));
+        // If no online users, try their managers
+        logger.debug("No online users found, checking managers for milestone: {}", milestone.getMilestone().getName());
+        Optional<User> selectedManagerOpt = eligibleMappings.stream()
+                .filter(m -> !m.isAssigned())
+                .filter(m -> m.getUser().getManager() != null)
+                .filter(m -> {
+                    Optional<UserLoginStatus> status = userOnlineStatusRepository.findByUserIdAndIsDeletedFalse(m.getUser().getManager().getId());
+                    boolean isManagerOnline = status.isPresent() && status.get().isOnline();
+                    logger.debug("Manager {} (ID: {}) for user {} online status: {}",
+                            m.getUser().getManager().getFullName(), m.getUser().getManager().getId(),
+                            m.getUser().getFullName(), isManagerOnline);
+                    return isManagerOnline && isUserAvailable(m.getUser().getManager());
+                })
+                .map(m -> m.getUser().getManager())
+                .findFirst();
 
-        if (bestUserOpt.isPresent()) {
-            User bestUser = bestUserOpt.get();
-            User manager = bestUser.getManager();
-            if (manager != null && isUserAvailable(manager)) {
-                logger.info("No unassigned users with positive rating found, assigned manager: {} (ID: {}) for milestone: {}",
-                        manager.getFullName(), manager.getId(), milestone.getMilestone().getName());
-                return new AssignmentResult(manager, "Manager fallback");
-            }
+        if (selectedManagerOpt.isPresent()) {
+            User manager = selectedManagerOpt.get();
+            // Create or update UserProductMap for the manager
+            UserProductMap managerProductMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
+                    manager.getId(), milestone.getProduct().getId()).orElseGet(() -> {
+                UserProductMap newMap = new UserProductMap();
+                newMap.setUser(manager);
+                newMap.setProduct(milestone.getProduct());
+                newMap.setRating(0.0); // Default rating for manager
+                newMap.setAssigned(false);
+                newMap.setDeleted(false);
+                newMap.setCreatedDate(new Date());
+                newMap.setUpdatedDate(new Date());
+                newMap.setCreatedBy(0L); // System or default user ID
+                newMap.setUpdatedBy(0L); // System or default user ID
+                return newMap;
+            });
+            managerProductMap.setAssigned(true);
+            userProductMapRepository.save(managerProductMap);
+            logger.info("Assigned manager: {} (ID: {}) for milestone: {} due to user offline",
+                    manager.getFullName(), manager.getId(), milestone.getMilestone().getName());
+            return new AssignmentResult(manager, "Manager assigned due to user offline");
         }
 
-        User admin = assignAdmin(milestone);
-        return new AssignmentResult(admin, "Admin assigned");
+        // Fallback to admin
+        return assignAdmin(milestone);
     }
 
-    private User assignAdmin(ProductMilestoneMap milestone) {
+    private AssignmentResult assignAdmin(ProductMilestoneMap milestone) {
         List<User> admins = userRepository.findAdmins();
         logger.debug("Found {} admins for milestone: {}", admins.size(), milestone.getMilestone().getName());
         if (!admins.isEmpty()) {
@@ -811,9 +839,27 @@ public class ProjectServiceImpl implements ProjectService {
                 .findFirst();
 
         if (availableAdmin.isPresent()) {
+            User admin = availableAdmin.get();
+            // Create or update UserProductMap for the admin
+            UserProductMap adminProductMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
+                    admin.getId(), milestone.getProduct().getId()).orElseGet(() -> {
+                UserProductMap newMap = new UserProductMap();
+                newMap.setUser(admin);
+                newMap.setProduct(milestone.getProduct());
+                newMap.setRating(0.0); // Default rating for admin
+                newMap.setAssigned(false);
+                newMap.setDeleted(false);
+                newMap.setCreatedDate(new Date());
+                newMap.setUpdatedDate(new Date());
+                newMap.setCreatedBy(0L); // System or default user ID
+                newMap.setUpdatedBy(0L); // System or default user ID
+                return newMap;
+            });
+            adminProductMap.setAssigned(true);
+            userProductMapRepository.save(adminProductMap);
             logger.info("Assigned admin: {} (ID: {}) for milestone: {}",
-                    availableAdmin.get().getFullName(), availableAdmin.get().getId(), milestone.getMilestone().getName());
-            return availableAdmin.get();
+                    admin.getFullName(), admin.getId(), milestone.getMilestone().getName());
+            return new AssignmentResult(admin, "Admin assigned due to no online users or managers");
         }
 
         logger.error("No available admins found for milestone: {}", milestone.getMilestone().getName());

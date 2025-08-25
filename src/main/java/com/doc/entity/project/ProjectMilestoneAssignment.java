@@ -71,5 +71,4 @@ public class ProjectMilestoneAssignment {
     private boolean isDeleted = false;
 
 
-
 }

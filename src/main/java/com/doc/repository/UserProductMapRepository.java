@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository interface for managing {@link UserProductMap} entities.
@@ -32,6 +33,8 @@ public interface UserProductMapRepository extends JpaRepository<UserProductMap, 
      */
     @Query("SELECT CASE WHEN COUNT(upm) > 0 THEN true ELSE false END FROM UserProductMap upm WHERE upm.user.id = :userId AND upm.product.id = :productId AND upm.isDeleted = false")
     boolean existsByUserIdAndProductIdAndIsDeletedFalse(@Param("userId") Long userId, @Param("productId") Long productId);
+
+    Optional<UserProductMap> findByUserIdAndProductIdAndIsDeletedFalse(@Param("userId") Long userId, @Param("productId") Long productId);
 
 
 }
