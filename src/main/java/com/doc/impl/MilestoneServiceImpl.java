@@ -183,6 +183,7 @@ public class MilestoneServiceImpl implements MilestoneService {
 
     @Override
     public List<MilestoneResponseDto> getAllMilestones() {
+
         List<Milestone> milestones = milestoneRepository.findAll();
 
         return milestones.stream()

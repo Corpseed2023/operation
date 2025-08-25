@@ -29,4 +29,6 @@ public interface ProductMilestoneMapRepository extends JpaRepository<ProductMile
      * @return a page of mappings for the product
      */
     Page<ProductMilestoneMap> findByProductId(Long productId, Pageable pageable);
+
+
 }

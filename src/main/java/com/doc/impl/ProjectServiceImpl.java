@@ -150,7 +150,9 @@ public class ProjectServiceImpl implements ProjectService {
                 });
 
         // Fetch milestones for the product
-        List<ProductMilestoneMap> milestones = productMilestoneMapRepository.findByProductId(product.getId(), PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        List<ProductMilestoneMap> milestones = productMilestoneMapRepository.findByProductId(product.getId(),
+                PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+
         if (milestones.isEmpty()) {
             logger.warn("No milestones found for product ID: {}", product.getId());
             throw new ValidationException("No milestones defined for product ID " + product.getId());

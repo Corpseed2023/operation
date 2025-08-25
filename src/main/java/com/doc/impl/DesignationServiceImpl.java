@@ -57,7 +57,7 @@ public class DesignationServiceImpl implements DesignationService {
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + departmentId + " not found"));
 
-        User createdByUser = userRepository.findActiveUserById(createdBy)
+         userRepository.findActiveUserById(createdBy)
                 .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + createdBy + " not found"));
 
         Designation designation = new Designation();
