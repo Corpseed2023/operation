@@ -8,13 +8,15 @@ import org.hibernate.annotations.Comment;
 
 import java.time.LocalDate;
 import java.util.Date;
-import java.util.Locale;
 
 /**
  * Entity mapping products to milestones with order and rules.
  */
 @Entity
-@Table(name = "product_milestone_map")
+@Table(name = "product_milestone_map", indexes = {
+        @Index(name = "idx_product_id", columnList = "product_id"),
+        @Index(name = "idx_milestone_id", columnList = "milestone_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor

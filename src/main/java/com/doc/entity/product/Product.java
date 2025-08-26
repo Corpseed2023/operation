@@ -17,7 +17,9 @@ import java.util.List;
  * Entity representing a product.
  */
 @Entity
-@Table(name = "products")
+@Table(name = "products", indexes = {
+        @Index(name = "idx_product_name", columnList = "productName", unique = true)
+})
 @Getter
 @Setter
 @NoArgsConstructor

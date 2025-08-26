@@ -12,7 +12,9 @@ import java.time.LocalDate;
 import java.util.Date;
 
 @Entity
-@Table(name = "project_payment_detail")
+@Table(name = "project_payment_detail", indexes = {
+        @Index(name = "idx_project_id", columnList = "project_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor

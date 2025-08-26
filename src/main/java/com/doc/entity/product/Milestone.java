@@ -15,7 +15,9 @@ import java.util.List;
  * (e.g., Documentation, Legal Verification, Certification).
  */
 @Entity
-@Table(name = "milestones")
+@Table(name = "milestones", indexes = {
+        @Index(name = "idx_name", columnList = "name", unique = true)
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -32,7 +34,6 @@ public class Milestone {
 
     @Column(columnDefinition = "varchar(1000) comment 'Detailed description of the milestone''s purpose and scope'")
     private String description;
-
 
     @ManyToMany(mappedBy = "milestones", fetch = FetchType.LAZY)
     @Comment("Departments associated with this milestone")

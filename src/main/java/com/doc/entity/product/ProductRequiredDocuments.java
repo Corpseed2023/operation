@@ -15,11 +15,13 @@ import java.util.List;
  * Represents a required document for a product based on region (state/central/international).
  */
 @Entity
+@Table(name = "product_required_documents", indexes = {
+        @Index(name = "idx_name", columnList = "name")
+})
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "product_required_documents")
 public class ProductRequiredDocuments {
 
     @Id
@@ -27,6 +29,7 @@ public class ProductRequiredDocuments {
     @Comment("Primary Key: Unique identifier for the required document")
     private Long id;
 
+    @Column(nullable = false)
     private String name;
 
     @Column(length = 1000)
@@ -36,13 +39,13 @@ public class ProductRequiredDocuments {
     private String type;
 
     @Comment("Country")
-    private String country; // For International
+    private String country;
 
     @Comment("Central Government Name")
-    private String centralName; // For Central Govt level
+    private String centralName;
 
     @Comment("State Name")
-    private String stateName; // For State level
+    private String stateName;
 
     @Comment("Is Deleted flag (soft delete)")
     private boolean isDeleted = false;

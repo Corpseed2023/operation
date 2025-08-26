@@ -1,6 +1,5 @@
 package com.doc.entity.project;
 
-
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -14,7 +13,10 @@ import java.util.Date;
  * Entity to store the history of project milestone assignments with reasons.
  */
 @Entity
-@Table(name = "project_assignment_history")
+@Table(name = "project_assignment_history", indexes = {
+        @Index(name = "idx_project_id", columnList = "project_id"),
+        @Index(name = "idx_milestone_assignment_id", columnList = "milestone_assignment_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -41,7 +43,7 @@ public class ProjectAssignmentHistory {
     private User assignedUser;
 
     @Column(name = "assignment_reason", nullable = false)
-    @Comment("Reason for assigning this user (e.g., ''Highest rating in round-robin'', ''Manager fallback'', ''Admin assigned'')")
+    @Comment("Reason for assigning this user (e.g., 'Highest rating in round-robin', 'Manager fallback', 'Admin assigned')")
     private String assignmentReason;
 
     @Temporal(TemporalType.TIMESTAMP)

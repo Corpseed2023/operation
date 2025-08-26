@@ -9,7 +9,9 @@ import org.hibernate.annotations.Comment;
 import java.util.Date;
 
 @Entity
-@Table(name = "project_payment_transaction")
+@Table(name = "project_payment_transaction", indexes = {
+        @Index(name = "idx_project_id", columnList = "project_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,13 +28,18 @@ public class ProjectPaymentTransaction {
     private Project project;
 
     @Column(nullable = false)
-    @Comment("Payment amount")
+    @Comment("Payment amount (positive for payment, negative for refund)")
     private Double amount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "transaction_type", nullable = false)
+    @Comment("Type of transaction: PAYMENT or REFUND")
+    private TransactionType transactionType;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(nullable = false)
-    @Comment("Payment date")
-    private Date paymentDate;
+    @Comment("Transaction date")
+    private Date transactionDate;
 
     @Column(nullable = false)
     @Comment("Created by user ID")
@@ -42,4 +49,9 @@ public class ProjectPaymentTransaction {
     @Column(updatable = false)
     @Comment("Created date")
     private Date createdDate;
+
+    public enum TransactionType {
+        PAYMENT,
+        REFUND
+    }
 }

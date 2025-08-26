@@ -1,4 +1,4 @@
-        package com.doc.entity.project;
+package com.doc.entity.project;
 
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
@@ -15,11 +15,16 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-        /**
+/**
  * Entity representing a project in the system.
  */
 @Entity
-@Table(name = "project")
+@Table(name = "project", indexes = {
+        @Index(name = "idx_project_no", columnList = "projectNo", unique = true),
+        @Index(name = "idx_product_id", columnList = "product_id"),
+        @Index(name = "idx_sales_person_id", columnList = "sales_person_id"),
+        @Index(name = "idx_status", columnList = "status")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -40,7 +45,7 @@ public class Project {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sales_person_id")
-    @Comment("sales person who bring this project")
+    @Comment("Sales person who brought this project")
     private User salesPerson;
 
     @OneToOne(mappedBy = "project", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
@@ -58,7 +63,7 @@ public class Project {
     private Contact contact;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn
+    @JoinColumn(name = "company_id")
     @Comment("Company associated with the project")
     private Company company;
 
@@ -85,8 +90,10 @@ public class Project {
     @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
 
-    @Comment("Is active flag")
-    private boolean isActive = true;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    @Comment("Project status: OPEN, IN_PROGRESS, COMPLETED, CANCELLED, REFUNDED")
+    private ProjectStatus status = ProjectStatus.OPEN;
 
     @Comment("Project address")
     private String address;
@@ -106,14 +113,4 @@ public class Project {
     @OneToMany(mappedBy = "project", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @Comment("List of milestone assignments for this project")
     private List<ProjectMilestoneAssignment> milestoneAssignments = new ArrayList<>();
-
-
-
-
-
-
-
-
-
-
 }

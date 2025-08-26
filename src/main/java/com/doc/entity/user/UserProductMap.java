@@ -13,7 +13,9 @@ import java.util.Date;
  * Entity representing a mapping between a user and a product for project assignment.
  */
 @Entity
-@Table(name = "user_product_map")
+@Table(name = "user_product_map", indexes = {
+        @Index(name = "idx_user_id_product_id", columnList = "user_id, product_id", unique = true)
+})
 @Getter
 @Setter
 @NoArgsConstructor

@@ -14,7 +14,9 @@ import java.util.Date;
  * Entity representing the count of projects assigned to a user per product.
  */
 @Entity
-@Table(name = "user_project_count")
+@Table(name = "user_project_count", indexes = {
+        @Index(name = "idx_user_id_product_id", columnList = "user_id, product_id", unique = true)
+})
 @Getter
 @Setter
 @NoArgsConstructor
