@@ -12,11 +12,11 @@ public interface ProjectService {
 
     ProjectResponseDto getProjectById(Long id);
 
-    List<ProjectResponseDto> getAllProjects(int page, int size);
-
     ProjectResponseDto updateProject(Long id, ProjectRequestDto requestDto);
 
     void deleteProject(Long id);
 
     ProjectResponseDto addPaymentTransaction(Long projectId, ProjectPaymentTransactionDto transactionDto);
+
+    List<ProjectResponseDto> getAllProjects(Long userId, int page, int size);
 }

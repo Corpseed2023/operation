@@ -104,4 +104,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = 'ADMIN' AND u.isDeleted = false")
     List<User> findAdmins();
+
+    /**
+     * Finds non-deleted users managed by a specific manager.
+     *
+     * @param managerId the ID of the manager
+     * @return a list of non-deleted users managed by the specified manager
+     */
+    @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isDeleted = false")
+    List<User> findByManagerIdAndIsDeletedFalse(@Param("managerId") Long managerId);
 }

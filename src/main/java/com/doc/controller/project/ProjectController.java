@@ -55,11 +55,12 @@ public class ProjectController {
             @ApiResponse(responseCode = "200", description = "List of projects retrieved"),
             @ApiResponse(responseCode = "400", description = "Invalid pagination parameters")
     })
-    @GetMapping
+        @GetMapping
     public ResponseEntity<List<ProjectResponseDto>> getAllProjects(
+            @RequestParam Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        List<ProjectResponseDto> responses = projectService.getAllProjects(page, size);
+        List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page, size);
         return ResponseEntity.ok(responses);
     }
 

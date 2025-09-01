@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -64,4 +65,14 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      */
     @Query("SELECT p FROM Project p WHERE p.product.id = :productId AND p.isDeleted = false")
     Page<Project> findByProductIdAndIsDeletedFalse(@Param("productId") Long productId, Pageable pageable);
+
+    /**
+     * Retrieves non-deleted projects assigned to specific users (based on milestone assignments), with pagination.
+     *
+     * @param userIds the list of user IDs
+     * @param pageable pagination information
+     * @return a {@link Page} of non-deleted projects assigned to the given users
+     */
+    @Query("SELECT DISTINCT p FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    Page<Project> findByAssignedUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
 }

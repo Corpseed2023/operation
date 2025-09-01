@@ -264,16 +264,45 @@ public class ProjectServiceImpl implements ProjectService {
         return mapToResponseDto(project);
     }
 
+    // Modified Service Method in ProjectServiceImpl
     @Override
-    public List<ProjectResponseDto> getAllProjects(int page, int size) {
-        logger.info("Fetching all projects, page: {}, size: {}", page, size);
+    public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
+        logger.info("Fetching projects for user ID: {}, page: {}, size: {}", userId, page, size);
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> {
+                    logger.error("User with ID {} not found or is deleted", userId);
+                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
+                });
+
         PageRequest pageable = PageRequest.of(page, size);
-        Page<Project> projectPage = projectRepository.findByIsDeletedFalse(pageable);
+        Page<Project> projectPage;
+
+        // Check if user has ADMIN role
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        if (isAdmin) {
+            logger.debug("User ID: {} is ADMIN, fetching all projects", userId);
+            projectPage = projectRepository.findByIsDeletedFalse(pageable);
+        } else {
+            List<Long> userIds = new ArrayList<>();
+            userIds.add(userId);
+
+            // If user is a manager, include subordinates
+            if (user.isManagerFlag()) {
+                logger.debug("User ID: {} is a manager, fetching subordinates' projects", userId);
+                List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+                userIds.addAll(subordinates.stream().map(User::getId).collect(Collectors.toList()));
+            }
+
+            logger.debug("Fetching projects for user IDs: {}", userIds);
+            projectPage = projectRepository.findByAssignedUserIds(userIds, pageable);
+        }
+
         return projectPage.getContent()
                 .stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
+
 
     @Override
     public ProjectResponseDto updateProject(Long id, ProjectRequestDto requestDto) {
@@ -789,6 +818,8 @@ public class ProjectServiceImpl implements ProjectService {
             throw new ValidationException("Transaction type cannot be null");
         }
     }
+
+
 
     private AssignmentResult assignMilestoneUser(ProductMilestoneMap milestone) {
         logger.info("Assigning user for milestone: {}, product ID: {}", milestone.getMilestone().getName(), milestone.getProduct().getId());
