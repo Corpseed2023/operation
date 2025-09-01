@@ -4,9 +4,12 @@ import com.doc.dto.project.ProjectRequestDto;
 import com.doc.exception.ValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+
+@Component
 public class ProjectRequestValidator {
 
     private static final Logger logger = LoggerFactory.getLogger(ProjectRequestValidator.class);
