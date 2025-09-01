@@ -57,6 +57,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("endDate") LocalDate endDate,
             Pageable pageable);
 
+
+
     /**
      * Finds products associated with a specific required document ID and not deleted.
      *

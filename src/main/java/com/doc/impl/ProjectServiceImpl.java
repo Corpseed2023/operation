@@ -504,7 +504,7 @@ public class ProjectServiceImpl implements ProjectService {
                 });
 
         // Validate status transition
-        validateMilestoneStatusTransition(assignment, newStatus, statusReason);
+        validateMilestoneStatusTransition(assignment, newStatus, statusReason) ;
 
         // Validate documents for COMPLETED status
         if (newStatus == MilestoneStatus.COMPLETED) {
