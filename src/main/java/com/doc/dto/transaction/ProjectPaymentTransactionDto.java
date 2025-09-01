@@ -1,5 +1,6 @@
 package com.doc.dto.transaction;
 
+import com.doc.entity.project.ProjectPaymentTransaction;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Getter;
@@ -20,4 +21,8 @@ public class ProjectPaymentTransactionDto {
 
     @NotNull(message = "Created by user ID cannot be null")
     private Long createdBy;
+
+    private ProjectPaymentTransaction.TransactionType transactionType;
+
 }
+

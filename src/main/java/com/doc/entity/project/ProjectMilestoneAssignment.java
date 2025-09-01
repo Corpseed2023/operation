@@ -15,9 +15,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Entity representing the assignment of a milestone to a user for a specific project.
- */
 @Entity
 @Table(name = "project_milestone_assignment", indexes = {
         @Index(name = "idx_project_id", columnList = "project_id"),
@@ -62,7 +59,7 @@ public class ProjectMilestoneAssignment {
     private MilestoneStatus status = MilestoneStatus.NEW;
 
     @Column(name = "status_reason", length = 1000)
-    @Comment("Reason for current status (required for ON_HOLD, REJECTED)")
+    @Comment("Reason for current status (required for ON_HOLD, REJECTED, COMPLETED)")
     private String statusReason;
 
     @Column(name = "is_visible", nullable = false)
@@ -70,7 +67,7 @@ public class ProjectMilestoneAssignment {
     private boolean isVisible = false;
 
     @Column(name = "visibility_reason", length = 1000)
-    @Comment("Reason for visibility status (e.g., 'Insufficient payment', 'Previous milestone incomplete')")
+    @Comment("Reason for visibility status, e.g., Insufficient payment or Previous milestone incomplete")
     private String visibilityReason;
 
     @Column(name = "rework_attempts", nullable = false)

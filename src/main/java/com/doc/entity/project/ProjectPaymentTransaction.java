@@ -19,39 +19,40 @@ public class ProjectPaymentTransaction {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Comment("Primary key: Unique identifier for the transaction")
+    @Comment("Primary key: Transaction ID")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
-    @Comment("Project associated with the transaction")
+    @JoinColumn(name = "project_id", nullable = false)
+    @Comment("Associated project")
     private Project project;
 
     @Column(nullable = false)
-    @Comment("Payment amount (positive for payment, negative for refund)")
+    @Comment("Transaction amount")
     private Double amount;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "transaction_type", nullable = false)
-    @Comment("Type of transaction: PAYMENT or REFUND")
+    @Comment("Transaction type: PAYMENT, REFUND")
     private TransactionType transactionType;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(nullable = false)
+    @Column(name = "transaction_date")
     @Comment("Transaction date")
     private Date transactionDate;
 
-    @Column(nullable = false)
     @Comment("Created by user ID")
     private Long createdBy;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(updatable = false)
     @Comment("Created date")
     private Date createdDate;
 
+    @Column(name = "is_deleted", nullable = false)
+    @Comment("Soft delete flag")
+    private boolean isDeleted = false;
+
     public enum TransactionType {
-        PAYMENT,
-        REFUND
+        PAYMENT, REFUND
     }
 }

@@ -25,16 +25,17 @@ public class UserProductMapController {
     private UserProductMapService userProductMapService;
 
     /**
-     * Creates a new user-product mapping.
+     * Creates new user-product mappings in bulk.
      *
-     * @param requestDto the request DTO containing mapping details
-     * @return the created mapping details
+     * @param requestDto the request DTO containing lists of userIds and productIds
+     * @return the list of created mappings
      */
     @PostMapping
-    public ResponseEntity<UserProductMapResponseDto> createUserProductMap(@RequestBody UserProductMapRequestDto requestDto) {
-        logger.info("Received request to create user-product mapping for userId: {}, productId: {}", requestDto.getUserId(), requestDto.getProductId());
-        UserProductMapResponseDto responseDto = userProductMapService.createUserProductMap(requestDto);
-        return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
+    public ResponseEntity<List<UserProductMapResponseDto>> createUserProductMaps(@RequestBody UserProductMapRequestDto requestDto) {
+        logger.info("Received request to create user-product mappings for userIds: {}, productIds: {}",
+                requestDto.getUserIds(), requestDto.getProductIds());
+        List<UserProductMapResponseDto> responseDtos = userProductMapService.createUserProductMaps(requestDto);
+        return new ResponseEntity<>(responseDtos, HttpStatus.CREATED);
     }
 
     /**
@@ -66,7 +67,7 @@ public class UserProductMapController {
      * Updates an existing user-product mapping.
      *
      * @param id         the mapping ID
-     * @param requestDto the request DTO containing updated details
+     * @param requestDto the request DTO containing updated details (expects single userId and productId)
      * @return the updated mapping details
      */
     @PutMapping("/{id}")

@@ -15,9 +15,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Entity representing a project in the system.
- */
 @Entity
 @Table(name = "project", indexes = {
         @Index(name = "idx_project_no", columnList = "projectNo", unique = true),
@@ -87,8 +84,13 @@ public class Project {
     @Comment("Updated by user ID")
     private Long updatedBy;
 
+    @Column(name = "is_deleted", nullable = false)
     @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
+
+    @Column(name = "is_active", nullable = false)
+    @Comment("Is active flag")
+    private boolean isActive = true;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)

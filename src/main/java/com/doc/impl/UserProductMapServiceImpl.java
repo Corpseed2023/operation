@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,26 +42,10 @@ public class UserProductMapServiceImpl implements UserProductMapService {
     private ProductRepository productRepository;
 
     @Override
-    public UserProductMapResponseDto createUserProductMap(UserProductMapRequestDto requestDto) {
-        logger.info("Creating user-product mapping for userId: {}, productId: {}", requestDto.getUserId(), requestDto.getProductId());
+    public List<UserProductMapResponseDto> createUserProductMaps(UserProductMapRequestDto requestDto) {
+        logger.info("Creating user-product mappings for userIds: {}, productIds: {}", requestDto.getUserIds(), requestDto.getProductIds());
+
         validateRequestDto(requestDto);
-
-        if (userProductMapRepository.existsByUserIdAndProductIdAndIsDeletedFalse(requestDto.getUserId(), requestDto.getProductId())) {
-            logger.warn("Mapping for userId: {} and productId: {} already exists", requestDto.getUserId(), requestDto.getProductId());
-            throw new ValidationException("Mapping for user ID " + requestDto.getUserId() + " and product ID " + requestDto.getProductId() + " already exists");
-        }
-
-        User user = userRepository.findByIdAndIsDeletedFalse(requestDto.getUserId())
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", requestDto.getUserId());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getUserId() + " not found or is deleted");
-                });
-
-        Product product = productRepository.findByIdAndIsDeletedFalse(requestDto.getProductId())
-                .orElseThrow(() -> {
-                    logger.error("Product with ID {} not found or is deleted", requestDto.getProductId());
-                    return new ResourceNotFoundException("Product with ID " + requestDto.getProductId() + " not found or is deleted");
-                });
 
         User createdBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getCreatedBy())
                 .orElseThrow(() -> {
@@ -74,20 +59,45 @@ public class UserProductMapServiceImpl implements UserProductMapService {
                     return new ResourceNotFoundException("Updated by user with ID " + requestDto.getUpdatedBy() + " not found or is deleted");
                 });
 
-        UserProductMap mapping = new UserProductMap();
-        mapping.setUser(user);
-        mapping.setProduct(product);
-        mapping.setRating(requestDto.getRating());
-        mapping.setCreatedBy(createdBy.getId());
-        mapping.setUpdatedBy(updatedBy.getId());
-        mapping.setCreatedDate(new Date());
-        mapping.setUpdatedDate(new Date());
-        mapping.setDeleted(false);
+        List<UserProductMapResponseDto> responseDtos = new ArrayList<>();
 
-        mapping = userProductMapRepository.save(mapping);
-        logger.info("User-product mapping created successfully with ID: {}", mapping.getId());
-        return mapToResponseDto(mapping);
+        for (Long userId : requestDto.getUserIds()) {
+            User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                    .orElseThrow(() -> {
+                        logger.error("User with ID {} not found or is deleted", userId);
+                        return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
+                    });
+
+            for (Long productId : requestDto.getProductIds()) {
+                if (userProductMapRepository.existsByUserIdAndProductIdAndIsDeletedFalse(userId, productId)) {
+                    logger.warn("Mapping for userId: {} and productId: {} already exists, skipping", userId, productId);
+                    continue;  // Skip existing mapping
+                }
+
+                Product product = productRepository.findByIdAndIsDeletedFalse(productId)
+                        .orElseThrow(() -> {
+                            logger.error("Product with ID {} not found or is deleted", productId);
+                            return new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted");
+                        });
+
+                UserProductMap mapping = new UserProductMap();
+                mapping.setUser(user);
+                mapping.setProduct(product);
+                mapping.setRating(requestDto.getRating());
+                mapping.setCreatedBy(createdBy.getId());
+                mapping.setUpdatedBy(updatedBy.getId());
+                mapping.setCreatedDate(new Date());
+                mapping.setUpdatedDate(new Date());
+                mapping.setDeleted(false);
+
+                mapping = userProductMapRepository.save(mapping);
+                logger.info("User-product mapping created successfully with ID: {}", mapping.getId());
+                responseDtos.add(mapToResponseDto(mapping));
+            }
+        }
+        return responseDtos;
     }
+
 
     @Override
     public UserProductMapResponseDto getUserProductMapById(Long id) {
@@ -113,10 +123,14 @@ public class UserProductMapServiceImpl implements UserProductMapService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Note: This update method expects a single userId and productId,
+     * so you might want a different DTO or overload if bulk updates are required.
+     */
     @Override
     public UserProductMapResponseDto updateUserProductMap(Long id, UserProductMapRequestDto requestDto) {
         logger.info("Updating user-product mapping with ID: {}", id);
-        validateRequestDto(requestDto);
+        validateSingleMappingRequestDto(requestDto);
 
         UserProductMap mapping = userProductMapRepository.findById(id)
                 .filter(m -> !m.isDeleted())
@@ -125,23 +139,26 @@ public class UserProductMapServiceImpl implements UserProductMapService {
                     return new ResourceNotFoundException("User-product mapping with ID " + id + " not found or is deleted");
                 });
 
-        if (!mapping.getUser().getId().equals(requestDto.getUserId()) || !mapping.getProduct().getId().equals(requestDto.getProductId())) {
-            if (userProductMapRepository.existsByUserIdAndProductIdAndIsDeletedFalse(requestDto.getUserId(), requestDto.getProductId())) {
-                logger.warn("Mapping for userId: {} and productId: {} already exists", requestDto.getUserId(), requestDto.getProductId());
-                throw new ValidationException("Mapping for user ID " + requestDto.getUserId() + " and product ID " + requestDto.getProductId() + " already exists");
+        Long requestUserId = requestDto.getUserIds().get(0);
+        Long requestProductId = requestDto.getProductIds().get(0);
+
+        if (!mapping.getUser().getId().equals(requestUserId) || !mapping.getProduct().getId().equals(requestProductId)) {
+            if (userProductMapRepository.existsByUserIdAndProductIdAndIsDeletedFalse(requestUserId, requestProductId)) {
+                logger.warn("Mapping for userId: {} and productId: {} already exists", requestUserId, requestProductId);
+                throw new ValidationException("Mapping for user ID " + requestUserId + " and product ID " + requestProductId + " already exists");
             }
         }
 
-        User user = userRepository.findByIdAndIsDeletedFalse(requestDto.getUserId())
+        User user = userRepository.findByIdAndIsDeletedFalse(requestUserId)
                 .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", requestDto.getUserId());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getUserId() + " not found or is deleted");
+                    logger.error("User with ID {} not found or is deleted", requestUserId);
+                    return new ResourceNotFoundException("User with ID " + requestUserId + " not found or is deleted");
                 });
 
-        Product product = productRepository.findByIdAndIsDeletedFalse(requestDto.getProductId())
+        Product product = productRepository.findByIdAndIsDeletedFalse(requestProductId)
                 .orElseThrow(() -> {
-                    logger.error("Product with ID {} not found or is deleted", requestDto.getProductId());
-                    return new ResourceNotFoundException("Product with ID " + requestDto.getProductId() + " not found or is deleted");
+                    logger.error("Product with ID {} not found or is deleted", requestProductId);
+                    return new ResourceNotFoundException("Product with ID " + requestProductId + " not found or is deleted");
                 });
 
         User updatedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUpdatedBy())
@@ -177,15 +194,19 @@ public class UserProductMapServiceImpl implements UserProductMapService {
         logger.info("User-product mapping deleted successfully with ID: {}", id);
     }
 
+    /**
+     * Validation for bulk create request
+     */
     private void validateRequestDto(UserProductMapRequestDto requestDto) {
-        logger.debug("Validating user-product mapping request DTO: userId: {}, productId: {}", requestDto.getUserId(), requestDto.getProductId());
-        if (requestDto.getUserId() == null) {
-            logger.warn("User ID is null");
-            throw new ValidationException("User ID cannot be null");
+        logger.debug("Validating bulk user-product mapping request DTO: userIds: {}, productIds: {}", requestDto.getUserIds(), requestDto.getProductIds());
+
+        if (requestDto.getUserIds() == null || requestDto.getUserIds().isEmpty()) {
+            logger.warn("User IDs list is null or empty");
+            throw new ValidationException("User IDs list cannot be null or empty");
         }
-        if (requestDto.getProductId() == null) {
-            logger.warn("Product ID is null");
-            throw new ValidationException("Product ID cannot be null");
+        if (requestDto.getProductIds() == null || requestDto.getProductIds().isEmpty()) {
+            logger.warn("Product IDs list is null or empty");
+            throw new ValidationException("Product IDs list cannot be null or empty");
         }
         if (requestDto.getRating() != null && (requestDto.getRating() < 0 || requestDto.getRating() > 5)) {
             logger.warn("Invalid rating: {}", requestDto.getRating());
@@ -200,6 +221,31 @@ public class UserProductMapServiceImpl implements UserProductMapService {
             throw new ValidationException("Updated by user ID cannot be null");
         }
         logger.debug("User-product mapping request DTO validated successfully");
+    }
+
+    /**
+     * Validation for single mapping requests like update
+     */
+    private void validateSingleMappingRequestDto(UserProductMapRequestDto requestDto) {
+        logger.debug("Validating single user-product mapping request DTO: userIds: {}, productIds: {}", requestDto.getUserIds(), requestDto.getProductIds());
+
+        if (requestDto.getUserIds() == null || requestDto.getUserIds().size() != 1) {
+            logger.warn("User IDs list is null or does not contain exactly one element");
+            throw new ValidationException("Exactly one user ID must be provided");
+        }
+        if (requestDto.getProductIds() == null || requestDto.getProductIds().size() != 1) {
+            logger.warn("Product IDs list is null or does not contain exactly one element");
+            throw new ValidationException("Exactly one product ID must be provided");
+        }
+        if (requestDto.getRating() != null && (requestDto.getRating() < 0 || requestDto.getRating() > 5)) {
+            logger.warn("Invalid rating: {}", requestDto.getRating());
+            throw new ValidationException("Rating must be between 0 and 5");
+        }
+        if (requestDto.getUpdatedBy() == null) {
+            logger.warn("Updated by user ID is null");
+            throw new ValidationException("Updated by user ID cannot be null");
+        }
+        logger.debug("Single user-product mapping request DTO validated successfully");
     }
 
     private UserProductMapResponseDto mapToResponseDto(UserProductMap mapping) {

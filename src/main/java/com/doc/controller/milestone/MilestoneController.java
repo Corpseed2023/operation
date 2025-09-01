@@ -77,8 +77,6 @@ public class MilestoneController {
     }
 
 
-
-
     /**
      * Deletes a milestone by ID (soft delete).
      *

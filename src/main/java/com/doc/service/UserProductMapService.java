@@ -11,12 +11,12 @@ import java.util.List;
 public interface UserProductMapService {
 
     /**
-     * Creates a new user-product mapping.
+     * Creates new user-product mappings in bulk.
      *
-     * @param requestDto the request DTO containing mapping details
-     * @return the created mapping details
+     * @param requestDto the request DTO containing lists of userIds and productIds, plus other details
+     * @return the list of created mapping details
      */
-    UserProductMapResponseDto createUserProductMap(UserProductMapRequestDto requestDto);
+    List<UserProductMapResponseDto> createUserProductMaps(UserProductMapRequestDto requestDto);
 
     /**
      * Retrieves a user-product mapping by its ID.
@@ -37,7 +37,7 @@ public interface UserProductMapService {
      * Updates an existing user-product mapping.
      *
      * @param id         the mapping ID
-     * @param requestDto the request DTO containing updated details
+     * @param requestDto the request DTO containing updated details (expects single userId and productId)
      * @return the updated mapping details
      */
     UserProductMapResponseDto updateUserProductMap(Long id, UserProductMapRequestDto requestDto);

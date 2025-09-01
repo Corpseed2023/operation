@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository interface for managing ProjectMilestoneAssignment entities.
@@ -23,4 +24,5 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     List<ProjectMilestoneAssignment> findByProjectIdAndIsDeletedFalse(Long projectId);
 
 
+    Optional<ProjectMilestoneAssignment> findByIdAndIsDeletedFalse(Long assignmentId);
 }

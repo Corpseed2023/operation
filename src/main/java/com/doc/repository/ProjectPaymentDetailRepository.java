@@ -18,4 +18,6 @@ public interface ProjectPaymentDetailRepository extends JpaRepository<ProjectPay
 
     @Query("SELECT ppd FROM ProjectPaymentDetail ppd WHERE ppd.paymentStatus = :status AND ppd.isDeleted = false")
     Page<ProjectPaymentDetail> findByPaymentStatusAndIsDeletedFalse(@Param("status") String status, Pageable pageable);
+
+
 }

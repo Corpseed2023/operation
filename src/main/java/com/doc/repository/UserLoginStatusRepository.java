@@ -18,4 +18,6 @@ public interface UserLoginStatusRepository extends JpaRepository<UserLoginStatus
      * @return Optional containing the UserOnlineStatus if found
      */
     Optional<UserLoginStatus> findByUserIdAndIsDeletedFalse(Long userId);
+
+
 }
