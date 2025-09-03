@@ -29,4 +29,6 @@ public class   ProductRequiredDocumentsResponseDto {
     private Date updatedDate;
 
     private List<Long> productIds;
+
+
 }

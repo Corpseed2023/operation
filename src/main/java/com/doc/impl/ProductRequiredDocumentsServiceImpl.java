@@ -66,6 +66,8 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 }
             }
 
+
+
             // Create new document
             ProductRequiredDocuments document = new ProductRequiredDocuments();
             mapRequestDtoToEntity(document, requestDto);

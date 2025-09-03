@@ -11,11 +11,14 @@ public interface ProductRequiredDocumentsService {
 
     ProductRequiredDocumentsResponseDto getRequiredDocumentById(Long id);
 
-    List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(int page, int size, String name, String type, String country, String centralName, String stateName);
+    List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(int page, int size, String name, String type,
+                                                                      String country, String centralName, String stateName);
 
     ProductRequiredDocumentsResponseDto updateRequiredDocument(Long id, ProductRequiredDocumentsRequestDto requestDto);
 
     void deleteRequiredDocument(Long id);
 
     List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList);
+
+
 }

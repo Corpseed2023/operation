@@ -61,7 +61,7 @@ public class ProductRequiredDocuments {
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "product_document_mapping",
-            joinColumns = @JoinColumn(name = "document_id"),
+                joinColumns = @JoinColumn(name = "document_id"),
             inverseJoinColumns = @JoinColumn(name = "product_id")
     )
     @Comment("List of products associated with this document")

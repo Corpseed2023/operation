@@ -1,14 +1,17 @@
 package com.doc.controller.project;
 
+import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
 import com.doc.dto.project.ProjectResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,10 +32,6 @@ public class ProjectController {
             @ApiResponse(responseCode = "409", description = "Project number already exists"),
             @ApiResponse(responseCode = "404", description = "Referenced entity not found")
     })
-
-
-
-
     @PostMapping
     public ResponseEntity<ProjectResponseDto> createProject(@Valid @RequestBody ProjectRequestDto requestDto) {
         ProjectResponseDto response = projectService.createProject(requestDto);
@@ -55,7 +54,7 @@ public class ProjectController {
             @ApiResponse(responseCode = "200", description = "List of projects retrieved"),
             @ApiResponse(responseCode = "400", description = "Invalid pagination parameters")
     })
-        @GetMapping
+    @GetMapping
     public ResponseEntity<List<ProjectResponseDto>> getAllProjects(
             @RequestParam Long userId,
             @RequestParam(defaultValue = "0") int page,
@@ -71,7 +70,6 @@ public class ProjectController {
             @ApiResponse(responseCode = "404", description = "Project or referenced entity not found"),
             @ApiResponse(responseCode = "409", description = "Project number already exists")
     })
-
     @PutMapping("/{id}")
     public ResponseEntity<ProjectResponseDto> updateProject(
             @PathVariable Long id,
@@ -99,9 +97,18 @@ public class ProjectController {
         return ResponseEntity.ok(response);
     }
 
-
-
-
-
+    @Operation(summary = "Get assigned projects with milestones for the logged-in user with pagination")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Paged list of assigned projects retrieved"),
+            @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @GetMapping("/my-projects")
+    public ResponseEntity<Page<AssignedProjectResponseDto>> getAssignedProjects(
+            @Parameter(description = "User ID of the logged-in user") @RequestParam Long userId,
+            @Parameter(description = "Page number (0-based)", example = "0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Number of records per page", example = "10") @RequestParam(defaultValue = "10") int size) {
+        Page<AssignedProjectResponseDto> projects = projectService.getAssignedProjects(userId, page, size);
+        return ResponseEntity.ok(projects);
+    }
 
 }

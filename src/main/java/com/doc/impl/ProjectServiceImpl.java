@@ -1,8 +1,8 @@
 package com.doc.impl;
 
-import com.doc.dto.project.ProjectRequestDto;
-import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
+import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -218,7 +219,6 @@ public class ProjectServiceImpl implements ProjectService {
             ProjectPaymentTransaction transaction = new ProjectPaymentTransaction();
             transaction.setProject(project);
             transaction.setAmount(paidAmount);
-            transaction.setTransactionType(ProjectPaymentTransaction.TransactionType.PAYMENT);
             transaction.setTransactionDate(new Date());
             transaction.setCreatedBy(createdBy.getId());
             transaction.setCreatedDate(new Date());
@@ -264,7 +264,6 @@ public class ProjectServiceImpl implements ProjectService {
         return mapToResponseDto(project);
     }
 
-    // Modified Service Method in ProjectServiceImpl
     @Override
     public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
         logger.info("Fetching projects for user ID: {}, page: {}, size: {}", userId, page, size);
@@ -302,6 +301,7 @@ public class ProjectServiceImpl implements ProjectService {
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
+
 
 
     @Override
@@ -431,35 +431,23 @@ public class ProjectServiceImpl implements ProjectService {
                 });
 
         double amount = transactionDto.getAmount();
-        ProjectPaymentTransaction.TransactionType transactionType = transactionDto.getTransactionType();
 
-        if (transactionType == ProjectPaymentTransaction.TransactionType.PAYMENT) {
-            if (amount <= 0) {
-                logger.warn("Invalid payment amount: {}", amount);
-                throw new ValidationException("Payment amount must be positive");
-            }
-            if (paymentDetail.getPaymentType().getName().equals("FULL") && paymentDetail.getDueAmount() == 0) {
-                logger.warn("Attempt to add payment to fully paid project ID: {}", projectId);
-                throw new ValidationException("Cannot add payment to a fully paid project");
-            }
-            if (amount > paymentDetail.getDueAmount()) {
-                logger.warn("Payment amount {} exceeds due amount {}", amount, paymentDetail.getDueAmount());
-                throw new ValidationException("Payment amount cannot exceed due amount of " + paymentDetail.getDueAmount());
-            }
-            paymentDetail.setDueAmount(paymentDetail.getDueAmount() - amount);
-        } else if (transactionType == ProjectPaymentTransaction.TransactionType.REFUND) {
-            if (amount >= 0) {
-                logger.warn("Invalid refund amount: {}", amount);
-                throw new ValidationException("Refund amount must be negative");
-            }
-            double paidAmount = paymentDetail.getTotalAmount() - paymentDetail.getDueAmount();
-            if (Math.abs(amount) > paidAmount) {
-                logger.warn("Refund amount {} exceeds paid amount {}", Math.abs(amount), paidAmount);
-                throw new ValidationException("Refund amount cannot exceed paid amount of " + paidAmount);
-            }
-            paymentDetail.setDueAmount(paymentDetail.getDueAmount() - amount); // amount is negative, so this increases dueAmount
-            project.setStatus(ProjectStatus.REFUNDED);
+        // Validate payment amount
+        if (amount <= 0) {
+            logger.warn("Invalid payment amount: {}", amount);
+            throw new ValidationException("Payment amount must be positive");
         }
+        if (paymentDetail.getPaymentType().getName().equals("FULL") && paymentDetail.getDueAmount() == 0) {
+            logger.warn("Attempt to add payment to fully paid project ID: {}", projectId);
+            throw new ValidationException("Cannot add payment to a fully paid project");
+        }
+        if (amount > paymentDetail.getDueAmount()) {
+            logger.warn("Payment amount {} exceeds due amount {}", amount, paymentDetail.getDueAmount());
+            throw new ValidationException("Payment amount cannot exceed due amount of " + paymentDetail.getDueAmount());
+        }
+
+        // Update due amount
+        paymentDetail.setDueAmount(paymentDetail.getDueAmount() - amount);
 
         User createdBy = userRepository.findByIdAndIsDeletedFalse(transactionDto.getCreatedBy())
                 .orElseThrow(() -> {
@@ -469,8 +457,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         ProjectPaymentTransaction transaction = new ProjectPaymentTransaction();
         transaction.setProject(project);
-        transaction.setAmount(amount);
-        transaction.setTransactionType(transactionType);
+    transaction.setAmount(amount);
         transaction.setTransactionDate(transactionDto.getPaymentDate());
         transaction.setCreatedBy(createdBy.getId());
         transaction.setCreatedDate(new Date());
@@ -480,11 +467,14 @@ public class ProjectServiceImpl implements ProjectService {
 
         projectPaymentTransactionRepository.save(transaction);
         projectPaymentDetailRepository.save(paymentDetail);
-        logger.info("Transaction added for project ID: {}, type: {}, amount: {}", projectId, transactionType, amount);
+        logger.info("Transaction added for project ID: {}, amount: {}", projectId, amount);
 
-        // Update milestone visibilities and project status
+        // Update milestone visibilities based on payment
         updateMilestoneVisibilities(project, createdBy.getId());
-        updateProjectStatus(project, createdBy.getId());
+
+        // Do not update project status here to keep it OPEN
+        // Project status will be updated when milestones are actively worked on
+        // updateProjectStatus(project, createdBy.getId());
 
         return mapToResponseDto(project);
     }
@@ -504,7 +494,7 @@ public class ProjectServiceImpl implements ProjectService {
                 });
 
         // Validate status transition
-        validateMilestoneStatusTransition(assignment, newStatus, statusReason) ;
+        validateMilestoneStatusTransition(assignment, newStatus, statusReason);
 
         // Validate documents for COMPLETED status
         if (newStatus == MilestoneStatus.COMPLETED) {
@@ -736,17 +726,17 @@ public class ProjectServiceImpl implements ProjectService {
     private void updateProjectStatus(Project project, Long updatedById) {
         logger.debug("Updating project status for project ID: {}", project.getId());
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
+
         if (assignments.isEmpty()) {
             project.setStatus(ProjectStatus.OPEN);
         } else if (assignments.stream().allMatch(a -> a.getStatus() == MilestoneStatus.COMPLETED)) {
             project.setStatus(ProjectStatus.COMPLETED);
         } else if (assignments.stream().anyMatch(a -> a.getStatus() == MilestoneStatus.IN_PROGRESS || a.getStatus() == MilestoneStatus.ON_HOLD)) {
             project.setStatus(ProjectStatus.IN_PROGRESS);
-        } else if (project.getPaymentDetail().getDueAmount() > project.getPaymentDetail().getTotalAmount() - project.getPaymentDetail().getDueAmount()) {
-            project.setStatus(ProjectStatus.REFUNDED);
         } else {
             project.setStatus(ProjectStatus.OPEN);
         }
+
         project.setUpdatedBy(updatedById);
         project.setUpdatedDate(new Date());
         projectRepository.save(project);
@@ -813,13 +803,7 @@ public class ProjectServiceImpl implements ProjectService {
             logger.warn("Created by user ID is null");
             throw new ValidationException("Created by user ID cannot be null");
         }
-        if (transactionDto.getTransactionType() == null) {
-            logger.warn("Transaction type is null");
-            throw new ValidationException("Transaction type cannot be null");
-        }
     }
-
-
 
     private AssignmentResult assignMilestoneUser(ProductMilestoneMap milestone) {
         logger.info("Assigning user for milestone: {}, product ID: {}", milestone.getMilestone().getName(), milestone.getProduct().getId());
@@ -962,8 +946,6 @@ public class ProjectServiceImpl implements ProjectService {
         return available;
     }
 
-
-
     private void mapRequestDtoToProject(Project project, ProjectRequestDto requestDto) {
         project.setName(requestDto.getName().trim());
         project.setProjectNo(requestDto.getProjectNo().trim());
@@ -1005,4 +987,117 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setActive(project.isActive());
         return dto;
     }
+
+    @Override
+    public Page<AssignedProjectResponseDto> getAssignedProjects(Long userId, int page, int size) {
+        logger.info("Fetching assigned projects with milestones for user ID: {}, page: {}, size: {}", userId, page, size);
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+
+        PageRequest pageable = PageRequest.of(page, size * 10); // Adjust size to account for multiple assignments per project
+        Page<ProjectMilestoneAssignment> assignmentPage;
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        if (isAdmin) {
+            assignmentPage = projectMilestoneAssignmentRepository.findAllByIsDeletedFalse(pageable);
+        } else if (user.isManagerFlag()) {
+            List<Department> managerDepts = user.getDepartments();
+            if (managerDepts.isEmpty()) {
+                return new PageImpl<>(new ArrayList<>(), pageable, 0);
+            }
+            List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
+            List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
+            List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
+            if (!deptUserIds.contains(userId)) {
+                deptUserIds.add(userId);
+            }
+            assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdInAndIsVisibleTrueAndStatusIn(
+                    deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
+        } else {
+            assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdAndIsVisibleTrueAndStatusIn(
+                    userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
+        }
+
+        List<ProjectMilestoneAssignment> assignments = assignmentPage.getContent();
+        for (ProjectMilestoneAssignment assignment : assignments) {
+            assignment.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId()));
+        }
+
+        Map<Project, List<ProjectMilestoneAssignment>> groupedByProject = assignments.stream()
+                .collect(Collectors.groupingBy(ProjectMilestoneAssignment::getProject));
+
+        List<AssignedProjectResponseDto> projectDtos = new ArrayList<>();
+        for (Map.Entry<Project, List<ProjectMilestoneAssignment>> entry : groupedByProject.entrySet()) {
+            AssignedProjectResponseDto dto = new AssignedProjectResponseDto();
+            dto.setProject(mapToProjectDetailsDto(entry.getKey()));
+            dto.setAssignedMilestones(entry.getValue().stream()
+                    .map(this::mapToAssignedMilestoneDto)
+                    .collect(Collectors.toList()));
+            projectDtos.add(dto);
+        }
+
+        int start = Math.min(page * size, projectDtos.size());
+        int end = Math.min(start + size, projectDtos.size());
+        List<AssignedProjectResponseDto> pagedDtos = projectDtos.subList(start, end);
+        return new PageImpl<>(pagedDtos, PageRequest.of(page, size), projectDtos.size());
+    }
+
+
+    private ProjectDetailsDto mapToProjectDetailsDto(Project project) {
+        ProjectDetailsDto dto = new ProjectDetailsDto();
+        dto.setId(project.getId());
+        dto.setName(project.getName());
+        dto.setProjectNo(project.getProjectNo());
+        dto.setDate(project.getDate());
+        dto.setAddress(project.getAddress());
+        dto.setCity(project.getCity());
+        dto.setState(project.getState());
+        dto.setCountry(project.getCountry());
+        dto.setCreatedDate(project.getCreatedDate());
+        dto.setUpdatedDate(project.getUpdatedDate());
+        return dto;
+    }
+
+    private AssignedMilestoneDto mapToAssignedMilestoneDto(ProjectMilestoneAssignment assignment) {
+        AssignedMilestoneDto dto = new AssignedMilestoneDto();
+        dto.setId(assignment.getId());
+        dto.setProjectId(assignment.getProject().getId());
+        dto.setProjectName(assignment.getProject().getName());
+        dto.setMilestoneId(assignment.getMilestone().getId());
+        dto.setMilestoneName(assignment.getMilestone().getName());
+        dto.setStatus(assignment.getStatus().name());
+        dto.setStatusReason(assignment.getStatusReason());
+        dto.setVisibilityReason(assignment.getVisibilityReason());
+        dto.setReworkAttempts(assignment.getReworkAttempts());
+        dto.setVisibleDate(assignment.getVisibleDate());
+        dto.setStartedDate(assignment.getStartedDate());
+        dto.setCompletedDate(assignment.getCompletedDate());
+        dto.setDocuments(assignment.getDocuments().stream()
+                .map(this::mapToDocumentResponseDto)
+                .collect(Collectors.toList()));
+        dto.setAssignedUser(mapToUserResponseDto(assignment.getAssignedUser()));
+        return dto;
+    }
+
+    private UserResponseDto mapToUserResponseDto(User user) {
+        if (user == null) {
+            return null;
+        }
+        UserResponseDto dto = new UserResponseDto();
+        dto.setId(user.getId());
+        dto.setFullName(user.getFullName());
+        dto.setEmail(user.getEmail());
+        dto.setContactNo(user.getContactNo());
+        return dto;
+    }
+
+    private DocumentResponseDto mapToDocumentResponseDto(ProjectDocumentUpload document) {
+        DocumentResponseDto dto = new DocumentResponseDto();
+        dto.setId(document.getId());
+        dto.setFileUrl(document.getFileUrl());
+        dto.setStatus(document.getStatus());
+        dto.setRemarks(document.getRemarks());
+        dto.setUploadTime(document.getUploadTime());
+        return dto;
+    }
+
 }

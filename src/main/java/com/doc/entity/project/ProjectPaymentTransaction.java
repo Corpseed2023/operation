@@ -31,11 +31,6 @@ public class ProjectPaymentTransaction {
     @Comment("Transaction amount")
     private Double amount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "transaction_type", nullable = false)
-    @Comment("Transaction type: PAYMENT, REFUND")
-    private TransactionType transactionType;
-
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "transaction_date")
     @Comment("Transaction date")
@@ -52,7 +47,5 @@ public class ProjectPaymentTransaction {
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
-    public enum TransactionType {
-        PAYMENT, REFUND
-    }
+
 }

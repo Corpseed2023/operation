@@ -22,7 +22,6 @@ public class ProjectPaymentTransactionDto {
     @NotNull(message = "Created by user ID cannot be null")
     private Long createdBy;
 
-    private ProjectPaymentTransaction.TransactionType transactionType;
 
 }
 

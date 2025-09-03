@@ -113,4 +113,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isDeleted = false")
     List<User> findByManagerIdAndIsDeletedFalse(@Param("managerId") Long managerId);
+
+    /**
+     * Finds non-deleted users by department IDs.
+     *
+     * @param deptIds the list of department IDs
+     * @return a list of non-deleted users in the specified departments
+     */
+    @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id IN :deptIds AND u.isDeleted = false")
+    List<User> findByDepartmentIdsIn(@Param("deptIds") List<Long> deptIds);
 }
