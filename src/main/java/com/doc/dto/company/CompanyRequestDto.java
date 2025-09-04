@@ -13,6 +13,7 @@ import com.doc.dto.contact.ContactRequestDto;
 @Setter
 public class CompanyRequestDto {
 
+
     @NotBlank(message = "Company name cannot be empty")
     private String name;
 

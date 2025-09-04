@@ -8,7 +8,6 @@ import java.util.List;
 
 public interface CompanyService {
 
-    CompanyResponseDto createCompany(CompanyRequestDto requestDto);
 
     CompanyResponseDto getCompanyById(Long id);
 
@@ -18,4 +17,8 @@ public interface CompanyService {
     void deleteCompany(Long id);
 
     List<CompanyResponseDto> getAllCompanies(int page, int size, Long userId);
+
+    CompanyResponseDto createCompany(CompanyRequestDto requestDto, Long companyId);
+
+
 }

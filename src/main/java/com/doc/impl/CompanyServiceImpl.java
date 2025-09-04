@@ -42,10 +42,14 @@ public class CompanyServiceImpl implements CompanyService {
     @Autowired
     private UserRepository userRepository;
 
+
     @Override
-    public CompanyResponseDto createCompany(CompanyRequestDto requestDto) {
-        logger.info("Creating company with name: {}, number of contacts: {}",
-                requestDto.getName(), requestDto.getContacts() != null ? requestDto.getContacts().size() : 0);
+    public CompanyResponseDto createCompany(CompanyRequestDto requestDto, Long companyId) {
+        logger.info("Creating company with name: {}, number of contacts: {}, provided ID: {}",
+                requestDto.getName(),
+                requestDto.getContacts() != null ? requestDto.getContacts().size() : 0,
+                companyId);
+
         validateRequestDto(requestDto);
 
         if (companyRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
@@ -61,18 +65,28 @@ public class CompanyServiceImpl implements CompanyService {
                 .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
 
         Company company = new Company();
+
+        if (companyId != null) {
+            if (companyRepository.existsById(companyId)) {
+                throw new ValidationException("Company with ID " + companyId + " already exists");
+            }
+            company.setId(companyId);
+        }
+
         mapRequestDtoToEntity(company, requestDto);
         company.setCreatedDate(new Date());
         company.setUpdatedDate(new Date());
         company.setDeleted(false);
 
-        // Map and associate contacts
         List<Contact> contacts = mapContactDtosToEntities(requestDto.getContacts(), company);
         company.setContacts(contacts);
 
         company = companyRepository.save(company);
         return mapToResponseDto(company);
     }
+
+
+
 
     @Override
     public CompanyResponseDto getCompanyById(Long id) {

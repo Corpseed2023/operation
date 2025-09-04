@@ -21,11 +21,15 @@ public class CompanyController {
     @Autowired
     private CompanyService companyService;
 
-    @PostMapping
-    public ResponseEntity<CompanyResponseDto> createCompany(@Valid @RequestBody CompanyRequestDto requestDto) {
-        CompanyResponseDto response = companyService.createCompany(requestDto);
+    @PostMapping("/createCompany")
+    public ResponseEntity<CompanyResponseDto> createCompany(
+            @Valid @RequestBody CompanyRequestDto requestDto,
+            @RequestParam(required = false) Long companyId) {
+
+        CompanyResponseDto response = companyService.createCompany(requestDto, companyId);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<CompanyResponseDto> getCompanyById(@PathVariable Long id) {
