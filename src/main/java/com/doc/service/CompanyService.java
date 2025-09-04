@@ -12,9 +12,10 @@ public interface CompanyService {
 
     CompanyResponseDto getCompanyById(Long id);
 
-    List<CompanyResponseDto> getAllCompanies(int page, int size);
 
     CompanyResponseDto updateCompany(Long id, CompanyRequestDto requestDto);
 
     void deleteCompany(Long id);
+
+    List<CompanyResponseDto> getAllCompanies(int page, int size, Long userId);
 }

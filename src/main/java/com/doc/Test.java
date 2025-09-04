@@ -1,8 +1,9 @@
 //package com.doc;
 //
 //
-//import java.util.Arrays;
-//import java.util.List;
+//import io.swagger.models.auth.In;
+//
+//import java.util.*;
 //import java.util.stream.Collectors;
 //
 //public class Test {
@@ -13,15 +14,8 @@
 //
 //        List<String> names = Arrays.asList("alice", "bob", "charlie","rt");
 //
-//        List<Integer> numbers = List.of(3, 7, 2, 9, 4);
 //
-//
-//
-////        List<String> result = names.stream().filter(name -> name.length()<5).collect(Collectors.toList());
-//        List<Integer> result = numbers.stream().max(Integer::compareTo);
-//
-//
-//
+//        Map<Character,List<String>> characterListMap = names.stream().collect(Collectors.groupingBy(n->n.charAt(0)));
 //
 //
 //

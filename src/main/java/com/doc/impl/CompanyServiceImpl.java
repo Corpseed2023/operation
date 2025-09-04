@@ -5,6 +5,7 @@ import com.doc.dto.company.CompanyResponseDto;
 import com.doc.dto.contact.ContactRequestDto;
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
+import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -82,15 +84,33 @@ public class CompanyServiceImpl implements CompanyService {
     }
 
     @Override
-    public List<CompanyResponseDto> getAllCompanies(int page, int size) {
+    public List<CompanyResponseDto> getAllCompanies(int page, int size, Long userId) {
         logger.info("Fetching companies, page: {}, size: {}", page, size);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> "ADMIN".equalsIgnoreCase(role.getName()));
+
         PageRequest pageable = PageRequest.of(page, size);
-        Page<Company> companyPage = companyRepository.findByIsDeletedFalse(pageable);
+        Page<Company> companyPage;
+
+        if (isAdmin) {
+            companyPage = companyRepository.findByIsDeletedFalse(pageable);
+        } else {
+
+            return Collections.emptyList();
+
+        }
+
         return companyPage.getContent()
                 .stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
+
+
 
     @Override
     public CompanyResponseDto updateCompany(Long id, CompanyRequestDto requestDto) {

@@ -798,6 +798,8 @@ public class ProjectServiceImpl implements ProjectService {
         if (transactionDto.getPaymentDate() == null) {
             logger.warn("Transaction date is null");
             throw new ValidationException("Transaction date cannot be null");
+
+
         }
         if (transactionDto.getCreatedBy() == null) {
             logger.warn("Created by user ID is null");

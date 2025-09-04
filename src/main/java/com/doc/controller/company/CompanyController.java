@@ -36,8 +36,9 @@ public class CompanyController {
     @GetMapping
     public ResponseEntity<List<CompanyResponseDto>> getAllCompanies(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        List<CompanyResponseDto> responses = companyService.getAllCompanies(page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam Long userId ) {
+        List<CompanyResponseDto> responses = companyService.getAllCompanies(page, size, userId);
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
 
