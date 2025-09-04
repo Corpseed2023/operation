@@ -105,9 +105,12 @@ public class ProjectController {
     @GetMapping("/my-projects")
     public ResponseEntity<Page<AssignedProjectResponseDto>> getAssignedProjects(
             @Parameter(description = "User ID of the logged-in user") @RequestParam Long userId,
-            @Parameter(description = "Page number (0-based)", example = "0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page number (1-based)", example = "1") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "Number of records per page", example = "10") @RequestParam(defaultValue = "10") int size) {
-        Page<AssignedProjectResponseDto> projects = projectService.getAssignedProjects(userId, page, size);
+        if (page < 1) {
+            throw new IllegalArgumentException("Page number must be at least 1");
+        }
+        Page<AssignedProjectResponseDto> projects = projectService.getAssignedProjects(userId, page - 1, size);
         return ResponseEntity.ok(projects);
     }
 
