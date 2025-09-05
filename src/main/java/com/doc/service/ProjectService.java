@@ -1,5 +1,6 @@
 package com.doc.service;
 
+import com.doc.dto.project.AssignedMilestoneDto;
 import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
 import com.doc.dto.project.ProjectResponseDto;
@@ -23,4 +24,6 @@ public interface ProjectService {
     List<ProjectResponseDto> getAllProjects(Long userId, int page, int size);
 
     Page<AssignedProjectResponseDto> getAssignedProjects(Long userId, int page, int size);
+
+    List<AssignedMilestoneDto> getProjectMilestones(Long projectId, Long userId);
 }

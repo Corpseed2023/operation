@@ -1080,6 +1080,8 @@ public class ProjectServiceImpl implements ProjectService {
         return dto;
     }
 
+
+
     private UserResponseDto mapToUserResponseDto(User user) {
         if (user == null) {
             return null;
@@ -1101,5 +1103,54 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setUploadTime(document.getUploadTime());
         return dto;
     }
+
+
+    @Override
+    public List<AssignedMilestoneDto> getProjectMilestones(Long projectId, Long userId) {
+        logger.info("Fetching milestones for project ID: {}, user ID: {}", projectId, userId);
+        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
+                .orElseThrow(() -> {
+                    logger.error("Project with ID {} not found or is deleted", projectId);
+                    return new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted");
+                });
+
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> {
+                    logger.error("User with ID {} not found or is deleted", userId);
+                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
+                });
+
+        List<ProjectMilestoneAssignment> assignments;
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        if (isAdmin) {
+            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
+        } else if (user.isManagerFlag()) {
+            List<Department> managerDepts = user.getDepartments();
+            if (managerDepts.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
+            List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
+            List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
+            if (!deptUserIds.contains(userId)) {
+                deptUserIds.add(userId);
+            }
+            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
+                    projectId, deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+        } else {
+            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
+                    projectId, userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+        }
+
+        for (ProjectMilestoneAssignment assignment : assignments) {
+            assignment.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId()));
+        }
+
+        return assignments.stream()
+                .map(this::mapToAssignedMilestoneDto)
+                .collect(Collectors.toList());
+    }
+
+
 
 }
