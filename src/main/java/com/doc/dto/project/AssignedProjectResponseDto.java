@@ -11,5 +11,5 @@ import java.util.List;
 @AllArgsConstructor
 public class AssignedProjectResponseDto {
     private ProjectDetailsDto project;
-    private List<AssignedMilestoneDto> assignedMilestones;
+//    private List<AssignedMilestoneDto> assignedMilestones;
 }

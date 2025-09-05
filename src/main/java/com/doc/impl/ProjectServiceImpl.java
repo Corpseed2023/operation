@@ -1031,9 +1031,9 @@ public class ProjectServiceImpl implements ProjectService {
         for (Map.Entry<Project, List<ProjectMilestoneAssignment>> entry : groupedByProject.entrySet()) {
             AssignedProjectResponseDto dto = new AssignedProjectResponseDto();
             dto.setProject(mapToProjectDetailsDto(entry.getKey()));
-            dto.setAssignedMilestones(entry.getValue().stream()
-                    .map(this::mapToAssignedMilestoneDto)
-                    .collect(Collectors.toList()));
+//            dto.setAssignedMilestones(entry.getValue().stream()
+//                    .map(this::mapToAssignedMilestoneDto)
+//                    .collect(Collectors.toList()));
             projectDtos.add(dto);
         }
 
