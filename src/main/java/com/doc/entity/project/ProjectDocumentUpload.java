@@ -7,8 +7,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
+import org.hibernate.annotations.GenericGenerator;
 
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * Represents the document uploaded for a specific project milestone against a required document item.
@@ -24,9 +26,11 @@ import java.util.Date;
 public class ProjectDocumentUpload {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(generator = "UUID")
+    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
+    @Column(name = "id", updatable = false, nullable = false)
     @Comment("Primary key: Unique identifier for the document upload")
-    private Long id;
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
@@ -39,8 +43,8 @@ public class ProjectDocumentUpload {
     private ProjectMilestoneAssignment milestoneAssignment;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "required_document_id", nullable = false)
-    @Comment("Required document for this upload")
+    @JoinColumn(name = "required_document_uuid", nullable = false, referencedColumnName = "uuid")
+    @Comment("Required document for this upload (references UUID)")
     private ProductRequiredDocuments requiredDocument;
 
     @Column(name = "file_url", nullable = false, length = 1000)
@@ -57,7 +61,7 @@ public class ProjectDocumentUpload {
     private String remarks;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_by")
+    @JoinColumn(name = "uploaded_by", nullable = false)
     @Comment("User who uploaded the document")
     private User uploadedBy;
 
@@ -66,14 +70,36 @@ public class ProjectDocumentUpload {
     @Comment("Time when the document was uploaded")
     private Date uploadTime;
 
+    @Column(name = "created_by", nullable = false)
+    @Comment("User ID who created the document upload")
+    private Long createdBy;
+
+    @Column(name = "updated_by", nullable = false)
+    @Comment("User ID who last updated the document upload")
+    private Long updatedBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_date", nullable = false, updatable = false)
+    @Comment("Date when the document upload was created")
+    private Date createdDate;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_date", nullable = false)
+    @Comment("Date when the document upload was last updated")
+    private Date updatedDate;
+
     @Column(name = "is_deleted", nullable = false)
     @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
 
-    public enum DocumentStatus {
-        PENDING,   // Document not yet uploaded
-        UPLOADED,  // Document uploaded, awaiting verification
-        VERIFIED,  // Document verified
-        REJECTED   // Document rejected (requires remarks)
+    @PrePersist
+    protected void onCreate() {
+        this.createdDate = new Date();
+        this.updatedDate = new Date();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedDate = new Date();
     }
 }

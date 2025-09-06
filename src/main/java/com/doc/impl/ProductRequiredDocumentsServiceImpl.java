@@ -17,9 +17,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,15 +40,19 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         for (ProductRequiredDocumentsRequestDto requestDto : requestDtoList) {
             validateRequestDto(requestDto);
 
-            // Check for duplicate document name
-            if (requiredDocumentsRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-                throw new ValidationException("Required document with name " + requestDto.getName() + " already exists");
+            String name = requestDto.getName().trim();
+            String country = Optional.ofNullable(requestDto.getCountry()).orElse("");
+            String centralName = Optional.ofNullable(requestDto.getCentralName()).orElse("");
+            String stateName = Optional.ofNullable(requestDto.getStateName()).orElse("");
+
+            // Check for duplicate document name and region combination
+            if (requiredDocumentsRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(name, country, centralName, stateName)) {
+                throw new ValidationException("Required document with name " + name + " already exists for this region");
             }
 
             // Validate createdBy and updatedBy users
             User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
                     .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
-
             User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
                     .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
 
@@ -66,22 +68,23 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 }
             }
 
-
-
             // Create new document
             ProductRequiredDocuments document = new ProductRequiredDocuments();
             mapRequestDtoToEntity(document, requestDto);
+            document.setCreatedBy(requestDto.getCreatedBy());
+            document.setUpdatedBy(requestDto.getUpdatedBy());
             document.setCreatedDate(new Date());
             document.setUpdatedDate(new Date());
             document.setDeleted(false);
             document.setProducts(products);
+            document.setUuid(UUID.randomUUID());
 
             // Update products to include this document
             for (Product product : products) {
                 product.getRequiredDocuments().add(document);
             }
 
-            // Save document
+            // Save document and products
             document = requiredDocumentsRepository.save(document);
             productRepository.saveAll(products);
 
@@ -92,18 +95,41 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     }
 
     @Override
-    public ProductRequiredDocumentsResponseDto getRequiredDocumentById(Long id) {
+    public ProductRequiredDocumentsResponseDto getRequiredDocumentById(Long id, Long userId) {
+        // Validate user
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+
+        // Find document
         ProductRequiredDocuments document = requiredDocumentsRepository.findById(id)
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
+
+        // Check if user has ADMIN role or is the creator/updater
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        if (!isAdmin && !document.getCreatedBy().equals(userId) && !document.getUpdatedBy().equals(userId)) {
+            throw new ValidationException("User is not authorized to access this document");
+        }
+
         return mapToResponseDto(document);
     }
 
     @Override
-    public List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(int page, int size, String name, String type, String country, String centralName, String stateName) {
+    public List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name, String type, String country, String centralName, String stateName) {
+        // Validate user
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+
+        // Check if user has ADMIN role
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        if (!isAdmin) {
+            throw new ValidationException("Only users with ADMIN role can fetch all required documents");
+        }
+
         PageRequest pageable = PageRequest.of(page, size);
         Page<ProductRequiredDocuments> documentPage;
 
+        // Fetch documents based on filters
         if (name != null || type != null || country != null || centralName != null || stateName != null) {
             documentPage = requiredDocumentsRepository.findByFilters(name, type, country, centralName, stateName, pageable);
         } else {
@@ -125,10 +151,14 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
 
-        // Check for duplicate document name
-        if (!document.getName().equals(requestDto.getName().trim()) &&
-                requiredDocumentsRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Required document with name " + requestDto.getName() + " already exists");
+        String name = requestDto.getName().trim();
+        String country = Optional.ofNullable(requestDto.getCountry()).orElse("");
+        String centralName = Optional.ofNullable(requestDto.getCentralName()).orElse("");
+        String stateName = Optional.ofNullable(requestDto.getStateName()).orElse("");
+
+        // Check for duplicate document name and region combination excluding current ID
+        if (requiredDocumentsRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseExcludingId(id, name, country, centralName, stateName)) {
+            throw new ValidationException("Required document with name " + name + " already exists for this region");
         }
 
         // Validate updatedBy user
@@ -155,6 +185,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
         // Update document fields
         mapRequestDtoToEntity(document, requestDto);
+        document.setUpdatedBy(requestDto.getUpdatedBy());
         document.setUpdatedDate(new Date());
         document.setProducts(products);
 
@@ -201,15 +232,18 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         if (requestDto.getUpdatedBy() == null) {
             throw new ValidationException("Updated by user ID cannot be null");
         }
+        if (requestDto.getCountry() == null && requestDto.getCentralName() == null && requestDto.getStateName() == null) {
+            throw new ValidationException("At least one of country, centralName, or stateName must be provided for regional documents");
+        }
     }
 
     private void mapRequestDtoToEntity(ProductRequiredDocuments document, ProductRequiredDocumentsRequestDto requestDto) {
         document.setName(requestDto.getName().trim());
         document.setDescription(requestDto.getDescription());
         document.setType(requestDto.getType().trim());
-        document.setCountry(requestDto.getCountry());
-        document.setCentralName(requestDto.getCentralName());
-        document.setStateName(requestDto.getStateName());
+        document.setCountry(Optional.ofNullable(requestDto.getCountry()).orElse(""));
+        document.setCentralName(Optional.ofNullable(requestDto.getCentralName()).orElse(""));
+        document.setStateName(Optional.ofNullable(requestDto.getStateName()).orElse(""));
     }
 
     private ProductRequiredDocumentsResponseDto mapToResponseDto(ProductRequiredDocuments document) {
@@ -218,13 +252,14 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         dto.setName(document.getName());
         dto.setDescription(document.getDescription());
         dto.setType(document.getType());
-        dto.setCountry(document.getCountry());
-        dto.setCentralName(document.getCentralName());
-        dto.setStateName(document.getStateName());
+        dto.setCountry(document.getCountry().isEmpty() ? null : document.getCountry());
+        dto.setCentralName(document.getCentralName().isEmpty() ? null : document.getCentralName());
+        dto.setStateName(document.getStateName().isEmpty() ? null : document.getStateName());
+        dto.setCreatedBy(document.getCreatedBy());
+        dto.setUpdatedBy(document.getUpdatedBy());
         dto.setCreatedDate(document.getCreatedDate());
         dto.setUpdatedDate(document.getUpdatedDate());
 
-        // Set product IDs
         List<Long> productIds = document.getProducts()
                 .stream()
                 .map(Product::getId)

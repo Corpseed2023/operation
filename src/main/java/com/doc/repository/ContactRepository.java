@@ -21,4 +21,6 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
 
     @Query("SELECT c FROM Contact c WHERE c.id = :id AND c.deleteStatus = false")
     Optional<Contact> findByIdAndDeleteStatusFalse(@Param("id") Long id);
+
+
 }
