@@ -4,13 +4,12 @@ import com.doc.dto.desigantion.DesignationRequestDto;
 import com.doc.dto.desigantion.DesignationResponseDto;
 import com.doc.service.DesignationService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
@@ -23,12 +22,7 @@ public class DesignationController {
 
     @PostMapping
     public ResponseEntity<DesignationResponseDto> createDesignation(@Valid @RequestBody DesignationRequestDto requestDto) {
-        DesignationResponseDto response = designationService.createDesignation(
-                requestDto.getName(),
-                requestDto.getWeightValue(),
-                requestDto.getDepartmentId(),
-                requestDto.getCreatedBy()
-        );
+        DesignationResponseDto response = designationService.createDesignation(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
@@ -50,12 +44,7 @@ public class DesignationController {
     public ResponseEntity<DesignationResponseDto> updateDesignation(
             @PathVariable Long id,
             @Valid @RequestBody DesignationRequestDto requestDto) {
-        DesignationResponseDto response = designationService.updateDesignation(
-                id,
-                requestDto.getName(),
-                requestDto.getWeightValue(),
-                requestDto.getDepartmentId()
-        );
+        DesignationResponseDto response = designationService.updateDesignation(id, requestDto);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
@@ -65,18 +54,10 @@ public class DesignationController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
-
     @PostMapping("/master")
     public ResponseEntity<DesignationResponseDto> createMasterDesignation(
-            @RequestParam @NotBlank String name,
-            @RequestParam @NotNull  Long weightValue,
-            @RequestParam @NotNull Long departmentId) {
-
-        DesignationResponseDto response = designationService.createMasterDesignation(
-                name,
-                weightValue,
-                departmentId
-        );
+            @Valid @RequestBody DesignationRequestDto requestDto) {
+        DesignationResponseDto response = designationService.createMasterDesignation(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 }

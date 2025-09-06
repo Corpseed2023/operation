@@ -1,16 +1,15 @@
 package com.doc.controller.department;
 
-
 import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.service.DepartmentService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
@@ -23,7 +22,7 @@ public class DepartmentController {
 
     @PostMapping
     public ResponseEntity<DepartmentResponseDto> createDepartment(@Valid @RequestBody DepartmentRequestDto requestDto) {
-        DepartmentResponseDto response = departmentService.createDepartment(requestDto.getName(), requestDto.getCreatedBy());
+        DepartmentResponseDto response = departmentService.createDepartment(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
@@ -32,6 +31,7 @@ public class DepartmentController {
         DepartmentResponseDto response = departmentService.getDepartmentById(id);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
+
     @GetMapping
     public ResponseEntity<List<DepartmentResponseDto>> getAllDepartments(
             @RequestParam(defaultValue = "0") int page,
@@ -44,7 +44,7 @@ public class DepartmentController {
     public ResponseEntity<DepartmentResponseDto> updateDepartment(
             @PathVariable Long id,
             @Valid @RequestBody DepartmentRequestDto requestDto) {
-        DepartmentResponseDto response = departmentService.updateDepartment(id, requestDto.getName());
+        DepartmentResponseDto response = departmentService.updateDepartment(id, requestDto);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
@@ -54,15 +54,10 @@ public class DepartmentController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
-
     @PostMapping("/master")
     public ResponseEntity<DepartmentResponseDto> createMasterDepartment(
-            @RequestParam @NotBlank String name) {
-
-        DepartmentResponseDto response = departmentService.createMasterDepartment(name);
+            @Valid @RequestBody DepartmentRequestDto requestDto) {
+        DepartmentResponseDto response = departmentService.createMasterDepartment(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
-
-
-
 }

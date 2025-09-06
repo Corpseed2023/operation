@@ -11,7 +11,7 @@ import com.doc.dto.contact.ContactRequestDto;
 
 @Getter
 @Setter
-public class   CompanyRequestDto {
+public class CompanyRequestDto {
 
 
     @NotBlank(message = "Company name cannot be empty")
