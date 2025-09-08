@@ -24,14 +24,14 @@ import java.util.stream.Collectors;
 @Transactional
 public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocumentsService {
 
-    @Autowired
-    private ProductRequiredDocumentsRepository requiredDocumentsRepository;
+        @Autowired
+        private ProductRequiredDocumentsRepository requiredDocumentsRepository;
 
-    @Autowired
-    private ProductRepository productRepository;
+        @Autowired
+        private ProductRepository productRepository;
 
-    @Autowired
-    private UserRepository userRepository;
+        @Autowired
+        private UserRepository userRepository;
 
     @Override
     public List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList) {
@@ -45,18 +45,15 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             String centralName = Optional.ofNullable(requestDto.getCentralName()).orElse("");
             String stateName = Optional.ofNullable(requestDto.getStateName()).orElse("");
 
-            // Check for duplicate document name and region combination
             if (requiredDocumentsRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(name, country, centralName, stateName)) {
                 throw new ValidationException("Required document with name " + name + " already exists for this region");
             }
 
-            // Validate createdBy and updatedBy users
             User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
                     .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
             User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
                     .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
 
-            // Validate product IDs
             List<Product> products = new ArrayList<>();
             if (requestDto.getProductIds() != null && !requestDto.getProductIds().isEmpty()) {
                 products = productRepository.findAllById(requestDto.getProductIds())
@@ -68,8 +65,14 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 }
             }
 
-            // Create new document
             ProductRequiredDocuments document = new ProductRequiredDocuments();
+
+            // **Set the ID explicitly from DTO**
+            if (requestDto.getId() == null) {
+                throw new ValidationException("ID must be provided for the required document");
+            }
+            document.setId(requestDto.getId());
+
             mapRequestDtoToEntity(document, requestDto);
             document.setCreatedBy(requestDto.getCreatedBy());
             document.setUpdatedBy(requestDto.getUpdatedBy());
@@ -79,12 +82,10 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             document.setProducts(products);
             document.setUuid(UUID.randomUUID());
 
-            // Update products to include this document
             for (Product product : products) {
                 product.getRequiredDocuments().add(document);
             }
 
-            // Save document and products
             document = requiredDocumentsRepository.save(document);
             productRepository.saveAll(products);
 

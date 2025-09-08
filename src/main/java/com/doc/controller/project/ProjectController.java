@@ -116,7 +116,6 @@ public class ProjectController {
     }
 
 
-
     @Operation(summary = "Get milestones for a project based on user role")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "List of milestones retrieved"),

@@ -38,6 +38,17 @@ public class ProductServiceImpl implements ProductService {
         for (ProductRequestDto requestDto : requestDtoList) {
             validateRequestDto(requestDto);
 
+            // Validate that id is provided by client (since no auto-generation now)
+            if (requestDto.getProductId() == null) {
+                throw new ValidationException("Product ID must be provided");
+            }
+
+            // Check if product with same id already exists (avoid overwrite)
+            if (productRepository.existsById(requestDto.getProductId())) {
+                throw new ValidationException("Product with ID " + requestDto.getProductId() + " already exists");
+            }
+
+            // Check for duplicate product name as before
             if (productRepository.existsByProductNameAndIsDeletedFalse(requestDto.getProductName().trim())) {
                 throw new ValidationException("Product with name " + requestDto.getProductName() + " already exists");
             }
@@ -49,6 +60,10 @@ public class ProductServiceImpl implements ProductService {
                     .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
 
             Product product = new Product();
+
+            // Explicitly set id from DTO
+            product.setId(requestDto.getProductId());
+
             mapRequestDtoToEntity(product, requestDto);
             product.setCreatedBy(createdBy);
             product.setUpdatedBy(updatedBy);

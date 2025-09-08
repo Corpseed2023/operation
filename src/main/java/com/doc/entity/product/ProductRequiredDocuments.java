@@ -29,7 +29,6 @@ import java.util.UUID;
 public class ProductRequiredDocuments {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Comment("Primary Key: Unique identifier for the required document")
     private Long id;
 
