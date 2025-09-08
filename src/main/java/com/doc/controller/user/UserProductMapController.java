@@ -56,7 +56,7 @@ public class UserProductMapController {
      *
      * @return a list of all non-deleted mappings
      */
-    @GetMapping
+    @GetMapping("/list")
     public ResponseEntity<List<UserProductMapResponseDto>> getAllUserProductMaps() {
         logger.info("Received request to fetch all user-product mappings");
         List<UserProductMapResponseDto> responseDtos = userProductMapService.getAllUserProductMaps();
@@ -88,5 +88,13 @@ public class UserProductMapController {
         logger.info("Received request to delete user-product mapping with ID: {}", id);
         userProductMapService.deleteUserProductMap(id);
         return ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping("/grouped")
+    public ResponseEntity<?> getAllUserProductMaps(@RequestParam(required = false) String groupBy) {
+        logger.info("Received request to fetch user-product mappings with groupBy: {}", groupBy);
+        Object response = userProductMapService.getUserProductMaps(groupBy);
+        return ResponseEntity.ok(response);
     }
 }

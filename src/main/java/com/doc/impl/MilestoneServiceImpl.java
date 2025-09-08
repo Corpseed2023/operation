@@ -1,5 +1,6 @@
 package com.doc.impl;
 
+import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.milestone.MilestoneRequestDto;
 import com.doc.dto.milestone.MilestoneResponseDto;
 import com.doc.entity.product.Milestone;
@@ -174,20 +175,31 @@ public class MilestoneServiceImpl implements MilestoneService {
         dto.setId(milestone.getId());
         dto.setName(milestone.getName());
         dto.setDescription(milestone.getDescription());
-        dto.setDepartmentIds(milestone.getDepartments().stream()
-                .map(Department::getId)
-                .collect(Collectors.toList()));
+
+        // Convert Department entities to DepartmentResponseDto
+        List<DepartmentResponseDto> departmentDtos = milestone.getDepartments().stream()
+                .map(dept -> {
+                    DepartmentResponseDto deptDto = new DepartmentResponseDto();
+                    deptDto.setId(dept.getId());
+                    deptDto.setName(dept.getName());
+                    deptDto.setCreatedDate(dept.getCreatedDate());
+                    deptDto.setUpdatedDate(dept.getUpdatedDate());
+                    return deptDto;
+                })
+                .collect(Collectors.toList());
+
+        dto.setDepartmentResponseDtos(departmentDtos);
+
         return dto;
     }
+
 
 
     @Override
     public List<MilestoneResponseDto> getAllMilestones() {
 
-        List<Milestone> milestones = milestoneRepository.findAll();
+        List<Milestone> milestoneList = milestoneRepository.findAll();
 
-        return milestones.stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
+        return milestoneList.stream().map(this::mapToResponseDto).collect(Collectors.toList());
     }
 }
