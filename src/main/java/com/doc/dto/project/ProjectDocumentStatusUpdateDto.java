@@ -5,9 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
-/**
- * DTO for updating the status of a project document.
- */
 @Getter
 @Setter
 public class ProjectDocumentStatusUpdateDto {

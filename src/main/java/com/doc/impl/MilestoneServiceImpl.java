@@ -170,27 +170,31 @@ public class MilestoneServiceImpl implements MilestoneService {
                 .map(this::mapToResponseDto);
     }
 
+
     private MilestoneResponseDto mapToResponseDto(Milestone milestone) {
-        MilestoneResponseDto dto = new MilestoneResponseDto();
-        dto.setId(milestone.getId());
-        dto.setName(milestone.getName());
-        dto.setDescription(milestone.getDescription());
 
-        // Convert Department entities to DepartmentResponseDto
-        List<DepartmentResponseDto> departmentDtos = milestone.getDepartments().stream()
-                .map(dept -> {
-                    DepartmentResponseDto deptDto = new DepartmentResponseDto();
-                    deptDto.setId(dept.getId());
-                    deptDto.setName(dept.getName());
-                    deptDto.setCreatedDate(dept.getCreatedDate());
-                    deptDto.setUpdatedDate(dept.getUpdatedDate());
-                    return deptDto;
-                })
-                .collect(Collectors.toList());
+        MilestoneResponseDto milestoneResponseDto = new MilestoneResponseDto();
 
-        dto.setDepartmentResponseDtos(departmentDtos);
+        milestoneResponseDto.setId(milestone.getId());
+        milestoneResponseDto.setName(milestone.getName());
+        milestoneResponseDto.setDescription(milestone.getDescription());
 
-        return dto;
+        List<DepartmentResponseDto> departmentResponseDtos = new ArrayList<>();
+
+        if (milestone != null && milestone.getDepartments() != null) {
+            for (Department department : milestone.getDepartments()) {
+                DepartmentResponseDto dto = new DepartmentResponseDto();
+                dto.setId(department.getId());
+                dto.setName(department.getName());
+                dto.setCreatedDate(department.getCreatedDate());
+                dto.setUpdatedDate(department.getUpdatedDate());
+                departmentResponseDtos.add(dto);
+            }
+        }
+
+        milestoneResponseDto.setDepartmentResponseDtos(departmentResponseDtos);
+
+        return milestoneResponseDto;
     }
 
 

@@ -7,14 +7,14 @@ import lombok.Setter;
 import java.util.Date;
 import java.util.UUID;
 
-/**
- * DTO for returning project document details.
- */
 @Getter
 @Setter
 public class DocumentResponseDto {
     private UUID id;
     private String fileUrl;
+    private String fileName;
+    private String oldFileUrl;
+    private String oldFileName;
     private DocumentStatus status;
     private String remarks;
     private Date uploadTime;

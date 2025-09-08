@@ -10,9 +10,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Repository interface for managing ProjectDocumentUpload entities.
- */
 @Repository
 public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDocumentUpload, UUID> {
 
@@ -37,14 +34,25 @@ public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDo
      *
      * @param projectId the project ID
      * @param milestoneAssignmentId the milestone assignment ID
-     * @param requiredDocumentId the required document UUID
+     * @param requiredDocumentUuid the required document UUID
      * @return true if a matching non-deleted upload exists, false otherwise
      */
     @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM ProjectDocumentUpload d " +
             "WHERE d.project.id = :projectId AND d.milestoneAssignment.id = :milestoneAssignmentId " +
-            "AND d.requiredDocument.id = :requiredDocumentId AND d.isDeleted = false")
-    boolean existsByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentIdAndIsDeletedFalse(
+            "AND d.requiredDocument.uuid = :requiredDocumentUuid AND d.isDeleted = false")
+    boolean existsByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentUuidAndIsDeletedFalse(
             @Param("projectId") Long projectId,
             @Param("milestoneAssignmentId") Long milestoneAssignmentId,
-            @Param("requiredDocumentId") UUID requiredDocumentId);
+            @Param("requiredDocumentUuid") UUID requiredDocumentUuid);
+
+    /**
+     * Finds a non-deleted document upload by project ID, milestone assignment ID, and required document UUID.
+     *
+     * @param projectId the project ID
+     * @param milestoneAssignmentId the milestone assignment ID
+     * @param requiredDocumentUuid the required document UUID
+     * @return an Optional containing the document upload if found and not deleted
+     */
+    Optional<ProjectDocumentUpload> findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentUuidAndIsDeletedFalse(
+            Long projectId, Long milestoneAssignmentId, UUID requiredDocumentUuid);
 }

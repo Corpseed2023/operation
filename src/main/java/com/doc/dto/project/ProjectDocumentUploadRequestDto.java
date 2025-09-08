@@ -7,9 +7,6 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-/**
- * DTO for uploading a project document.
- */
 @Getter
 @Setter
 public class ProjectDocumentUploadRequestDto {
@@ -25,6 +22,9 @@ public class ProjectDocumentUploadRequestDto {
 
     @NotBlank(message = "File URL cannot be empty")
     private String fileUrl;
+
+    @NotBlank(message = "File name cannot be empty")
+    private String fileName;
 
     @NotNull(message = "Uploaded by user ID cannot be null")
     private Long uploadedById;

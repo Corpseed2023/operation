@@ -116,7 +116,9 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     }
 
     @Override
-    public List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name, String type, String country, String centralName, String stateName) {
+    public List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name,
+                                                                             String type, String country, String centralName,
+                                                                             String stateName) {
         // Validate user
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
@@ -250,6 +252,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     private ProductRequiredDocumentsResponseDto mapToResponseDto(ProductRequiredDocuments document) {
         ProductRequiredDocumentsResponseDto dto = new ProductRequiredDocumentsResponseDto();
         dto.setId(document.getId());
+        dto.setUuid(document.getUuid()); // ✅ Map UUID here
         dto.setName(document.getName());
         dto.setDescription(document.getDescription());
         dto.setType(document.getType());
@@ -269,4 +272,5 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
         return dto;
     }
+
 }

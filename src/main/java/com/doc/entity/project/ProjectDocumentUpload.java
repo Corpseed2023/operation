@@ -12,9 +12,6 @@ import org.hibernate.annotations.GenericGenerator;
 import java.util.Date;
 import java.util.UUID;
 
-/**
- * Represents the document uploaded for a specific project milestone against a required document item.
- */
 @Entity
 @Table(name = "project_document_upload", indexes = {
         @Index(name = "idx_project_id", columnList = "project_id"),
@@ -50,6 +47,18 @@ public class ProjectDocumentUpload {
     @Column(name = "file_url", nullable = false, length = 1000)
     @Comment("URL of the uploaded document")
     private String fileUrl;
+
+    @Column(name = "file_name", nullable = false, length = 255)
+    @Comment("Name of the uploaded file")
+    private String fileName;
+
+    @Column(name = "old_file_url", length = 1000)
+    @Comment("URL of the previous file (if replaced)")
+    private String oldFileUrl;
+
+    @Column(name = "old_file_name", length = 255)
+    @Comment("Name of the previous file (if replaced)")
+    private String oldFileName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)

@@ -24,31 +24,36 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Service implementation for managing project document uploads and status updates.
- */
 @Service
 @Transactional
 public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadService {
 
     private static final Logger logger = LoggerFactory.getLogger(ProjectDocumentUploadServiceImpl.class);
 
-    @Autowired
-    private ProjectDocumentUploadRepository projectDocumentUploadRepository;
+    private final ProjectDocumentUploadRepository projectDocumentUploadRepository;
+    private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+    private final ProjectRepository projectRepository;
+    private final ProductRequiredDocumentsRepository productRequiredDocumentsRepository;
+    private final UserRepository userRepository;
+
+
 
     @Autowired
-    private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
-
-    @Autowired
-    private ProjectRepository projectRepository;
-
-    @Autowired
-    private ProductRequiredDocumentsRepository productRequiredDocumentsRepository;
-
-    @Autowired
-    private UserRepository userRepository;
+    public ProjectDocumentUploadServiceImpl(
+            ProjectDocumentUploadRepository projectDocumentUploadRepository,
+            ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
+            ProjectRepository projectRepository,
+            ProductRequiredDocumentsRepository productRequiredDocumentsRepository,
+            UserRepository userRepository) {
+        this.projectDocumentUploadRepository = projectDocumentUploadRepository;
+        this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
+        this.projectRepository = projectRepository;
+        this.productRequiredDocumentsRepository = productRequiredDocumentsRepository;
+        this.userRepository = userRepository;
+    }
 
     @Override
     public DocumentResponseDto uploadDocument(ProjectDocumentUploadRequestDto requestDto) {
@@ -58,8 +63,9 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         // Validate inputs
         validateUploadRequest(requestDto);
 
-        // Sanitize file URL
+        // Sanitize file URL and name
         String sanitizedFileUrl = sanitizeFileUrl(requestDto.getFileUrl());
+        String sanitizedFileName = sanitizeFileName(requestDto.getFileName());
 
         // Fetch entities
         Project project = projectRepository.findByIdAndIsDeletedFalse(requestDto.getProjectId())
@@ -68,7 +74,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("Project with ID " + requestDto.getProjectId() + " not found or is deleted");
                 });
 
-        ProjectMilestoneAssignment milestoneAssignment = projectMilestoneAssignmentRepository.findByIdAndIsDeletedFalse(requestDto.getMilestoneAssignmentId())
+        ProjectMilestoneAssignment milestoneAssignment = projectMilestoneAssignmentRepository
+                .findByIdAndIsDeletedFalse(requestDto.getMilestoneAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", requestDto.getMilestoneAssignmentId());
                     return new ResourceNotFoundException("Milestone assignment with ID " + requestDto.getMilestoneAssignmentId() + " not found or is deleted");
@@ -98,32 +105,48 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("User with ID " + requestDto.getCreatedById() + " not found or is deleted");
                 });
 
-        // Check for duplicate upload
-        if (projectDocumentUploadRepository.existsByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentIdAndIsDeletedFalse(
-                requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId())) {
-            logger.warn("Duplicate document upload detected for project ID: {}, milestone assignment ID: {}, required document UUID: {}",
-                    requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
-            throw new ValidationException("Document already uploaded for this required document and milestone assignment");
+        // Check for existing upload
+        Optional<ProjectDocumentUpload> existingUploadOpt = projectDocumentUploadRepository
+                .findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentUuidAndIsDeletedFalse(
+                        requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
+
+        ProjectDocumentUpload documentUpload;
+        boolean isReplacement = false;
+
+        if (existingUploadOpt.isPresent()) {
+            documentUpload = existingUploadOpt.get();
+            if (documentUpload.getStatus() == DocumentStatus.VERIFIED) {
+                logger.warn("Cannot replace verified document for project ID: {}, milestone assignment ID: {}, required document UUID: {}",
+                        requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
+                throw new ValidationException("Cannot replace a verified document");
+            }
+            isReplacement = true;
+            documentUpload.setOldFileUrl(documentUpload.getFileUrl());
+            documentUpload.setOldFileName(documentUpload.getFileName());
+            logger.info("Replacing existing document with ID: {}", documentUpload.getId());
+        } else {
+            documentUpload = new ProjectDocumentUpload();
+            documentUpload.setId(UUID.randomUUID());
+            documentUpload.setProject(project);
+            documentUpload.setMilestoneAssignment(milestoneAssignment);
+            documentUpload.setRequiredDocument(requiredDocument);
+            documentUpload.setCreatedBy(requestDto.getCreatedById());
+            documentUpload.setCreatedDate(new Date());
         }
 
-        // Create new document upload
-        ProjectDocumentUpload documentUpload = new ProjectDocumentUpload();
-        documentUpload.setId(UUID.randomUUID());
-        documentUpload.setProject(project);
-        documentUpload.setMilestoneAssignment(milestoneAssignment);
-        documentUpload.setRequiredDocument(requiredDocument);
+        // Set or update fields
         documentUpload.setFileUrl(sanitizedFileUrl);
+        documentUpload.setFileName(sanitizedFileName);
         documentUpload.setStatus(DocumentStatus.UPLOADED);
+        documentUpload.setRemarks(null);
         documentUpload.setUploadedBy(uploadedBy);
-        documentUpload.setCreatedBy(requestDto.getCreatedById());
-        documentUpload.setUpdatedBy(requestDto.getCreatedById());
         documentUpload.setUploadTime(new Date());
-        documentUpload.setCreatedDate(new Date());
+        documentUpload.setUpdatedBy(requestDto.getCreatedById());
         documentUpload.setUpdatedDate(new Date());
         documentUpload.setDeleted(false);
 
         documentUpload = projectDocumentUploadRepository.save(documentUpload);
-        logger.info("Document uploaded successfully with ID: {}", documentUpload.getId());
+        logger.info("Document {} successfully with ID: {}", isReplacement ? "replaced" : "uploaded", documentUpload.getId());
 
         return mapToDocumentResponseDto(documentUpload);
     }
@@ -174,6 +197,10 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             logger.warn("File URL is empty or null");
             throw new ValidationException("File URL cannot be empty");
         }
+        if (requestDto.getFileName() == null || requestDto.getFileName().trim().isEmpty()) {
+            logger.warn("File name is empty or null");
+            throw new ValidationException("File name cannot be empty");
+        }
         if (requestDto.getUploadedById() == null) {
             logger.warn("Uploaded by user ID is null");
             throw new ValidationException("Uploaded by user ID cannot be null");
@@ -194,25 +221,26 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             throw new ValidationException("Document is already in status: " + newStatus);
         }
         switch (currentStatus) {
-            case PENDING:
+            case PENDING -> {
                 if (newStatus != DocumentStatus.UPLOADED) {
                     logger.warn("Invalid status transition from PENDING to {}", newStatus);
                     throw new ValidationException("Invalid transition from PENDING to " + newStatus);
                 }
-                break;
-            case UPLOADED:
+            }
+            case UPLOADED -> {
                 if (newStatus != DocumentStatus.VERIFIED && newStatus != DocumentStatus.REJECTED) {
                     logger.warn("Invalid status transition from UPLOADED to {}", newStatus);
                     throw new ValidationException("Invalid transition from UPLOADED to " + newStatus);
                 }
-                break;
-            case VERIFIED:
-            case REJECTED:
+            }
+            case VERIFIED, REJECTED -> {
                 logger.warn("Attempted to change status from final state: {}", currentStatus);
                 throw new ValidationException("Cannot change status from " + currentStatus);
-            default:
+            }
+            default -> {
                 logger.error("Invalid current status: {}", currentStatus);
                 throw new ValidationException("Invalid current status: " + currentStatus);
+            }
         }
     }
 
@@ -220,7 +248,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         if (fileUrl == null) {
             return null;
         }
-        // Basic sanitization: trim and ensure valid URL format
         String sanitized = fileUrl.trim();
         if (!sanitized.matches("^(https?|ftp)://[^\\s/$.?#].[^\\s]*$")) {
             logger.warn("Invalid file URL format: {}", fileUrl);
@@ -229,17 +256,31 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         return sanitized;
     }
 
+    private String sanitizeFileName(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        String sanitized = fileName.trim().replaceAll("[^a-zA-Z0-9\\.\\-_]", "");
+        if (sanitized.length() > 255) {
+            logger.warn("File name exceeds maximum length of 255 characters");
+            throw new ValidationException("File name cannot exceed 255 characters");
+        }
+        if (sanitized.isEmpty()) {
+            logger.warn("Invalid file name after sanitization");
+            throw new ValidationException("Invalid file name");
+        }
+        return sanitized;
+    }
+
     private String sanitizeRemarks(String remarks) {
         if (remarks == null) {
             return null;
         }
-        // Basic sanitization: trim and limit length
         String sanitized = remarks.trim();
         if (sanitized.length() > 1000) {
             logger.warn("Remarks exceed maximum length of 1000 characters");
             throw new ValidationException("Remarks cannot exceed 1000 characters");
         }
-        // Add additional sanitization (e.g., remove malicious scripts) if needed
         return sanitized;
     }
 
@@ -247,6 +288,9 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         DocumentResponseDto dto = new DocumentResponseDto();
         dto.setId(documentUpload.getId());
         dto.setFileUrl(documentUpload.getFileUrl());
+        dto.setFileName(documentUpload.getFileName());
+        dto.setOldFileUrl(documentUpload.getOldFileUrl());
+        dto.setOldFileName(documentUpload.getOldFileName());
         dto.setStatus(documentUpload.getStatus());
         dto.setRemarks(documentUpload.getRemarks());
         dto.setUploadTime(documentUpload.getUploadTime());

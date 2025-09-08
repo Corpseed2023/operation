@@ -39,7 +39,6 @@ public class ProjectDocumentUploadController {
             @ApiResponse(responseCode = "404", description = "Project, milestone assignment, or required document not found"),
             @ApiResponse(responseCode = "409", description = "Duplicate document upload")
     })
-//    @PreAuthorize("hasRole('UPLOADER')")
     @PostMapping("/{projectId}/milestones/{milestoneAssignmentId}/documents")
     public ResponseEntity<DocumentResponseDto> uploadDocument(
             @Parameter(description = "ID of the project") @PathVariable Long projectId,
@@ -59,7 +58,6 @@ public class ProjectDocumentUploadController {
             @ApiResponse(responseCode = "403", description = "Access denied"),
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
-//    @PreAuthorize("hasAnyRole('ADMIN', 'VERIFIER')")
     @PutMapping("/documents/{documentId}/status")
     public ResponseEntity<DocumentResponseDto> updateDocumentStatus(
             @Parameter(description = "UUID of the document to update") @PathVariable UUID documentId,
