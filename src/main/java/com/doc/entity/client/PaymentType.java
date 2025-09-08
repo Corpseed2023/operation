@@ -16,7 +16,6 @@ import java.util.Date;
 public class PaymentType {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Comment("Primary Key: Unique identifier for payment type")
     private Long id;
 

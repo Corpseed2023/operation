@@ -11,7 +11,6 @@ import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.user.Department;
 import com.doc.entity.user.User;
-import com.doc.entity.user.UserLoginStatus;
 import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -78,9 +77,6 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Autowired
     private UserProjectCountRepository userProjectCountRepository;
-
-    @Autowired
-    private UserLoginStatusRepository userOnlineStatusRepository;
 
     @Autowired
     private ProjectDocumentUploadRepository projectDocumentUploadRepository;
@@ -785,10 +781,6 @@ public class ProjectServiceImpl implements ProjectService {
 
         Optional<UserProductMap> selectedMappingOpt = eligibleMappings.stream()
                 .filter(m -> !m.isAssigned())
-                .filter(m -> {
-                    Optional<UserLoginStatus> status = userOnlineStatusRepository.findByUserIdAndIsDeletedFalse(m.getUser().getId());
-                    return status.isPresent() && status.get().isOnline();
-                })
                 .max(Comparator.comparingDouble(m -> m.getRating() != null ? m.getRating() : 0.0));
 
         if (selectedMappingOpt.isPresent()) {
@@ -798,17 +790,14 @@ public class ProjectServiceImpl implements ProjectService {
             userProductMapRepository.save(selectedMapping);
             logger.info("Assigned user: {} (ID: {}, Rating: {}) for milestone: {}",
                     selectedUser.getFullName(), selectedUser.getId(), selectedMapping.getRating(), milestone.getMilestone().getName());
-            return new AssignmentResult(selectedUser, "Highest rating in round-robin and online");
+            return new AssignmentResult(selectedUser, "Highest rating");
         }
 
         Optional<User> selectedManagerOpt = eligibleMappings.stream()
                 .filter(m -> !m.isAssigned())
                 .filter(m -> m.getUser().getManager() != null)
-                .filter(m -> {
-                    Optional<UserLoginStatus> status = userOnlineStatusRepository.findByUserIdAndIsDeletedFalse(m.getUser().getManager().getId());
-                    return status.isPresent() && status.get().isOnline() && isUserAvailable(m.getUser().getManager());
-                })
                 .map(m -> m.getUser().getManager())
+                .filter(this::isUserAvailable)
                 .findFirst();
 
         if (selectedManagerOpt.isPresent()) {
@@ -829,9 +818,9 @@ public class ProjectServiceImpl implements ProjectService {
             });
             managerProductMap.setAssigned(true);
             userProductMapRepository.save(managerProductMap);
-            logger.info("Assigned manager: {} (ID: {}) for milestone: {} due to user offline",
+            logger.info("Assigned manager: {} (ID: {}) for milestone: {}",
                     manager.getFullName(), manager.getId(), milestone.getMilestone().getName());
-            return new AssignmentResult(manager, "Manager assigned due to user offline");
+            return new AssignmentResult(manager, "Manager assigned due to no available users");
         }
 
         return assignAdmin(milestone);
@@ -863,7 +852,7 @@ public class ProjectServiceImpl implements ProjectService {
             userProductMapRepository.save(adminProductMap);
             logger.info("Assigned admin: {} (ID: {}) for milestone: {}",
                     admin.getFullName(), admin.getId(), milestone.getMilestone().getName());
-            return new AssignmentResult(admin, "Admin assigned due to no online users or managers");
+            return new AssignmentResult(admin, "Admin assigned due to no available users or managers");
         }
 
         logger.error("No available admins found for milestone: {}", milestone.getMilestone().getName());
@@ -960,9 +949,10 @@ public class ProjectServiceImpl implements ProjectService {
         for (Map.Entry<Project, List<ProjectMilestoneAssignment>> entry : groupedByProject.entrySet()) {
             AssignedProjectResponseDto dto = new AssignedProjectResponseDto();
             dto.setProject(mapToProjectDetailsDto(entry.getKey()));
-//            dto.setAssignedMilestones(entry.getValue().stream()
-//                    .map(this::mapToAssignedMilestoneDto)
-//                    .collect(Collectors.toList()));
+            // Note: The commented-out line for setting assigned milestones is preserved as in the original code
+            // dto.setAssignedMilestones(entry.getValue().stream()
+            //         .map(this::mapToAssignedMilestoneDto)
+            //         .collect(Collectors.toList()));
             projectDtos.add(dto);
         }
 

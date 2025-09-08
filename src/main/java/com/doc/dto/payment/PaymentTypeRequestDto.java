@@ -9,6 +9,9 @@ import lombok.Setter;
 @Setter
 public class PaymentTypeRequestDto {
 
+    @NotNull(message = "Payment type ID cannot be null")
+    private Long id;
+
     @NotBlank(message = "Payment type name cannot be empty")
     private String name;
 

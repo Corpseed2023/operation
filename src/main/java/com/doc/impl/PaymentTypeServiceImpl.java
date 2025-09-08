@@ -35,6 +35,12 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
     public PaymentTypeResponseDto createPaymentType(PaymentTypeRequestDto requestDto) {
         validateRequestDto(requestDto);
 
+        // Check if payment type with given id already exists (to avoid duplicates)
+        if (paymentTypeRepository.existsById(requestDto.getId())) {
+            throw new ValidationException("Payment type with ID " + requestDto.getId() + " already exists");
+        }
+
+        // Also check if name already exists for non-deleted records
         if (paymentTypeRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
             throw new ValidationException("Payment type with name " + requestDto.getName() + " already exists");
         }
@@ -43,11 +49,12 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
 
         PaymentType paymentType = new PaymentType();
+        paymentType.setId(requestDto.getId());  // <-- use provided ID here
         paymentType.setName(requestDto.getName().trim());
         paymentType.setCreatedDate(new Date());
         paymentType.setUpdatedDate(new Date());
         paymentType.setCreatedBy(requestDto.getCreatedBy());
-        paymentType.setUpdatedBy(requestDto.getCreatedBy());
+        paymentType.setUpdatedBy(requestDto.getUpdatedBy());
         paymentType.setDeleted(false);
 
         paymentType = paymentTypeRepository.save(paymentType);
