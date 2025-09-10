@@ -915,25 +915,40 @@ public class ProjectServiceImpl implements ProjectService {
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
 
-        PageRequest pageable = PageRequest.of(page, size * 10); // Adjust size to account for multiple assignments per project
+        PageRequest pageable = PageRequest.of(page, size * 10);// Adjust size to account for multiple assignments per project
+
         Page<ProjectMilestoneAssignment> assignmentPage;
+
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+
         if (isAdmin) {
+
             assignmentPage = projectMilestoneAssignmentRepository.findAllByIsDeletedFalse(pageable);
+
         } else if (user.isManagerFlag()) {
+
             List<Department> managerDepts = user.getDepartments();
+
             if (managerDepts.isEmpty()) {
+
                 return new PageImpl<>(new ArrayList<>(), pageable, 0);
             }
+
             List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
+
             List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
+
             List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
+
             if (!deptUserIds.contains(userId)) {
+
                 deptUserIds.add(userId);
             }
+
             assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdInAndIsVisibleTrueAndStatusIn(
                     deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
-        } else {
+        }
+        else {
             assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdAndIsVisibleTrueAndStatusIn(
                     userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
         }
@@ -979,11 +994,16 @@ public class ProjectServiceImpl implements ProjectService {
                 });
 
         List<ProjectMilestoneAssignment> assignments;
+
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+
         if (isAdmin) {
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
+
         } else if (user.isManagerFlag()) {
+
             List<Department> managerDepts = user.getDepartments();
+
             if (managerDepts.isEmpty()) {
                 return new ProjectMilestoneResponseDto();
             }
@@ -991,8 +1011,10 @@ public class ProjectServiceImpl implements ProjectService {
             List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
             List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
             if (!deptUserIds.contains(userId)) {
+
                 deptUserIds.add(userId);
             }
+
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
                     projectId, deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
         } else {
