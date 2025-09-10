@@ -64,4 +64,6 @@ public class Contact {
 
     @Comment("Updated By User ID")
     private Long updatedBy;
+
+
 }

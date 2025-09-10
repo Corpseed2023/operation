@@ -1,5 +1,6 @@
 package com.doc.impl;
 
+import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.project.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.dto.user.UserResponseDto;
@@ -948,7 +949,7 @@ public class ProjectServiceImpl implements ProjectService {
         List<AssignedProjectResponseDto> projectDtos = new ArrayList<>();
         for (Map.Entry<Project, List<ProjectMilestoneAssignment>> entry : groupedByProject.entrySet()) {
             AssignedProjectResponseDto dto = new AssignedProjectResponseDto();
-            dto.setProject(mapToProjectDetailsDto(entry.getKey()));
+            dto.setProject(mapToProjectDetailsDto(entry.getKey(), userId));
             // Note: The commented-out line for setting assigned milestones is preserved as in the original code
             // dto.setAssignedMilestones(entry.getValue().stream()
             //         .map(this::mapToAssignedMilestoneDto)
@@ -962,7 +963,57 @@ public class ProjectServiceImpl implements ProjectService {
         return new PageImpl<>(pagedDtos, PageRequest.of(page, size), projectDtos.size());
     }
 
-    private ProjectDetailsDto mapToProjectDetailsDto(Project project) {
+    @Override
+    public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
+        logger.info("Fetching project details and milestones for project ID: {}, user ID: {}", projectId, userId);
+        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
+                .orElseThrow(() -> {
+                    logger.error("Project with ID {} not found or is deleted", projectId);
+                    return new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted");
+                });
+
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> {
+                    logger.error("User with ID {} not found or is deleted", userId);
+                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
+                });
+
+        List<ProjectMilestoneAssignment> assignments;
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        if (isAdmin) {
+            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
+        } else if (user.isManagerFlag()) {
+            List<Department> managerDepts = user.getDepartments();
+            if (managerDepts.isEmpty()) {
+                return new ProjectMilestoneResponseDto();
+            }
+            List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
+            List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
+            List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
+            if (!deptUserIds.contains(userId)) {
+                deptUserIds.add(userId);
+            }
+            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
+                    projectId, deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+        } else {
+            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
+                    projectId, userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+        }
+
+        for (ProjectMilestoneAssignment assignment : assignments) {
+            assignment.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId()));
+        }
+
+        ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
+        response.setProjectDetails(mapToProjectDetailsDto(project, userId));
+        response.setMilestones(assignments.stream()
+                .map(this::mapToAssignedMilestoneDto)
+                .collect(Collectors.toList()));
+
+        return response;
+    }
+
+    private ProjectDetailsDto mapToProjectDetailsDto(Project project, Long userId) {
         ProjectDetailsDto dto = new ProjectDetailsDto();
         dto.setId(project.getId());
         dto.setName(project.getName());
@@ -974,11 +1025,76 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setCountry(project.getCountry());
         dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
         dto.setProductName(project.getProduct() != null ? project.getProduct().getProductName() : null);
+        dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
+        dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
+
+        // Fetch and map contact details based on user role and department
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        boolean isCrtDepartment = user.getDepartments().stream()
+                .anyMatch(dept -> dept.getName().equalsIgnoreCase("CRT"));
+
+        List<ContactDetailsDto> contactDtos = new ArrayList<>();
+        if (project.getCompany() != null) {
+            List<Contact> contacts = project.getCompany().getContacts().stream()
+                    .filter(contact -> !contact.isDeleteStatus())
+                    .collect(Collectors.toList());
+            for (Contact contact : contacts) {
+                ContactDetailsDto contactDto = new ContactDetailsDto();
+                contactDto.setId(contact.getId());
+                contactDto.setName(contact.getName());
+                contactDto.setDesignation(contact.getDesignation());
+
+                if (isAdmin || isCrtDepartment) {
+                    // ADMIN or CRT department sees unmasked details
+                    contactDto.setEmails(contact.getEmails());
+                    contactDto.setContactNo(contact.getContactNo());
+                    contactDto.setWhatsappNo(contact.getWhatsappNo());
+                } else {
+                    // Non-ADMIN, non-CRT department sees masked details
+                    contactDto.setEmails(maskEmail(contact.getEmails()));
+                    contactDto.setContactNo(maskPhoneNumber(contact.getContactNo()));
+                    contactDto.setWhatsappNo(maskPhoneNumber(contact.getWhatsappNo()));
+                }
+                contactDtos.add(contactDto);
+            }
+        }
+        dto.setContacts(contactDtos);
+
         return dto;
     }
 
+    private String maskPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.length() < 7) {
+            return phoneNumber; // Return as-is if too short to mask
+        }
+        // Show first 3 and last 4 digits, mask middle with "XXXX"
+        String firstThree = phoneNumber.substring(0, 3);
+        String lastFour = phoneNumber.substring(phoneNumber.length() - 4);
+        return firstThree + "XXXX" + lastFour;
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return email; // Return as-is if invalid email
+        }
+        String[] parts = email.split("@");
+        String localPart = parts[0];
+        String domainPart = parts[1];
+        // Mask local part: keep first 5 chars, replace rest with "XXXXX"
+        String maskedLocalPart = localPart.length() > 5 ? localPart.substring(0, 5) + "XXXXX" : localPart;
+        // Mask domain: keep first 3 chars and TLD, mask middle with "XXX"
+        int lastDotIndex = domainPart.lastIndexOf(".");
+        if (lastDotIndex == -1) {
+            return maskedLocalPart + "@" + domainPart;
+        }
+        String domainPrefix = domainPart.substring(0, Math.min(3, lastDotIndex));
+        String tld = domainPart.substring(lastDotIndex);
+        return maskedLocalPart + "@" + domainPrefix + "XXX" + tld;
+    }
 
     private AssignedMilestoneDto mapToAssignedMilestoneDto(ProjectMilestoneAssignment assignment) {
         AssignedMilestoneDto dto = new AssignedMilestoneDto();
@@ -1028,57 +1144,4 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setUpdatedDate(document.getUpdatedDate());
         return dto;
     }
-
-    @Override
-    public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
-        logger.info("Fetching project details and milestones for project ID: {}, user ID: {}", projectId, userId);
-        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
-                .orElseThrow(() -> {
-                    logger.error("Project with ID {} not found or is deleted", projectId);
-                    return new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted");
-                });
-
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", userId);
-                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
-                });
-
-        List<ProjectMilestoneAssignment> assignments;
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-        if (isAdmin) {
-            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
-        } else if (user.isManagerFlag()) {
-            List<Department> managerDepts = user.getDepartments();
-            if (managerDepts.isEmpty()) {
-                return new ProjectMilestoneResponseDto();
-            }
-            List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
-            List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
-            List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
-            if (!deptUserIds.contains(userId)) {
-                deptUserIds.add(userId);
-            }
-            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-                    projectId, deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
-        } else {
-            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
-                    projectId, userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
-        }
-
-        for (ProjectMilestoneAssignment assignment : assignments) {
-            assignment.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId()));
-        }
-
-        ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
-        response.setProjectDetails(mapToProjectDetailsDto(project));
-        response.setMilestones(assignments.stream()
-                .map(this::mapToAssignedMilestoneDto)
-                .collect(Collectors.toList()));
-
-        return response;
-    }
-
-
-
 }

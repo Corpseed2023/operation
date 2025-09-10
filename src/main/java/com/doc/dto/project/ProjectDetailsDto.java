@@ -1,9 +1,11 @@
 package com.doc.dto.project;
 
+import com.doc.dto.contact.ContactDetailsDto;
 import lombok.*;
 
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.List;
 
 @NoArgsConstructor
 @Getter
@@ -22,4 +24,7 @@ public class ProjectDetailsDto {
     private String productName;
     private Date createdDate;
     private Date updatedDate;
+    private Long companyId;
+    private String companyName;
+    private List<ContactDetailsDto> contacts;
 }
