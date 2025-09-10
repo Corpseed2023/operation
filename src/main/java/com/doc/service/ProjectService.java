@@ -1,9 +1,6 @@
 package com.doc.service;
 
-import com.doc.dto.project.AssignedMilestoneDto;
-import com.doc.dto.project.AssignedProjectResponseDto;
-import com.doc.dto.project.ProjectRequestDto;
-import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import org.springframework.data.domain.Page;
 
@@ -25,5 +22,5 @@ public interface ProjectService {
 
     Page<AssignedProjectResponseDto> getAssignedProjects(Long userId, int page, int size);
 
-    List<AssignedMilestoneDto> getProjectMilestones(Long projectId, Long userId);
+    ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId);
 }

@@ -1,10 +1,14 @@
 package com.doc.dto.project;
 
-import lombok.Data;
+import lombok.*;
+
 import java.time.LocalDate;
 import java.util.Date;
 
-@Data
+@NoArgsConstructor
+@Getter
+@Setter
+@AllArgsConstructor
 public class ProjectDetailsDto {
     private Long id;
     private String name;
@@ -14,6 +18,8 @@ public class ProjectDetailsDto {
     private String city;
     private String state;
     private String country;
+    private Long productId;
+    private String productName;
     private Date createdDate;
     private Date updatedDate;
 }

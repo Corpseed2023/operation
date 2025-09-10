@@ -972,10 +972,13 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setCity(project.getCity());
         dto.setState(project.getState());
         dto.setCountry(project.getCountry());
+        dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
+        dto.setProductName(project.getProduct() != null ? project.getProduct().getProductName() : null);
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
         return dto;
     }
+
 
     private AssignedMilestoneDto mapToAssignedMilestoneDto(ProjectMilestoneAssignment assignment) {
         AssignedMilestoneDto dto = new AssignedMilestoneDto();
@@ -1027,8 +1030,8 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public List<AssignedMilestoneDto> getProjectMilestones(Long projectId, Long userId) {
-        logger.info("Fetching milestones for project ID: {}, user ID: {}", projectId, userId);
+    public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
+        logger.info("Fetching project details and milestones for project ID: {}, user ID: {}", projectId, userId);
         Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
                 .orElseThrow(() -> {
                     logger.error("Project with ID {} not found or is deleted", projectId);
@@ -1048,7 +1051,7 @@ public class ProjectServiceImpl implements ProjectService {
         } else if (user.isManagerFlag()) {
             List<Department> managerDepts = user.getDepartments();
             if (managerDepts.isEmpty()) {
-                return new ArrayList<>();
+                return new ProjectMilestoneResponseDto();
             }
             List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
             List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
@@ -1067,8 +1070,15 @@ public class ProjectServiceImpl implements ProjectService {
             assignment.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId()));
         }
 
-        return assignments.stream()
+        ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
+        response.setProjectDetails(mapToProjectDetailsDto(project));
+        response.setMilestones(assignments.stream()
                 .map(this::mapToAssignedMilestoneDto)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
+
+        return response;
     }
+
+
+
 }
