@@ -60,6 +60,8 @@ public class Product {
     @Comment("Update date")
     private Date updatedDate;
 
+    // create
+
     @Column(nullable = false)
     @Comment("Soft delete flag")
     private boolean isDeleted = false;

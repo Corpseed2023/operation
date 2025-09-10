@@ -4,11 +4,13 @@ import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsResponseDto;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductRequiredDocuments;
+import com.doc.entity.project.Project;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.ProductRepository;
 import com.doc.repository.ProductRequiredDocumentsRepository;
+import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.ProductRequiredDocumentsService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,14 +26,17 @@ import java.util.stream.Collectors;
 @Transactional
 public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocumentsService {
 
-        @Autowired
-        private ProductRequiredDocumentsRepository requiredDocumentsRepository;
+    @Autowired
+    private ProductRequiredDocumentsRepository requiredDocumentsRepository;
 
-        @Autowired
-        private ProductRepository productRepository;
+    @Autowired
+    private ProductRepository productRepository;
 
-        @Autowired
-        private UserRepository userRepository;
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @Override
     public List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList) {
@@ -222,6 +227,42 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         requiredDocumentsRepository.save(document);
     }
 
+    @Override
+    public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProjectAndProduct(Long projectId, Long productId, Long userId) {
+        // Validate user
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+
+        // Validate project
+        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted"));
+
+        // Validate product
+        Product product = productRepository.findByIdAndIsDeletedFalse(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted"));
+
+        // Verify product belongs to the project
+        if (!project.getProduct().getId().equals(productId)) {
+            throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId);
+        }
+
+        // Check if user has ADMIN role or is the creator/updater of the project
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        if (!isAdmin && !project.getCreatedBy().equals(userId) && !project.getUpdatedBy().equals(userId)) {
+            throw new ValidationException("User is not authorized to access this project's documents");
+        }
+
+        // Fetch required documents for the product
+        List<ProductRequiredDocuments> documents = product.getRequiredDocuments()
+                .stream()
+                .filter(doc -> !doc.isDeleted())
+                .collect(Collectors.toList());
+
+        return documents.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
     private void validateRequestDto(ProductRequiredDocumentsRequestDto requestDto) {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
             throw new ValidationException("Document name cannot be empty");
@@ -252,7 +293,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     private ProductRequiredDocumentsResponseDto mapToResponseDto(ProductRequiredDocuments document) {
         ProductRequiredDocumentsResponseDto dto = new ProductRequiredDocumentsResponseDto();
         dto.setId(document.getId());
-        dto.setUuid(document.getUuid()); // ✅ Map UUID here
+        dto.setUuid(document.getUuid());
         dto.setName(document.getName());
         dto.setDescription(document.getDescription());
         dto.setType(document.getType());
@@ -272,5 +313,4 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
         return dto;
     }
-
 }

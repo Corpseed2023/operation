@@ -11,9 +11,12 @@ public interface ProductRequiredDocumentsService {
 
     ProductRequiredDocumentsResponseDto getRequiredDocumentById(Long id, Long userId);
 
-    List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name, String type, String country, String centralName, String stateName);
+    List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name, String type,
+                                                                      String country, String centralName, String stateName);
 
     ProductRequiredDocumentsResponseDto updateRequiredDocument(Long id, ProductRequiredDocumentsRequestDto requestDto);
 
     void deleteRequiredDocument(Long id);
+
+    List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProjectAndProduct(Long projectId, Long productId, Long userId);
 }

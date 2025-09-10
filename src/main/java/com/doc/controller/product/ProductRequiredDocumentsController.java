@@ -62,4 +62,15 @@ public class ProductRequiredDocumentsController {
         requiredDocumentsService.deleteRequiredDocument(id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+
+
+    @GetMapping("/project/{projectId}/product/{productId}")
+    public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> getRequiredDocumentsByProjectAndProduct(
+            @PathVariable Long projectId,
+            @PathVariable Long productId,
+            @RequestParam Long userId) {
+        List<ProductRequiredDocumentsResponseDto> responses = requiredDocumentsService.getRequiredDocumentsByProjectAndProduct(projectId, productId, userId);
+        return new ResponseEntity<>(responses, HttpStatus.OK);
+    }
 }
