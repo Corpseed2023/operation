@@ -2,14 +2,17 @@ package com.doc.impl;
 
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsResponseDto;
+import com.doc.dto.project.DocumentResponseDto;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductRequiredDocuments;
 import com.doc.entity.project.Project;
+import com.doc.entity.project.ProjectDocumentUpload;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.ProductRepository;
 import com.doc.repository.ProductRequiredDocumentsRepository;
+import com.doc.repository.ProjectDocumentUploadRepository;
 import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.ProductRequiredDocumentsService;
@@ -37,6 +40,9 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
     @Autowired
     private ProjectRepository projectRepository;
+
+    @Autowired
+    private ProjectDocumentUploadRepository projectDocumentUploadRepository; // Added for fetching uploads
 
     @Override
     public List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList) {
@@ -258,8 +264,17 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 .filter(doc -> !doc.isDeleted())
                 .collect(Collectors.toList());
 
+        // Map to DTOs and include uploads
         return documents.stream()
-                .map(this::mapToResponseDto)
+                .map(doc -> {
+                    ProductRequiredDocumentsResponseDto dto = mapToResponseDto(doc);
+                    List<ProjectDocumentUpload> uploads = projectDocumentUploadRepository
+                            .findByProjectIdAndRequiredDocumentUuidAndIsDeletedFalse(projectId, doc.getUuid());
+                    dto.setUploads(uploads.stream()
+                            .map(this::mapToDocumentResponseDto)
+                            .collect(Collectors.toList()));
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -311,6 +326,26 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 .collect(Collectors.toList());
         dto.setProductIds(productIds);
 
+        return dto;
+    }
+
+    // Duplicated mapper for DocumentResponseDto (to avoid dependency; alternatively, inject ProjectDocumentUploadService)
+    private DocumentResponseDto mapToDocumentResponseDto(ProjectDocumentUpload documentUpload) {
+        DocumentResponseDto dto = new DocumentResponseDto();
+        dto.setId(documentUpload.getId());
+        dto.setFileUrl(documentUpload.getFileUrl());
+        dto.setFileName(documentUpload.getFileName());
+        dto.setOldFileUrl(documentUpload.getOldFileUrl());
+        dto.setOldFileName(documentUpload.getOldFileName());
+        dto.setStatus(documentUpload.getStatus());
+        dto.setRemarks(documentUpload.getRemarks());
+        dto.setUploadTime(documentUpload.getUploadTime());
+        dto.setRequiredDocumentId(documentUpload.getRequiredDocument().getUuid());
+        dto.setMilestoneAssignmentId(documentUpload.getMilestoneAssignment().getId());
+        dto.setProjectId(documentUpload.getProject().getId());
+        dto.setUploadedById(documentUpload.getUploadedBy().getId());
+        dto.setCreatedDate(documentUpload.getCreatedDate());
+        dto.setUpdatedDate(documentUpload.getUpdatedDate());
         return dto;
     }
 }

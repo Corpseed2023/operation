@@ -55,4 +55,9 @@ public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDo
      */
     Optional<ProjectDocumentUpload> findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentUuidAndIsDeletedFalse(
             Long projectId, Long milestoneAssignmentId, UUID requiredDocumentUuid);
+
+    @Query("SELECT d FROM ProjectDocumentUpload d WHERE d.project.id = :projectId AND d.requiredDocument.uuid = :uuid AND d.isDeleted = false")
+    List<ProjectDocumentUpload> findByProjectIdAndRequiredDocumentUuidAndIsDeletedFalse(@Param("projectId") Long projectId, @Param("uuid") UUID uuid);
+
+
 }

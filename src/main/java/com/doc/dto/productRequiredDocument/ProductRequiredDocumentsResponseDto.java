@@ -1,5 +1,6 @@
 package com.doc.dto.productRequiredDocument;
 
+import com.doc.dto.project.DocumentResponseDto;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -25,4 +26,5 @@ public class ProductRequiredDocumentsResponseDto {
     private Date createdDate;
     private Date updatedDate;
     private List<Long> productIds = new ArrayList<>();
+    private List<DocumentResponseDto> uploads = new ArrayList<>(); // Added to include uploaded documents
 }
