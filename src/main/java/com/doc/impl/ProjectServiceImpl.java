@@ -249,16 +249,6 @@ public class ProjectServiceImpl implements ProjectService {
         return mapToResponseDto(project);
     }
 
-    @Override
-    public ProjectResponseDto getProjectById(Long id) {
-        logger.info("Fetching project with ID: {}", id);
-        Project project = projectRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> {
-                    logger.error("Project with ID {} not found or is deleted", id);
-                    return new ResourceNotFoundException("Project with ID " + id + " not found or is deleted");
-                });
-        return mapToResponseDto(project);
-    }
 
     @Override
     public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
@@ -296,95 +286,6 @@ public class ProjectServiceImpl implements ProjectService {
                 .stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    public ProjectResponseDto updateProject(Long id, ProjectRequestDto requestDto) {
-        logger.info("Updating project with ID: {}", id);
-        projectRequestValidator.validate(requestDto);
-
-        Project project = projectRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> {
-                    logger.error("Project with ID {} not found or is deleted", id);
-                    return new ResourceNotFoundException("Project with ID " + id + " not found or is deleted");
-                });
-
-        if (!project.getProjectNo().equals(requestDto.getProjectNo().trim()) &&
-                projectRepository.existsByProjectNoAndIsDeletedFalse(requestDto.getProjectNo().trim())) {
-            logger.warn("Project number {} already exists", requestDto.getProjectNo());
-            throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists");
-        }
-
-        User salesPerson = userRepository.findByIdAndIsDeletedFalse(requestDto.getSalesPersonId())
-                .orElseThrow(() -> {
-                    logger.error("Sales person with ID {} not found or is deleted", requestDto.getSalesPersonId());
-                    return new ResourceNotFoundException("Sales person with ID " + requestDto.getSalesPersonId() + " not found or is deleted");
-                });
-
-        Product product = productRepository.findByIdAndIsDeletedFalse(requestDto.getProductId())
-                .orElseThrow(() -> {
-                    logger.error("Product with ID {} not found or is deleted", requestDto.getProductId());
-                    return new ResourceNotFoundException("Product with ID " + requestDto.getProductId() + " not found or is deleted");
-                });
-
-        Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
-                .orElseThrow(() -> {
-                    logger.error("Company with ID {} not found or is deleted", requestDto.getCompanyId());
-                    return new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found or is deleted");
-                });
-
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalse(requestDto.getContactId())
-                .orElseThrow(() -> {
-                    logger.error("Contact with ID {} not found or is deleted", requestDto.getContactId());
-                    return new ResourceNotFoundException("Contact with ID " + requestDto.getContactId() + " not found or is deleted");
-                });
-
-        User updatedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUpdatedBy())
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", requestDto.getUpdatedBy());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getUpdatedBy() + " not found or is deleted");
-                });
-
-        User approvedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getApprovedById())
-                .orElseThrow(() -> {
-                    logger.error("Approved by user with ID {} not found or is deleted", requestDto.getApprovedById());
-                    return new ResourceNotFoundException("Approved by user with ID " + requestDto.getApprovedById() + " not found or is deleted");
-                });
-
-        PaymentType paymentType = paymentTypeRepository.findById(requestDto.getPaymentTypeId())
-                .orElseThrow(() -> {
-                    logger.error("Payment type with ID {} not found", requestDto.getPaymentTypeId());
-                    return new ResourceNotFoundException("Payment type with ID " + requestDto.getPaymentTypeId() + " not found");
-                });
-
-        double totalAmount = requestDto.getTotalAmount();
-        double paidAmount = requestDto.getPaidAmount() != null ? requestDto.getPaidAmount() : 0.0;
-        double dueAmount = totalAmount - paidAmount;
-
-        mapRequestDtoToProject(project, requestDto);
-        project.setSalesPerson(salesPerson);
-        project.setProduct(product);
-        project.setCompany(company);
-        project.setContact(contact);
-        project.setUpdatedBy(updatedBy.getId());
-        project.setUpdatedDate(new Date());
-
-        ProjectPaymentDetail paymentDetail = project.getPaymentDetail();
-        paymentDetail.setTotalAmount(totalAmount);
-        paymentDetail.setDueAmount(dueAmount);
-        paymentDetail.setPaymentStatus(requestDto.getPaymentStatus());
-        paymentDetail.setPaymentType(paymentType);
-        paymentDetail.setApprovedBy(approvedBy);
-        paymentDetail.setUpdatedBy(updatedBy.getId());
-        paymentDetail.setUpdatedDate(new Date());
-
-        project = projectRepository.save(project);
-        logger.info("Project updated successfully with ID: {}", id);
-
-        // Update milestone visibilities based on new payment
-        updateMilestoneVisibilities(project, updatedBy.getId());
-
-        return mapToResponseDto(project);
     }
 
     @Override
@@ -548,7 +449,7 @@ public class ProjectServiceImpl implements ProjectService {
         }
     }
 
-    private void updateMilestoneVisibilities(Project project, Long updatedById) {
+    public void updateMilestoneVisibilities(Project project, Long updatedById) {
         logger.debug("Updating milestone visibilities for project ID: {}", project.getId());
         double totalAmount = project.getPaymentDetail().getTotalAmount();
         double paidAmount = totalAmount - project.getPaymentDetail().getDueAmount();
@@ -568,7 +469,6 @@ public class ProjectServiceImpl implements ProjectService {
             cumulativePaymentPercentage += map.getPaymentPercentage();
             boolean allPreviousCompleted = true;
 
-            // Check if all previous milestones are COMPLETED
             for (ProjectMilestoneAssignment prevAssignment : assignments) {
                 if (prevAssignment.getProductMilestoneMap().getOrder() < map.getOrder()) {
                     if (prevAssignment.getStatus() != MilestoneStatus.COMPLETED) {
@@ -588,7 +488,6 @@ public class ProjectServiceImpl implements ProjectService {
                 visibilityReason = !isVisible ? (allPreviousCompleted ? "Insufficient payment" : "Previous milestone incomplete") : null;
             }
 
-            // Always update if isVisible differs or reason differs
             if (assignment.isVisible() != isVisible || !Objects.equals(visibilityReason, assignment.getVisibilityReason())) {
                 assignment.setVisible(isVisible);
                 assignment.setVisibilityReason(visibilityReason);
@@ -609,7 +508,6 @@ public class ProjectServiceImpl implements ProjectService {
                                 assignmentResult.user.getFullName(), assignmentResult.user.getId(),
                                 map.getMilestone().getName(), project.getId());
 
-                        // Save assignment history
                         ProjectAssignmentHistory history = new ProjectAssignmentHistory();
                         history.setProject(project);
                         history.setMilestoneAssignment(assignment);
@@ -622,7 +520,6 @@ public class ProjectServiceImpl implements ProjectService {
                         history.setDeleted(false);
                         projectAssignmentHistoryRepository.save(history);
 
-                        // Update user project count
                         UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
                         if (count == null) {
                             count = new UserProjectCount();
@@ -650,7 +547,6 @@ public class ProjectServiceImpl implements ProjectService {
             }
         }
     }
-
     private void updateProjectStatus(Project project, Long updatedById) {
         logger.debug("Updating project status for project ID: {}", project.getId());
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
@@ -1166,4 +1062,6 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setUpdatedDate(document.getUpdatedDate());
         return dto;
     }
+
+
 }

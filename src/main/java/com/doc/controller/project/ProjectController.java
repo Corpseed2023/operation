@@ -40,16 +40,6 @@ public class ProjectController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    @Operation(summary = "Get a project by ID")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Project found"),
-            @ApiResponse(responseCode = "404", description = "Project not found")
-    })
-    @GetMapping("/{id}")
-    public ResponseEntity<ProjectResponseDto> getProjectById(@PathVariable Long id) {
-        ProjectResponseDto response = projectService.getProjectById(id);
-        return ResponseEntity.ok(response);
-    }
 
     @Operation(summary = "Get all projects with pagination")
     @ApiResponses({
@@ -65,20 +55,6 @@ public class ProjectController {
         return ResponseEntity.ok(responses);
     }
 
-    @Operation(summary = "Update a project by ID")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Project updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid request data"),
-            @ApiResponse(responseCode = "404", description = "Project or referenced entity not found"),
-            @ApiResponse(responseCode = "409", description = "Project number already exists")
-    })
-    @PutMapping("/{id}")
-    public ResponseEntity<ProjectResponseDto> updateProject(
-            @PathVariable Long id,
-            @Valid @RequestBody ProjectRequestDto requestDto) {
-        ProjectResponseDto response = projectService.updateProject(id, requestDto);
-        return ResponseEntity.ok(response);
-    }
 
     @Operation(summary = "Delete a project by ID (soft delete)")
     @ApiResponses({
