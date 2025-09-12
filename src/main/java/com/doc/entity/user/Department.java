@@ -48,4 +48,7 @@ public class Department {
     private Date updatedDate;
 
     private LocalDate date;
+
+    @Column(name = "auto_assignment_enabled", nullable = false)
+    private boolean autoAssignmentEnabled = true;  // Default to true; can be set to false for departments like Legal
 }

@@ -60,4 +60,6 @@ public class UserProductMap {
 
     @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
+
+
 }

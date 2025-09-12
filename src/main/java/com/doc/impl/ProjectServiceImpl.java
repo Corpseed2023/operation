@@ -88,6 +88,8 @@ public class ProjectServiceImpl implements ProjectService {
     @Autowired
     private ProjectRequestValidator projectRequestValidator;
 
+
+
     private static class AssignmentResult {
         User user;
         String reason;
@@ -98,6 +100,7 @@ public class ProjectServiceImpl implements ProjectService {
         }
     }
 
+
     @Override
     public ProjectResponseDto createProject(ProjectRequestDto requestDto) {
         logger.info("Creating project with projectNo: {}", requestDto.getProjectNo());
@@ -107,6 +110,7 @@ public class ProjectServiceImpl implements ProjectService {
             logger.warn("Project number {} already exists", requestDto.getProjectNo());
             throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists");
         }
+
 
         User salesPerson = userRepository.findByIdAndIsDeletedFalse(requestDto.getSalesPersonId())
                 .orElseThrow(() -> {
