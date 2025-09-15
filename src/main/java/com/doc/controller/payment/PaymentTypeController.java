@@ -21,6 +21,8 @@ public class PaymentTypeController {
     @Autowired
     private PaymentTypeService paymentTypeService;
 
+
+
     @PostMapping
     public ResponseEntity<PaymentTypeResponseDto> createPaymentType(@Valid @RequestBody PaymentTypeRequestDto requestDto) {
         PaymentTypeResponseDto response = paymentTypeService.createPaymentType(requestDto);

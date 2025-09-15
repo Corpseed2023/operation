@@ -1,5 +1,6 @@
 package com.doc.dto.milestone;
 
+import com.doc.dto.department.DepartmentResponseDto;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -17,5 +18,5 @@ public class MilestoneResponseDto {
     private Long id;
     private String name;
     private String description;
-    private List<Long> departmentIds;
+    private List<DepartmentResponseDto> departmentResponseDtos;
 }

@@ -26,12 +26,21 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public RoleResponseDto createRole(RoleRequestDto requestDto) {
-        logger.info("Creating role with name: {}", requestDto.getName());
-        if (roleRepository.existsByNameAndIdNot(requestDto.getName(), 0L)) {
+        logger.info("Creating role with ID: {}, name: {}", requestDto.getId(), requestDto.getName());
+        validateRequestDto(requestDto);
+
+        // Check for duplicate role ID
+        if (roleRepository.existsById(requestDto.getId())) {
+            throw new ValidationException("Role with ID " + requestDto.getId() + " already exists");
+        }
+
+        // Check for duplicate name
+        if (roleRepository.existsByNameAndIdNot(requestDto.getName().trim(), 0L)) {
             throw new ValidationException("Role with name '" + requestDto.getName() + "' already exists");
         }
 
         Role role = new Role();
+        role.setId(requestDto.getId());
         role.setName(requestDto.getName().trim());
         role = roleRepository.save(role);
         logger.info("Role created with ID: {}", role.getId());
@@ -61,10 +70,13 @@ public class RoleServiceImpl implements RoleService {
     @Override
     public RoleResponseDto updateRole(Long id, RoleRequestDto requestDto) {
         logger.info("Updating role with ID: {}", id);
+        validateRequestDto(requestDto);
+
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found with ID: " + id));
 
-        if (roleRepository.existsByNameAndIdNot(requestDto.getName(), id)) {
+        if (!role.getName().equals(requestDto.getName().trim()) &&
+                roleRepository.existsByNameAndIdNot(requestDto.getName().trim(), id)) {
             throw new ValidationException("Role with name '" + requestDto.getName() + "' already exists");
         }
 
@@ -82,6 +94,15 @@ public class RoleServiceImpl implements RoleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found with ID: " + id));
         roleRepository.delete(role);
         logger.info("Role deleted with ID: {}", id);
+    }
+
+    private void validateRequestDto(RoleRequestDto requestDto) {
+        if (requestDto.getId() == null) {
+            throw new ValidationException("Role ID cannot be null");
+        }
+        if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
+            throw new ValidationException("Role name is mandatory");
+        }
     }
 
     private RoleResponseDto mapToResponseDto(Role role) {

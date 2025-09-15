@@ -26,7 +26,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
-
 @Service
 @Transactional
 public class UserServiceImpl implements UserService {
@@ -47,9 +46,15 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponseDto createUser(UserRequestDto requestDto) {
-        logger.info("Creating user with email: {}, roleIds: {}", requestDto.getEmail(), requestDto.getRoleIds());
+        logger.info("Creating user with ID: {}, email: {}, roleIds: {}", requestDto.getId(), requestDto.getEmail(), requestDto.getRoleIds());
         validateRequestDto(requestDto);
 
+        // Check for duplicate user ID
+        if (userRepository.existsById(requestDto.getId())) {
+            throw new ValidationException("User with ID " + requestDto.getId() + " already exists");
+        }
+
+        // Check for duplicate email
         if (userRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail().trim())) {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
         }
@@ -60,6 +65,7 @@ public class UserServiceImpl implements UserService {
         User manager = validateManager(requestDto.getManagerId(), roles);
 
         User user = new User();
+        user.setId(requestDto.getId()); // Set the provided ID
         mapRequestDtoToEntity(user, requestDto);
         user.setCreatedDate(new Date());
         user.setUpdatedDate(new Date());
@@ -114,6 +120,7 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
         }
 
+        // For updates, ID in DTO is ignored; use the path ID
         Designation designation = validateDesignation(requestDto.getDesignationId());
         List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), designation.getDepartment().getId());
         List<Role> roles = validateRoles(requestDto.getRoleIds());
@@ -141,6 +148,9 @@ public class UserServiceImpl implements UserService {
     }
 
     private void validateRequestDto(UserRequestDto requestDto) {
+        if (requestDto.getId() == null) {
+            throw new ValidationException("User ID cannot be null");
+        }
         if (requestDto.getFullName() == null || requestDto.getFullName().trim().isEmpty()) {
             throw new ValidationException("Full name cannot be empty");
         }
@@ -172,7 +182,6 @@ public class UserServiceImpl implements UserService {
         if (departments.size() != departmentIds.size()) {
             throw new ResourceNotFoundException("One or more departments not found");
         }
-        // Optional: Enforce that designation's department is included in departmentIds
         if (!departmentIds.contains(designationDepartmentId)) {
             throw new ValidationException("Designation's department ID " + designationDepartmentId + " must be included in departmentIds");
         }
@@ -212,7 +221,6 @@ public class UserServiceImpl implements UserService {
         dto.setFullName(user.getFullName());
         dto.setEmail(user.getEmail());
         dto.setContactNo(user.getContactNo());
-        // Use userDesignation instead of designation
         dto.setDesignation(user.getUserDesignation() != null ? user.getUserDesignation().getName() : null);
         dto.setDesignationId(user.getUserDesignation() != null ? user.getUserDesignation().getId() : null);
         dto.setDepartmentIds(user.getDepartments().stream()

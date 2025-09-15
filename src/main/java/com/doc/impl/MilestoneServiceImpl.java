@@ -1,5 +1,6 @@
 package com.doc.impl;
 
+import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.milestone.MilestoneRequestDto;
 import com.doc.dto.milestone.MilestoneResponseDto;
 import com.doc.entity.product.Milestone;
@@ -169,25 +170,40 @@ public class MilestoneServiceImpl implements MilestoneService {
                 .map(this::mapToResponseDto);
     }
 
+
     private MilestoneResponseDto mapToResponseDto(Milestone milestone) {
-        MilestoneResponseDto dto = new MilestoneResponseDto();
-        dto.setId(milestone.getId());
-        dto.setName(milestone.getName());
-        dto.setDescription(milestone.getDescription());
-        dto.setDepartmentIds(milestone.getDepartments().stream()
-                .map(Department::getId)
-                .collect(Collectors.toList()));
-        return dto;
+
+        MilestoneResponseDto milestoneResponseDto = new MilestoneResponseDto();
+
+        milestoneResponseDto.setId(milestone.getId());
+        milestoneResponseDto.setName(milestone.getName());
+        milestoneResponseDto.setDescription(milestone.getDescription());
+
+        List<DepartmentResponseDto> departmentResponseDtos = new ArrayList<>();
+
+        if (milestone != null && milestone.getDepartments() != null) {
+            for (Department department : milestone.getDepartments()) {
+                DepartmentResponseDto dto = new DepartmentResponseDto();
+                dto.setId(department.getId());
+                dto.setName(department.getName());
+                dto.setCreatedDate(department.getCreatedDate());
+                dto.setUpdatedDate(department.getUpdatedDate());
+                departmentResponseDtos.add(dto);
+            }
+        }
+
+        milestoneResponseDto.setDepartmentResponseDtos(departmentResponseDtos);
+
+        return milestoneResponseDto;
     }
+
 
 
     @Override
     public List<MilestoneResponseDto> getAllMilestones() {
 
-        List<Milestone> milestones = milestoneRepository.findAll();
+        List<Milestone> milestoneList = milestoneRepository.findAll();
 
-        return milestones.stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
+        return milestoneList.stream().map(this::mapToResponseDto).collect(Collectors.toList());
     }
 }

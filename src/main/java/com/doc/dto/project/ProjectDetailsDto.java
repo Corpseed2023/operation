@@ -1,10 +1,16 @@
 package com.doc.dto.project;
 
-import lombok.Data;
+import com.doc.dto.contact.ContactDetailsDto;
+import lombok.*;
+
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.List;
 
-@Data
+@NoArgsConstructor
+@Getter
+@Setter
+@AllArgsConstructor
 public class ProjectDetailsDto {
     private Long id;
     private String name;
@@ -14,6 +20,11 @@ public class ProjectDetailsDto {
     private String city;
     private String state;
     private String country;
+    private Long productId;
+    private String productName;
     private Date createdDate;
     private Date updatedDate;
+    private Long companyId;
+    private String companyName;
+    private List<ContactDetailsDto> contacts;
 }

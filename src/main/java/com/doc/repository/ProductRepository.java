@@ -15,6 +15,7 @@ import java.util.Optional;
 /**
  * Repository interface for managing {@link Product} entities.
  */
+
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 

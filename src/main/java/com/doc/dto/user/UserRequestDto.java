@@ -13,6 +13,9 @@ import java.util.List;
 @Setter
 public class UserRequestDto {
 
+    @NotNull(message = "User ID cannot be null")
+    private Long id;
+
     @NotBlank(message = "Full name cannot be empty")
     @Size(max = 100, message = "Full name cannot exceed 100 characters")
     private String fullName;

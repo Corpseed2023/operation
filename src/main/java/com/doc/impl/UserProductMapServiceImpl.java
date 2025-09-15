@@ -1,7 +1,6 @@
 package com.doc.impl;
 
-import com.doc.dto.product.UserProductMapRequestDto;
-import com.doc.dto.product.UserProductMapResponseDto;
+import com.doc.dto.product.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
@@ -18,9 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -263,4 +260,91 @@ public class UserProductMapServiceImpl implements UserProductMapService {
         dto.setDeleted(mapping.isDeleted());
         return dto;
     }
-}
+
+
+
+        @Override
+        public Object getUserProductMaps(String groupBy) {
+            logger.info("Fetching all user-product mappings with groupBy: {}", groupBy);
+
+            // Fetch all non-deleted mappings
+            List<UserProductMap> mappings = userProductMapRepository.findByIsDeletedFalse();
+
+            if (groupBy == null || groupBy.trim().isEmpty()) {
+                // Return flat list if no groupBy specified
+                return mappings.stream()
+                        .map(this::mapToResponseDto)
+                        .collect(Collectors.toList());
+            }
+
+            switch (groupBy.toLowerCase()) {
+                case "product":
+                    Map<Long, ProductGroupDto> productMap = new HashMap<>();
+                    for (UserProductMap m : mappings) {
+                        Long pid = m.getProduct().getId();
+                        ProductGroupDto dto = productMap.computeIfAbsent(pid, k -> {
+                            ProductGroupDto p = new ProductGroupDto();
+                            p.setProductId(pid);
+                            p.setProductName(m.getProduct().getProductName());
+                            return p;
+                        });
+                        UserRatingDto ur = new UserRatingDto();
+                        ur.setUserId(m.getUser().getId());
+                        ur.setUserName(m.getUser().getFullName());
+                        ur.setRating(m.getRating());
+                        dto.getUsers().add(ur);
+                    }
+                    return new ArrayList<>(productMap.values());
+
+                case "user":
+                    Map<Long, UserGroupDto> userMap = new HashMap<>();
+                    for (UserProductMap m : mappings) {
+                        Long uid = m.getUser().getId();
+                        UserGroupDto dto = userMap.computeIfAbsent(uid, k -> {
+                            UserGroupDto u = new UserGroupDto();
+                            u.setUserId(uid);
+                            u.setUserName(m.getUser().getFullName());
+                            return u;
+                        });
+                        ProductRatingDto pr = new ProductRatingDto();
+                        pr.setProductId(m.getProduct().getId());
+                        pr.setProductName(m.getProduct().getProductName());
+                        pr.setRating(m.getRating());
+                        dto.getProducts().add(pr);
+                    }
+                    return new ArrayList<>(userMap.values());
+
+                case "rating":
+                    Map<Double, RatingGroupDto> ratingMap = new HashMap<>();
+                    for (UserProductMap m : mappings) {
+                        Double r = m.getRating();
+                        if (r == null) {
+                            continue; // Skip null ratings
+                        }
+                        RatingGroupDto dto = ratingMap.computeIfAbsent(r, k -> {
+                            RatingGroupDto rg = new RatingGroupDto();
+                            rg.setRating(k);
+                            return rg;
+                        });
+                        UserProductDto up = new UserProductDto();
+                        up.setUserId(m.getUser().getId());
+                        up.setUserName(m.getUser().getFullName());
+                        up.setProductId(m.getProduct().getId());
+                        up.setProductName(m.getProduct().getProductName());
+                        dto.getMappings().add(up);
+                    }
+                    return new ArrayList<>(ratingMap.values());
+
+                default:
+                    logger.warn("Invalid groupBy value: {}", groupBy);
+                    throw new ValidationException("Invalid groupBy value: " + groupBy + ". Valid values are: product, user, rating");
+            }
+        }
+
+
+    }
+
+
+
+
+

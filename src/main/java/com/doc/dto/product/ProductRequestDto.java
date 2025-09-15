@@ -13,6 +13,8 @@ import java.util.List;
 @Setter
 public class ProductRequestDto {
 
+    private Long productId ;
+
     @NotBlank(message = "Product name cannot be empty")
     private String productName;
 

@@ -1,5 +1,6 @@
 package com.doc.impl;
 
+import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.entity.user.Department;
 import com.doc.entity.user.User;
@@ -14,12 +15,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-
-import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
-
 
 @Service
 @Transactional
@@ -32,27 +30,32 @@ public class DepartmentServiceImpl implements DepartmentService {
     private UserRepository userRepository;
 
     @Override
-    public DepartmentResponseDto createDepartment(String departmentName, Long createdBy) {
-        if (departmentName == null || departmentName.trim().isEmpty()) {
-            throw new ValidationException("Department name cannot be empty");
+    public DepartmentResponseDto createDepartment(DepartmentRequestDto requestDto) {
+        validateRequestDto(requestDto);
+
+        // Check for duplicate department ID
+        if (departmentRepository.existsById(requestDto.getId())) {
+            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists");
         }
 
-        if (departmentRepository.existsByNameAndIsDeletedFalse(departmentName)) {
-            throw new ValidationException("Department with name " + departmentName + " already exists");
+        // Check for duplicate name
+        if (departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
+            throw new ValidationException("Department with name " + requestDto.getName() + " already exists");
         }
 
-        User createdByUser = userRepository.findActiveUserById(createdBy)
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + createdBy + " not found"));
+        // Validate createdBy user
+        userRepository.findActiveUserById(requestDto.getCreatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
 
         Department department = new Department();
-        department.setName(departmentName.trim());
+        department.setId(requestDto.getId());
+        department.setName(requestDto.getName().trim());
         department.setCreatedDate(new Date());
         department.setUpdatedDate(new Date());
-        department.setDate(LocalDate.now());
+        department.setDeleted(false);
 
         department = departmentRepository.save(department);
         return mapToResponseDto(department);
-
     }
 
     @Override
@@ -74,21 +77,19 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
     @Override
-    public DepartmentResponseDto updateDepartment(Long id, String departmentName) {
-        if (departmentName == null || departmentName.trim().isEmpty()) {
-            throw new ValidationException("Department name cannot be empty");
-        }
+    public DepartmentResponseDto updateDepartment(Long id, DepartmentRequestDto requestDto) {
+        validateRequestDto(requestDto);
 
         Department department = departmentRepository.findById(id)
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found"));
 
-        if (!department.getName().equals(departmentName.trim()) &&
-                departmentRepository.existsByNameAndIsDeletedFalse(departmentName.trim())) {
-            throw new ValidationException("Department with name " + departmentName + " already exists");
+        if (!department.getName().equals(requestDto.getName().trim()) &&
+                departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
+            throw new ValidationException("Department with name " + requestDto.getName() + " already exists");
         }
 
-        department.setName(departmentName.trim());
+        department.setName(requestDto.getName().trim());
         department.setUpdatedDate(new Date());
         department = departmentRepository.save(department);
         return mapToResponseDto(department);
@@ -105,6 +106,43 @@ public class DepartmentServiceImpl implements DepartmentService {
         departmentRepository.save(department);
     }
 
+    @Override
+    public DepartmentResponseDto createMasterDepartment(DepartmentRequestDto requestDto) {
+        validateRequestDto(requestDto);
+
+        // Check for duplicate department ID
+        if (departmentRepository.existsById(requestDto.getId())) {
+            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists");
+        }
+
+        // Check for duplicate name
+        if (departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
+            throw new ValidationException("Department with name " + requestDto.getName() + " already exists");
+        }
+
+        Department department = new Department();
+        department.setId(requestDto.getId());
+        department.setName(requestDto.getName().trim());
+        department.setCreatedDate(new Date());
+        department.setUpdatedDate(new Date());
+        department.setDeleted(false);
+
+        department = departmentRepository.save(department);
+        return mapToResponseDto(department);
+    }
+
+    private void validateRequestDto(DepartmentRequestDto requestDto) {
+        if (requestDto.getId() == null) {
+            throw new ValidationException("Department ID cannot be null");
+        }
+        if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
+            throw new ValidationException("Department name cannot be empty");
+        }
+        if (requestDto.getCreatedBy() == null) {
+            throw new ValidationException("Created by user ID cannot be null");
+        }
+    }
+
     private DepartmentResponseDto mapToResponseDto(Department department) {
         DepartmentResponseDto dto = new DepartmentResponseDto();
         dto.setId(department.getId());
@@ -112,25 +150,5 @@ public class DepartmentServiceImpl implements DepartmentService {
         dto.setCreatedDate(department.getCreatedDate());
         dto.setUpdatedDate(department.getUpdatedDate());
         return dto;
-    }
-
-
-    @Override
-    public DepartmentResponseDto createMasterDepartment(String departmentName) {
-        if (departmentName == null || departmentName.trim().isEmpty()) {
-            throw new ValidationException("Department name cannot be empty");
-        }
-
-        if (departmentRepository.existsByNameAndIsDeletedFalse(departmentName)) {
-            throw new ValidationException("Department with name " + departmentName + " already exists");
-        }
-
-        Department department = new Department();
-        department.setName(departmentName.trim());
-        department.setCreatedDate(new Date());
-        department.setUpdatedDate(new Date());
-
-        department = departmentRepository.save(department);
-        return mapToResponseDto(department);
     }
 }

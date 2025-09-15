@@ -21,4 +21,6 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
 
     @Query("SELECT r FROM Role r WHERE (:name IS NULL OR r.name LIKE %:name%)")
     Page<Role> findByNameContaining(@Param("name") String name, Pageable pageable);
+
+    boolean existsById(Long id); // Added for duplicate ID check
 }

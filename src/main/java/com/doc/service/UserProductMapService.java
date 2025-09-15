@@ -48,4 +48,6 @@ public interface UserProductMapService {
      * @param id the mapping ID
      */
     void deleteUserProductMap(Long id);
+
+    Object getUserProductMaps(String groupBy);
 }

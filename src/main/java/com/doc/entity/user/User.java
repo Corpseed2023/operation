@@ -18,8 +18,8 @@ import java.util.List;
 @NoArgsConstructor
 public class User {
 
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Comment("Primary key: User ID")
     private Long id;
 

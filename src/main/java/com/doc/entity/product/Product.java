@@ -26,7 +26,6 @@ import java.util.List;
 public class Product {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Comment("Primary key: Product ID")
     private Long id;
 
