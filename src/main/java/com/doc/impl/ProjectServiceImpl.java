@@ -181,6 +181,17 @@ public class ProjectServiceImpl implements ProjectService {
         double paidAmount = requestDto.getPaidAmount() != null ? requestDto.getPaidAmount() : 0.0;
         double dueAmount = totalAmount - paidAmount;
 
+        // Validate initial payment based on payment type
+        String paymentTypeName = paymentType.getName();
+        if (paymentTypeName.equals("Full Payment") && paidAmount != totalAmount) {
+            logger.warn("Full Payment requires the entire amount ({}), received: {}", totalAmount, paidAmount);
+            throw new ValidationException("Full Payment requires the entire amount of " + totalAmount);
+        }
+        if (paymentTypeName.equals("Purchase Order Payment") && paidAmount > 0) {
+            logger.warn("No initial payment allowed for PO-based project at creation");
+            throw new ValidationException("No initial payment allowed for Purchase Order Payment at project creation");
+        }
+
         Project project = new Project();
         mapRequestDtoToProject(project, requestDto);
         project.setSalesPerson(salesPerson);
@@ -233,8 +244,6 @@ public class ProjectServiceImpl implements ProjectService {
             assignment.setProductMilestoneMap(milestone);
             assignment.setMilestone(milestone.getMilestone());
             assignment.setStatus(MilestoneStatus.NEW);
-            assignment.setVisible(false);
-            assignment.setVisibilityReason("Insufficient payment");
             assignment.setCreatedBy(createdBy.getId());
             assignment.setUpdatedBy(updatedBy.getId());
             assignment.setCreatedDate(new Date());
@@ -242,11 +251,26 @@ public class ProjectServiceImpl implements ProjectService {
             assignment.setDate(LocalDate.now());
             assignment.setDeleted(false);
 
+            // Set visibility for PO-based payment
+            if (paymentTypeName.equals("Purchase Order Payment")) {
+                if (milestone.getMilestone().getName().equalsIgnoreCase("Certification")) {
+                    assignment.setVisible(false);
+                    assignment.setVisibilityReason("Full payment required for Certification");
+                } else {
+                    assignment.setVisible(true);
+                    assignment.setVisibilityReason(null);
+                    assignment.setVisibleDate(new Date());
+                }
+            } else {
+                assignment.setVisible(false);
+                assignment.setVisibilityReason("Insufficient payment");
+            }
+
             projectMilestoneAssignmentRepository.save(assignment);
             logger.debug("Milestone assignment created for project ID: {}, milestone: {}", project.getId(), milestone.getMilestone().getName());
         }
 
-        // Update milestone visibilities based on initial payment
+        // Update milestone visibilities based on initial payment (also handles PO-based logic)
         updateMilestoneVisibilities(project, createdBy.getId());
 
         logger.info("Project created successfully with projectNo: {}", requestDto.getProjectNo());
@@ -330,23 +354,53 @@ public class ProjectServiceImpl implements ProjectService {
                 });
 
         double amount = transactionDto.getAmount();
+        String paymentTypeName = paymentDetail.getPaymentType().getName();
+        double totalAmount = paymentDetail.getTotalAmount();
+        double dueAmount = paymentDetail.getDueAmount();
+        double paidAmount = totalAmount - dueAmount;
 
-        // Validate payment amount
+        // Validate payment amount based on payment type
         if (amount <= 0) {
             logger.warn("Invalid payment amount: {}", amount);
             throw new ValidationException("Payment amount must be positive");
         }
-        if (paymentDetail.getPaymentType().getName().equals("FULL") && paymentDetail.getDueAmount() == 0) {
-            logger.warn("Attempt to add payment to fully paid project ID: {}", projectId);
-            throw new ValidationException("Cannot add payment to a fully paid project");
-        }
-        if (amount > paymentDetail.getDueAmount()) {
-            logger.warn("Payment amount {} exceeds due amount {}", amount, paymentDetail.getDueAmount());
-            throw new ValidationException("Payment amount cannot exceed due amount of " + paymentDetail.getDueAmount());
+
+        if (paymentTypeName.equals("Full Payment")) {
+            // For Full Payment, the entire amount must be paid in one transaction
+            if (dueAmount > 0 && amount != dueAmount) {
+                logger.warn("Full Payment requires the entire due amount ({}), received: {}", dueAmount, amount);
+                throw new ValidationException("Full Payment requires the entire due amount of " + dueAmount);
+            }
+        } else if (paymentTypeName.equals("Partial Payment")) {
+            // For Partial Payment, ensure some payment is made but allow less than total
+            if (amount > dueAmount) {
+                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
+                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount);
+            }
+        } else if (paymentTypeName.equals("Purchase Order Payment")) {
+            // For PO-based, ensure all non-Certification milestones are completed before accepting payment
+            List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
+            boolean allNonCertificationCompleted = assignments.stream()
+                    .filter(a -> !a.getMilestone().getName().equalsIgnoreCase("Certification"))
+                    .allMatch(a -> a.getStatus() == MilestoneStatus.COMPLETED);
+            if (!allNonCertificationCompleted) {
+                logger.warn("Cannot add payment for PO-based project ID {} until all non-Certification milestones are completed", projectId);
+                throw new ValidationException("All non-Certification milestones must be completed before adding payment for PO-based project");
+            }
+            if (amount > dueAmount) {
+                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
+                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount);
+            }
+        } else if (paymentTypeName.equals("Installment Payment")) {
+            // For Installment Payment, allow partial payments (existing logic applies)
+            if (amount > dueAmount) {
+                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
+                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount);
+            }
         }
 
         // Update due amount
-        paymentDetail.setDueAmount(paymentDetail.getDueAmount() - amount);
+        paymentDetail.setDueAmount(dueAmount - amount);
 
         User createdBy = userRepository.findByIdAndIsDeletedFalse(transactionDto.getCreatedBy())
                 .orElseThrow(() -> {
@@ -453,11 +507,13 @@ public class ProjectServiceImpl implements ProjectService {
         }
     }
 
+
     public void updateMilestoneVisibilities(Project project, Long updatedById) {
         logger.debug("Updating milestone visibilities for project ID: {}", project.getId());
         double totalAmount = project.getPaymentDetail().getTotalAmount();
         double paidAmount = totalAmount - project.getPaymentDetail().getDueAmount();
         double paidPercentage = (paidAmount / totalAmount) * 100.0;
+        String paymentTypeName = project.getPaymentDetail().getPaymentType().getName();
 
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
         if (assignments.isEmpty()) {
@@ -467,86 +523,166 @@ public class ProjectServiceImpl implements ProjectService {
 
         assignments.sort(Comparator.comparing(a -> a.getProductMilestoneMap().getOrder()));
 
-        double cumulativePaymentPercentage = 0.0;
-        for (ProjectMilestoneAssignment assignment : assignments) {
-            ProductMilestoneMap map = assignment.getProductMilestoneMap();
-            cumulativePaymentPercentage += map.getPaymentPercentage();
-            boolean allPreviousCompleted = true;
+        if (paymentTypeName.equals("Purchase Order Payment")) {
+            // For PO-based payment, all milestones except Certification are visible from the start
+            for (ProjectMilestoneAssignment assignment : assignments) {
+                ProductMilestoneMap map = assignment.getProductMilestoneMap();
+                boolean isCertification = map.getMilestone().getName().equalsIgnoreCase("Certification");
+                boolean isVisible;
+                String visibilityReason = null;
 
-            for (ProjectMilestoneAssignment prevAssignment : assignments) {
-                if (prevAssignment.getProductMilestoneMap().getOrder() < map.getOrder()) {
-                    if (prevAssignment.getStatus() != MilestoneStatus.COMPLETED) {
-                        allPreviousCompleted = false;
-                        break;
+                if (isCertification) {
+                    // Certification milestone requires full payment
+                    isVisible = Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
+                    visibilityReason = isVisible ? null : "Full payment required for Certification";
+                } else {
+                    // Non-Certification milestones are visible regardless of payment
+                    isVisible = true;
+                    visibilityReason = null;
+                }
+
+                if (assignment.isVisible() != isVisible || !Objects.equals(visibilityReason, assignment.getVisibilityReason())) {
+                    assignment.setVisible(isVisible);
+                    assignment.setVisibilityReason(visibilityReason);
+                    assignment.setVisibleDate(isVisible ? new Date() : null);
+                    assignment.setUpdatedBy(updatedById);
+                    assignment.setUpdatedDate(new Date());
+                    projectMilestoneAssignmentRepository.save(assignment);
+                    logger.debug("Milestone {} (ID: {}) visibility updated to {}, reason: {}",
+                            map.getMilestone().getName(), assignment.getId(), isVisible, visibilityReason);
+                }
+
+                if (isVisible && !map.isAutoGenerated() && assignment.getAssignedUser() == null) {
+                    try {
+                        AssignmentResult assignmentResult = assignMilestoneUser(map);
+                        if (assignmentResult != null && assignmentResult.user != null) {
+                            assignment.setAssignedUser(assignmentResult.user);
+                            logger.debug("Assigned user {} (ID: {}) to milestone {} for project ID: {}",
+                                    assignmentResult.user.getFullName(), assignmentResult.user.getId(),
+                                    map.getMilestone().getName(), project.getId());
+
+                            ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+                            history.setProject(project);
+                            history.setMilestoneAssignment(assignment);
+                            history.setAssignedUser(assignmentResult.user);
+                            history.setAssignmentReason(assignmentResult.reason);
+                            history.setCreatedDate(new Date());
+                            history.setUpdatedDate(new Date());
+                            history.setCreatedBy(updatedById);
+                            history.setUpdatedBy(updatedById);
+                            history.setDeleted(false);
+                            projectAssignmentHistoryRepository.save(history);
+
+
+                            UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
+                            if (count == null) {
+                                count = new UserProjectCount();
+                                count.setUser(assignmentResult.user);
+                                count.setProduct(project.getProduct());
+                                count.setProjectCount(1);
+                                count.setLastUpdatedDate(new Date());
+                                count.setCreatedDate(new Date());
+                                count.setUpdatedDate(new Date());
+                                count.setCreatedBy(updatedById);
+                                count.setUpdatedBy(updatedById);
+                                count.setDeleted(false);
+                            } else {
+                                count.setProjectCount(count.getProjectCount() + 1);
+                                count.setLastUpdatedDate(new Date());
+                                count.setUpdatedDate(new Date());
+                                count.setUpdatedBy(updatedById);
+                            }
+                            userProjectCountRepository.save(count);
+                        }
+                    } catch (ResourceNotFoundException e) {
+                        logger.error("Failed to assign user to milestone {}: {}", map.getMilestone().getName(), e.getMessage());
+                        throw e;
                     }
                 }
             }
+        } else {
+            // Existing logic for other payment types (Full, Partial, Installment)
+            double cumulativePaymentPercentage = 0.0;
+            for (ProjectMilestoneAssignment assignment : assignments) {
+                ProductMilestoneMap map = assignment.getProductMilestoneMap();
+                cumulativePaymentPercentage += map.getPaymentPercentage();
+                boolean allPreviousCompleted = true;
 
-            boolean isVisible;
-            String visibilityReason = null;
-            if (map.getMilestone().getName().equalsIgnoreCase("Certification")) {
-                isVisible = Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
-                visibilityReason = isVisible ? null : "Full payment required for Certification";
-            } else {
-                isVisible = allPreviousCompleted && paidPercentage >= cumulativePaymentPercentage;
-                visibilityReason = !isVisible ? (allPreviousCompleted ? "Insufficient payment" : "Previous milestone incomplete") : null;
-            }
-
-            if (assignment.isVisible() != isVisible || !Objects.equals(visibilityReason, assignment.getVisibilityReason())) {
-                assignment.setVisible(isVisible);
-                assignment.setVisibilityReason(visibilityReason);
-                assignment.setVisibleDate(isVisible ? new Date() : null);
-                assignment.setUpdatedBy(updatedById);
-                assignment.setUpdatedDate(new Date());
-                projectMilestoneAssignmentRepository.save(assignment);
-                logger.debug("Milestone {} (ID: {}) visibility updated to {}, reason: {}",
-                        map.getMilestone().getName(), assignment.getId(), isVisible, visibilityReason);
-            }
-
-            if (isVisible && !map.isAutoGenerated() && assignment.getAssignedUser() == null) {
-                try {
-                    AssignmentResult assignmentResult = assignMilestoneUser(map);
-                    if (assignmentResult != null && assignmentResult.user != null) {
-                        assignment.setAssignedUser(assignmentResult.user);
-                        logger.debug("Assigned user {} (ID: {}) to milestone {} for project ID: {}",
-                                assignmentResult.user.getFullName(), assignmentResult.user.getId(),
-                                map.getMilestone().getName(), project.getId());
-
-                        ProjectAssignmentHistory history = new ProjectAssignmentHistory();
-                        history.setProject(project);
-                        history.setMilestoneAssignment(assignment);
-                        history.setAssignedUser(assignmentResult.user);
-                        history.setAssignmentReason(assignmentResult.reason);
-                        history.setCreatedDate(new Date());
-                        history.setUpdatedDate(new Date());
-                        history.setCreatedBy(updatedById);
-                        history.setUpdatedBy(updatedById);
-                        history.setDeleted(false);
-                        projectAssignmentHistoryRepository.save(history);
-
-                        UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
-                        if (count == null) {
-                            count = new UserProjectCount();
-                            count.setUser(assignmentResult.user);
-                            count.setProduct(project.getProduct());
-                            count.setProjectCount(1);
-                            count.setLastUpdatedDate(new Date());
-                            count.setCreatedDate(new Date());
-                            count.setUpdatedDate(new Date());
-                            count.setCreatedBy(updatedById);
-                            count.setUpdatedBy(updatedById);
-                            count.setDeleted(false);
-                        } else {
-                            count.setProjectCount(count.getProjectCount() + 1);
-                            count.setLastUpdatedDate(new Date());
-                            count.setUpdatedDate(new Date());
-                            count.setUpdatedBy(updatedById);
+                for (ProjectMilestoneAssignment prevAssignment : assignments) {
+                    if (prevAssignment.getProductMilestoneMap().getOrder() < map.getOrder()) {
+                        if (prevAssignment.getStatus() != MilestoneStatus.COMPLETED) {
+                            allPreviousCompleted = false;
+                            break;
                         }
-                        userProjectCountRepository.save(count);
                     }
-                } catch (ResourceNotFoundException e) {
-                    logger.error("Failed to assign user to milestone {}: {}", map.getMilestone().getName(), e.getMessage());
-                    throw e;
+                }
+
+                boolean isVisible;
+                String visibilityReason = null;
+                if (map.getMilestone().getName().equalsIgnoreCase("Certification")) {
+                    isVisible = Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
+                    visibilityReason = isVisible ? null : "Full payment required for Certification";
+                } else {
+                    isVisible = allPreviousCompleted && paidPercentage >= cumulativePaymentPercentage;
+                    visibilityReason = !isVisible ? (allPreviousCompleted ? "Insufficient payment" : "Previous milestone incomplete") : null;
+                }
+
+                if (assignment.isVisible() != isVisible || !Objects.equals(visibilityReason, assignment.getVisibilityReason())) {
+                    assignment.setVisible(isVisible);
+                    assignment.setVisibilityReason(visibilityReason);
+                    assignment.setVisibleDate(isVisible ? new Date() : null);
+                    assignment.setUpdatedBy(updatedById);
+                    assignment.setUpdatedDate(new Date());
+                    projectMilestoneAssignmentRepository.save(assignment);
+                    logger.debug("Milestone {} (ID: {}) visibility updated to {}, reason: {}",
+                            map.getMilestone().getName(), assignment.getId(), isVisible, visibilityReason);
+                }
+
+                if (isVisible && !map.isAutoGenerated() && assignment.getAssignedUser() == null) {
+                    try {
+                        AssignmentResult assignmentResult = assignMilestoneUser(map);
+                        if (assignmentResult != null && assignmentResult.user != null) {
+                            assignment.setAssignedUser(assignmentResult.user);
+                            logger.debug("Assigned user {} (ID: {}) to milestone {} for project ID: {}",
+                                    assignmentResult.user.getFullName(), assignmentResult.user.getId(),
+                                    map.getMilestone().getName(), project.getId());
+
+                            ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+                            history.setProject(project);
+                            history.setMilestoneAssignment(assignment);
+                            history.setAssignedUser(assignmentResult.user);
+                            history.setAssignmentReason(assignmentResult.reason);
+                            history.setCreatedDate(new Date());
+                            history.setUpdatedDate(new Date());
+                            history.setCreatedBy(updatedById);
+                            history.setUpdatedBy(updatedById);
+                            history.setDeleted(false);
+                            projectAssignmentHistoryRepository.save(history);
+
+                            UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
+                            if (count == null) {
+                                count = new UserProjectCount();
+                                count.setUser(assignmentResult.user);
+                                count.setProduct(project.getProduct());
+                                count.setProjectCount(1);
+                                count.setLastUpdatedDate(new Date());
+                                count.setCreatedDate(new Date());
+                                count.setUpdatedDate(new Date());
+                                count.setCreatedBy(updatedById);
+                                count.setUpdatedBy(updatedById);
+                                count.setDeleted(false);
+                            } else {
+                                count.setProjectCount(count.getProjectCount() + 1);
+                                count.setLastUpdatedDate(new Date());
+                                count.setUpdatedDate(new Date());
+                                count.setUpdatedBy(updatedById);
+                            }
+                            userProjectCountRepository.save(count);
+                        }
+                    } catch (ResourceNotFoundException e) {
+                        logger.error("Failed to assign user to milestone {}: {}", map.getMilestone().getName(), e.getMessage());
+                        throw e;
+                    }
                 }
             }
         }
