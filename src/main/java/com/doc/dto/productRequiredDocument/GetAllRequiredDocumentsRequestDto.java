@@ -20,4 +20,5 @@ public class GetAllRequiredDocumentsRequestDto {
     private String country;
     private String centralName;
     private String stateName;
+    private Long productId; // New field for product filter
 }

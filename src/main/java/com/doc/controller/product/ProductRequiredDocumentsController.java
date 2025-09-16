@@ -47,7 +47,8 @@ public class ProductRequiredDocumentsController {
                 requestDto.getType(),
                 requestDto.getCountry(),
                 requestDto.getCentralName(),
-                requestDto.getStateName()
+                requestDto.getStateName(),
+                requestDto.getProductId() // Add productId
         );
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }

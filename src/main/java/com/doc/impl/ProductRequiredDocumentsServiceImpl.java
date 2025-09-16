@@ -129,7 +129,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     @Override
     public List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name,
                                                                              String type, String country, String centralName,
-                                                                             String stateName) {
+                                                                             String stateName, Long productId) {
         // Validate user
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
@@ -144,8 +144,8 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         Page<ProductRequiredDocuments> documentPage;
 
         // Fetch documents based on filters
-        if (name != null || type != null || country != null || centralName != null || stateName != null) {
-            documentPage = requiredDocumentsRepository.findByFilters(name, type, country, centralName, stateName, pageable);
+        if (name != null || type != null || country != null || centralName != null || stateName != null || productId != null) {
+            documentPage = requiredDocumentsRepository.findByFiltersAndProduct(name, type, country, centralName, stateName, productId, pageable);
         } else {
             documentPage = requiredDocumentsRepository.findByIsDeletedFalse(pageable);
         }
@@ -192,7 +192,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         }
 
         // Clear existing product mappings
-        for (Product product : document.getProducts()) {
+        for (Product product : document.getProducts()) { .
             product.getRequiredDocuments().remove(document);
         }
         productRepository.saveAll(document.getProducts());
