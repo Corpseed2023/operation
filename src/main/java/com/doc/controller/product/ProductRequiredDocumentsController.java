@@ -1,5 +1,6 @@
 package com.doc.controller.product;
 
+import com.doc.dto.productRequiredDocument.GetAllRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsResponseDto;
 import com.doc.service.ProductRequiredDocumentsService;
@@ -37,15 +38,17 @@ public class ProductRequiredDocumentsController {
 
     @GetMapping
     public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> getAllRequiredDocuments(
-            @RequestParam Long userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) String country,
-            @RequestParam(required = false) String centralName,
-            @RequestParam(required = false) String stateName) {
-        List<ProductRequiredDocumentsResponseDto> responses = requiredDocumentsService.getAllRequiredDocuments(userId, page, size, name, type, country, centralName, stateName);
+            @Valid @RequestBody GetAllRequiredDocumentsRequestDto requestDto) {
+        List<ProductRequiredDocumentsResponseDto> responses = requiredDocumentsService.getAllRequiredDocuments(
+                requestDto.getUserId(),
+                requestDto.getPage(),
+                requestDto.getSize(),
+                requestDto.getName(),
+                requestDto.getType(),
+                requestDto.getCountry(),
+                requestDto.getCentralName(),
+                requestDto.getStateName()
+        );
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
 
@@ -72,6 +75,4 @@ public class ProductRequiredDocumentsController {
                 requiredDocumentsService.getRequiredDocumentsByProjectAndProduct(projectId, productId, userId);
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
-
-
 }

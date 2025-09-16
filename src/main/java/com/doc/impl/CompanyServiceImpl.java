@@ -86,8 +86,6 @@ public class CompanyServiceImpl implements CompanyService {
     }
 
 
-
-
     @Override
     public CompanyResponseDto getCompanyById(Long id) {
         logger.info("Fetching company with ID: {}", id);
