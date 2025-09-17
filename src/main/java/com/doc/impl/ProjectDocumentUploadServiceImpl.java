@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @Transactional
@@ -38,8 +37,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final ProjectRepository projectRepository;
     private final ProductRequiredDocumentsRepository productRequiredDocumentsRepository;
     private final UserRepository userRepository;
-
-
 
     @Autowired
     public ProjectDocumentUploadServiceImpl(
@@ -57,7 +54,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
     @Override
     public DocumentResponseDto uploadDocument(ProjectDocumentUploadRequestDto requestDto) {
-        logger.info("Initiating document upload for project ID: {}, milestone assignment ID: {}, required document UUID: {}",
+        logger.info("Initiating document upload for project ID: {}, milestone assignment ID: {}, required document ID: {}",
                 requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
 
         // Validate inputs
@@ -87,10 +84,10 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         }
 
         ProductRequiredDocuments requiredDocument = productRequiredDocumentsRepository
-                .findByUuidAndIsDeletedFalse(requestDto.getRequiredDocumentId())
+                .findById(requestDto.getRequiredDocumentId())
                 .orElseThrow(() -> {
-                    logger.error("Required document with UUID {} not found or is deleted", requestDto.getRequiredDocumentId());
-                    return new ResourceNotFoundException("Required document with UUID " + requestDto.getRequiredDocumentId() + " not found or is deleted");
+                    logger.error("Required document with ID {} not found or is deleted", requestDto.getRequiredDocumentId());
+                    return new ResourceNotFoundException("Required document with ID " + requestDto.getRequiredDocumentId() + " not found or is deleted");
                 });
 
         User uploadedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUploadedById())
@@ -107,7 +104,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         // Check for existing upload
         Optional<ProjectDocumentUpload> existingUploadOpt = projectDocumentUploadRepository
-                .findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentUuidAndIsDeletedFalse(
+                .findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentIdAndIsDeletedFalse(
                         requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
 
         ProjectDocumentUpload documentUpload;
@@ -116,7 +113,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         if (existingUploadOpt.isPresent()) {
             documentUpload = existingUploadOpt.get();
             if (documentUpload.getStatus() == DocumentStatus.VERIFIED) {
-                logger.warn("Cannot replace verified document for project ID: {}, milestone assignment ID: {}, required document UUID: {}",
+                logger.warn("Cannot replace verified document for project ID: {}, milestone assignment ID: {}, required document ID: {}",
                         requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
                 throw new ValidationException("Cannot replace a verified document");
             }
@@ -126,7 +123,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             logger.info("Replacing existing document with ID: {}", documentUpload.getId());
         } else {
             documentUpload = new ProjectDocumentUpload();
-            documentUpload.setId(UUID.randomUUID());
             documentUpload.setProject(project);
             documentUpload.setMilestoneAssignment(milestoneAssignment);
             documentUpload.setRequiredDocument(requiredDocument);
@@ -152,7 +148,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     }
 
     @Override
-    public DocumentResponseDto updateDocumentStatus(UUID documentId, ProjectDocumentStatusUpdateDto updateDto) {
+    public DocumentResponseDto updateDocumentStatus(Long documentId, ProjectDocumentStatusUpdateDto updateDto) {
         logger.info("Updating document status for ID: {} to {}", documentId, updateDto.getNewStatus());
 
         // Fetch document
@@ -192,6 +188,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         return mapToDocumentResponseDto(documentUpload);
     }
 
+
     private void validateUploadRequest(ProjectDocumentUploadRequestDto requestDto) {
         if (requestDto.getFileUrl() == null || requestDto.getFileUrl().trim().isEmpty()) {
             logger.warn("File URL is empty or null");
@@ -210,8 +207,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             throw new ValidationException("Created by user ID cannot be null");
         }
         if (requestDto.getRequiredDocumentId() == null) {
-            logger.warn("Required document UUID is null");
-            throw new ValidationException("Required document UUID cannot be null");
+            logger.warn("Required document ID is null");
+            throw new ValidationException("Required document ID cannot be null");
         }
     }
 
@@ -294,7 +291,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         dto.setStatus(documentUpload.getStatus());
         dto.setRemarks(documentUpload.getRemarks());
         dto.setUploadTime(documentUpload.getUploadTime());
-        dto.setRequiredDocumentId(documentUpload.getRequiredDocument().getUuid());
+        dto.setRequiredDocumentId(documentUpload.getRequiredDocument().getId());
         dto.setMilestoneAssignmentId(documentUpload.getMilestoneAssignment().getId());
         dto.setProjectId(documentUpload.getProject().getId());
         dto.setUploadedById(documentUpload.getUploadedBy().getId());

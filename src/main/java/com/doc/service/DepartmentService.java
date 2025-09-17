@@ -2,6 +2,7 @@ package com.doc.service;
 
 import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
+import com.doc.dto.user.UserResponseDto;
 
 import java.util.List;
 
@@ -18,4 +19,6 @@ public interface DepartmentService {
     void deleteDepartment(Long id);
 
     DepartmentResponseDto createMasterDepartment(DepartmentRequestDto requestDto);
+
+    List<UserResponseDto> getUsersByDepartmentId(Long id);
 }

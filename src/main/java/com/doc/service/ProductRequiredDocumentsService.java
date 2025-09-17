@@ -1,6 +1,5 @@
 package com.doc.service;
 
-import com.doc.dto.productRequiredDocument.GetAllRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsResponseDto;
 
@@ -10,8 +9,6 @@ public interface ProductRequiredDocumentsService {
 
     List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList);
 
-    ProductRequiredDocumentsResponseDto getRequiredDocumentById(Long id, Long userId);
-
 
     ProductRequiredDocumentsResponseDto updateRequiredDocument(Long id, ProductRequiredDocumentsRequestDto requestDto);
 
@@ -19,5 +16,8 @@ public interface ProductRequiredDocumentsService {
 
     List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProjectAndProduct(Long projectId, Long productId, Long userId);
 
-    List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name, String type, String country, String centralName, String stateName, Long productId);
+    List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProduct(Long productId, Long projectId,
+                                                                            String stateName, String centralName);
+
+
 }

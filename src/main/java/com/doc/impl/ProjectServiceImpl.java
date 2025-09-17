@@ -1194,7 +1194,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setStatus(document.getStatus());
         dto.setRemarks(document.getRemarks());
         dto.setUploadTime(document.getUploadTime());
-        dto.setRequiredDocumentId(document.getRequiredDocument().getUuid());
+        dto.setRequiredDocumentId(document.getRequiredDocument().getId());
         dto.setMilestoneAssignmentId(document.getMilestoneAssignment().getId());
         dto.setProjectId(document.getProject().getId());
         dto.setUploadedById(document.getUploadedBy().getId());

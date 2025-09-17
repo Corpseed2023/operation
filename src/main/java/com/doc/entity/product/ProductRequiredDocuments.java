@@ -6,12 +6,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
-import org.hibernate.annotations.GenericGenerator;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Represents a required document for a product based on region (state/central/international).
@@ -19,7 +17,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "product_required_documents",
-        indexes = {@Index(name = "idx_name", columnList = "name"), @Index(name = "idx_uuid", columnList = "uuid")},
+        indexes = {@Index(name = "idx_name", columnList = "name")},
         uniqueConstraints = {@UniqueConstraint(columnNames = {"name", "country", "centralName", "stateName"})}
 )
 @Getter
@@ -31,12 +29,6 @@ public class ProductRequiredDocuments {
     @Id
     @Comment("Primary Key: Unique identifier for the required document")
     private Long id;
-
-    @GeneratedValue(generator = "UUID")
-    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
-    @Column(name = "uuid", updatable = false, nullable = false, unique = true)
-    @Comment("Secondary unique identifier (UUID) for the required document")
-    private UUID uuid;
 
     @Column(nullable = false)
     @Comment("Name of the required document (e.g., Aadhaar Card, PAN Card)")
@@ -97,9 +89,6 @@ public class ProductRequiredDocuments {
     protected void onCreate() {
         this.createdDate = new Date();
         this.updatedDate = new Date();
-        if (this.uuid == null) { // Fallback to ensure UUID is set
-            this.uuid = UUID.randomUUID();
-        }
     }
 
     @PreUpdate

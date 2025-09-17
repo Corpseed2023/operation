@@ -2,6 +2,7 @@ package com.doc.controller.department;
 
 import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
+import com.doc.dto.user.UserResponseDto;
 import com.doc.service.DepartmentService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,4 +61,15 @@ public class DepartmentController {
         DepartmentResponseDto response = departmentService.createMasterDepartment(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
+
+
+    @GetMapping("/{id}/users")
+    public ResponseEntity<List<UserResponseDto>> getUsersByDepartmentId(@PathVariable Long id) {
+        List<UserResponseDto> users = departmentService.getUsersByDepartmentId(id);
+        return new ResponseEntity<>(users, HttpStatus.OK);
+    }
+
+
+
+
 }

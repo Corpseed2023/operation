@@ -2,6 +2,7 @@ package com.doc.impl;
 
 import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
+import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.user.Department;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
@@ -151,4 +152,34 @@ public class DepartmentServiceImpl implements DepartmentService {
         dto.setUpdatedDate(department.getUpdatedDate());
         return dto;
     }
+
+    public List<UserResponseDto> getUsersByDepartmentId(Long departmentId)
+    {
+        Department department =  departmentRepository.findByIdAndIsDeletedFalse(departmentId).
+                orElseThrow(()-> new ResourceNotFoundException("Department ID "+ departmentId + "not found"));
+        return department.getUsers().stream().map(this::mapToUserResponseDto).collect(Collectors.toList());
+    }
+
+    private UserResponseDto mapToUserResponseDto(User user) {
+        UserResponseDto dto = new UserResponseDto();
+        dto.setId(user.getId());
+        dto.setFullName(user.getFullName());
+        dto.setEmail(user.getEmail());
+        dto.setContactNo(user.getContactNo());
+        dto.setDesignation(user.getUserDesignation() != null ? user.getUserDesignation().getName() : null);
+        dto.setDesignationId(user.getUserDesignation() != null ? user.getUserDesignation().getId() : null);
+        dto.setDepartmentIds(user.getDepartments() != null
+                ? user.getDepartments().stream().map(d -> d.getId()).toList()
+                : List.of());
+        dto.setRoleIds(user.getRoles() != null
+                ? user.getRoles().stream().map(r -> r.getId()).toList()
+                : List.of());
+        dto.setManagerId(user.getManager() != null ? user.getManager().getId() : null);
+        dto.setManagerFlag(user.isManagerFlag());
+        dto.setCreatedDate(user.getCreatedDate());
+        dto.setUpdatedDate(user.getUpdatedDate());
+        return dto;
+    }
+
+
 }

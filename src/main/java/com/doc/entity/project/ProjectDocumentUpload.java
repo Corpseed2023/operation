@@ -7,10 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
-import org.hibernate.annotations.GenericGenerator;
 
 import java.util.Date;
-import java.util.UUID;
 
 @Entity
 @Table(name = "project_document_upload", indexes = {
@@ -22,13 +20,10 @@ import java.util.UUID;
 @NoArgsConstructor
 public class ProjectDocumentUpload {
 
-
     @Id
-    @GeneratedValue(generator = "UUID")
-    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
-    @Column(name = "id", updatable = false, nullable = false)
-    @Comment("Primary key: Unique identifier for the document upload")
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Comment("Primary key: Unique identifier for payment details")
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
@@ -41,8 +36,8 @@ public class ProjectDocumentUpload {
     private ProjectMilestoneAssignment milestoneAssignment;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "required_document_uuid", nullable = false, referencedColumnName = "uuid")
-    @Comment("Required document for this upload (references UUID)")
+    @JoinColumn(name = "required_document_id", nullable = false)
+    @Comment("Required document for this upload (references ID)")
     private ProductRequiredDocuments requiredDocument;
 
     @Column(name = "file_url", nullable = false, length = 1000)

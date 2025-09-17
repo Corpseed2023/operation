@@ -42,7 +42,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     private ProjectRepository projectRepository;
 
     @Autowired
-    private ProjectDocumentUploadRepository projectDocumentUploadRepository; // Added for fetching uploads
+    private ProjectDocumentUploadRepository projectDocumentUploadRepository;
 
     @Override
     public List<ProductRequiredDocumentsResponseDto> createRequiredDocuments(List<ProductRequiredDocumentsRequestDto> requestDtoList) {
@@ -78,7 +78,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
             ProductRequiredDocuments document = new ProductRequiredDocuments();
 
-            // **Set the ID explicitly from DTO**
             if (requestDto.getId() == null) {
                 throw new ValidationException("ID must be provided for the required document");
             }
@@ -91,7 +90,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             document.setUpdatedDate(new Date());
             document.setDeleted(false);
             document.setProducts(products);
-            document.setUuid(UUID.randomUUID());
 
             for (Product product : products) {
                 product.getRequiredDocuments().add(document);
@@ -107,60 +105,9 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     }
 
     @Override
-    public ProductRequiredDocumentsResponseDto getRequiredDocumentById(Long id, Long userId) {
-        // Validate user
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
-
-        // Find document
-        ProductRequiredDocuments document = requiredDocumentsRepository.findById(id)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
-
-        // Check if user has ADMIN role or is the creator/updater
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-        if (!isAdmin && !document.getCreatedBy().equals(userId) && !document.getUpdatedBy().equals(userId)) {
-            throw new ValidationException("User is not authorized to access this document");
-        }
-
-        return mapToResponseDto(document);
-    }
-
-    @Override
-    public List<ProductRequiredDocumentsResponseDto> getAllRequiredDocuments(Long userId, int page, int size, String name,
-                                                                             String type, String country, String centralName,
-                                                                             String stateName, Long productId) {
-        // Validate user
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
-
-        // Check if user has ADMIN role
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-        if (!isAdmin) {
-            throw new ValidationException("Only users with ADMIN role can fetch all required documents");
-        }
-
-        PageRequest pageable = PageRequest.of(page, size);
-        Page<ProductRequiredDocuments> documentPage;
-
-        // Fetch documents based on filters
-        if (name != null || type != null || country != null || centralName != null || stateName != null || productId != null) {
-            documentPage = requiredDocumentsRepository.findByFiltersAndProduct(name, type, country, centralName, stateName, productId, pageable);
-        } else {
-            documentPage = requiredDocumentsRepository.findByIsDeletedFalse(pageable);
-        }
-
-        return documentPage.getContent()
-                .stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
     public ProductRequiredDocumentsResponseDto updateRequiredDocument(Long id, ProductRequiredDocumentsRequestDto requestDto) {
         validateRequestDto(requestDto);
 
-        // Find existing document
         ProductRequiredDocuments document = requiredDocumentsRepository.findById(id)
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
@@ -170,16 +117,13 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         String centralName = Optional.ofNullable(requestDto.getCentralName()).orElse("");
         String stateName = Optional.ofNullable(requestDto.getStateName()).orElse("");
 
-        // Check for duplicate document name and region combination excluding current ID
         if (requiredDocumentsRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseExcludingId(id, name, country, centralName, stateName)) {
             throw new ValidationException("Required document with name " + name + " already exists for this region");
         }
 
-        // Validate updatedBy user
         User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
                 .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
 
-        // Validate product IDs
         List<Product> products = new ArrayList<>();
         if (requestDto.getProductIds() != null && !requestDto.getProductIds().isEmpty()) {
             products = productRepository.findAllById(requestDto.getProductIds())
@@ -191,24 +135,20 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             }
         }
 
-        // Clear existing product mappings
-        for (Product product : document.getProducts()) { .
+        for (Product product : document.getProducts()) {
             product.getRequiredDocuments().remove(document);
         }
         productRepository.saveAll(document.getProducts());
 
-        // Update document fields
         mapRequestDtoToEntity(document, requestDto);
         document.setUpdatedBy(requestDto.getUpdatedBy());
         document.setUpdatedDate(new Date());
         document.setProducts(products);
 
-        // Update products to include this document
         for (Product product : products) {
             product.getRequiredDocuments().add(document);
         }
 
-        // Save updated document and products
         document = requiredDocumentsRepository.save(document);
         productRepository.saveAll(products);
 
@@ -221,13 +161,11 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
 
-        // Remove document from associated products
         for (Product product : document.getProducts()) {
             product.getRequiredDocuments().remove(document);
         }
         productRepository.saveAll(document.getProducts());
 
-        // Soft delete the document
         document.setDeleted(true);
         document.setUpdatedDate(new Date());
         requiredDocumentsRepository.save(document);
@@ -235,41 +173,75 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
     @Override
     public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProjectAndProduct(Long projectId, Long productId, Long userId) {
-        // Validate user
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
 
-        // Validate project
         Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted"));
 
-        // Validate product
         Product product = productRepository.findByIdAndIsDeletedFalse(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted"));
 
-        // Verify product belongs to the project
         if (!project.getProduct().getId().equals(productId)) {
             throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId);
         }
 
-        // Check if user has ADMIN role or is the creator/updater of the project
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
         if (!isAdmin && !project.getCreatedBy().equals(userId) && !project.getUpdatedBy().equals(userId)) {
             throw new ValidationException("User is not authorized to access this project's documents");
         }
 
-        // Fetch required documents for the product
         List<ProductRequiredDocuments> documents = product.getRequiredDocuments()
                 .stream()
                 .filter(doc -> !doc.isDeleted())
                 .collect(Collectors.toList());
 
-        // Map to DTOs and include uploads
         return documents.stream()
                 .map(doc -> {
                     ProductRequiredDocumentsResponseDto dto = mapToResponseDto(doc);
                     List<ProjectDocumentUpload> uploads = projectDocumentUploadRepository
-                            .findByProjectIdAndRequiredDocumentUuidAndIsDeletedFalse(projectId, doc.getUuid());
+                            .findByProjectIdAndRequiredDocumentIdAndIsDeletedFalse(projectId, doc.getId());
+                    dto.setUploads(uploads.stream()
+                            .map(this::mapToDocumentResponseDto)
+                            .collect(Collectors.toList()));
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProduct(Long productId, Long projectId,
+                                                                                   String stateName, String centralName) {
+        Product product = productRepository.findByIdAndIsDeletedFalse(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted"));
+
+        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted"));
+
+        if (!project.getProduct().getId().equals(productId)) {
+            throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId);
+        }
+
+        List<ProductRequiredDocuments> documents = product.getRequiredDocuments()
+                .stream()
+                .filter(doc -> !doc.isDeleted())
+                .filter(doc -> {
+                    if (stateName != null && !stateName.isEmpty()) {
+                        return doc.getStateName().equalsIgnoreCase(stateName);
+                    } else if (centralName != null && !centralName.isEmpty()) {
+                        return doc.getCentralName().equalsIgnoreCase(centralName) && doc.getStateName().isEmpty();
+                    } else {
+                        return doc.getStateName().isEmpty() && doc.getCentralName().isEmpty() || // International or central with no state
+                                !doc.getCentralName().isEmpty(); // Central-level documents
+                    }
+                })
+                .collect(Collectors.toList());
+
+        return documents.stream()
+                .map(doc -> {
+                    ProductRequiredDocumentsResponseDto dto = mapToResponseDto(doc);
+                    List<ProjectDocumentUpload> uploads = projectDocumentUploadRepository
+                            .findByProjectIdAndRequiredDocumentIdAndIsDeletedFalse(projectId, doc.getId());
                     dto.setUploads(uploads.stream()
                             .map(this::mapToDocumentResponseDto)
                             .collect(Collectors.toList()));
@@ -308,7 +280,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     private ProductRequiredDocumentsResponseDto mapToResponseDto(ProductRequiredDocuments document) {
         ProductRequiredDocumentsResponseDto dto = new ProductRequiredDocumentsResponseDto();
         dto.setId(document.getId());
-        dto.setUuid(document.getUuid());
         dto.setName(document.getName());
         dto.setDescription(document.getDescription());
         dto.setType(document.getType());
@@ -329,7 +300,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         return dto;
     }
 
-    // Duplicated mapper for DocumentResponseDto (to avoid dependency; alternatively, inject ProjectDocumentUploadService)
     private DocumentResponseDto mapToDocumentResponseDto(ProjectDocumentUpload documentUpload) {
         DocumentResponseDto dto = new DocumentResponseDto();
         dto.setId(documentUpload.getId());
@@ -340,7 +310,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         dto.setStatus(documentUpload.getStatus());
         dto.setRemarks(documentUpload.getRemarks());
         dto.setUploadTime(documentUpload.getUploadTime());
-        dto.setRequiredDocumentId(documentUpload.getRequiredDocument().getUuid());
+        dto.setRequiredDocumentId(documentUpload.getRequiredDocument().getId());
         dto.setMilestoneAssignmentId(documentUpload.getMilestoneAssignment().getId());
         dto.setProjectId(documentUpload.getProject().getId());
         dto.setUploadedById(documentUpload.getUploadedBy().getId());
