@@ -1,10 +1,11 @@
 package com.doc.service;
 
-
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapRequestDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 /**
  * Service interface for managing ProductMilestoneMap entities.
@@ -43,5 +44,12 @@ public interface ProductMilestoneMapService {
      */
     void deleteProductMilestoneMap(Long id);
 
-
+    /**
+     * Retrieves all product-milestone mappings for a given user and product.
+     *
+     * @param userId the ID of the user
+     * @param productId the ID of the product
+     * @return a list of product-milestone mappings
+     */
+    List<ProductMilestoneMapResponseDto> getProductMilestoneMapsByUserAndProduct(Long userId, Long productId);
 }

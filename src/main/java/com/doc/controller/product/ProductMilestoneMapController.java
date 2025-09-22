@@ -5,11 +5,11 @@ import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
 import com.doc.service.ProductMilestoneMapService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * REST Controller for managing ProductMilestoneMap entities.
@@ -33,7 +33,6 @@ public class ProductMilestoneMapController {
         ProductMilestoneMapResponseDto response = productMilestoneMapService.createProductMilestoneMap(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
-
 
     /**
      * Updates an existing product-milestone mapping.
@@ -74,4 +73,18 @@ public class ProductMilestoneMapController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    /**
+     * Retrieves all product-milestone mappings for a given product and user.
+     *
+     * @param userId the ID of the user
+     * @param productId the ID of the product
+     * @return a list of product-milestone mappings
+     */
+    @GetMapping("/user/{userId}/product/{productId}")
+    public ResponseEntity<List<ProductMilestoneMapResponseDto>> getProductMilestoneMapsByUserAndProduct(
+            @PathVariable Long userId,
+            @PathVariable Long productId) {
+        List<ProductMilestoneMapResponseDto> response = productMilestoneMapService.getProductMilestoneMapsByUserAndProduct(userId, productId);
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
 }

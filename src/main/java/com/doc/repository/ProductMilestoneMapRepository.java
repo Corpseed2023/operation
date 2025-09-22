@@ -6,6 +6,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 /**
  * Repository interface for managing ProductMilestoneMap entities.
  */
@@ -30,5 +32,11 @@ public interface ProductMilestoneMapRepository extends JpaRepository<ProductMile
      */
     Page<ProductMilestoneMap> findByProductId(Long productId, Pageable pageable);
 
-
+    /**
+     * Finds all mappings by product ID.
+     *
+     * @param productId the product ID
+     * @return a list of mappings for the product
+     */
+    List<ProductMilestoneMap> findByProductId(Long productId);
 }
