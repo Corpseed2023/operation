@@ -51,12 +51,12 @@ public class UserServiceImpl implements UserService {
 
         // Check for duplicate user ID
         if (userRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("User with ID " + requestDto.getId() + " already exists");
+            throw new ValidationException("User with ID " + requestDto.getId() + " already exists", "DUPLICATE_USER_ID");
         }
 
         // Check for duplicate email
         if (userRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail().trim())) {
-            throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
+            throw new ValidationException("User with email " + requestDto.getEmail() + " already exists", "DUPLICATE_EMAIL");
         }
 
         Designation designation = validateDesignation(requestDto.getDesignationId());
@@ -84,7 +84,7 @@ public class UserServiceImpl implements UserService {
     public UserResponseDto getUserById(Long id) {
         logger.info("Fetching user with ID: {}", id);
         User user = userRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found", "USER_NOT_FOUND"));
         return mapToResponseDto(user);
     }
 
@@ -113,11 +113,11 @@ public class UserServiceImpl implements UserService {
         validateRequestDto(requestDto);
 
         User user = userRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found", "USER_NOT_FOUND"));
 
         if (!user.getEmail().equals(requestDto.getEmail().trim()) &&
                 userRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail().trim())) {
-            throw new ValidationException("User with email " + requestDto.getEmail() + " already exists");
+            throw new ValidationException("User with email " + requestDto.getEmail() + " already exists", "DUPLICATE_EMAIL");
         }
 
         // For updates, ID in DTO is ignored; use the path ID
@@ -141,7 +141,7 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(Long id) {
         logger.info("Deleting user with ID: {}", id);
         User user = userRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found", "USER_NOT_FOUND"));
         user.setDeleted(true);
         user.setUpdatedDate(new Date());
         userRepository.save(user);
@@ -149,29 +149,29 @@ public class UserServiceImpl implements UserService {
 
     private void validateRequestDto(UserRequestDto requestDto) {
         if (requestDto.getId() == null) {
-            throw new ValidationException("User ID cannot be null");
+            throw new ValidationException("User ID cannot be null", "INVALID_USER_ID");
         }
         if (requestDto.getFullName() == null || requestDto.getFullName().trim().isEmpty()) {
-            throw new ValidationException("Full name cannot be empty");
+            throw new ValidationException("Full name cannot be empty", "INVALID_FULL_NAME");
         }
         if (requestDto.getEmail() == null || requestDto.getEmail().trim().isEmpty()) {
-            throw new ValidationException("Email cannot be empty");
+            throw new ValidationException("Email cannot be empty", "INVALID_EMAIL");
         }
         if (requestDto.getDesignationId() == null) {
-            throw new ValidationException("Designation ID cannot be null");
+            throw new ValidationException("Designation ID cannot be null", "INVALID_DESIGNATION_ID");
         }
         if (requestDto.getDepartmentIds() == null || requestDto.getDepartmentIds().isEmpty()) {
-            throw new ValidationException("Department IDs cannot be null or empty");
+            throw new ValidationException("Department IDs cannot be null or empty", "INVALID_DEPARTMENT_IDS");
         }
         if (requestDto.getRoleIds() == null || requestDto.getRoleIds().isEmpty()) {
-            throw new ValidationException("Role IDs cannot be null or empty");
+            throw new ValidationException("Role IDs cannot be null or empty", "INVALID_ROLE_IDS");
         }
     }
 
     private Designation validateDesignation(Long designationId) {
         return designationRepository.findById(designationId)
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Designation with ID " + designationId + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Designation with ID " + designationId + " not found", "DESIGNATION_NOT_FOUND"));
     }
 
     private List<Department> validateDepartments(List<Long> departmentIds, Long designationDepartmentId) {
@@ -180,10 +180,10 @@ public class UserServiceImpl implements UserService {
                 .filter(d -> !d.isDeleted())
                 .collect(Collectors.toList());
         if (departments.size() != departmentIds.size()) {
-            throw new ResourceNotFoundException("One or more departments not found");
+            throw new ResourceNotFoundException("One or more departments not found", "DEPARTMENT_NOT_FOUND");
         }
         if (!departmentIds.contains(designationDepartmentId)) {
-            throw new ValidationException("Designation's department ID " + designationDepartmentId + " must be included in departmentIds");
+            throw new ValidationException("Designation's department ID " + designationDepartmentId + " must be included in departmentIds", "INVALID_DEPARTMENT_DESIGNATION");
         }
         return departments;
     }
@@ -191,7 +191,7 @@ public class UserServiceImpl implements UserService {
     private List<Role> validateRoles(List<Long> roleIds) {
         List<Role> roles = roleRepository.findAllById(roleIds);
         if (roles.size() != roleIds.size()) {
-            throw new ResourceNotFoundException("One or more roles not found");
+            throw new ResourceNotFoundException("One or more roles not found", "ROLE_NOT_FOUND");
         }
         return roles;
     }
@@ -199,11 +199,11 @@ public class UserServiceImpl implements UserService {
     private User validateManager(Long managerId, List<Role> roles) {
         boolean hasAdminRole = roles.stream().anyMatch(role -> role.getName().equalsIgnoreCase("ADMIN"));
         if (!hasAdminRole && managerId == null) {
-            throw new ValidationException("Manager ID is required for non-ADMIN roles");
+            throw new ValidationException("Manager ID is required for non-ADMIN roles", "INVALID_MANAGER_ID");
         }
         if (managerId != null) {
             return userRepository.findByIdAndIsDeletedFalse(managerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Manager with ID " + managerId + " not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Manager with ID " + managerId + " not found", "MANAGER_NOT_FOUND"));
         }
         return null;
     }

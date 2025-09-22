@@ -1,8 +1,14 @@
 package com.doc.exception;
 
-
 public class ValidationException extends RuntimeException {
-    public ValidationException(String message) {
+    private final String errorCode;
+
+    public ValidationException(String message, String errorCode) {
         super(message);
+        this.errorCode = errorCode;
+    }
+
+    public String getErrorCode() {
+        return errorCode;
     }
 }

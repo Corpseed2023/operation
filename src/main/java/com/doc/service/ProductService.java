@@ -11,7 +11,7 @@ public interface ProductService {
 
     ProductResponseDto getProductById(Long id);
 
-    List<ProductResponseDto> getAllProducts(int page, int size, String productName, Boolean isActive, LocalDate startDate, LocalDate endDate);
+    List<ProductResponseDto> getAllProducts(int page, int size);
 
     void deleteProduct(Long id);
 

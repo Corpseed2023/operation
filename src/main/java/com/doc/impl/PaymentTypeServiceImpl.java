@@ -1,13 +1,10 @@
 package com.doc.impl;
 
-
-
 import com.doc.dto.payment.PaymentTypeRequestDto;
 import com.doc.dto.payment.PaymentTypeResponseDto;
 import com.doc.entity.client.PaymentType;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-
 import com.doc.repository.PaymentTypeRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.PaymentTypeService;
@@ -37,19 +34,19 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
 
         // Check if payment type with given id already exists (to avoid duplicates)
         if (paymentTypeRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("Payment type with ID " + requestDto.getId() + " already exists");
+            throw new ValidationException("Payment type with ID " + requestDto.getId() + " already exists", "DUPLICATE_PAYMENT_TYPE_ID");
         }
 
         // Also check if name already exists for non-deleted records
         if (paymentTypeRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Payment type with name " + requestDto.getName() + " already exists");
+            throw new ValidationException("Payment type with name " + requestDto.getName() + " already exists", "DUPLICATE_PAYMENT_TYPE_NAME");
         }
 
         userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         PaymentType paymentType = new PaymentType();
-        paymentType.setId(requestDto.getId());  // <-- use provided ID here
+        paymentType.setId(requestDto.getId()); // <-- use provided ID here
         paymentType.setName(requestDto.getName().trim());
         paymentType.setCreatedDate(new Date());
         paymentType.setUpdatedDate(new Date());
@@ -65,7 +62,7 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
     public PaymentTypeResponseDto getPaymentTypeById(Long id) {
         PaymentType paymentType = paymentTypeRepository.findById(id)
                 .filter(pt -> !pt.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Payment type with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Payment type with ID " + id + " not found", "PAYMENT_TYPE_NOT_FOUND"));
         return mapToResponseDto(paymentType);
     }
 
@@ -85,15 +82,15 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
 
         PaymentType paymentType = paymentTypeRepository.findById(id)
                 .filter(pt -> !pt.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Payment type with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Payment type with ID " + id + " not found", "PAYMENT_TYPE_NOT_FOUND"));
 
         if (!paymentType.getName().equals(requestDto.getName().trim()) &&
                 paymentTypeRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Payment type with name " + requestDto.getName() + " already exists");
+            throw new ValidationException("Payment type with name " + requestDto.getName() + " already exists", "DUPLICATE_PAYMENT_TYPE_NAME");
         }
 
         userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found", "USER_NOT_FOUND"));
 
         paymentType.setName(requestDto.getName().trim());
         paymentType.setUpdatedDate(new Date());
@@ -106,7 +103,7 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
     public void deletePaymentType(Long id) {
         PaymentType paymentType = paymentTypeRepository.findById(id)
                 .filter(pt -> !pt.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Payment type with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Payment type with ID " + id + " not found", "PAYMENT_TYPE_NOT_FOUND"));
 
         paymentType.setDeleted(true);
         paymentType.setUpdatedDate(new Date());
@@ -115,13 +112,13 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
 
     private void validateRequestDto(PaymentTypeRequestDto requestDto) {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Payment type name cannot be empty");
+            throw new ValidationException("Payment type name cannot be empty", "INVALID_PAYMENT_TYPE_NAME");
         }
         if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null");
+            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
         }
         if (requestDto.getUpdatedBy() == null) {
-            throw new ValidationException("Updated by user ID cannot be null");
+            throw new ValidationException("Updated by user ID cannot be null", "INVALID_UPDATED_BY");
         }
     }
 

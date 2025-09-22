@@ -125,12 +125,6 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
         return mapToResponseDto(mapping);
     }
 
-    @Override
-    public Page<ProductMilestoneMapResponseDto> getAllProductMilestoneMaps(Pageable pageable) {
-        logger.info("Fetching all product-milestone mappings with pageable: {}", pageable);
-        return productMilestoneMapRepository.findAll(pageable)
-                .map(this::mapToResponseDto);
-    }
 
     @Override
     public void deleteProductMilestoneMap(Long id) {
@@ -141,15 +135,6 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
         logger.info("Product-milestone mapping deleted with ID: {}", id);
     }
 
-    @Override
-    public Page<ProductMilestoneMapResponseDto> getProductMilestoneMapsByProduct(Long productId, Pageable pageable) {
-        logger.info("Fetching product-milestone mappings for product ID: {} with pageable: {}", productId, pageable);
-        if (!productRepository.findByIdAndIsDeletedFalse(productId).isPresent()) {
-            throw new EntityNotFoundException("Product not found with ID: " + productId);
-        }
-        return productMilestoneMapRepository.findByProductId(productId, pageable)
-                .map(this::mapToResponseDto);
-    }
 
     private ProductMilestoneMapResponseDto mapToResponseDto(ProductMilestoneMap mapping) {
         ProductMilestoneMapResponseDto dto = new ProductMilestoneMapResponseDto();

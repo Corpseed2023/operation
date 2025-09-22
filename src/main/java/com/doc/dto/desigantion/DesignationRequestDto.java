@@ -21,6 +21,5 @@ public class DesignationRequestDto {
     @NotNull(message = "Department ID cannot be null")
     private Long departmentId;
 
-    @NotNull(message = "Created by user ID cannot be null")
-    private Long createdBy;
+
 }

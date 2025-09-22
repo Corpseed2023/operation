@@ -63,18 +63,6 @@ public class ProductMilestoneMapController {
     }
 
     /**
-     * Retrieves all product-milestone mappings with pagination.
-     *
-     * @param pageable pagination information
-     * @return a page of mappings
-     */
-    @GetMapping
-    public ResponseEntity<Page<ProductMilestoneMapResponseDto>> getAllProductMilestoneMaps(Pageable pageable) {
-        Page<ProductMilestoneMapResponseDto> mappings = productMilestoneMapService.getAllProductMilestoneMaps(pageable);
-        return new ResponseEntity<>(mappings, HttpStatus.OK);
-    }
-
-    /**
      * Deletes a product-milestone mapping by ID.
      *
      * @param id the mapping ID
@@ -86,17 +74,4 @@ public class ProductMilestoneMapController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
-    /**
-     * Retrieves product-milestone mappings by product ID with pagination.
-     *
-     * @param productId the product ID
-     * @param pageable pagination information
-     * @return a page of mappings for the product
-     */
-    @GetMapping("/product/{productId}")
-    public ResponseEntity<Page<ProductMilestoneMapResponseDto>> getProductMilestoneMapsByProduct(
-            @PathVariable Long productId, Pageable pageable) {
-        Page<ProductMilestoneMapResponseDto> mappings = productMilestoneMapService.getProductMilestoneMapsByProduct(productId, pageable);
-        return new ResponseEntity<>(mappings, HttpStatus.OK);
-    }
 }

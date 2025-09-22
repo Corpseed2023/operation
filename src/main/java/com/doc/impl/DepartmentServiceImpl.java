@@ -30,23 +30,24 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Autowired
     private UserRepository userRepository;
 
+
     @Override
     public DepartmentResponseDto createDepartment(DepartmentRequestDto requestDto) {
         validateRequestDto(requestDto);
 
         // Check for duplicate department ID
         if (departmentRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists");
+            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists", "DUPLICATE_DEPARTMENT_ID");
         }
 
         // Check for duplicate name
         if (departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Department with name " + requestDto.getName() + " already exists");
+            throw new ValidationException("Department with name " + requestDto.getName() + " already exists", "DUPLICATE_DEPARTMENT_NAME");
         }
 
         // Validate createdBy user
         userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Department department = new Department();
         department.setId(requestDto.getId());
@@ -63,7 +64,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     public DepartmentResponseDto getDepartmentById(Long id) {
         Department department = departmentRepository.findById(id)
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found", "DEPARTMENT_NOT_FOUND"));
         return mapToResponseDto(department);
     }
 
@@ -83,11 +84,11 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Department department = departmentRepository.findById(id)
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found", "DEPARTMENT_NOT_FOUND"));
 
         if (!department.getName().equals(requestDto.getName().trim()) &&
                 departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Department with name " + requestDto.getName() + " already exists");
+            throw new ValidationException("Department with name " + requestDto.getName() + " already exists", "DUPLICATE_DEPARTMENT_NAME");
         }
 
         department.setName(requestDto.getName().trim());
@@ -100,7 +101,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     public void deleteDepartment(Long id) {
         Department department = departmentRepository.findById(id)
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found", "DEPARTMENT_NOT_FOUND"));
 
         department.setDeleted(true);
         department.setUpdatedDate(new Date());
@@ -113,12 +114,12 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         // Check for duplicate department ID
         if (departmentRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists");
+            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists", "DUPLICATE_DEPARTMENT_ID");
         }
 
         // Check for duplicate name
         if (departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Department with name " + requestDto.getName() + " already exists");
+            throw new ValidationException("Department with name " + requestDto.getName() + " already exists", "DUPLICATE_DEPARTMENT_NAME");
         }
 
         Department department = new Department();
@@ -134,13 +135,13 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private void validateRequestDto(DepartmentRequestDto requestDto) {
         if (requestDto.getId() == null) {
-            throw new ValidationException("Department ID cannot be null");
+            throw new ValidationException("Department ID cannot be null", "INVALID_DEPARTMENT_ID");
         }
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Department name cannot be empty");
+            throw new ValidationException("Department name cannot be empty", "INVALID_DEPARTMENT_NAME");
         }
         if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null");
+            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
         }
     }
 
@@ -153,10 +154,9 @@ public class DepartmentServiceImpl implements DepartmentService {
         return dto;
     }
 
-    public List<UserResponseDto> getUsersByDepartmentId(Long departmentId)
-    {
-        Department department =  departmentRepository.findByIdAndIsDeletedFalse(departmentId).
-                orElseThrow(()-> new ResourceNotFoundException("Department ID "+ departmentId + "not found"));
+    public List<UserResponseDto> getUsersByDepartmentId(Long departmentId) {
+        Department department = departmentRepository.findByIdAndIsDeletedFalse(departmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Department ID " + departmentId + " not found", "DEPARTMENT_NOT_FOUND"));
         return department.getUsers().stream().map(this::mapToUserResponseDto).collect(Collectors.toList());
     }
 
@@ -180,6 +180,4 @@ public class DepartmentServiceImpl implements DepartmentService {
         dto.setUpdatedDate(user.getUpdatedDate());
         return dto;
     }
-
-
 }

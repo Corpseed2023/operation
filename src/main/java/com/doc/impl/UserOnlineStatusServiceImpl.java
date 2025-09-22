@@ -2,7 +2,6 @@ package com.doc.impl;
 
 import com.doc.dto.user.UserLoginStatusResponseDto;
 import com.doc.entity.user.UserLoginStatus;
-
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.repository.UserLoginStatusRepository;
@@ -34,7 +33,7 @@ public class UserOnlineStatusServiceImpl implements UserLoginStatusService {
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", userId);
-                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
+                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
         UserLoginStatus status = userOnlineStatusRepository.findByUserIdAndIsDeletedFalse(userId)
@@ -55,7 +54,7 @@ public class UserOnlineStatusServiceImpl implements UserLoginStatusService {
         UserLoginStatus status = userOnlineStatusRepository.findByUserIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> {
                     logger.error("Online status for user ID {} not found", userId);
-                    return new ResourceNotFoundException("Online status for user ID " + userId + " not found");
+                    return new ResourceNotFoundException("Online status for user ID " + userId + " not found", "ONLINE_STATUS_NOT_FOUND");
                 });
 
         status.setOnline(false);
@@ -73,7 +72,7 @@ public class UserOnlineStatusServiceImpl implements UserLoginStatusService {
         UserLoginStatus status = userOnlineStatusRepository.findByUserIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> {
                     logger.error("Online status for user ID {} not found", userId);
-                    return new ResourceNotFoundException("Online status for user ID " + userId + " not found");
+                    return new ResourceNotFoundException("Online status for user ID " + userId + " not found", "ONLINE_STATUS_NOT_FOUND");
                 });
         return mapToDto(status);
     }

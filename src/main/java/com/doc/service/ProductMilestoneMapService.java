@@ -37,26 +37,11 @@ public interface ProductMilestoneMapService {
     ProductMilestoneMapResponseDto getProductMilestoneMapById(Long id);
 
     /**
-     * Retrieves all product-milestone mappings with pagination.
-     *
-     * @param pageable pagination information
-     * @return a page of mappings
-     */
-    Page<ProductMilestoneMapResponseDto> getAllProductMilestoneMaps(Pageable pageable);
-
-    /**
      * Deletes a product-milestone mapping by ID.
      *
      * @param id the mapping ID
      */
     void deleteProductMilestoneMap(Long id);
 
-    /**
-     * Retrieves product-milestone mappings by product ID with pagination.
-     *
-     * @param productId the product ID
-     * @param pageable pagination information
-     * @return a page of mappings
-     */
-    Page<ProductMilestoneMapResponseDto> getProductMilestoneMapsByProduct(Long productId, Pageable pageable);
+
 }

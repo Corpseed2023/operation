@@ -1,6 +1,5 @@
 package com.doc.impl;
 
-
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
 import com.doc.entity.product.ProductMilestoneMap;
@@ -58,18 +57,17 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
-        // Existing updateMilestoneStatus implementation (unchanged from your provided code)
         logger.info("Updating milestone assignment ID: {} to status: {}", updateDto.getAssignmentId(), updateDto.getNewStatus());
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findByIdAndIsDeletedFalse(updateDto.getAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", updateDto.getAssignmentId());
-                    return new ResourceNotFoundException("Milestone assignment with ID " + updateDto.getAssignmentId() + " not found or is deleted");
+                    return new ResourceNotFoundException("Milestone assignment with ID " + updateDto.getAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
         User changedBy = userRepository.findByIdAndIsDeletedFalse(updateDto.getChangedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", updateDto.getChangedById());
-                    return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted");
+                    return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
         validateMilestoneStatusTransition(assignment, updateDto.getNewStatus(), updateDto.getStatusReason());
@@ -80,7 +78,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 boolean allVerified = documents.stream().allMatch(doc -> doc.getStatus() == DocumentStatus.VERIFIED);
                 if (!allVerified) {
                     logger.warn("Cannot complete milestone ID: {} due to unverified documents", updateDto.getAssignmentId());
-                    throw new ValidationException("All documents must be verified to complete milestone");
+                    throw new ValidationException("All documents must be verified to complete milestone", "UNVERIFIED_DOCUMENTS");
                 }
             }
         }
@@ -88,12 +86,12 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         if (updateDto.getNewStatus() == MilestoneStatus.NEW && assignment.getStatus() == MilestoneStatus.REJECTED) {
             if (!assignment.getProductMilestoneMap().isAllowRollback()) {
                 logger.warn("Rollback not allowed for milestone: {}", assignment.getProductMilestoneMap().getMilestone().getName());
-                throw new ValidationException("Rollback not allowed for milestone " + assignment.getProductMilestoneMap().getMilestone().getName());
+                throw new ValidationException("Rollback not allowed for milestone " + assignment.getProductMilestoneMap().getMilestone().getName(), "ROLLBACK_NOT_ALLOWED");
             }
             if (assignment.getReworkAttempts() >= assignment.getProductMilestoneMap().getMaxAttempts()) {
                 logger.warn("Maximum rework attempts ({}) reached for milestone ID: {}",
                         assignment.getProductMilestoneMap().getMaxAttempts(), updateDto.getAssignmentId());
-                throw new ValidationException("Maximum rework attempts reached for milestone");
+                throw new ValidationException("Maximum rework attempts reached for milestone", "MAX_REWORK_ATTEMPTS_REACHED");
             }
             assignment.setReworkAttempts(assignment.getReworkAttempts() + 1);
         }
@@ -133,46 +131,45 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
     @Override
     public void reassignMilestone(ReassignMilestoneDto reassignDto) {
-
         logger.info("Reassigning milestone assignment ID: {} to user ID: {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
 
         // Validate milestone assignment
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findByIdAndIsDeletedFalse(reassignDto.getAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", reassignDto.getAssignmentId());
-                    return new ResourceNotFoundException("Milestone assignment with ID " + reassignDto.getAssignmentId() + " not found or is deleted");
+                    return new ResourceNotFoundException("Milestone assignment with ID " + reassignDto.getAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
         // Validate new user
         User newUser = userRepository.findByIdAndIsDeletedFalse(reassignDto.getNewUserId())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", reassignDto.getNewUserId());
-                    return new ResourceNotFoundException("User with ID " + reassignDto.getNewUserId() + " not found or is deleted");
+                    return new ResourceNotFoundException("User with ID " + reassignDto.getNewUserId() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
         // Validate changedBy user
         User changedBy = userRepository.findByIdAndIsDeletedFalse(reassignDto.getChangedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", reassignDto.getChangedById());
-                    return new ResourceNotFoundException("User with ID " + reassignDto.getChangedById() + " not found or is deleted");
+                    return new ResourceNotFoundException("User with ID " + reassignDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
         // Validate reassignment reason
         if (reassignDto.getReassignmentReason() == null || reassignDto.getReassignmentReason().trim().isEmpty()) {
             logger.warn("Reassignment reason is required for milestone assignment ID: {}", reassignDto.getAssignmentId());
-            throw new ValidationException("Reassignment reason is required");
+            throw new ValidationException("Reassignment reason is required", "INVALID_REASSIGNMENT_REASON");
         }
 
         // Validate that the milestone is not completed
         if (assignment.getStatus() == MilestoneStatus.COMPLETED) {
             logger.warn("Cannot reassign completed milestone assignment ID: {}", reassignDto.getAssignmentId());
-            throw new ValidationException("Cannot reassign a completed milestone");
+            throw new ValidationException("Cannot reassign a completed milestone", "COMPLETED_MILESTONE_REASSIGNMENT");
         }
 
         // Validate that the new user is different from the current user
         if (assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(reassignDto.getNewUserId())) {
             logger.warn("Milestone assignment ID: {} is already assigned to user ID: {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
-            throw new ValidationException("Milestone is already assigned to the specified user");
+            throw new ValidationException("Milestone is already assigned to the specified user", "SAME_USER_REASSIGNMENT");
         }
 
         // Validate that the new user is eligible (belongs to the milestone's department)
@@ -187,7 +184,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             boolean isEligible = userDepartmentIds.stream().anyMatch(milestoneDepartmentIds::contains);
             if (!isEligible) {
                 logger.warn("User ID: {} is not eligible for milestone: {}", reassignDto.getNewUserId(), milestoneMap.getMilestone().getName());
-                throw new ValidationException("User is not in a department associated with the milestone");
+                throw new ValidationException("User is not in a department associated with the milestone", "INELIGIBLE_USER");
             }
         }
 
@@ -271,46 +268,46 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         if (statusReason == null || statusReason.trim().isEmpty()) {
             if (newStatus == MilestoneStatus.COMPLETED || newStatus == MilestoneStatus.ON_HOLD || newStatus == MilestoneStatus.REJECTED) {
                 logger.warn("Status reason is required for status: {}", newStatus);
-                throw new ValidationException("Status reason is required for status: " + newStatus);
+                throw new ValidationException("Status reason is required for status: " + newStatus, "INVALID_STATUS_REASON");
             }
         }
 
         MilestoneStatus currentStatus = assignment.getStatus();
         if (currentStatus == newStatus) {
             logger.warn("Milestone assignment ID: {} already in status: {}", assignment.getId(), newStatus);
-            throw new ValidationException("Milestone is already in status: " + newStatus);
+            throw new ValidationException("Milestone is already in status: " + newStatus, "INVALID_STATUS_TRANSITION_SAME");
         }
 
         switch (currentStatus) {
             case NEW:
                 if (newStatus != MilestoneStatus.IN_PROGRESS && newStatus != MilestoneStatus.ON_HOLD) {
-                    throw new ValidationException("Invalid transition from NEW to " + newStatus);
+                    throw new ValidationException("Invalid transition from NEW to " + newStatus, "INVALID_STATUS_TRANSITION_NEW");
                 }
                 break;
             case IN_PROGRESS:
                 if (newStatus != MilestoneStatus.COMPLETED && newStatus != MilestoneStatus.ON_HOLD && newStatus != MilestoneStatus.REJECTED) {
-                    throw new ValidationException("Invalid transition from IN_PROGRESS to " + newStatus);
+                    throw new ValidationException("Invalid transition from IN_PROGRESS to " + newStatus, "INVALID_STATUS_TRANSITION_IN_PROGRESS");
                 }
                 break;
             case ON_HOLD:
                 if (newStatus != MilestoneStatus.IN_PROGRESS) {
-                    throw new ValidationException("Invalid transition from ON_HOLD to " + newStatus);
+                    throw new ValidationException("Invalid transition from ON_HOLD to " + newStatus, "INVALID_STATUS_TRANSITION_ON_HOLD");
                 }
                 break;
             case REJECTED:
                 if (newStatus != MilestoneStatus.NEW) {
-                    throw new ValidationException("Invalid transition from REJECTED to " + newStatus);
+                    throw new ValidationException("Invalid transition from REJECTED to " + newStatus, "INVALID_STATUS_TRANSITION_REJECTED");
                 }
                 break;
             case COMPLETED:
-                throw new ValidationException("Cannot change status from COMPLETED");
+                throw new ValidationException("Cannot change status from COMPLETED", "INVALID_STATUS_TRANSITION_COMPLETED");
             default:
-                throw new ValidationException("Invalid current status: " + currentStatus);
+                throw new ValidationException("Invalid current status: " + currentStatus, "INVALID_CURRENT_STATUS");
         }
 
         if (!assignment.isVisible() && newStatus != MilestoneStatus.NEW) {
             logger.warn("Cannot update milestone ID: {} to {} when not visible", assignment.getId(), newStatus);
-            throw new ValidationException("Milestone must be visible to change status to " + newStatus);
+            throw new ValidationException("Milestone must be visible to change status to " + newStatus, "MILESTONE_NOT_VISIBLE");
         }
     }
 

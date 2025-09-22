@@ -47,6 +47,7 @@ public class ProjectPaymentDetail {
     @Comment("User who approved payment")
     private User approvedBy;
 
+
     @Column(name = "payment_status", nullable = false)
     @Comment("Payment status: PENDING, APPROVED, REJECTED")
     private String paymentStatus = "PENDING";

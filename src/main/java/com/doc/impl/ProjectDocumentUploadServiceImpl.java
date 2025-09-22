@@ -68,38 +68,38 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         Project project = projectRepository.findByIdAndIsDeletedFalse(requestDto.getProjectId())
                 .orElseThrow(() -> {
                     logger.error("Project with ID {} not found or is deleted", requestDto.getProjectId());
-                    return new ResourceNotFoundException("Project with ID " + requestDto.getProjectId() + " not found or is deleted");
+                    return new ResourceNotFoundException("Project with ID " + requestDto.getProjectId() + " not found or is deleted", "PROJECT_NOT_FOUND");
                 });
 
         ProjectMilestoneAssignment milestoneAssignment = projectMilestoneAssignmentRepository
                 .findByIdAndIsDeletedFalse(requestDto.getMilestoneAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", requestDto.getMilestoneAssignmentId());
-                    return new ResourceNotFoundException("Milestone assignment with ID " + requestDto.getMilestoneAssignmentId() + " not found or is deleted");
+                    return new ResourceNotFoundException("Milestone assignment with ID " + requestDto.getMilestoneAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
         if (!milestoneAssignment.getProject().getId().equals(project.getId())) {
             logger.warn("Milestone assignment ID {} does not belong to project ID {}", requestDto.getMilestoneAssignmentId(), requestDto.getProjectId());
-            throw new ValidationException("Milestone assignment does not belong to the specified project");
+            throw new ValidationException("Milestone assignment does not belong to the specified project", "INVALID_MILESTONE_PROJECT_ASSOCIATION");
         }
 
         ProductRequiredDocuments requiredDocument = productRequiredDocumentsRepository
                 .findById(requestDto.getRequiredDocumentId())
                 .orElseThrow(() -> {
                     logger.error("Required document with ID {} not found or is deleted", requestDto.getRequiredDocumentId());
-                    return new ResourceNotFoundException("Required document with ID " + requestDto.getRequiredDocumentId() + " not found or is deleted");
+                    return new ResourceNotFoundException("Required document with ID " + requestDto.getRequiredDocumentId() + " not found or is deleted", "DOCUMENT_NOT_FOUND");
                 });
 
         User uploadedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUploadedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", requestDto.getUploadedById());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getUploadedById() + " not found or is deleted");
+                    return new ResourceNotFoundException("User with ID " + requestDto.getUploadedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
         User createdBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getCreatedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", requestDto.getCreatedById());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getCreatedById() + " not found or is deleted");
+                    return new ResourceNotFoundException("User with ID " + requestDto.getCreatedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
         // Check for existing upload
@@ -115,7 +115,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             if (documentUpload.getStatus() == DocumentStatus.VERIFIED) {
                 logger.warn("Cannot replace verified document for project ID: {}, milestone assignment ID: {}, required document ID: {}",
                         requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
-                throw new ValidationException("Cannot replace a verified document");
+                throw new ValidationException("Cannot replace a verified document", "VERIFIED_DOCUMENT_REPLACEMENT");
             }
             isReplacement = true;
             documentUpload.setOldFileUrl(documentUpload.getFileUrl());
@@ -155,13 +155,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         ProjectDocumentUpload documentUpload = projectDocumentUploadRepository.findByIdAndIsDeletedFalse(documentId)
                 .orElseThrow(() -> {
                     logger.error("Document upload with ID {} not found or is deleted", documentId);
-                    return new ResourceNotFoundException("Document upload with ID " + documentId + " not found or is deleted");
+                    return new ResourceNotFoundException("Document upload with ID " + documentId + " not found or is deleted", "DOCUMENT_UPLOAD_NOT_FOUND");
                 });
 
         User changedBy = userRepository.findByIdAndIsDeletedFalse(updateDto.getChangedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", updateDto.getChangedById());
-                    return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted");
+                    return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
         // Validate status transition
@@ -170,7 +170,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         // Validate remarks for REJECTED status
         if (updateDto.getNewStatus() == DocumentStatus.REJECTED && (updateDto.getRemarks() == null || updateDto.getRemarks().trim().isEmpty())) {
             logger.warn("Remarks are required for REJECTED status for document ID: {}", documentId);
-            throw new ValidationException("Remarks are required for REJECTED status");
+            throw new ValidationException("Remarks are required for REJECTED status", "INVALID_REJECTED_STATUS");
         }
 
         // Sanitize remarks
@@ -188,55 +188,54 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         return mapToDocumentResponseDto(documentUpload);
     }
 
-
     private void validateUploadRequest(ProjectDocumentUploadRequestDto requestDto) {
         if (requestDto.getFileUrl() == null || requestDto.getFileUrl().trim().isEmpty()) {
             logger.warn("File URL is empty or null");
-            throw new ValidationException("File URL cannot be empty");
+            throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
         }
         if (requestDto.getFileName() == null || requestDto.getFileName().trim().isEmpty()) {
             logger.warn("File name is empty or null");
-            throw new ValidationException("File name cannot be empty");
+            throw new ValidationException("File name cannot be empty", "INVALID_FILE_NAME");
         }
         if (requestDto.getUploadedById() == null) {
             logger.warn("Uploaded by user ID is null");
-            throw new ValidationException("Uploaded by user ID cannot be null");
+            throw new ValidationException("Uploaded by user ID cannot be null", "INVALID_UPLOADED_BY");
         }
         if (requestDto.getCreatedById() == null) {
             logger.warn("Created by user ID is null");
-            throw new ValidationException("Created by user ID cannot be null");
+            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
         }
         if (requestDto.getRequiredDocumentId() == null) {
             logger.warn("Required document ID is null");
-            throw new ValidationException("Required document ID cannot be null");
+            throw new ValidationException("Required document ID cannot be null", "INVALID_REQUIRED_DOCUMENT_ID");
         }
     }
 
     private void validateDocumentStatusTransition(DocumentStatus currentStatus, DocumentStatus newStatus) {
         if (currentStatus == newStatus) {
             logger.warn("Attempted to set document to same status: {}", newStatus);
-            throw new ValidationException("Document is already in status: " + newStatus);
+            throw new ValidationException("Document is already in status: " + newStatus, "INVALID_STATUS_TRANSITION_SAME");
         }
         switch (currentStatus) {
             case PENDING -> {
                 if (newStatus != DocumentStatus.UPLOADED) {
                     logger.warn("Invalid status transition from PENDING to {}", newStatus);
-                    throw new ValidationException("Invalid transition from PENDING to " + newStatus);
+                    throw new ValidationException("Invalid transition from PENDING to " + newStatus, "INVALID_STATUS_TRANSITION_PENDING");
                 }
             }
             case UPLOADED -> {
                 if (newStatus != DocumentStatus.VERIFIED && newStatus != DocumentStatus.REJECTED) {
                     logger.warn("Invalid status transition from UPLOADED to {}", newStatus);
-                    throw new ValidationException("Invalid transition from UPLOADED to " + newStatus);
+                    throw new ValidationException("Invalid transition from UPLOADED to " + newStatus, "INVALID_STATUS_TRANSITION_UPLOADED");
                 }
             }
             case VERIFIED, REJECTED -> {
                 logger.warn("Attempted to change status from final state: {}", currentStatus);
-                throw new ValidationException("Cannot change status from " + currentStatus);
+                throw new ValidationException("Cannot change status from " + currentStatus, "INVALID_STATUS_TRANSITION_FINAL");
             }
             default -> {
                 logger.error("Invalid current status: {}", currentStatus);
-                throw new ValidationException("Invalid current status: " + currentStatus);
+                throw new ValidationException("Invalid current status: " + currentStatus, "INVALID_CURRENT_STATUS");
             }
         }
     }
@@ -248,7 +247,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         String sanitized = fileUrl.trim();
         if (!sanitized.matches("^(https?|ftp)://[^\\s/$.?#].[^\\s]*$")) {
             logger.warn("Invalid file URL format: {}", fileUrl);
-            throw new ValidationException("Invalid file URL format");
+            throw new ValidationException("Invalid file URL format", "INVALID_FILE_URL_FORMAT");
         }
         return sanitized;
     }
@@ -260,11 +259,11 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         String sanitized = fileName.trim().replaceAll("[^a-zA-Z0-9\\.\\-_]", "");
         if (sanitized.length() > 255) {
             logger.warn("File name exceeds maximum length of 255 characters");
-            throw new ValidationException("File name cannot exceed 255 characters");
+            throw new ValidationException("File name cannot exceed 255 characters", "INVALID_FILE_NAME_LENGTH");
         }
         if (sanitized.isEmpty()) {
             logger.warn("Invalid file name after sanitization");
-            throw new ValidationException("Invalid file name");
+            throw new ValidationException("Invalid file name", "INVALID_FILE_NAME_FORMAT");
         }
         return sanitized;
     }
@@ -276,7 +275,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         String sanitized = remarks.trim();
         if (sanitized.length() > 1000) {
             logger.warn("Remarks exceed maximum length of 1000 characters");
-            throw new ValidationException("Remarks cannot exceed 1000 characters");
+            throw new ValidationException("Remarks cannot exceed 1000 characters", "INVALID_REMARKS_LENGTH");
         }
         return sanitized;
     }

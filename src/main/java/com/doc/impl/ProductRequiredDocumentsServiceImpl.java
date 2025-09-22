@@ -57,13 +57,13 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             String stateName = Optional.ofNullable(requestDto.getStateName()).orElse("");
 
             if (requiredDocumentsRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(name, country, centralName, stateName)) {
-                throw new ValidationException("Required document with name " + name + " already exists for this region");
+                throw new ValidationException("Required document with name " + name + " already exists for this region", "DUPLICATE_DOCUMENT_NAME");
             }
 
             User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
             User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found", "USER_NOT_FOUND"));
 
             List<Product> products = new ArrayList<>();
             if (requestDto.getProductIds() != null && !requestDto.getProductIds().isEmpty()) {
@@ -72,14 +72,14 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                         .filter(p -> !p.isDeleted())
                         .collect(Collectors.toList());
                 if (products.size() != requestDto.getProductIds().size()) {
-                    throw new ResourceNotFoundException("One or more products not found");
+                    throw new ResourceNotFoundException("One or more products not found", "PRODUCT_NOT_FOUND");
                 }
             }
 
             ProductRequiredDocuments document = new ProductRequiredDocuments();
 
             if (requestDto.getId() == null) {
-                throw new ValidationException("ID must be provided for the required document");
+                throw new ValidationException("ID must be provided for the required document", "INVALID_DOCUMENT_ID");
             }
             document.setId(requestDto.getId());
 
@@ -110,7 +110,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
         ProductRequiredDocuments document = requiredDocumentsRepository.findById(id)
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found", "DOCUMENT_NOT_FOUND"));
 
         String name = requestDto.getName().trim();
         String country = Optional.ofNullable(requestDto.getCountry()).orElse("");
@@ -118,11 +118,11 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         String stateName = Optional.ofNullable(requestDto.getStateName()).orElse("");
 
         if (requiredDocumentsRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseExcludingId(id, name, country, centralName, stateName)) {
-            throw new ValidationException("Required document with name " + name + " already exists for this region");
+            throw new ValidationException("Required document with name " + name + " already exists for this region", "DUPLICATE_DOCUMENT_NAME");
         }
 
         User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found", "USER_NOT_FOUND"));
 
         List<Product> products = new ArrayList<>();
         if (requestDto.getProductIds() != null && !requestDto.getProductIds().isEmpty()) {
@@ -131,7 +131,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                     .filter(p -> !p.isDeleted())
                     .collect(Collectors.toList());
             if (products.size() != requestDto.getProductIds().size()) {
-                throw new ResourceNotFoundException("One or more products not found");
+                throw new ResourceNotFoundException("One or more products not found", "PRODUCT_NOT_FOUND");
             }
         }
 
@@ -159,7 +159,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     public void deleteRequiredDocument(Long id) {
         ProductRequiredDocuments document = requiredDocumentsRepository.findById(id)
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Required document with ID " + id + " not found", "DOCUMENT_NOT_FOUND"));
 
         for (Product product : document.getProducts()) {
             product.getRequiredDocuments().remove(document);
@@ -174,21 +174,21 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     @Override
     public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProjectAndProduct(Long projectId, Long productId, Long userId) {
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "USER_NOT_FOUND"));
 
         Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted", "PROJECT_NOT_FOUND"));
 
         Product product = productRepository.findByIdAndIsDeletedFalse(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted", "PRODUCT_NOT_FOUND"));
 
         if (!project.getProduct().getId().equals(productId)) {
-            throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId);
+            throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId, "INVALID_PRODUCT_PROJECT_ASSOCIATION");
         }
 
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
         if (!isAdmin && !project.getCreatedBy().equals(userId) && !project.getUpdatedBy().equals(userId)) {
-            throw new ValidationException("User is not authorized to access this project's documents");
+            throw new ValidationException("User is not authorized to access this project's documents", "UNAUTHORIZED_ACCESS");
         }
 
         List<ProductRequiredDocuments> documents = product.getRequiredDocuments()
@@ -213,13 +213,13 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProduct(Long productId, Long projectId,
                                                                                    String stateName, String centralName) {
         Product product = productRepository.findByIdAndIsDeletedFalse(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted", "PRODUCT_NOT_FOUND"));
 
         Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted", "PROJECT_NOT_FOUND"));
 
         if (!project.getProduct().getId().equals(productId)) {
-            throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId);
+            throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId, "INVALID_PRODUCT_PROJECT_ASSOCIATION");
         }
 
         List<ProductRequiredDocuments> documents = product.getRequiredDocuments()
@@ -252,19 +252,19 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
     private void validateRequestDto(ProductRequiredDocumentsRequestDto requestDto) {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Document name cannot be empty");
+            throw new ValidationException("Document name cannot be empty", "INVALID_DOCUMENT_NAME");
         }
         if (requestDto.getType() == null || requestDto.getType().trim().isEmpty()) {
-            throw new ValidationException("Document type cannot be empty");
+            throw new ValidationException("Document type cannot be empty", "INVALID_DOCUMENT_TYPE");
         }
         if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null");
+            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
         }
         if (requestDto.getUpdatedBy() == null) {
-            throw new ValidationException("Updated by user ID cannot be null");
+            throw new ValidationException("Updated by user ID cannot be null", "INVALID_UPDATED_BY");
         }
         if (requestDto.getCountry() == null && requestDto.getCentralName() == null && requestDto.getStateName() == null) {
-            throw new ValidationException("At least one of country, centralName, or stateName must be provided for regional documents");
+            throw new ValidationException("At least one of country, centralName, or stateName must be provided for regional documents", "INVALID_REGIONAL_FIELDS");
         }
     }
 

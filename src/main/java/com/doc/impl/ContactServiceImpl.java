@@ -6,7 +6,6 @@ import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-
 import com.doc.repository.CompanyRepository;
 import com.doc.repository.ContactRepository;
 import com.doc.repository.UserRepository;
@@ -47,18 +46,18 @@ public class ContactServiceImpl implements ContactService {
         // Check for duplicate email within the company (or globally if companyId is null)
         Long companyId = requestDto.getCompanyId();
         if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalse(requestDto.getEmails(), companyId)) {
-            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company");
+            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
         }
 
         Company company = null;
         if (requestDto.getCompanyId() != null) {
             company = companyRepository.findById(requestDto.getCompanyId())
                     .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found", "COMPANY_NOT_FOUND"));
         }
 
         userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Contact contact = new Contact();
         mapRequestDtoToEntity(contact, requestDto, company);
@@ -76,7 +75,7 @@ public class ContactServiceImpl implements ContactService {
         logger.info("Fetching contact with ID: {}", id);
         Contact contact = contactRepository.findById(id)
                 .filter(c -> !c.isDeleteStatus())
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
         return mapToResponseDto(contact);
     }
 
@@ -99,24 +98,24 @@ public class ContactServiceImpl implements ContactService {
 
         Contact contact = contactRepository.findById(id)
                 .filter(c -> !c.isDeleteStatus())
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
 
         // Check for duplicate email within the company (or globally if companyId is null)
         Long companyId = requestDto.getCompanyId();
         if (!contact.getEmails().equals(requestDto.getEmails()) &&
                 contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalse(requestDto.getEmails(), companyId)) {
-            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company");
+            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
         }
 
         Company company = null;
         if (requestDto.getCompanyId() != null) {
             company = companyRepository.findById(requestDto.getCompanyId())
                     .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found", "COMPANY_NOT_FOUND"));
         }
 
         userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found", "USER_NOT_FOUND"));
 
         mapRequestDtoToEntity(contact, requestDto, company);
         contact.setUpdatedDate(new Date());
@@ -129,7 +128,7 @@ public class ContactServiceImpl implements ContactService {
         logger.info("Deleting contact with ID: {}", id);
         Contact contact = contactRepository.findById(id)
                 .filter(c -> !c.isDeleteStatus())
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
 
         contact.setDeleteStatus(true);
         contact.setUpdatedDate(new Date());
@@ -138,16 +137,16 @@ public class ContactServiceImpl implements ContactService {
 
     private void validateRequestDto(ContactRequestDto requestDto) {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Contact name cannot be empty");
+            throw new ValidationException("Contact name cannot be empty", "INVALID_CONTACT_NAME");
         }
         if (requestDto.getEmails() == null || requestDto.getEmails().trim().isEmpty()) {
-            throw new ValidationException("Contact email cannot be empty");
+            throw new ValidationException("Contact email cannot be empty", "INVALID_CONTACT_EMAIL");
         }
         if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null");
+            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
         }
         if (requestDto.getUpdatedBy() == null) {
-            throw new ValidationException("Updated by user ID cannot be null");
+            throw new ValidationException("Updated by user ID cannot be null", "INVALID_UPDATED_BY");
         }
         // Add additional validations as needed (e.g., email format, contact number format)
     }
