@@ -54,7 +54,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * Finds non-deleted users by department ID with pagination.
      *
      * @param departmentId the department ID
-     * @param pageable     pagination information
+     * @param pageable pagination information
      * @return a page of non-deleted users in the specified department
      */
     Page<User> findByDepartmentsIdAndIsDeletedFalse(Long departmentId, Pageable pageable);
@@ -72,30 +72,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * Finds non-deleted users by manager flag with pagination.
      *
      * @param managerFlag the manager flag
-     * @param pageable    pagination information
+     * @param pageable pagination information
      * @return a page of non-deleted users with the specified manager flag
      */
     Page<User> findByManagerFlagAndIsDeletedFalse(boolean managerFlag, Pageable pageable);
-
-    /**
-     * Finds users by filters (full name, email, manager flag) with pagination.
-     *
-     * @param fullName    the full name to filter by (optional)
-     * @param email       the email to filter by (optional)
-     * @param managerFlag the manager flag to filter by (optional)
-     * @param pageable    pagination information
-     * @return a page of non-deleted users matching the filters
-     */
-    @Query("SELECT u FROM User u WHERE " +
-            "(:fullName IS NULL OR u.fullName LIKE %:fullName%) AND " +
-            "(:email IS NULL OR u.email = :email) AND " +
-            "(:managerFlag IS NULL OR u.managerFlag = :managerFlag) AND " +
-            "u.isDeleted = false")
-    Page<User> findByFilters(
-            @Param("fullName") String fullName,
-            @Param("email") String email,
-            @Param("managerFlag") Boolean managerFlag,
-            Pageable pageable);
 
     /**
      * Finds users with the ADMIN role who are not deleted.
@@ -106,13 +86,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAdmins();
 
     /**
-     * Finds non-deleted users managed by a specific manager.
+     * Finds non-deleted users managed by a specific manager with pagination.
      *
      * @param managerId the ID of the manager
-     * @return a list of non-deleted users managed by the specified manager
+     * @param pageable pagination information
+     * @return a page of non-deleted users managed by the specified manager
      */
     @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isDeleted = false")
-    List<User> findByManagerIdAndIsDeletedFalse(@Param("managerId") Long managerId);
+    Page<User> findByManagerIdAndIsDeletedFalseList(@Param("managerId") Long managerId, Pageable pageable);
 
     /**
      * Finds non-deleted users by department IDs.
@@ -122,4 +103,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id IN :deptIds AND u.isDeleted = false")
     List<User> findByDepartmentIdsIn(@Param("deptIds") List<Long> deptIds);
+
+    @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isDeleted = false")
+    List<User> findByManagerIdAndIsDeletedFalse(@Param("managerId") Long managerId);
 }

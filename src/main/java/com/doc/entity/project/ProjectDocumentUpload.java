@@ -97,6 +97,10 @@ public class ProjectDocumentUpload {
     @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
 
+    @Column(name = "replacement_count", nullable = false)
+    @Comment("Number of times the document has been replaced")
+    private int replacementCount = 0;
+
     @PrePersist
     protected void onCreate() {
         this.createdDate = new Date();

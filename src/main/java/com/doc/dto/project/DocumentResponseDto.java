@@ -23,4 +23,5 @@ public class DocumentResponseDto {
     private Long uploadedById;
     private Date createdDate;
     private Date updatedDate;
+    private int replacementCount;
 }

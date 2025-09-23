@@ -15,8 +15,6 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     Page<Department> findByIsDeletedFalse(Pageable pageable);
 
-    boolean existsByIdAndIsDeletedFalse(Long id);
-
     Optional<Department> findByIdAndIsDeletedFalse(Long id);
 }
 

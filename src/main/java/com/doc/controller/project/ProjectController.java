@@ -40,7 +40,6 @@ public class ProjectController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-
     @Operation(summary = "Get all projects with pagination")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "List of projects retrieved"),
@@ -54,7 +53,6 @@ public class ProjectController {
         List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page, size);
         return ResponseEntity.ok(responses);
     }
-
 
     @Operation(summary = "Delete a project by ID (soft delete)")
     @ApiResponses({
@@ -92,16 +90,18 @@ public class ProjectController {
         return ResponseEntity.ok(projects);
     }
 
-    @Operation(summary = "Get project details and milestones based on user role")
+    @Operation(summary = "Get project details and milestones based on user role and assignment",
+            description = "Retrieves project details and milestones for a project. Accessible only to users with ADMIN or OPERATION_HEAD roles, assigned users, or their managers.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Project details and milestones retrieved"),
-            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "200", description = "Project details and milestones retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+            @ApiResponse(responseCode = "403", description = "User is not authorized to view project details"),
             @ApiResponse(responseCode = "404", description = "Project or user not found")
     })
     @GetMapping("/{projectId}/milestones")
     public ResponseEntity<ProjectMilestoneResponseDto> getProjectMilestones(
-            @PathVariable Long projectId,
-            @Parameter(description = "User ID of the logged-in user") @RequestParam Long userId) {
+            @PathVariable @Parameter(description = "ID of the project") Long projectId,
+            @RequestParam @Parameter(description = "User ID of the logged-in user") Long userId) {
         ProjectMilestoneResponseDto response = projectService.getProjectMilestones(projectId, userId);
         return ResponseEntity.ok(response);
     }

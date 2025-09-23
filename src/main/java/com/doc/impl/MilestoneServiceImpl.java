@@ -159,17 +159,6 @@ public class MilestoneServiceImpl implements MilestoneService {
         logger.info("Milestone deleted with ID: {}", id);
     }
 
-    @Override
-    public Page<MilestoneResponseDto> getMilestonesByDepartment(Long departmentId, Pageable pageable) {
-        logger.info("Fetching milestones for department ID: {} with pageable: {}", departmentId, pageable);
-        if (!departmentRepository.existsByIdAndIsDeletedFalse(departmentId)) {
-            logger.error("Department not found with ID: {}", departmentId);
-            throw new EntityNotFoundException("Department not found with ID: " + departmentId);
-        }
-        return milestoneRepository.findByDepartmentsId(departmentId, pageable)
-                .map(this::mapToResponseDto);
-    }
-
 
     private MilestoneResponseDto mapToResponseDto(Milestone milestone) {
 
@@ -196,7 +185,6 @@ public class MilestoneServiceImpl implements MilestoneService {
 
         return milestoneResponseDto;
     }
-
 
 
     @Override

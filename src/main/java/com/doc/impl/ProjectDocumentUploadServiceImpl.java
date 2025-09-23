@@ -20,6 +20,7 @@ import com.doc.service.ProjectDocumentUploadService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,9 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final ProjectRepository projectRepository;
     private final ProductRequiredDocumentsRepository productRequiredDocumentsRepository;
     private final UserRepository userRepository;
+
+    @Value("${aws.s3.bucket.url}")
+    private String bucketUrl;
 
     @Autowired
     public ProjectDocumentUploadServiceImpl(
@@ -60,9 +64,11 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         // Validate inputs
         validateUploadRequest(requestDto);
 
-        // Sanitize file URL and name
-        String sanitizedFileUrl = sanitizeFileUrl(requestDto.getFileUrl());
+        // Sanitize file name
         String sanitizedFileName = sanitizeFileName(requestDto.getFileName());
+
+        // Construct file URL using bucket URL and file name
+        String sanitizedFileUrl = bucketUrl + "/" + sanitizedFileName;
 
         // Fetch entities
         Project project = projectRepository.findByIdAndIsDeletedFalse(requestDto.getProjectId())
@@ -120,6 +126,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             isReplacement = true;
             documentUpload.setOldFileUrl(documentUpload.getFileUrl());
             documentUpload.setOldFileName(documentUpload.getFileName());
+            documentUpload.setReplacementCount(documentUpload.getReplacementCount() + 1);
             logger.info("Replacing existing document with ID: {}", documentUpload.getId());
         } else {
             documentUpload = new ProjectDocumentUpload();
@@ -128,6 +135,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             documentUpload.setRequiredDocument(requiredDocument);
             documentUpload.setCreatedBy(requestDto.getCreatedById());
             documentUpload.setCreatedDate(new Date());
+            documentUpload.setReplacementCount(0);
         }
 
         // Set or update fields
@@ -189,10 +197,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     }
 
     private void validateUploadRequest(ProjectDocumentUploadRequestDto requestDto) {
-        if (requestDto.getFileUrl() == null || requestDto.getFileUrl().trim().isEmpty()) {
-            logger.warn("File URL is empty or null");
-            throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
-        }
         if (requestDto.getFileName() == null || requestDto.getFileName().trim().isEmpty()) {
             logger.warn("File name is empty or null");
             throw new ValidationException("File name cannot be empty", "INVALID_FILE_NAME");
@@ -240,18 +244,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         }
     }
 
-    private String sanitizeFileUrl(String fileUrl) {
-        if (fileUrl == null) {
-            return null;
-        }
-        String sanitized = fileUrl.trim();
-        if (!sanitized.matches("^(https?|ftp)://[^\\s/$.?#].[^\\s]*$")) {
-            logger.warn("Invalid file URL format: {}", fileUrl);
-            throw new ValidationException("Invalid file URL format", "INVALID_FILE_URL_FORMAT");
-        }
-        return sanitized;
-    }
-
     private String sanitizeFileName(String fileName) {
         if (fileName == null) {
             return null;
@@ -296,6 +288,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         dto.setUploadedById(documentUpload.getUploadedBy().getId());
         dto.setCreatedDate(documentUpload.getCreatedDate());
         dto.setUpdatedDate(documentUpload.getUpdatedDate());
+        dto.setReplacementCount(documentUpload.getReplacementCount());
         return dto;
     }
 }

@@ -90,21 +90,6 @@ public class MilestoneController {
     }
 
     /**
-     * Retrieves milestones by department ID with pagination.
-     *
-     * @param departmentId the department ID
-     * @param pageable pagination information
-     * @return a page of milestones associated with the department
-     */
-    @GetMapping("/department/{departmentId}")
-    public ResponseEntity<Page<MilestoneResponseDto>> getMilestonesByDepartment(
-            @PathVariable Long departmentId, Pageable pageable) {
-        Page<MilestoneResponseDto> milestones = milestoneService.getMilestonesByDepartment(departmentId, pageable);
-        return new ResponseEntity<>(milestones, HttpStatus.OK);
-    }
-
-
-    /**
      * Retrieves all milestones without pagination.
      *
      * @return list of all milestones

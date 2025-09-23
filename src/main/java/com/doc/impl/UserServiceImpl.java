@@ -49,12 +49,10 @@ public class UserServiceImpl implements UserService {
         logger.info("Creating user with ID: {}, email: {}, roleIds: {}", requestDto.getId(), requestDto.getEmail(), requestDto.getRoleIds());
         validateRequestDto(requestDto);
 
-        // Check for duplicate user ID
         if (userRepository.existsById(requestDto.getId())) {
             throw new ValidationException("User with ID " + requestDto.getId() + " already exists", "DUPLICATE_USER_ID");
         }
 
-        // Check for duplicate email
         if (userRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail().trim())) {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists", "DUPLICATE_EMAIL");
         }
@@ -65,7 +63,7 @@ public class UserServiceImpl implements UserService {
         User manager = validateManager(requestDto.getManagerId(), roles);
 
         User user = new User();
-        user.setId(requestDto.getId()); // Set the provided ID
+        user.setId(requestDto.getId());
         mapRequestDtoToEntity(user, requestDto);
         user.setCreatedDate(new Date());
         user.setUpdatedDate(new Date());
@@ -89,16 +87,26 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserResponseDto> getAllUsers(int page, int size, String fullName, String email, Boolean managerFlag) {
-        logger.info("Fetching users, page: {}, size: {}, fullName: {}, email: {}, managerFlag: {}",
-                page, size, fullName, email, managerFlag);
+    public List<UserResponseDto> getAllUsers(int page, int size, Long userId) {
+        logger.info("Fetching users for userId: {}, page: {}, size: {}", userId, page, size);
+        User requestingUser = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Requesting user with ID " + userId + " not found", "USER_NOT_FOUND"));
+
         PageRequest pageable = PageRequest.of(page, size);
         Page<User> userPage;
 
-        if (fullName != null || email != null || managerFlag != null) {
-            userPage = userRepository.findByFilters(fullName, email, managerFlag, pageable);
-        } else {
+        boolean isAdminOrOpHead = requestingUser.getRoles().stream()
+                .anyMatch(role -> role.getName().equalsIgnoreCase("ADMIN") || role.getName().equalsIgnoreCase("Operation Head"));
+
+        if (isAdminOrOpHead) {
+            logger.info("User {} has ADMIN or Operation Head role, fetching all users", userId);
             userPage = userRepository.findByIsDeletedFalse(pageable);
+        } else if (requestingUser.isManagerFlag()) {
+            logger.info("User {} is a manager, fetching managed users", userId);
+            userPage = userRepository.findByManagerIdAndIsDeletedFalseList(userId, pageable);
+        } else {
+            logger.warn("User {} does not have sufficient permissions", userId);
+            throw new ValidationException("User does not have permission to view users", "UNAUTHORIZED_ACCESS");
         }
 
         return userPage.getContent()
@@ -120,7 +128,6 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists", "DUPLICATE_EMAIL");
         }
 
-        // For updates, ID in DTO is ignored; use the path ID
         Designation designation = validateDesignation(requestDto.getDesignationId());
         List<Department> departments = validateDepartments(requestDto.getDepartmentIds(), designation.getDepartment().getId());
         List<Role> roles = validateRoles(requestDto.getRoleIds());
@@ -235,4 +242,6 @@ public class UserServiceImpl implements UserService {
         dto.setUpdatedDate(user.getUpdatedDate());
         return dto;
     }
+
+
 }

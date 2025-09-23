@@ -47,26 +47,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Page<Project> findByIsDeletedFalse(Pageable pageable);
 
     /**
-     * Retrieves non-deleted projects associated with a specific company, with pagination.
-     *
-     * @param companyId the ID of the company
-     * @param pageable pagination information
-     * @return a {@link Page} of non-deleted projects for the given company
-     */
-    @Query("SELECT p FROM Project p WHERE p.company.id = :companyId AND p.isDeleted = false")
-    Page<Project> findByCompanyIdAndIsDeletedFalse(@Param("companyId") Long companyId, Pageable pageable);
-
-    /**
-     * Retrieves non-deleted projects associated with a specific product, with pagination.
-     *
-     * @param productId the ID of the product
-     * @param pageable pagination information
-     * @return a {@link Page} of non-deleted projects for the given product
-     */
-    @Query("SELECT p FROM Project p WHERE p.product.id = :productId AND p.isDeleted = false")
-    Page<Project> findByProductIdAndIsDeletedFalse(@Param("productId") Long productId, Pageable pageable);
-
-    /**
      * Retrieves non-deleted projects assigned to specific users (based on milestone assignments), with pagination.
      *
      * @param userIds the list of user IDs
@@ -75,6 +55,4 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      */
     @Query("SELECT DISTINCT p FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     Page<Project> findByAssignedUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
-
-
 }

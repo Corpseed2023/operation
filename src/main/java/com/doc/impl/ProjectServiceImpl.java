@@ -354,23 +354,24 @@ public class ProjectServiceImpl implements ProjectService {
         double dueAmount = paymentDetail.getDueAmount();
         double paidAmount = totalAmount - dueAmount;
 
-        // Validate payment amount based on payment type
+        // Validate payment amount
         if (amount <= 0) {
             logger.warn("Invalid payment amount: {}", amount);
             throw new ValidationException("Payment amount must be positive", "ERR_INVALID_PAYMENT_AMOUNT");
         }
 
+        // Universal check: Payment amount cannot exceed due amount for any payment type
+        if (amount > dueAmount) {
+            logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
+            throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount, "ERR_EXCEEDS_DUE_AMOUNT");
+        }
+
+        // Payment type-specific validations
         if (paymentTypeName.equals("Full Payment")) {
-            // For Full Payment, the entire amount must be paid in one transaction
+            // For Full Payment, the entire due amount must be paid in one transaction
             if (dueAmount > 0 && amount != dueAmount) {
                 logger.warn("Full Payment requires the entire due amount ({}), received: {}", dueAmount, amount);
                 throw new ValidationException("Full Payment requires the entire due amount of " + dueAmount, "ERR_INVALID_FULL_PAYMENT_AMOUNT");
-            }
-        } else if (paymentTypeName.equals("Partial Payment")) {
-            // For Partial Payment, ensure some payment is made but allow less than total
-            if (amount > dueAmount) {
-                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
-                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount, "ERR_EXCEEDS_DUE_AMOUNT");
             }
         } else if (paymentTypeName.equals("Purchase Order Payment")) {
             // For PO-based, ensure all non-Certification milestones are completed before accepting payment
@@ -381,16 +382,6 @@ public class ProjectServiceImpl implements ProjectService {
             if (!allNonCertificationCompleted) {
                 logger.warn("Cannot add payment for PO-based project ID {} until all non-Certification milestones are completed", projectId);
                 throw new ValidationException("All non-Certification milestones must be completed before adding payment for PO-based project", "ERR_PO_PAYMENT_MILESTONE_NOT_COMPLETED");
-            }
-            if (amount > dueAmount) {
-                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
-                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount, "ERR_EXCEEDS_DUE_AMOUNT");
-            }
-        } else if (paymentTypeName.equals("Installment Payment")) {
-            // For Installment Payment, allow partial payments (existing logic applies)
-            if (amount > dueAmount) {
-                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
-                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount, "ERR_EXCEEDS_DUE_AMOUNT");
             }
         }
 
@@ -422,6 +413,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         return mapToResponseDto(project);
     }
+
 
     public void updateMilestoneStatus(Long assignmentId, MilestoneStatus newStatus, String statusReason, Long changedById) {
         logger.info("Updating milestone assignment ID: {} to status: {}", assignmentId, newStatus);
@@ -505,7 +497,7 @@ public class ProjectServiceImpl implements ProjectService {
     public void updateMilestoneVisibilities(Project project, Long updatedById) {
         logger.debug("Updating milestone visibilities for project ID: {}", project.getId());
         double totalAmount = project.getPaymentDetail().getTotalAmount();
-        double paidAmount = totalAmount - project.getPaymentDetail().getDueAmount(); // Fixed: Use getDueAmount()
+        double paidAmount = totalAmount - project.getPaymentDetail().getDueAmount();
         double paidPercentage = (paidAmount / totalAmount) * 100.0;
         String paymentTypeName = project.getPaymentDetail().getPaymentType().getName();
 
@@ -680,6 +672,7 @@ public class ProjectServiceImpl implements ProjectService {
             }
         }
     }
+
     private void updateProjectStatus(Project project, Long updatedById) {
         logger.debug("Updating project status for project ID: {}", project.getId());
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
@@ -949,8 +942,9 @@ public class ProjectServiceImpl implements ProjectService {
         Page<ProjectMilestoneAssignment> assignmentPage;
 
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
 
-        if (isAdmin) {
+        if (isAdmin || isOperationHead) {
             assignmentPage = projectMilestoneAssignmentRepository.findAllByIsDeletedFalse(pageable);
         } else if (user.isManagerFlag()) {
             List<Department> managerDepts = user.getDepartments();
@@ -982,10 +976,6 @@ public class ProjectServiceImpl implements ProjectService {
         for (Map.Entry<Project, List<ProjectMilestoneAssignment>> entry : groupedByProject.entrySet()) {
             AssignedProjectResponseDto dto = new AssignedProjectResponseDto();
             dto.setProject(mapToProjectDetailsDto(entry.getKey(), userId));
-            // Note: The commented-out line for setting assigned milestones is preserved as in the original code
-            // dto.setAssignedMilestones(entry.getValue().stream()
-            // .map(this::mapToAssignedMilestoneDto)
-            // .collect(Collectors.toList()));
             projectDtos.add(dto);
         }
 
@@ -994,6 +984,7 @@ public class ProjectServiceImpl implements ProjectService {
         List<AssignedProjectResponseDto> pagedDtos = projectDtos.subList(start, end);
         return new PageImpl<>(pagedDtos, PageRequest.of(page, size), projectDtos.size());
     }
+
 
     @Override
     public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
@@ -1010,25 +1001,42 @@ public class ProjectServiceImpl implements ProjectService {
                     return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "ERR_USER_NOT_FOUND");
                 });
 
+        // Check authorization
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
+        boolean isAssignedUser = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId).isPresent();
+        boolean isManagerOfAssignedUser = false;
+
+        if (!isAdmin && !isOperationHead && !isAssignedUser) {
+            // Check if the user is a manager of any assigned user
+            List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
+            List<Long> assignedUserIds = assignments.stream()
+                    .filter(a -> a.getAssignedUser() != null)
+                    .map(a -> a.getAssignedUser().getId())
+                    .collect(Collectors.toList());
+            List<User> managedUsers = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+            isManagerOfAssignedUser = managedUsers.stream().anyMatch(u -> assignedUserIds.contains(u.getId()));
+        }
+
+        if (!isAdmin && !isOperationHead && !isAssignedUser && !isManagerOfAssignedUser) {
+            logger.warn("User ID: {} is not authorized to view project ID: {}", userId, projectId);
+            throw new ValidationException("User is not authorized to view this project", "ERR_UNAUTHORIZED_ACCESS");
+        }
+
         List<ProjectMilestoneAssignment> assignments;
 
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-
-        if (isAdmin) {
+        if (isAdmin || isOperationHead) {
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
-        } else if (user.isManagerFlag()) {
-            List<Department> managerDepts = user.getDepartments();
-            if (managerDepts.isEmpty()) {
-                return new ProjectMilestoneResponseDto();
-            }
-            List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
-            List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
-            List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
-            if (!deptUserIds.contains(userId)) {
-                deptUserIds.add(userId);
+        } else if (isManagerOfAssignedUser) {
+            List<Long> managedUserIds = userRepository.findByManagerIdAndIsDeletedFalse(userId)
+                    .stream()
+                    .map(User::getId)
+                    .collect(Collectors.toList());
+            if (!managedUserIds.contains(userId)) {
+                managedUserIds.add(userId); // Include the manager themselves if they are assigned
             }
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-                    projectId, deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+                    projectId, managedUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
         } else {
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
                     projectId, userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
@@ -1068,6 +1076,7 @@ public class ProjectServiceImpl implements ProjectService {
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "ERR_USER_NOT_FOUND"));
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
         boolean isCrtDepartment = user.getDepartments().stream()
                 .anyMatch(dept -> dept.getName().equalsIgnoreCase("CRT"));
 
@@ -1082,13 +1091,13 @@ public class ProjectServiceImpl implements ProjectService {
                 contactDto.setName(contact.getName());
                 contactDto.setDesignation(contact.getDesignation());
 
-                if (isAdmin || isCrtDepartment) {
-                    // ADMIN or CRT department sees unmasked details
+                if (isAdmin || isOperationHead || isCrtDepartment) {
+                    // ADMIN, OPERATION_HEAD, or CRT department sees unmasked details
                     contactDto.setEmails(contact.getEmails());
                     contactDto.setContactNo(contact.getContactNo());
                     contactDto.setWhatsappNo(contact.getWhatsappNo());
                 } else {
-                    // Non-ADMIN, non-CRT department sees masked details
+                    // Non-ADMIN, non-OPERATION_HEAD, non-CRT department sees masked details
                     contactDto.setEmails(maskEmail(contact.getEmails()));
                     contactDto.setContactNo(maskPhoneNumber(contact.getContactNo()));
                     contactDto.setWhatsappNo(maskPhoneNumber(contact.getWhatsappNo()));
