@@ -1,5 +1,6 @@
-package com.doc.entity.product;
+package com.doc.entity.document;
 
+import com.doc.entity.product.Product;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

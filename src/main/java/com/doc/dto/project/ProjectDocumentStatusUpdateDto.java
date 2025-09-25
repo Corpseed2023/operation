@@ -1,6 +1,6 @@
 package com.doc.dto.project;
 
-import com.doc.entity.project.DocumentStatus;
+import com.doc.entity.document.DocumentStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;

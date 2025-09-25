@@ -1,6 +1,6 @@
-package com.doc.repository;
+package com.doc.repository.documentRepo;
 
-import com.doc.entity.project.ProjectDocumentUpload;
+import com.doc.entity.document.ProjectDocumentUpload;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

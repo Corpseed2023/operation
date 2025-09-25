@@ -3,19 +3,20 @@ package com.doc.impl;
 import com.doc.dto.project.DocumentResponseDto;
 import com.doc.dto.project.ProjectDocumentStatusUpdateDto;
 import com.doc.dto.project.ProjectDocumentUploadRequestDto;
-import com.doc.entity.project.DocumentStatus;
+import com.doc.entity.document.DocumentStatus;
+import com.doc.entity.document.ProductRequiredDocuments;
+import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.project.Project;
-import com.doc.entity.project.ProjectDocumentUpload;
 import com.doc.entity.project.ProjectMilestoneAssignment;
-import com.doc.entity.product.ProductRequiredDocuments;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-import com.doc.repository.ProjectDocumentUploadRepository;
 import com.doc.repository.ProjectMilestoneAssignmentRepository;
 import com.doc.repository.ProjectRepository;
-import com.doc.repository.ProductRequiredDocumentsRepository;
 import com.doc.repository.UserRepository;
+import com.doc.repository.documentRepo.DocumentStatusRepository;
+import com.doc.repository.documentRepo.ProductRequiredDocumentsRepository;
+import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.service.ProjectDocumentUploadService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final ProjectRepository projectRepository;
     private final ProductRequiredDocumentsRepository productRequiredDocumentsRepository;
     private final UserRepository userRepository;
+    private final DocumentStatusRepository documentStatusRepository;
 
     @Value("${aws.s3.bucket.url}")
     private String bucketUrl;
@@ -48,12 +50,14 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
             ProjectRepository projectRepository,
             ProductRequiredDocumentsRepository productRequiredDocumentsRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            DocumentStatusRepository documentStatusRepository) {
         this.projectDocumentUploadRepository = projectDocumentUploadRepository;
         this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
         this.projectRepository = projectRepository;
         this.productRequiredDocumentsRepository = productRequiredDocumentsRepository;
         this.userRepository = userRepository;
+        this.documentStatusRepository = documentStatusRepository;
     }
 
     @Override
@@ -108,6 +112,12 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("User with ID " + requestDto.getCreatedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
+        // Fetch the PENDING and UPLOADED statuses from the repository
+        DocumentStatus pendingStatus = documentStatusRepository.findByName("PENDING")
+                .orElseThrow(() -> new ResourceNotFoundException("Document status PENDING not found", "STATUS_NOT_FOUND"));
+        DocumentStatus uploadedStatus = documentStatusRepository.findByName("UPLOADED")
+                .orElseThrow(() -> new ResourceNotFoundException("Document status UPLOADED not found", "STATUS_NOT_FOUND"));
+
         // Check for existing upload
         Optional<ProjectDocumentUpload> existingUploadOpt = projectDocumentUploadRepository
                 .findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentIdAndIsDeletedFalse(
@@ -118,7 +128,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         if (existingUploadOpt.isPresent()) {
             documentUpload = existingUploadOpt.get();
-            if (documentUpload.getStatus() == DocumentStatus.VERIFIED) {
+            if ("VERIFIED".equals(documentUpload.getStatus().getName())) {
                 logger.warn("Cannot replace verified document for project ID: {}, milestone assignment ID: {}, required document ID: {}",
                         requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
                 throw new ValidationException("Cannot replace a verified document", "VERIFIED_DOCUMENT_REPLACEMENT");
@@ -136,12 +146,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             documentUpload.setCreatedBy(requestDto.getCreatedById());
             documentUpload.setCreatedDate(new Date());
             documentUpload.setReplacementCount(0);
+            documentUpload.setStatus(pendingStatus);  // Default to PENDING
         }
 
         // Set or update fields
         documentUpload.setFileUrl(sanitizedFileUrl);
         documentUpload.setFileName(sanitizedFileName);
-        documentUpload.setStatus(DocumentStatus.UPLOADED);
+        documentUpload.setStatus(uploadedStatus);  // Set to UPLOADED
         documentUpload.setRemarks(null);
         documentUpload.setUploadedBy(uploadedBy);
         documentUpload.setUploadTime(new Date());
@@ -172,11 +183,17 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
+        DocumentStatus newStatusEntity = documentStatusRepository.findByName(updateDto.getNewStatus().getName())
+                .orElseThrow(() -> {
+                    logger.error("Document status {} not found", updateDto.getNewStatus());
+                    return new ResourceNotFoundException("Document status " + updateDto.getNewStatus() + " not found", "STATUS_NOT_FOUND");
+                });
+
         // Validate status transition
-        validateDocumentStatusTransition(documentUpload.getStatus(), updateDto.getNewStatus());
+        validateDocumentStatusTransition(documentUpload.getStatus(), newStatusEntity);
 
         // Validate remarks for REJECTED status
-        if (updateDto.getNewStatus() == DocumentStatus.REJECTED && (updateDto.getRemarks() == null || updateDto.getRemarks().trim().isEmpty())) {
+        if ("REJECTED".equals(newStatusEntity.getName()) && (updateDto.getRemarks() == null || updateDto.getRemarks().trim().isEmpty())) {
             logger.warn("Remarks are required for REJECTED status for document ID: {}", documentId);
             throw new ValidationException("Remarks are required for REJECTED status", "INVALID_REJECTED_STATUS");
         }
@@ -185,7 +202,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         String sanitizedRemarks = updateDto.getRemarks() != null ? sanitizeRemarks(updateDto.getRemarks()) : null;
 
         // Update document
-        documentUpload.setStatus(updateDto.getNewStatus());
+        documentUpload.setStatus(newStatusEntity);
         documentUpload.setRemarks(sanitizedRemarks);
         documentUpload.setUpdatedBy(updateDto.getChangedById());
         documentUpload.setUpdatedDate(new Date());
@@ -216,30 +233,30 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     }
 
     private void validateDocumentStatusTransition(DocumentStatus currentStatus, DocumentStatus newStatus) {
-        if (currentStatus == newStatus) {
-            logger.warn("Attempted to set document to same status: {}", newStatus);
-            throw new ValidationException("Document is already in status: " + newStatus, "INVALID_STATUS_TRANSITION_SAME");
+        if (currentStatus.getName().equals(newStatus.getName())) {
+            logger.warn("Attempted to set document to same status: {}", newStatus.getName());
+            throw new ValidationException("Document is already in status: " + newStatus.getName(), "INVALID_STATUS_TRANSITION_SAME");
         }
-        switch (currentStatus) {
-            case PENDING -> {
-                if (newStatus != DocumentStatus.UPLOADED) {
-                    logger.warn("Invalid status transition from PENDING to {}", newStatus);
-                    throw new ValidationException("Invalid transition from PENDING to " + newStatus, "INVALID_STATUS_TRANSITION_PENDING");
+        switch (currentStatus.getName()) {
+            case "PENDING" -> {
+                if (!"UPLOADED".equals(newStatus.getName())) {
+                    logger.warn("Invalid status transition from PENDING to {}", newStatus.getName());
+                    throw new ValidationException("Invalid transition from PENDING to " + newStatus.getName(), "INVALID_STATUS_TRANSITION_PENDING");
                 }
             }
-            case UPLOADED -> {
-                if (newStatus != DocumentStatus.VERIFIED && newStatus != DocumentStatus.REJECTED) {
-                    logger.warn("Invalid status transition from UPLOADED to {}", newStatus);
-                    throw new ValidationException("Invalid transition from UPLOADED to " + newStatus, "INVALID_STATUS_TRANSITION_UPLOADED");
+            case "UPLOADED" -> {
+                if (!"VERIFIED".equals(newStatus.getName()) && !"REJECTED".equals(newStatus.getName())) {
+                    logger.warn("Invalid status transition from UPLOADED to {}", newStatus.getName());
+                    throw new ValidationException("Invalid transition from UPLOADED to " + newStatus.getName(), "INVALID_STATUS_TRANSITION_UPLOADED");
                 }
             }
-            case VERIFIED, REJECTED -> {
-                logger.warn("Attempted to change status from final state: {}", currentStatus);
-                throw new ValidationException("Cannot change status from " + currentStatus, "INVALID_STATUS_TRANSITION_FINAL");
+            case "VERIFIED", "REJECTED" -> {
+                logger.warn("Attempted to change status from final state: {}", currentStatus.getName());
+                throw new ValidationException("Cannot change status from " + currentStatus.getName(), "INVALID_STATUS_TRANSITION_FINAL");
             }
             default -> {
-                logger.error("Invalid current status: {}", currentStatus);
-                throw new ValidationException("Invalid current status: " + currentStatus, "INVALID_CURRENT_STATUS");
+                logger.error("Invalid current status: {}", currentStatus.getName());
+                throw new ValidationException("Invalid current status: " + currentStatus.getName(), "INVALID_CURRENT_STATUS");
             }
         }
     }

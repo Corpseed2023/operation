@@ -1,6 +1,7 @@
-package com.doc.entity.project;
+package com.doc.entity.document;
 
-import com.doc.entity.product.ProductRequiredDocuments;
+import com.doc.entity.project.Project;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -56,10 +57,10 @@ public class ProjectDocumentUpload {
     @Comment("Name of the previous file (if replaced)")
     private String oldFileName;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    @Comment("Document status: PENDING, UPLOADED, VERIFIED, REJECTED")
-    private DocumentStatus status = DocumentStatus.PENDING;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "status_id", nullable = false)
+    @Comment("Document status: Reference to DocumentStatus entity")
+    private DocumentStatus status;  // Changed from enum to entity reference
 
     @Column(name = "remarks", length = 1000)
     @Comment("Remarks for the document status (required for REJECTED)")

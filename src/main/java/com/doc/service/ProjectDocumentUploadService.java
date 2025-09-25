@@ -10,7 +10,6 @@ import com.doc.dto.project.ProjectDocumentStatusUpdateDto;
  */
 public interface ProjectDocumentUploadService {
 
-
     DocumentResponseDto uploadDocument(ProjectDocumentUploadRequestDto requestDto);
 
     DocumentResponseDto updateDocumentStatus(Long documentId, ProjectDocumentStatusUpdateDto updateDto);

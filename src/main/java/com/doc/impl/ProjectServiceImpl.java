@@ -7,6 +7,7 @@ import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
+import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.project.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
@@ -16,6 +17,9 @@ import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
+import com.doc.repository.documentRepo.DocumentStatusRepository;
+import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
+import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.service.ProjectService;
 import com.doc.validator.request.ProjectRequestValidator;
 import org.slf4j.Logger;
@@ -65,12 +69,6 @@ public class ProjectServiceImpl implements ProjectService {
     private ProjectPaymentTransactionRepository projectPaymentTransactionRepository;
 
     @Autowired
-    private UserProductMapRepository userProductMapRepository;
-
-    @Autowired
-    private ProductMilestoneMapRepository productMilestoneMapRepository;
-
-    @Autowired
     private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
 
     @Autowired
@@ -80,10 +78,25 @@ public class ProjectServiceImpl implements ProjectService {
     private UserProjectCountRepository userProjectCountRepository;
 
     @Autowired
+    private UserProductMapRepository userProductMapRepository;
+
+    @Autowired
+    private ProductMilestoneMapRepository productMilestoneMapRepository;
+
+    @Autowired
     private ProjectDocumentUploadRepository projectDocumentUploadRepository;
 
     @Autowired
     private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
+
+    @Autowired
+    private MilestoneStatusRepository milestoneStatusRepository;
+
+    @Autowired
+    private DocumentStatusRepository documentStatusRepository;
+
+    @Autowired
+    private ProjectStatusRepository projectStatusRepository;
 
     @Autowired
     private ProjectRequestValidator projectRequestValidator;
@@ -200,7 +213,8 @@ public class ProjectServiceImpl implements ProjectService {
         project.setUpdatedDate(new Date());
         project.setDeleted(false);
         project.setActive(true);
-        project.setStatus(ProjectStatus.OPEN);
+        project.setStatus(projectStatusRepository.findByName("OPEN")
+                .orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
 
         ProjectPaymentDetail paymentDetail = new ProjectPaymentDetail();
         paymentDetail.setProject(project);
@@ -233,13 +247,16 @@ public class ProjectServiceImpl implements ProjectService {
             logger.debug("Initial payment transaction recorded for project ID: {}, amount: {}", project.getId(), paidAmount);
         }
 
+        MilestoneStatus newStatusEntity = milestoneStatusRepository.findByName("NEW")
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone status NEW not found", "STATUS_NOT_FOUND"));
+
         // Create milestone assignments
         for (ProductMilestoneMap milestone : milestones) {
             ProjectMilestoneAssignment assignment = new ProjectMilestoneAssignment();
             assignment.setProject(project);
             assignment.setProductMilestoneMap(milestone);
             assignment.setMilestone(milestone.getMilestone());
-            assignment.setStatus(MilestoneStatus.NEW);
+            assignment.setStatus(newStatusEntity);
             assignment.setCreatedBy(createdBy.getId());
             assignment.setUpdatedBy(updatedBy.getId());
             assignment.setCreatedDate(new Date());
@@ -272,6 +289,8 @@ public class ProjectServiceImpl implements ProjectService {
         logger.info("Project created successfully with projectNo: {}", requestDto.getProjectNo());
         return mapToResponseDto(project);
     }
+
+
 
     @Override
     public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
@@ -378,7 +397,7 @@ public class ProjectServiceImpl implements ProjectService {
             List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
             boolean allNonCertificationCompleted = assignments.stream()
                     .filter(a -> !a.getMilestone().getName().equalsIgnoreCase("Certification"))
-                    .allMatch(a -> a.getStatus() == MilestoneStatus.COMPLETED);
+                    .allMatch(a -> "COMPLETED".equals(a.getStatus().getName()));
             if (!allNonCertificationCompleted) {
                 logger.warn("Cannot add payment for PO-based project ID {} until all non-Certification milestones are completed", projectId);
                 throw new ValidationException("All non-Certification milestones must be completed before adding payment for PO-based project", "ERR_PO_PAYMENT_MILESTONE_NOT_COMPLETED");
@@ -414,9 +433,8 @@ public class ProjectServiceImpl implements ProjectService {
         return mapToResponseDto(project);
     }
 
-
-    public void updateMilestoneStatus(Long assignmentId, MilestoneStatus newStatus, String statusReason, Long changedById) {
-        logger.info("Updating milestone assignment ID: {} to status: {}", assignmentId, newStatus);
+    public void updateMilestoneStatus(Long assignmentId, String newStatusName, String statusReason, Long changedById) {
+        logger.info("Updating milestone assignment ID: {} to status: {}", assignmentId, newStatusName);
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findByIdAndIsDeletedFalse(assignmentId)
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", assignmentId);
@@ -429,14 +447,20 @@ public class ProjectServiceImpl implements ProjectService {
                     return new ResourceNotFoundException("User with ID " + changedById + " not found or is deleted", "ERR_USER_NOT_FOUND");
                 });
 
+        MilestoneStatus newStatus = milestoneStatusRepository.findByName(newStatusName)
+                .orElseThrow(() -> {
+                    logger.error("Milestone status {} not found", newStatusName);
+                    return new ResourceNotFoundException("Milestone status " + newStatusName + " not found", "STATUS_NOT_FOUND");
+                });
+
         // Validate status transition
         validateMilestoneStatusTransition(assignment, newStatus, statusReason);
 
         // Validate documents for COMPLETED status
-        if (newStatus == MilestoneStatus.COMPLETED) {
+        if ("COMPLETED".equals(newStatus.getName())) {
             List<ProjectDocumentUpload> documents = projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignmentId);
             if (!assignment.getProductMilestoneMap().isAutoGenerated() && !documents.isEmpty()) {
-                boolean allVerified = documents.stream().allMatch(doc -> doc.getStatus() == DocumentStatus.VERIFIED);
+                boolean allVerified = documents.stream().allMatch(doc -> "VERIFIED".equals(doc.getStatus().getName()));
                 if (!allVerified) {
                     logger.warn("Cannot complete milestone ID: {} due to unverified documents", assignmentId);
                     throw new ValidationException("All documents must be verified to complete milestone", "ERR_UNVERIFIED_DOCUMENTS");
@@ -445,7 +469,7 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         // Handle REJECTED → NEW for rework
-        if (newStatus == MilestoneStatus.NEW && assignment.getStatus() == MilestoneStatus.REJECTED) {
+        if ("NEW".equals(newStatus.getName()) && "REJECTED".equals(assignment.getStatus().getName())) {
             ProductMilestoneMap map = assignment.getProductMilestoneMap();
             if (!map.isAllowRollback()) {
                 logger.warn("Rollback not allowed for milestone: {}", map.getMilestone().getName());
@@ -471,11 +495,11 @@ public class ProjectServiceImpl implements ProjectService {
         // Update assignment
         assignment.setStatus(newStatus);
         assignment.setStatusReason(statusReason);
-        if (newStatus == MilestoneStatus.IN_PROGRESS) {
+        if ("IN_PROGRESS".equals(newStatus.getName())) {
             assignment.setStartedDate(new Date());
-        } else if (newStatus == MilestoneStatus.COMPLETED) {
+        } else if ("COMPLETED".equals(newStatus.getName())) {
             assignment.setCompletedDate(new Date());
-        } else if (newStatus == MilestoneStatus.REJECTED || newStatus == MilestoneStatus.ON_HOLD) {
+        } else if ("REJECTED".equals(newStatus.getName()) || "ON_HOLD".equals(newStatus.getName())) {
             assignment.setStatusReason(statusReason);
         }
         assignment.setUpdatedBy(changedById);
@@ -483,13 +507,13 @@ public class ProjectServiceImpl implements ProjectService {
 
         projectMilestoneAssignmentRepository.save(assignment);
         milestoneStatusHistoryRepository.save(history);
-        logger.info("Milestone assignment ID: {} updated to status: {}", assignmentId, newStatus);
+        logger.info("Milestone assignment ID: {} updated to status: {}", assignmentId, newStatus.getName());
 
         // Update project status
         updateProjectStatus(assignment.getProject(), changedById);
 
         // If completed, re-check visibilities to unlock/assign next
-        if (newStatus == MilestoneStatus.COMPLETED) {
+        if ("COMPLETED".equals(newStatus.getName())) {
             updateMilestoneVisibilities(assignment.getProject(), changedById);
         }
     }
@@ -595,7 +619,7 @@ public class ProjectServiceImpl implements ProjectService {
 
                 for (ProjectMilestoneAssignment prevAssignment : assignments) {
                     if (prevAssignment.getProductMilestoneMap().getOrder() < map.getOrder()) {
-                        if (prevAssignment.getStatus() != MilestoneStatus.COMPLETED) {
+                        if (!"COMPLETED".equals(prevAssignment.getStatus().getName())) {
                             allPreviousCompleted = false;
                             break;
                         }
@@ -678,65 +702,70 @@ public class ProjectServiceImpl implements ProjectService {
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
 
         if (assignments.isEmpty()) {
-            project.setStatus(ProjectStatus.OPEN);
-        } else if (assignments.stream().allMatch(a -> a.getStatus() == MilestoneStatus.COMPLETED)) {
-            project.setStatus(ProjectStatus.COMPLETED);
-        } else if (assignments.stream().anyMatch(a -> a.getStatus() == MilestoneStatus.IN_PROGRESS || a.getStatus() == MilestoneStatus.ON_HOLD)) {
-            project.setStatus(ProjectStatus.IN_PROGRESS);
+            project.setStatus(projectStatusRepository.findByName("OPEN")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
+        } else if (assignments.stream().allMatch(a -> "COMPLETED".equals(a.getStatus().getName()))) {
+            project.setStatus(projectStatusRepository.findByName("COMPLETED")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status COMPLETED not found", "STATUS_NOT_FOUND")));
+        } else if (assignments.stream().anyMatch(a -> "IN_PROGRESS".equals(a.getStatus().getName()) || "ON_HOLD".equals(a.getStatus().getName()))) {
+            project.setStatus(projectStatusRepository.findByName("IN_PROGRESS")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status IN_PROGRESS not found", "STATUS_NOT_FOUND")));
         } else {
-            project.setStatus(ProjectStatus.OPEN);
+            project.setStatus(projectStatusRepository.findByName("OPEN")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
         }
 
         project.setUpdatedBy(updatedById);
         project.setUpdatedDate(new Date());
         projectRepository.save(project);
-        logger.debug("Project ID: {} status updated to: {}", project.getId(), project.getStatus());
+        logger.debug("Project ID: {} status updated to: {}", project.getId(), project.getStatus().getName());
     }
 
     private void validateMilestoneStatusTransition(ProjectMilestoneAssignment assignment, MilestoneStatus newStatus, String statusReason) {
+        String newStatusName = newStatus.getName();
         if (statusReason == null || statusReason.trim().isEmpty()) {
-            if (newStatus == MilestoneStatus.COMPLETED || newStatus == MilestoneStatus.ON_HOLD || newStatus == MilestoneStatus.REJECTED) {
-                logger.warn("Status reason is required for status: {}", newStatus);
-                throw new ValidationException("Status reason is required for status: " + newStatus, "ERR_STATUS_REASON_REQUIRED");
+            if ("COMPLETED".equals(newStatusName) || "ON_HOLD".equals(newStatusName) || "REJECTED".equals(newStatusName)) {
+                logger.warn("Status reason is required for status: {}", newStatusName);
+                throw new ValidationException("Status reason is required for status: " + newStatusName, "ERR_STATUS_REASON_REQUIRED");
             }
         }
 
-        MilestoneStatus currentStatus = assignment.getStatus();
-        if (currentStatus == newStatus) {
-            logger.warn("Milestone assignment ID: {} already in status: {}", assignment.getId(), newStatus);
-            throw new ValidationException("Milestone is already in status: " + newStatus, "ERR_SAME_STATUS");
+        String currentStatusName = assignment.getStatus().getName();
+        if (currentStatusName.equals(newStatusName)) {
+            logger.warn("Milestone assignment ID: {} already in status: {}", assignment.getId(), newStatusName);
+            throw new ValidationException("Milestone is already in status: " + newStatusName, "ERR_SAME_STATUS");
         }
 
-        switch (currentStatus) {
-            case NEW:
-                if (newStatus != MilestoneStatus.IN_PROGRESS && newStatus != MilestoneStatus.ON_HOLD) {
-                    throw new ValidationException("Invalid transition from NEW to " + newStatus, "ERR_INVALID_STATUS_TRANSITION_NEW");
+        switch (currentStatusName) {
+            case "NEW":
+                if (!"IN_PROGRESS".equals(newStatusName) && !"ON_HOLD".equals(newStatusName)) {
+                    throw new ValidationException("Invalid transition from NEW to " + newStatusName, "ERR_INVALID_STATUS_TRANSITION_NEW");
                 }
                 break;
-            case IN_PROGRESS:
-                if (newStatus != MilestoneStatus.COMPLETED && newStatus != MilestoneStatus.ON_HOLD && newStatus != MilestoneStatus.REJECTED) {
-                    throw new ValidationException("Invalid transition from IN_PROGRESS to " + newStatus, "ERR_INVALID_STATUS_TRANSITION_IN_PROGRESS");
+            case "IN_PROGRESS":
+                if (!"COMPLETED".equals(newStatusName) && !"ON_HOLD".equals(newStatusName) && !"REJECTED".equals(newStatusName)) {
+                    throw new ValidationException("Invalid transition from IN_PROGRESS to " + newStatusName, "ERR_INVALID_STATUS_TRANSITION_IN_PROGRESS");
                 }
                 break;
-            case ON_HOLD:
-                if (newStatus != MilestoneStatus.IN_PROGRESS) {
-                    throw new ValidationException("Invalid transition from ON_HOLD to " + newStatus, "ERR_INVALID_STATUS_TRANSITION_ON_HOLD");
+            case "ON_HOLD":
+                if (!"IN_PROGRESS".equals(newStatusName)) {
+                    throw new ValidationException("Invalid transition from ON_HOLD to " + newStatusName, "ERR_INVALID_STATUS_TRANSITION_ON_HOLD");
                 }
                 break;
-            case REJECTED:
-                if (newStatus != MilestoneStatus.NEW) {
-                    throw new ValidationException("Invalid transition from REJECTED to " + newStatus, "ERR_INVALID_STATUS_TRANSITION_REJECTED");
+            case "REJECTED":
+                if (!"NEW".equals(newStatusName)) {
+                    throw new ValidationException("Invalid transition from REJECTED to " + newStatusName, "ERR_INVALID_STATUS_TRANSITION_REJECTED");
                 }
                 break;
-            case COMPLETED:
+            case "COMPLETED":
                 throw new ValidationException("Cannot change status from COMPLETED", "ERR_STATUS_CHANGE_COMPLETED");
             default:
-                throw new ValidationException("Invalid current status: " + currentStatus, "ERR_INVALID_CURRENT_STATUS");
+                throw new ValidationException("Invalid current status: " + currentStatusName, "ERR_INVALID_CURRENT_STATUS");
         }
 
-        if (!assignment.isVisible() && newStatus != MilestoneStatus.NEW) {
-            logger.warn("Cannot update milestone ID: {} to {} when not visible", assignment.getId(), newStatus);
-            throw new ValidationException("Milestone must be visible to change status to " + newStatus, "ERR_MILESTONE_NOT_VISIBLE");
+        if (!assignment.isVisible() && !"NEW".equals(newStatusName)) {
+            logger.warn("Cannot update milestone ID: {} to {} when not visible", assignment.getId(), newStatusName);
+            throw new ValidationException("Milestone must be visible to change status to " + newStatusName, "ERR_MILESTONE_NOT_VISIBLE");
         }
     }
 
@@ -958,10 +987,10 @@ public class ProjectServiceImpl implements ProjectService {
                 deptUserIds.add(userId);
             }
             assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-                    deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
+                    deptUserIds, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(), milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()), pageable);
         } else {
             assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdAndIsVisibleTrueAndStatusIn(
-                    userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
+                    userId, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(), milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()), pageable);
         }
 
         List<ProjectMilestoneAssignment> assignments = assignmentPage.getContent();
@@ -984,7 +1013,6 @@ public class ProjectServiceImpl implements ProjectService {
         List<AssignedProjectResponseDto> pagedDtos = projectDtos.subList(start, end);
         return new PageImpl<>(pagedDtos, PageRequest.of(page, size), projectDtos.size());
     }
-
 
     @Override
     public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
@@ -1036,10 +1064,10 @@ public class ProjectServiceImpl implements ProjectService {
                 managedUserIds.add(userId); // Include the manager themselves if they are assigned
             }
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-                    projectId, managedUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+                    projectId, managedUserIds, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(), milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()));
         } else {
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
-                    projectId, userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+                    projectId, userId, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(), milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()));
         }
 
         for (ProjectMilestoneAssignment assignment : assignments) {
@@ -1146,7 +1174,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setProjectName(assignment.getProject().getName());
         dto.setMilestoneId(assignment.getMilestone().getId());
         dto.setMilestoneName(assignment.getMilestone().getName());
-        dto.setStatus(assignment.getStatus().name());
+        dto.setStatus(assignment.getStatus().getName());
         dto.setStatusReason(assignment.getStatusReason());
         dto.setVisibilityReason(assignment.getVisibilityReason());
         dto.setReworkAttempts(assignment.getReworkAttempts());
@@ -1176,6 +1204,9 @@ public class ProjectServiceImpl implements ProjectService {
         DocumentResponseDto dto = new DocumentResponseDto();
         dto.setId(document.getId());
         dto.setFileUrl(document.getFileUrl());
+        dto.setFileName(document.getFileName());
+        dto.setOldFileUrl(document.getOldFileUrl());
+        dto.setOldFileName(document.getOldFileName());
         dto.setStatus(document.getStatus());
         dto.setRemarks(document.getRemarks());
         dto.setUploadTime(document.getUploadTime());
@@ -1185,6 +1216,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setUploadedById(document.getUploadedBy().getId());
         dto.setCreatedDate(document.getCreatedDate());
         dto.setUpdatedDate(document.getUpdatedDate());
+        dto.setReplacementCount(document.getReplacementCount());
         return dto;
     }
 }
