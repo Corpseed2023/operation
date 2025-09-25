@@ -291,7 +291,6 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
 
-
     @Override
     public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
         logger.info("Fetching projects for user ID: {}, page: {}, size: {}", userId, page, size);
