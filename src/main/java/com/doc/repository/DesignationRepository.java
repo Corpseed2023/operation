@@ -37,7 +37,7 @@ public interface DesignationRepository extends JpaRepository<Designation, Long> 
 
     // Fetch a designation by ID where isDeleted is false
     @Query("SELECT d FROM Designation d WHERE d.id = :id AND d.isDeleted = false")
-    Optional<Designation> findByIdAndIsDeletedFalse(Long id);
+    Optional<Designation> findActiveUserById(Long id);
 
     // Fetch all non-deleted designations with pagination
     @Query("SELECT d FROM Designation d WHERE d.isDeleted = false")

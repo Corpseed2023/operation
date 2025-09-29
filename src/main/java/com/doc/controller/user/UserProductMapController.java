@@ -97,4 +97,19 @@ public class UserProductMapController {
         Object response = userProductMapService.getUserProductMaps(groupBy);
         return ResponseEntity.ok(response);
     }
+
+    // Additions to UserProductMapController
+    @GetMapping("/user/{userId}/active-products")
+    public ResponseEntity<List<UserProductMapResponseDto>> getActiveProductsForUser(@PathVariable Long userId) {
+        logger.info("Received request to fetch active products for user ID: {}", userId);
+        List<UserProductMapResponseDto> responses = userProductMapService.getActiveProductsForUser(userId);
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/product/{productId}/active-users")
+    public ResponseEntity<List<UserProductMapResponseDto>> getActiveUsersForProduct(@PathVariable Long productId) {
+        logger.info("Received request to fetch active users for product ID: {}", productId);
+        List<UserProductMapResponseDto> responses = userProductMapService.getActiveUsersForProduct(productId);
+        return ResponseEntity.ok(responses);
+    }
 }

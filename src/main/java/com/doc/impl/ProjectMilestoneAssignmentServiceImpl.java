@@ -67,13 +67,13 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
         logger.info("Updating milestone assignment ID: {} to status: {}", updateDto.getAssignmentId(), updateDto.getNewStatusName());
-        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findByIdAndIsDeletedFalse(updateDto.getAssignmentId())
+        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findActiveUserById(updateDto.getAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", updateDto.getAssignmentId());
                     return new ResourceNotFoundException("Milestone assignment with ID " + updateDto.getAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
-        User changedBy = userRepository.findByIdAndIsDeletedFalse(updateDto.getChangedById())
+        User changedBy = userRepository.findActiveUserById(updateDto.getChangedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", updateDto.getChangedById());
                     return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
@@ -148,19 +148,19 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     public void reassignMilestone(ReassignMilestoneDto reassignDto) {
         logger.info("Reassigning milestone assignment ID: {} to user ID: {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
 
-        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findByIdAndIsDeletedFalse(reassignDto.getAssignmentId())
+        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findActiveUserById(reassignDto.getAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", reassignDto.getAssignmentId());
                     return new ResourceNotFoundException("Milestone assignment with ID " + reassignDto.getAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
-        User newUser = userRepository.findByIdAndIsDeletedFalse(reassignDto.getNewUserId())
+        User newUser = userRepository.findActiveUserById(reassignDto.getNewUserId())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", reassignDto.getNewUserId());
                     return new ResourceNotFoundException("User with ID " + reassignDto.getNewUserId() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
-        User changedBy = userRepository.findByIdAndIsDeletedFalse(reassignDto.getChangedById())
+        User changedBy = userRepository.findActiveUserById(reassignDto.getChangedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", reassignDto.getChangedById());
                     return new ResourceNotFoundException("User with ID " + reassignDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
@@ -266,6 +266,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         projectMilestoneAssignmentRepository.save(assignment);
         logger.info("Milestone assignment ID: {} reassigned to user ID: {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
     }
+
 
     private void validateMilestoneStatusTransition(ProjectMilestoneAssignment assignment, MilestoneStatus newStatus, String statusReason) {
         String newStatusName = newStatus.getName();

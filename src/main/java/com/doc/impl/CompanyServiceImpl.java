@@ -184,7 +184,7 @@ public class CompanyServiceImpl implements CompanyService {
                 if (contactDto.getUpdatedBy() == null) {
                     throw new ValidationException("Contact updated by user ID cannot be null", "INVALID_CONTACT_UPDATED_BY");
                 }
-                if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalse(contactDto.getEmails(), null)) {
+                if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(contactDto.getEmails(), null)) {
                     throw new ValidationException("Contact with email " + contactDto.getEmails() + " already exists", "DUPLICATE_CONTACT_EMAIL");
                 }
             }

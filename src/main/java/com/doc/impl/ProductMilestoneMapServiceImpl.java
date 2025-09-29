@@ -51,7 +51,7 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
                 requestDto.getProductId(), requestDto.getMilestoneId());
 
         // Validate product and milestone existence
-        Product product = productRepository.findByIdAndIsDeletedFalse(requestDto.getProductId())
+        Product product = productRepository.findActiveUserById(requestDto.getProductId())
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + requestDto.getProductId()));
         Milestone milestone = milestoneRepository.findById(requestDto.getMilestoneId())
                 .orElseThrow(() -> new EntityNotFoundException("Milestone not found with ID: " + requestDto.getMilestoneId()));
@@ -90,7 +90,7 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
                 .orElseThrow(() -> new EntityNotFoundException("Product-milestone mapping not found with ID: " + id));
 
         // Validate product and milestone existence
-        Product product = productRepository.findByIdAndIsDeletedFalse(requestDto.getProductId())
+        Product product = productRepository.findActiveUserById(requestDto.getProductId())
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + requestDto.getProductId()));
         Milestone milestone = milestoneRepository.findById(requestDto.getMilestoneId())
                 .orElseThrow(() -> new EntityNotFoundException("Milestone not found with ID: " + requestDto.getMilestoneId()));

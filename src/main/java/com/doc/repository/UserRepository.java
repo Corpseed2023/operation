@@ -18,92 +18,76 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
 
     /**
-     * Checks if a user with the given email exists and is not deleted.
+     * Checks if a user with the given email exists, is active, and is not deleted.
      *
      * @param email the email address to check
-     * @return true if a user with the specified email exists and is not deleted, false otherwise
+     * @return true if a user with the specified email exists, is active, and is not deleted, false otherwise
      */
-    boolean existsByEmailAndIsDeletedFalse(String email);
+    boolean existsByEmailAndIsActiveTrueAndIsDeletedFalse(String email);
 
     /**
-     * Finds a user by ID if not deleted.
+     * Finds a user by ID if active and not deleted.
      *
      * @param id the user ID
-     * @return an Optional containing the user if found and not deleted, empty otherwise
+     * @return an Optional containing the user if found, active, and not deleted, empty otherwise
      */
-    Optional<User> findByIdAndIsDeletedFalse(Long id);
+    Optional<User> findByIdAndIsActiveTrueAndIsDeletedFalse(Long id);
 
     /**
-     * Finds an active user by ID if not deleted (for compatibility with services).
+     * Finds an active user by ID if active and not deleted (for compatibility with services).
      *
      * @param id the user ID
-     * @return an Optional containing the user if found and not deleted, empty otherwise
+     * @return an Optional containing the user if found, active, and not deleted, empty otherwise
      */
-    @Query("SELECT u FROM User u WHERE u.id = :id AND u.isDeleted = false")
+    @Query("SELECT u FROM User u WHERE u.id = :id AND u.isActive = true AND u.isDeleted = false")
     Optional<User> findActiveUserById(@Param("id") Long id);
 
     /**
-     * Finds all non-deleted users with pagination.
+     * Finds all active and non-deleted users with pagination.
      *
      * @param pageable pagination information
-     * @return a page of non-deleted users
+     * @return a page of active and non-deleted users
      */
-    Page<User> findByIsDeletedFalse(Pageable pageable);
+    Page<User> findByIsActiveTrueAndIsDeletedFalse(Pageable pageable);
+
 
     /**
-     * Finds non-deleted users by department ID with pagination.
+     * Finds active and non-deleted users by department ID (non-paginated).
      *
      * @param departmentId the department ID
-     * @param pageable pagination information
-     * @return a page of non-deleted users in the specified department
+     * @return a list of active and non-deleted users in the specified department
      */
-    Page<User> findByDepartmentsIdAndIsDeletedFalse(Long departmentId, Pageable pageable);
+    @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id = :departmentId AND u.isActive = true AND u.isDeleted = false")
+    List<User> findByDepartmentsIdAndIsActiveTrueAndIsDeletedFalse(@Param("departmentId") Long departmentId);
+
 
     /**
-     * Finds non-deleted users by department ID (non-paginated).
+     * Finds users with the ADMIN role who are active and not deleted.
      *
-     * @param departmentId the department ID
-     * @return a list of non-deleted users in the specified department
+     * @return a list of active and non-deleted users with the ADMIN role
      */
-    @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id = :departmentId AND u.isDeleted = false")
-    List<User> findByDepartmentsIdAndIsDeletedFalse(@Param("departmentId") Long departmentId);
-
-    /**
-     * Finds non-deleted users by manager flag with pagination.
-     *
-     * @param managerFlag the manager flag
-     * @param pageable pagination information
-     * @return a page of non-deleted users with the specified manager flag
-     */
-    Page<User> findByManagerFlagAndIsDeletedFalse(boolean managerFlag, Pageable pageable);
-
-    /**
-     * Finds users with the ADMIN role who are not deleted.
-     *
-     * @return a list of non-deleted users with the ADMIN role
-     */
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = 'ADMIN' AND u.isDeleted = false")
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = 'ADMIN' AND u.isActive = true AND u.isDeleted = false")
     List<User> findAdmins();
 
     /**
-     * Finds non-deleted users managed by a specific manager with pagination.
+     * Finds active and non-deleted users managed by a specific manager with pagination.
      *
      * @param managerId the ID of the manager
      * @param pageable pagination information
-     * @return a page of non-deleted users managed by the specified manager
+     * @return a page of active and non-deleted users managed by the specified manager
      */
-    @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isDeleted = false")
+    @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isActive = true AND u.isDeleted = false")
     Page<User> findByManagerIdAndIsDeletedFalseList(@Param("managerId") Long managerId, Pageable pageable);
 
     /**
-     * Finds non-deleted users by department IDs.
+     * Finds active and non-deleted users by department IDs.
      *
      * @param deptIds the list of department IDs
-     * @return a list of non-deleted users in the specified departments
+     * @return a list of active and non-deleted users in the specified departments
      */
-    @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id IN :deptIds AND u.isDeleted = false")
+    @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id IN :deptIds AND u.isActive = true AND u.isDeleted = false")
     List<User> findByDepartmentIdsIn(@Param("deptIds") List<Long> deptIds);
 
-    @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isDeleted = false")
+    @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isActive = true AND u.isDeleted = false")
     List<User> findByManagerIdAndIsDeletedFalse(@Param("managerId") Long managerId);
 }

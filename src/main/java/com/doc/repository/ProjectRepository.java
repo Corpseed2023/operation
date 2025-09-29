@@ -35,7 +35,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @return an {@link Optional} containing the project if found and not deleted, empty otherwise
      */
     @Query("SELECT p FROM Project p WHERE p.id = :id AND p.isDeleted = false")
-    Optional<Project> findByIdAndIsDeletedFalse(@Param("id") Long id);
+    Optional<Project> findActiveUserById(@Param("id") Long id);
 
     /**
      * Retrieves all non-deleted projects with pagination.

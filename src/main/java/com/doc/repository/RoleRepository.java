@@ -19,7 +19,7 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
 
     boolean existsByNameAndIsDeletedFalseAndIdNot(String name, Long id);
 
-    Optional<Role> findByIdAndIsDeletedFalse(Long id);
+    Optional<Role> findActiveUserById(Long id);
 
     @Query("SELECT r FROM Role r WHERE r.isDeleted = false AND LOWER(r.name) LIKE LOWER(CONCAT('%', :name, '%'))")
     Page<Role> findByNameContainingIgnoreCaseAndIsDeletedFalse(@Param("name") String name, Pageable pageable);

@@ -75,14 +75,14 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         String sanitizedFileUrl = bucketUrl + "/" + sanitizedFileName;
 
         // Fetch entities
-        Project project = projectRepository.findByIdAndIsDeletedFalse(requestDto.getProjectId())
+        Project project = projectRepository.findActiveUserById(requestDto.getProjectId())
                 .orElseThrow(() -> {
                     logger.error("Project with ID {} not found or is deleted", requestDto.getProjectId());
                     return new ResourceNotFoundException("Project with ID " + requestDto.getProjectId() + " not found or is deleted", "PROJECT_NOT_FOUND");
                 });
 
         ProjectMilestoneAssignment milestoneAssignment = projectMilestoneAssignmentRepository
-                .findByIdAndIsDeletedFalse(requestDto.getMilestoneAssignmentId())
+                .findActiveUserById(requestDto.getMilestoneAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment with ID {} not found or is deleted", requestDto.getMilestoneAssignmentId());
                     return new ResourceNotFoundException("Milestone assignment with ID " + requestDto.getMilestoneAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
@@ -100,13 +100,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("Required document with ID " + requestDto.getRequiredDocumentId() + " not found or is deleted", "DOCUMENT_NOT_FOUND");
                 });
 
-        User uploadedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUploadedById())
+        User uploadedBy = userRepository.findActiveUserById(requestDto.getUploadedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", requestDto.getUploadedById());
                     return new ResourceNotFoundException("User with ID " + requestDto.getUploadedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
-        User createdBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getCreatedById())
+        User createdBy = userRepository.findActiveUserById(requestDto.getCreatedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", requestDto.getCreatedById());
                     return new ResourceNotFoundException("User with ID " + requestDto.getCreatedById() + " not found or is deleted", "USER_NOT_FOUND");
@@ -171,13 +171,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         logger.info("Updating document status for ID: {} to {}", documentId, updateDto.getNewStatus());
 
         // Fetch document
-        ProjectDocumentUpload documentUpload = projectDocumentUploadRepository.findByIdAndIsDeletedFalse(documentId)
+        ProjectDocumentUpload documentUpload = projectDocumentUploadRepository.findActiveUserById(documentId)
                 .orElseThrow(() -> {
                     logger.error("Document upload with ID {} not found or is deleted", documentId);
                     return new ResourceNotFoundException("Document upload with ID " + documentId + " not found or is deleted", "DOCUMENT_UPLOAD_NOT_FOUND");
                 });
 
-        User changedBy = userRepository.findByIdAndIsDeletedFalse(updateDto.getChangedById())
+        User changedBy = userRepository.findActiveUserById(updateDto.getChangedById())
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", updateDto.getChangedById());
                     return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");

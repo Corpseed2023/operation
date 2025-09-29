@@ -44,13 +44,13 @@ public class UserProductMapServiceImpl implements UserProductMapService {
 
         validateRequestDto(requestDto);
 
-        User createdBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getCreatedBy())
+        User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
                 .orElseThrow(() -> {
                     logger.error("Created by user with ID {} not found or is deleted", requestDto.getCreatedBy());
                     return new ResourceNotFoundException("Created by user with ID " + requestDto.getCreatedBy() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
-        User updatedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUpdatedBy())
+        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
                 .orElseThrow(() -> {
                     logger.error("Updated by user with ID {} not found or is deleted", requestDto.getUpdatedBy());
                     return new ResourceNotFoundException("Updated by user with ID " + requestDto.getUpdatedBy() + " not found or is deleted", "USER_NOT_FOUND");
@@ -59,7 +59,7 @@ public class UserProductMapServiceImpl implements UserProductMapService {
         List<UserProductMapResponseDto> responseDtos = new ArrayList<>();
 
         for (Long userId : requestDto.getUserIds()) {
-            User user = userRepository.findByIdAndIsDeletedFalse(userId)
+            User user = userRepository.findActiveUserById(userId)
                     .orElseThrow(() -> {
                         logger.error("User with ID {} not found or is deleted", userId);
                         return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "USER_NOT_FOUND");
@@ -71,7 +71,7 @@ public class UserProductMapServiceImpl implements UserProductMapService {
                     continue; // Skip existing mapping
                 }
 
-                Product product = productRepository.findByIdAndIsDeletedFalse(productId)
+                Product product = productRepository.findActiveUserById(productId)
                         .orElseThrow(() -> {
                             logger.error("Product with ID {} not found or is deleted", productId);
                             return new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted", "PRODUCT_NOT_FOUND");
@@ -146,19 +146,19 @@ public class UserProductMapServiceImpl implements UserProductMapService {
             }
         }
 
-        User user = userRepository.findByIdAndIsDeletedFalse(requestUserId)
+        User user = userRepository.findActiveUserById(requestUserId)
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", requestUserId);
                     return new ResourceNotFoundException("User with ID " + requestUserId + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
-        Product product = productRepository.findByIdAndIsDeletedFalse(requestProductId)
+        Product product = productRepository.findActiveUserById(requestProductId)
                 .orElseThrow(() -> {
                     logger.error("Product with ID {} not found or is deleted", requestProductId);
                     return new ResourceNotFoundException("Product with ID " + requestProductId + " not found or is deleted", "PRODUCT_NOT_FOUND");
                 });
 
-        User updatedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUpdatedBy())
+        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
                 .orElseThrow(() -> {
                     logger.error("Updated by user with ID {} not found or is deleted", requestDto.getUpdatedBy());
                     return new ResourceNotFoundException("Updated by user with ID " + requestDto.getUpdatedBy() + " not found or is deleted", "USER_NOT_FOUND");
@@ -341,5 +341,34 @@ public class UserProductMapServiceImpl implements UserProductMapService {
         }
     }
 
+
+    // Additions to UserProductMapServiceImpl
+    @Override
+    public List<UserProductMapResponseDto> getActiveProductsForUser(Long userId) {
+        logger.info("Fetching active products for user ID: {}", userId);
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> {
+                    logger.error("User with ID {} not found or is inactive/deleted", userId);
+                    return new ResourceNotFoundException("User with ID " + userId + " not found or is inactive/deleted", "USER_NOT_FOUND");
+                });
+        List<UserProductMap> mappings = userProductMapRepository.findActiveProductsForUser(userId);
+        return mappings.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<UserProductMapResponseDto> getActiveUsersForProduct(Long productId) {
+        logger.info("Fetching active users for product ID: {}", productId);
+        productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(productId)
+                .orElseThrow(() -> {
+                    logger.error("Product with ID {} not found or is inactive/deleted", productId);
+                    return new ResourceNotFoundException("Product with ID " + productId + " not found or is inactive/deleted", "PRODUCT_NOT_FOUND");
+                });
+        List<UserProductMap> mappings = userProductMapRepository.findActiveUsersForProduct(productId);
+        return mappings.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
 
 }

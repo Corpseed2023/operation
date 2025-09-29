@@ -11,6 +11,8 @@ import java.util.List;
 @Component
 public class ProjectRequestValidator {
 
+
+
     private static final Logger logger = LoggerFactory.getLogger(ProjectRequestValidator.class);
 
     public void validate(ProjectRequestDto requestDto) {
@@ -40,10 +42,7 @@ public class ProjectRequestValidator {
             logger.warn("Paid amount {} exceeds total amount {}", requestDto.getPaidAmount(), requestDto.getTotalAmount());
             throw new ValidationException("Paid amount cannot exceed total amount", "ERR_EXCEEDS_TOTAL_AMOUNT");
         }
-        if (!List.of("PENDING", "APPROVED", "REJECTED").contains(requestDto.getPaymentStatus())) {
-            logger.warn("Invalid payment status: {}", requestDto.getPaymentStatus());
-            throw new ValidationException("Payment status must be PENDING, APPROVED, or REJECTED", "ERR_INVALID_PAYMENT_STATUS");
-        }
+
         if (requestDto.getProductId() == null) {
 
             logger.warn("Product ID is null");

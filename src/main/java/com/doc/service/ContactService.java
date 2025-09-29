@@ -7,13 +7,14 @@ import java.util.List;
 
 public interface ContactService {
 
-    ContactResponseDto createContact(ContactRequestDto requestDto);
 
-    ContactResponseDto getContactById(Long id);
-
-    List<ContactResponseDto> getAllContacts(int page, int size);
+    List<ContactResponseDto> getAllContacts(int page, int size, Long companyId, Long userId);
 
     ContactResponseDto updateContact(Long id, ContactRequestDto requestDto);
 
     void deleteContact(Long id);
+
+    ContactResponseDto createContact(ContactRequestDto requestDto);
+
+    ContactResponseDto getContactById(Long id);
 }

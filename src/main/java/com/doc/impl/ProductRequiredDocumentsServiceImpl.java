@@ -87,6 +87,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             document.setCreatedDate(new Date());
             document.setUpdatedDate(new Date());
             document.setDeleted(false);
+            document.setActive(true);  // Added
             document.setProducts(products);
 
             for (Product product : products) {
@@ -101,7 +102,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
         return responseList;
     }
-
     @Override
     public ProductRequiredDocumentsResponseDto updateRequiredDocument(Long id, ProductRequiredDocumentsRequestDto requestDto) {
         validateRequestDto(requestDto);
@@ -171,13 +171,13 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
     @Override
     public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProjectAndProduct(Long projectId, Long productId, Long userId) {
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+        User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "USER_NOT_FOUND"));
 
-        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
+        Project project = projectRepository.findActiveUserById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted", "PROJECT_NOT_FOUND"));
 
-        Product product = productRepository.findByIdAndIsDeletedFalse(productId)
+        Product product = productRepository.findActiveUserById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted", "PRODUCT_NOT_FOUND"));
 
         if (!project.getProduct().getId().equals(productId)) {
@@ -210,10 +210,10 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     @Override
     public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProduct(Long productId, Long projectId,
                                                                                    String stateName, String centralName) {
-        Product product = productRepository.findByIdAndIsDeletedFalse(productId)
+        Product product = productRepository.findActiveUserById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted", "PRODUCT_NOT_FOUND"));
 
-        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
+        Project project = projectRepository.findActiveUserById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted", "PROJECT_NOT_FOUND"));
 
         if (!project.getProduct().getId().equals(productId)) {
@@ -315,5 +315,37 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         dto.setCreatedDate(documentUpload.getCreatedDate());
         dto.setUpdatedDate(documentUpload.getUpdatedDate());
         return dto;
+    }
+
+    @Override
+    public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsForAdmin(Long productId, Long userId, String stateName, String centralName) {
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "USER_NOT_FOUND"));
+
+        boolean isAuthorized = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN") || role.getName().equals("OPERATION_HEAD"));
+        if (!isAuthorized) {
+            throw new ValidationException("User is not authorized to access this information", "UNAUTHORIZED_ACCESS");
+        }
+
+        Product product = productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + productId + " not found or is deleted", "PRODUCT_NOT_FOUND"));
+
+        List<ProductRequiredDocuments> documents = product.getRequiredDocuments()
+                .stream()
+                .filter(doc -> !doc.isDeleted() && doc.isActive())
+                .filter(doc -> {
+                    if (stateName != null && !stateName.isEmpty()) {
+                        return doc.getStateName().equalsIgnoreCase(stateName);
+                    } else if (centralName != null && !centralName.isEmpty()) {
+                        return doc.getCentralName().equalsIgnoreCase(centralName) && doc.getStateName().isEmpty();
+                    } else {
+                        return true;
+                    }
+                })
+                .collect(Collectors.toList());
+
+        return documents.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
     }
 }

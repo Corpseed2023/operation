@@ -18,21 +18,20 @@ import java.util.List;
 @NoArgsConstructor
 public class User {
 
-
     @Id
     @Comment("Primary key: User ID")
     private Long id;
 
     @Column(name = "full_name")
-    @Comment("Users full name") // Removed single quote
+    @Comment("Users full name")
     private String fullName;
 
     @Column(name = "email")
-    @Comment("Users email address") // Removed single quote
+    @Comment("Users email address")
     private String email;
 
     @Column(name = "contact_no")
-    @Comment("Users contact number") // Removed single quote
+    @Comment("Users contact number")
     private String contactNo;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -60,7 +59,7 @@ public class User {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
-    @Comment("Users manager") // Removed single quote
+    @Comment("Users manager")
     private User manager;
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
@@ -86,4 +85,8 @@ public class User {
     @Column(name = "is_deleted", nullable = false)
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
+
+    @Column(name = "is_active", nullable = false)
+    @Comment("Active status flag")
+    private boolean isActive = true;
 }

@@ -50,4 +50,8 @@ public interface UserProductMapService {
     void deleteUserProductMap(Long id);
 
     Object getUserProductMaps(String groupBy);
+
+    // Additions to UserProductMapService interface
+    List<UserProductMapResponseDto> getActiveProductsForUser(Long userId);
+    List<UserProductMapResponseDto> getActiveUsersForProduct(Long productId);
 }

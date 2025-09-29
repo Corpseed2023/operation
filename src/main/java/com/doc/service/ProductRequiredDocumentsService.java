@@ -20,4 +20,5 @@ public interface ProductRequiredDocumentsService {
                                                                             String stateName, String centralName);
 
 
+    List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsForAdmin(Long productId, Long userId, String stateName, String centralName);
 }

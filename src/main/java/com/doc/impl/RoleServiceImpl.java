@@ -56,7 +56,7 @@ public class RoleServiceImpl implements RoleService {
     @Override
     public RoleResponseDto getRoleById(Long id) {
         logger.info("Fetching role with ID: {}", id);
-        Role role = roleRepository.findByIdAndIsDeletedFalse(id)
+        Role role = roleRepository.findActiveUserById(id)
                 .orElseThrow(() -> {
                     logger.error("Role not found with ID: {}", id);
                     return new ResourceNotFoundException("Role with ID " + id + " not found", "ERR_ROLE_NOT_FOUND");
@@ -90,7 +90,7 @@ public class RoleServiceImpl implements RoleService {
         logger.info("Updating role with ID: {}", id);
         validateRequestDto(requestDto);
 
-        Role role = roleRepository.findByIdAndIsDeletedFalse(id)
+        Role role = roleRepository.findActiveUserById(id)
                 .orElseThrow(() -> {
                     logger.error("Role not found with ID: {}", id);
                     return new ResourceNotFoundException("Role with ID " + id + " not found", "ERR_ROLE_NOT_FOUND");
@@ -114,7 +114,7 @@ public class RoleServiceImpl implements RoleService {
     @Override
     public void deleteRole(Long id) {
         logger.info("Deleting role with ID: {}", id);
-        Role role = roleRepository.findByIdAndIsDeletedFalse(id)
+        Role role = roleRepository.findActiveUserById(id)
                 .orElseThrow(() -> {
                     logger.error("Role not found with ID: {}", id);
                     return new ResourceNotFoundException("Role with ID " + id + " not found", "ERR_ROLE_NOT_FOUND");

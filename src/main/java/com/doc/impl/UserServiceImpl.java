@@ -53,7 +53,7 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("User with ID " + requestDto.getId() + " already exists", "DUPLICATE_USER_ID");
         }
 
-        if (userRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail().trim())) {
+        if (userRepository.existsByEmailAndIsActiveTrueAndIsDeletedFalse(requestDto.getEmail().trim())) {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists", "DUPLICATE_EMAIL");
         }
 
@@ -68,6 +68,7 @@ public class UserServiceImpl implements UserService {
         user.setCreatedDate(new Date());
         user.setUpdatedDate(new Date());
         user.setDeleted(false);
+        user.setActive(true);
         user.setUserDesignation(designation);
         user.setDepartments(departments);
         user.setRoles(roles);
@@ -81,7 +82,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserResponseDto getUserById(Long id) {
         logger.info("Fetching user with ID: {}", id);
-        User user = userRepository.findByIdAndIsDeletedFalse(id)
+        User user = userRepository.findActiveUserById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found", "USER_NOT_FOUND"));
         return mapToResponseDto(user);
     }
@@ -89,7 +90,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public List<UserResponseDto> getAllUsers(int page, int size, Long userId) {
         logger.info("Fetching users for userId: {}, page: {}, size: {}", userId, page, size);
-        User requestingUser = userRepository.findByIdAndIsDeletedFalse(userId)
+        User requestingUser = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Requesting user with ID " + userId + " not found", "USER_NOT_FOUND"));
 
         PageRequest pageable = PageRequest.of(page, size);
@@ -100,7 +101,7 @@ public class UserServiceImpl implements UserService {
 
         if (isAdminOrOpHead) {
             logger.info("User {} has ADMIN or Operation Head role, fetching all users", userId);
-            userPage = userRepository.findByIsDeletedFalse(pageable);
+            userPage = userRepository.findByIsActiveTrueAndIsDeletedFalse(pageable);
         } else if (requestingUser.isManagerFlag()) {
             logger.info("User {} is a manager, fetching managed users", userId);
             userPage = userRepository.findByManagerIdAndIsDeletedFalseList(userId, pageable);
@@ -120,11 +121,11 @@ public class UserServiceImpl implements UserService {
         logger.info("Updating user with ID: {}, email: {}, roleIds: {}", id, requestDto.getEmail(), requestDto.getRoleIds());
         validateRequestDto(requestDto);
 
-        User user = userRepository.findByIdAndIsDeletedFalse(id)
+        User user = userRepository.findActiveUserById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found", "USER_NOT_FOUND"));
 
         if (!user.getEmail().equals(requestDto.getEmail().trim()) &&
-                userRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail().trim())) {
+                userRepository.existsByEmailAndIsActiveTrueAndIsDeletedFalse(requestDto.getEmail().trim())) {
             throw new ValidationException("User with email " + requestDto.getEmail() + " already exists", "DUPLICATE_EMAIL");
         }
 
@@ -147,7 +148,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void deleteUser(Long id) {
         logger.info("Deleting user with ID: {}", id);
-        User user = userRepository.findByIdAndIsDeletedFalse(id)
+        User user = userRepository.findActiveUserById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found", "USER_NOT_FOUND"));
         user.setDeleted(true);
         user.setUpdatedDate(new Date());
@@ -209,7 +210,7 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("Manager ID is required for non-ADMIN roles", "INVALID_MANAGER_ID");
         }
         if (managerId != null) {
-            return userRepository.findByIdAndIsDeletedFalse(managerId)
+            return userRepository.findActiveUserById(managerId)
                     .orElseThrow(() -> new ResourceNotFoundException("Manager with ID " + managerId + " not found", "MANAGER_NOT_FOUND"));
         }
         return null;

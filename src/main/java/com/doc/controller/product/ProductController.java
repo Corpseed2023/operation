@@ -42,13 +42,16 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<List<ProductResponseDto>> getAllProducts(
+            @RequestParam Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         logger.info("Fetching active and non-deleted products, page: {}, size: {}", page, size);
-        List<ProductResponseDto> responses = productService.getAllProducts(page, size);
+        List<ProductResponseDto> responses = productService.getAllProducts(userId, page, size);
         logger.info("Retrieved {} active and non-deleted products", responses.size());
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
+
+
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {

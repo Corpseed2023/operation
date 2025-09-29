@@ -87,15 +87,25 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductResponseDto getProductById(Long id) {
         logger.info("Fetching product with ID: {}", id);
-        Product product = productRepository.findById(id)
-                .filter(p -> !p.isDeleted())
+        Product product = productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product with ID " + id + " not found", "PRODUCT_NOT_FOUND"));
         return mapToResponseDto(product);
     }
 
     @Override
-    public List<ProductResponseDto> getAllProducts(int page, int size) {
-        logger.info("Fetching active and non-deleted products, page: {}, size: {}", page, size);
+    public List<ProductResponseDto> getAllProducts(Long userId, int page, int size) {
+        logger.info("Fetching active and non-deleted products for user ID: {}, page: {}, size: {}", userId, page, size);
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + userId + " not found", "USER_NOT_FOUND"));
+
+        boolean hasRequiredRole = user.getRoles().stream()
+                .anyMatch(role -> role.getName().equals("ADMIN") || role.getName().equals("OPERATION_HEAD"));
+
+        if (!hasRequiredRole) {
+            throw new ValidationException("User does not have the required role to access all products", "INSUFFICIENT_PRIVILEGES");
+        }
+
         PageRequest pageable = PageRequest.of(page, size);
         Page<Product> productPage = productRepository.findByIsActiveTrueAndIsDeletedFalse(pageable);
 
@@ -106,6 +116,8 @@ public class ProductServiceImpl implements ProductService {
         logger.info("Retrieved {} active and non-deleted products", responses.size());
         return responses;
     }
+
+
 
     @Override
     public void deleteProduct(Long id) {

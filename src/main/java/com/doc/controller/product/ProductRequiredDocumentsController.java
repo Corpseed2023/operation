@@ -55,4 +55,15 @@ public class ProductRequiredDocumentsController {
                         productId, requestDto.getProjectId(), requestDto.getStateName(), requestDto.getCentralName());
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
+
+    @GetMapping("/admin/product/{productId}")
+    public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> getRequiredDocumentsForAdmin(
+            @PathVariable Long productId,
+            @RequestParam Long userId,
+            @RequestParam(required = false) String stateName,
+            @RequestParam(required = false) String centralName) {
+        List<ProductRequiredDocumentsResponseDto> responses =
+                requiredDocumentsService.getRequiredDocumentsForAdmin(productId, userId, stateName, centralName);
+        return new ResponseEntity<>(responses, HttpStatus.OK);
+    }
 }

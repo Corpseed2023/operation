@@ -30,7 +30,7 @@ public class UserOnlineStatusServiceImpl implements UserLoginStatusService {
     @Override
     public UserLoginStatusResponseDto setOnline(Long userId) {
         logger.info("Setting user ID: {} to online", userId);
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+        User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> {
                     logger.error("User with ID {} not found or is deleted", userId);
                     return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted", "USER_NOT_FOUND");

@@ -86,7 +86,7 @@ public class DesignationServiceImpl implements DesignationService {
     @Override
     public DesignationResponseDto getDesignationById(Long id) {
         logger.info("Fetching designation with ID: {}", id);
-        Designation designation = designationRepository.findByIdAndIsDeletedFalse(id)
+        Designation designation = designationRepository.findActiveUserById(id)
                 .orElseThrow(() -> {
                     logger.error("Designation with ID {} not found or is deleted", id);
                     return new ResourceNotFoundException("Designation with ID " + id + " not found", "ERR_DESIGNATION_NOT_FOUND");
@@ -120,7 +120,7 @@ public class DesignationServiceImpl implements DesignationService {
         logger.info("Updating designation with ID: {}", id);
         validateRequestDto(requestDto);
 
-        Designation designation = designationRepository.findByIdAndIsDeletedFalse(id)
+        Designation designation = designationRepository.findActiveUserById(id)
                 .orElseThrow(() -> {
                     logger.error("Designation with ID {} not found or is deleted", id);
                     return new ResourceNotFoundException("Designation with ID " + id + " not found", "ERR_DESIGNATION_NOT_FOUND");
@@ -152,7 +152,7 @@ public class DesignationServiceImpl implements DesignationService {
     @Override
     public void deleteDesignation(Long id) {
         logger.info("Deleting designation with ID: {}", id);
-        Designation designation = designationRepository.findByIdAndIsDeletedFalse(id)
+        Designation designation = designationRepository.findActiveUserById(id)
                 .orElseThrow(() -> {
                     logger.error("Designation with ID {} not found or is deleted", id);
                     return new ResourceNotFoundException("Designation with ID " + id + " not found", "ERR_DESIGNATION_NOT_FOUND");

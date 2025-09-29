@@ -26,7 +26,7 @@ public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDo
      * @param id the document upload ID
      * @return an Optional containing the document upload if found and not deleted
      */
-    Optional<ProjectDocumentUpload> findByIdAndIsDeletedFalse(Long id);
+    Optional<ProjectDocumentUpload> findActiveUserById(Long id);
 
     /**
      * Checks if a non-deleted document upload exists for the given project, milestone assignment, and required document.

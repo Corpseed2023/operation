@@ -33,7 +33,7 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
      * @param assignmentId The ID of the milestone assignment.
      * @return An Optional containing the ProjectMilestoneAssignment if found, or empty if not found or deleted.
      */
-    Optional<ProjectMilestoneAssignment> findByIdAndIsDeletedFalse(@Param("assignmentId") Long assignmentId);
+    Optional<ProjectMilestoneAssignment> findActiveUserById(@Param("assignmentId") Long assignmentId);
 
     /**
      * Finds all non-deleted ProjectMilestoneAssignment entities with pagination.

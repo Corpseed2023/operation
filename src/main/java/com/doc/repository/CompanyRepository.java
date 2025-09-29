@@ -21,7 +21,7 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
     Page<Company> findByIsDeletedFalse(Pageable pageable);
 
     @Query("SELECT c FROM Company c WHERE c.id = :id AND c.isDeleted = false")
-    Optional<Company> findByIdAndIsDeletedFalse(@Param("id") Long id);
+    Optional<Company> findActiveUserById(@Param("id") Long id);
 
 
 

@@ -67,6 +67,10 @@ public class ProductRequiredDocuments {
     @Comment("Is Deleted flag (soft delete)")
     private boolean isDeleted = false;
 
+    @Column(nullable = false)
+    @Comment("Active status flag")
+    private boolean isActive = true;
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", nullable = false, updatable = false)
     @Comment("Date when the document was created")

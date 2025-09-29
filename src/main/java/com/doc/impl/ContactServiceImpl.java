@@ -45,7 +45,7 @@ public class ContactServiceImpl implements ContactService {
 
         // Check for duplicate email within the company (or globally if companyId is null)
         Long companyId = requestDto.getCompanyId();
-        if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalse(requestDto.getEmails(), companyId)) {
+        if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getEmails(), companyId)) {
             throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
         }
 
@@ -65,6 +65,7 @@ public class ContactServiceImpl implements ContactService {
         contact.setUpdatedDate(new Date());
         contact.setUpdatedBy(requestDto.getCreatedBy());
         contact.setDeleteStatus(false);
+        contact.setActive(true);
 
         contact = contactRepository.save(contact);
         return mapToResponseDto(contact);
@@ -73,17 +74,25 @@ public class ContactServiceImpl implements ContactService {
     @Override
     public ContactResponseDto getContactById(Long id) {
         logger.info("Fetching contact with ID: {}", id);
-        Contact contact = contactRepository.findById(id)
-                .filter(c -> !c.isDeleteStatus())
+        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
         return mapToResponseDto(contact);
     }
 
     @Override
-    public List<ContactResponseDto> getAllContacts(int page, int size) {
-        logger.info("Fetching contacts, page: {}, size: {}", page, size);
+    public List<ContactResponseDto> getAllContacts(int page, int size, Long companyId, Long userId) {
+        logger.info("Fetching contacts, page: {}, size: {}, companyId: {}, userId: {}", page, size, companyId, userId);
         PageRequest pageable = PageRequest.of(page, size);
-        Page<Contact> contactPage = contactRepository.findByDeleteStatusFalse(pageable);
+        Page<Contact> contactPage;
+        if (companyId != null && userId != null) {
+            contactPage = contactRepository.findByCompanyIdAndCreatedByAndDeleteStatusFalseAndIsActiveTrue(companyId, userId, pageable);
+        } else if (companyId != null) {
+            contactPage = contactRepository.findByCompanyIdAndDeleteStatusFalseAndIsActiveTrue(companyId, pageable);
+        } else if (userId != null) {
+            contactPage = contactRepository.findByCreatedByAndDeleteStatusFalseAndIsActiveTrue(userId, pageable);
+        } else {
+            contactPage = contactRepository.findByDeleteStatusFalseAndIsActiveTrue(pageable);
+        }
         return contactPage.getContent()
                 .stream()
                 .map(this::mapToResponseDto)
@@ -96,14 +105,13 @@ public class ContactServiceImpl implements ContactService {
                 id, requestDto.getEmails(), requestDto.getCompanyId());
         validateRequestDto(requestDto);
 
-        Contact contact = contactRepository.findById(id)
-                .filter(c -> !c.isDeleteStatus())
+        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
 
         // Check for duplicate email within the company (or globally if companyId is null)
         Long companyId = requestDto.getCompanyId();
         if (!contact.getEmails().equals(requestDto.getEmails()) &&
-                contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalse(requestDto.getEmails(), companyId)) {
+                contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getEmails(), companyId)) {
             throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
         }
 
@@ -126,11 +134,11 @@ public class ContactServiceImpl implements ContactService {
     @Override
     public void deleteContact(Long id) {
         logger.info("Deleting contact with ID: {}", id);
-        Contact contact = contactRepository.findById(id)
-                .filter(c -> !c.isDeleteStatus())
+        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
 
         contact.setDeleteStatus(true);
+        contact.setActive(false);
         contact.setUpdatedDate(new Date());
         contactRepository.save(contact);
     }

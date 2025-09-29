@@ -50,6 +50,10 @@ public class Contact {
     @Comment("Soft delete flag")
     private boolean deleteStatus = false;
 
+    @Column(nullable = false)
+    @Comment("Active status flag")
+    private boolean isActive = true;
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(updatable = false)
     @Comment("Creation Date")

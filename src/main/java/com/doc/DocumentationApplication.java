@@ -3,14 +3,18 @@ package com.doc;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.project.MilestoneStatus;
 import com.doc.entity.project.ProjectStatus;
-
+import com.doc.entity.client.PaymentType;
 import com.doc.repository.MilestoneStatusRepository;
 import com.doc.repository.documentRepo.DocumentStatusRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
+import com.doc.repository.PaymentTypeRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+
+import java.time.LocalDate;
+import java.util.Date;
 
 @SpringBootApplication
 public class DocumentationApplication {
@@ -22,7 +26,8 @@ public class DocumentationApplication {
 	@Bean
 	public CommandLineRunner initStatuses(MilestoneStatusRepository milestoneStatusRepository,
 										  DocumentStatusRepository documentStatusRepository,
-										  ProjectStatusRepository projectStatusRepository) {
+										  ProjectStatusRepository projectStatusRepository,
+										  PaymentTypeRepository paymentTypeRepository) {
 		return args -> {
 			// Populate milestone_statuses if empty
 			if (milestoneStatusRepository.count() == 0) {
@@ -49,6 +54,14 @@ public class DocumentationApplication {
 				createProjectStatus(projectStatusRepository, "CANCELLED", "Project cancelled (e.g., client request)");
 				createProjectStatus(projectStatusRepository, "REFUNDED", "Project refunded (reverts visibility)");
 			}
+
+			// Populate payment_types if empty
+			if (paymentTypeRepository.count() == 0) {
+				createPaymentType(paymentTypeRepository, 1L, "FULL");
+				createPaymentType(paymentTypeRepository, 2L, "PARTIAL");
+				createPaymentType(paymentTypeRepository, 3L, "INSTALLMENT");
+				createPaymentType(paymentTypeRepository, 4L, "PURCHASE_ORDER");
+			}
 		};
 	}
 
@@ -71,5 +84,17 @@ public class DocumentationApplication {
 		status.setName(name);
 		status.setDescription(description);
 		repo.save(status);
+	}
+
+	private void createPaymentType(PaymentTypeRepository repo, Long id, String name) {
+		PaymentType paymentType = new PaymentType();
+		paymentType.setId(id);
+		paymentType.setName(name);
+		paymentType.setCreatedDate(new Date());
+		paymentType.setUpdatedDate(new Date());
+		// createdBy and updatedBy left as null (system-initialized, no user required)
+		paymentType.setDeleted(false);
+		paymentType.setDate(LocalDate.now());
+		repo.save(paymentType);
 	}
 }
