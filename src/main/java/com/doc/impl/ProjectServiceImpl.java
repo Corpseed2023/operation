@@ -78,7 +78,7 @@ public class ProjectServiceImpl implements ProjectService {
     private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
 
     @Autowired
-    private UserProjectCountRepository userProjectCountRepository;
+    private UserPerformanceCountRepository userPerformanceCountRepository;
 
     @Autowired
     private UserProductMapRepository userProductMapRepository;
@@ -521,12 +521,12 @@ public class ProjectServiceImpl implements ProjectService {
                             history.setDeleted(false);
                             projectAssignmentHistoryRepository.save(history);
 
-                            UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
+                            UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
                             if (count == null) {
-                                count = new UserProjectCount();
+                                count = new UserPerformanceCount();
                                 count.setUser(assignmentResult.user);
                                 count.setProduct(project.getProduct());
-                                count.setProjectCount(1);
+                                count.setAssignmentCount(1);
                                 count.setLastUpdatedDate(new Date());
                                 count.setCreatedDate(new Date());
                                 count.setUpdatedDate(new Date());
@@ -534,12 +534,12 @@ public class ProjectServiceImpl implements ProjectService {
                                 count.setUpdatedBy(updatedById);
                                 count.setDeleted(false);
                             } else {
-                                count.setProjectCount(count.getProjectCount() + 1);
+                                count.setAssignmentCount(count.getAssignmentCount() + 1);
                                 count.setLastUpdatedDate(new Date());
                                 count.setUpdatedDate(new Date());
                                 count.setUpdatedBy(updatedById);
                             }
-                            userProjectCountRepository.save(count);
+                            userPerformanceCountRepository.save(count);
                         }
                     } catch (ResourceNotFoundException e) {
                         logger.error("Failed to assign user to milestone {}: {}", map.getMilestone().getName(), e.getMessage());
@@ -609,12 +609,12 @@ public class ProjectServiceImpl implements ProjectService {
                             history.setDeleted(false);
                             projectAssignmentHistoryRepository.save(history);
 
-                            UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
+                            UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
                             if (count == null) {
-                                count = new UserProjectCount();
+                                count = new UserPerformanceCount();
                                 count.setUser(assignmentResult.user);
                                 count.setProduct(project.getProduct());
-                                count.setProjectCount(1);
+                                count.setAssignmentCount(1);
                                 count.setLastUpdatedDate(new Date());
                                 count.setCreatedDate(new Date());
                                 count.setUpdatedDate(new Date());
@@ -622,12 +622,12 @@ public class ProjectServiceImpl implements ProjectService {
                                 count.setUpdatedBy(updatedById);
                                 count.setDeleted(false);
                             } else {
-                                count.setProjectCount(count.getProjectCount() + 1);
+                                count.setAssignmentCount(count.getAssignmentCount() + 1);
                                 count.setLastUpdatedDate(new Date());
                                 count.setUpdatedDate(new Date());
                                 count.setUpdatedBy(updatedById);
                             }
-                            userProjectCountRepository.save(count);
+                            userPerformanceCountRepository.save(count);
                         }
                     } catch (ResourceNotFoundException e) {
                         logger.error("Failed to assign user to milestone {}: {}", map.getMilestone().getName(), e.getMessage());
@@ -643,7 +643,7 @@ public class ProjectServiceImpl implements ProjectService {
         return productMilestoneMapRepository.findByProductId(productId, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
     }
 
-     private void validateTransactionDto(ProjectPaymentTransactionDto transactionDto) {
+    private void validateTransactionDto(ProjectPaymentTransactionDto transactionDto) {
         if (transactionDto.getAmount() == null) {
             logger.warn("Transaction amount is null");
             throw new ValidationException("Transaction amount cannot be null", "ERR_NULL_AMOUNT");
@@ -708,9 +708,9 @@ public class ProjectServiceImpl implements ProjectService {
         Optional<UserProductMap> selectedMappingOpt = eligibleMappings.stream()
                 .filter(m -> !m.isAssigned())
                 .filter(m -> {
-                    UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(m.getUser().getId(), milestone.getProduct().getId());
+                    UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(m.getUser().getId(), milestone.getProduct().getId());
                     int maxProjects = getMaxProjectsForUser(m.getUser());
-                    return count == null || count.getProjectCount() < maxProjects;
+                    return count == null || count.getAssignmentCount() < maxProjects;
                 })
                 .max(Comparator.comparingDouble(m -> m.getRating() != null ? m.getRating() : 0.0));
 
@@ -721,6 +721,28 @@ public class ProjectServiceImpl implements ProjectService {
             userProductMapRepository.save(selectedMapping);
             logger.info("Assigned user: {} (ID: {}, Rating: {}) for milestone: {}",
                     selectedUser.getFullName(), selectedUser.getId(), selectedMapping.getRating(), milestone.getMilestone().getName());
+
+            // Increment assignmentCount for the selected user
+            UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(selectedUser.getId(), milestone.getProduct().getId());
+            if (count == null) {
+                count = new UserPerformanceCount();
+                count.setUser(selectedUser);
+                count.setProduct(milestone.getProduct());
+                count.setAssignmentCount(1);
+                count.setLastUpdatedDate(new Date());
+                count.setCreatedDate(new Date());
+                count.setUpdatedDate(new Date());
+                count.setCreatedBy(0L); // Placeholder, update as needed
+                count.setUpdatedBy(0L); // Placeholder
+                count.setDeleted(false);
+            } else {
+                count.setAssignmentCount(count.getAssignmentCount() + 1);
+                count.setLastUpdatedDate(new Date());
+                count.setUpdatedDate(new Date());
+                count.setUpdatedBy(0L); // Placeholder
+            }
+            userPerformanceCountRepository.save(count);
+
             return new AssignmentResult(selectedUser, "Highest rating");
         }
 
@@ -751,6 +773,28 @@ public class ProjectServiceImpl implements ProjectService {
             userProductMapRepository.save(managerProductMap);
             logger.info("Assigned manager: {} (ID: {}) for milestone: {}",
                     manager.getFullName(), manager.getId(), milestone.getMilestone().getName());
+
+            // Increment assignmentCount for the manager
+            UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(manager.getId(), milestone.getProduct().getId());
+            if (count == null) {
+                count = new UserPerformanceCount();
+                count.setUser(manager);
+                count.setProduct(milestone.getProduct());
+                count.setAssignmentCount(1);
+                count.setLastUpdatedDate(new Date());
+                count.setCreatedDate(new Date());
+                count.setUpdatedDate(new Date());
+                count.setCreatedBy(0L);
+                count.setUpdatedBy(0L);
+                count.setDeleted(false);
+            } else {
+                count.setAssignmentCount(count.getAssignmentCount() + 1);
+                count.setLastUpdatedDate(new Date());
+                count.setUpdatedDate(new Date());
+                count.setUpdatedBy(0L);
+            }
+            userPerformanceCountRepository.save(count);
+
             return new AssignmentResult(manager, "Manager assigned due to no available users");
         }
 
@@ -783,6 +827,28 @@ public class ProjectServiceImpl implements ProjectService {
             userProductMapRepository.save(adminProductMap);
             logger.info("Assigned admin: {} (ID: {}) for milestone: {}",
                     admin.getFullName(), admin.getId(), milestone.getMilestone().getName());
+
+            // Increment assignmentCount for the admin
+            UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(admin.getId(), milestone.getProduct().getId());
+            if (count == null) {
+                count = new UserPerformanceCount();
+                count.setUser(admin);
+                count.setProduct(milestone.getProduct());
+                count.setAssignmentCount(1);
+                count.setLastUpdatedDate(new Date());
+                count.setCreatedDate(new Date());
+                count.setUpdatedDate(new Date());
+                count.setCreatedBy(0L);
+                count.setUpdatedBy(0L);
+                count.setDeleted(false);
+            } else {
+                count.setAssignmentCount(count.getAssignmentCount() + 1);
+                count.setLastUpdatedDate(new Date());
+                count.setUpdatedDate(new Date());
+                count.setUpdatedBy(0L);
+            }
+            userPerformanceCountRepository.save(count);
+
             return new AssignmentResult(admin, "Admin assigned due to no available users or managers");
         }
 
@@ -808,9 +874,9 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         // Check workload (e.g., max projects)
-        UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(user.getId(), productId);
+        UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(user.getId(), productId);
         int maxProjects = getMaxProjectsForUser(user);
-        if (count != null && count.getProjectCount() >= maxProjects) {
+        if (count != null && count.getAssignmentCount() >= maxProjects) {
             logger.debug("User {} (ID: {}) has reached max project limit ({}) for product ID: {}",
                     user.getFullName(), user.getId(), maxProjects, productId);
             return false;

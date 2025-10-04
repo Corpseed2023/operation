@@ -25,13 +25,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     boolean existsByEmailAndIsActiveTrueAndIsDeletedFalse(String email);
 
-    /**
-     * Finds a user by ID if active and not deleted.
-     *
-     * @param id the user ID
-     * @return an Optional containing the user if found, active, and not deleted, empty otherwise
-     */
-    Optional<User> findByIdAndIsActiveTrueAndIsDeletedFalse(Long id);
 
     /**
      * Finds an active user by ID if active and not deleted (for compatibility with services).

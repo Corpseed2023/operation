@@ -11,39 +11,43 @@ import org.hibernate.annotations.Comment;
 import java.util.Date;
 
 /**
- * Entity representing the count of projects assigned to a user per product.
+ * Entity representing user performance count (assignments and time spent per product).
  */
 @Entity
-@Table(name = "user_project_count", indexes = {
+@Table(name = "user_performance_count", indexes = {
         @Index(name = "idx_user_id_product_id", columnList = "user_id, product_id", unique = true)
 })
 @Getter
 @Setter
 @NoArgsConstructor
-public class UserProjectCount {
+public class UserPerformanceCount {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Comment("Primary key: Unique identifier for the user project count record")
+    @Comment("Primary key: Unique identifier for the user performance record")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    @Comment("User associated with the project count")
+    @Comment("User associated with the performance count")
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
-    @Comment("Product associated with the project count")
+    @Comment("Product associated with the performance count")
     private Product product;
 
-    @Column(name = "project_count", nullable = false)
-    @Comment("Number of projects assigned to the user for this product")
-    private int projectCount = 0;
+    @Column(name = "assignment_count", nullable = false)
+    @Comment("Number of assignments (milestones) currently with the user for this product")
+    private int assignmentCount = 0;
+
+    @Column(name = "time_spent", nullable = false)
+    @Comment("Total time spent (in days) on assignments for this product")
+    private double timeSpent = 0.0; // Aggregate time spent, updated on completion
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "last_updated_date", nullable = false)
-    @Comment("Last date when the project count was updated")
+    @Comment("Last date when the performance count was updated")
     private Date lastUpdatedDate = new Date();
 
     @Temporal(TemporalType.TIMESTAMP)

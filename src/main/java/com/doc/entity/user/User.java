@@ -89,4 +89,8 @@ public class User {
     @Column(name = "is_active", nullable = false)
     @Comment("Active status flag")
     private boolean isActive = true;
+
+    @Column(name = "bucket_size", nullable = false)
+    @Comment("Max concurrent projects/assignments the user can handle (bucket size)")
+    private int bucketSize = 0;
 }
