@@ -1,5 +1,7 @@
 package com.doc.entity.user;
 
+import com.doc.entity.department.Department;
+import com.doc.entity.department.Designation;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,6 +19,8 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 public class User {
+
+
 
     @Id
     @Comment("Primary key: User ID")

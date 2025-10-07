@@ -3,7 +3,7 @@ package com.doc.impl;
 import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.user.UserResponseDto;
-import com.doc.entity.user.Department;
+import com.doc.entity.department.Department;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;

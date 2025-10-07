@@ -1,6 +1,6 @@
 package com.doc.repository;
 
-import com.doc.entity.user.Designation;
+import com.doc.entity.department.Designation;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

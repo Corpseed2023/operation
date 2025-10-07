@@ -1,5 +1,6 @@
-package com.doc.entity.user;
+package com.doc.entity.department;
 
+import com.doc.entity.department.Department;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

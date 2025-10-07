@@ -5,7 +5,7 @@ import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
 import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.project.*;
-import com.doc.entity.user.Department;
+import com.doc.entity.department.Department;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
@@ -13,8 +13,9 @@ import com.doc.exception.ValidationException;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
-import com.doc.service.ProjectMilestoneAssignmentService;
+import com.doc.service.AutoAssignmentService;
 import com.doc.service.ProjectService;
+import com.doc.service.ProjectMilestoneAssignmentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,59 +32,39 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
     private static final Logger logger = LoggerFactory.getLogger(ProjectMilestoneAssignmentServiceImpl.class);
 
-    @Autowired
-    private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private ProjectDocumentUploadRepository projectDocumentUploadRepository;
-
-    @Autowired
-    private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
-
-
-    @Autowired
-    private ProjectService projectService;
-
-    @Autowired
-    private ProjectRepository projectRepository;
-
-    @Autowired
-    private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
-
-    @Autowired
-    private UserProductMapRepository userProductMapRepository;
-
-    @Autowired
-    private UserPerformanceCountRepository userPerformanceCountRepository;
-
-    @Autowired
-    private MilestoneStatusRepository milestoneStatusRepository;
-
-    @Autowired
-    private ProjectStatusRepository projectStatusRepository;
+    @Autowired private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private ProjectDocumentUploadRepository projectDocumentUploadRepository;
+    @Autowired private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
+    @Autowired private ProjectService projectService;
+    @Autowired private ProjectRepository projectRepository;
+    @Autowired private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
+    @Autowired private UserProductMapRepository userProductMapRepository;
+    @Autowired private UserPerformanceCountRepository userPerformanceCountRepository;
+    @Autowired private MilestoneStatusRepository milestoneStatusRepository;
+    @Autowired private ProjectStatusRepository projectStatusRepository;
+    @Autowired private AutoAssignmentService autoAssignmentService;
 
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
         logger.info("Updating milestone assignment ID: {} to status: {}", updateDto.getAssignmentId(), updateDto.getNewStatusName());
+
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findActiveUserById(updateDto.getAssignmentId())
                 .orElseThrow(() -> {
-                    logger.error("Milestone assignment with ID {} not found or is deleted", updateDto.getAssignmentId());
-                    return new ResourceNotFoundException("Milestone assignment with ID " + updateDto.getAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
+                    logger.error("Milestone assignment ID {} not found or is deleted", updateDto.getAssignmentId());
+                    return new ResourceNotFoundException("Milestone assignment not found", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
         User changedBy = userRepository.findActiveUserById(updateDto.getChangedById())
                 .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", updateDto.getChangedById());
-                    return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
+                    logger.error("User ID {} not found or is deleted", updateDto.getChangedById());
+                    return new ResourceNotFoundException("User not found", "USER_NOT_FOUND");
                 });
 
         MilestoneStatus newStatus = milestoneStatusRepository.findByName(updateDto.getNewStatusName())
                 .orElseThrow(() -> {
                     logger.error("Milestone status {} not found", updateDto.getNewStatusName());
-                    return new ResourceNotFoundException("Milestone status " + updateDto.getNewStatusName() + " not found", "STATUS_NOT_FOUND");
+                    return new ResourceNotFoundException("Milestone status not found", "STATUS_NOT_FOUND");
                 });
 
         validateMilestoneStatusTransition(assignment, newStatus, updateDto.getStatusReason());
@@ -93,34 +74,32 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             if (!assignment.getProductMilestoneMap().isAutoGenerated() && !documents.isEmpty()) {
                 boolean allVerified = documents.stream().allMatch(doc -> "VERIFIED".equals(doc.getStatus().getName()));
                 if (!allVerified) {
-                    logger.warn("Cannot complete milestone ID: {} due to unverified documents", updateDto.getAssignmentId());
+                    logger.warn("Cannot complete milestone ID {} due to unverified documents", updateDto.getAssignmentId());
                     throw new ValidationException("All documents must be verified to complete milestone", "UNVERIFIED_DOCUMENTS");
                 }
             }
 
-            // Update UserPerformanceCount on completion: add timeSpent and decrement assignmentCount
             if (assignment.getAssignedUser() != null) {
                 UserPerformanceCount count = userPerformanceCountRepository.findByUserIdAndProductId(
                         assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId());
                 if (count != null) {
                     count.setTimeSpent(count.getTimeSpent() + assignment.getProductMilestoneMap().getTatInDays());
-                    count.setAssignmentCount(Math.max(0, count.getAssignmentCount() - 1)); // Decrement assignment count
+                    count.setAssignmentCount(Math.max(0, count.getAssignmentCount() - 1));
                     count.setLastUpdatedDate(new Date());
                     count.setUpdatedDate(new Date());
                     count.setUpdatedBy(updateDto.getChangedById());
                     userPerformanceCountRepository.save(count);
-                    logger.debug("Updated UserPerformanceCount for user ID: {} on completion: timeSpent + {}, assignmentCount - 1",
+                    logger.debug("Updated UserPerformanceCount for user ID {}: timeSpent + {}, assignmentCount - 1",
                             assignment.getAssignedUser().getId(), assignment.getProductMilestoneMap().getTatInDays());
                 }
 
-                // Reset isAssigned in UserProductMap
                 UserProductMap userMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
                                 assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId())
                         .orElse(null);
                 if (userMap != null) {
                     userMap.setAssigned(false);
                     userProductMapRepository.save(userMap);
-                    logger.debug("Reset isAssigned for user ID: {} in UserProductMap on completion", assignment.getAssignedUser().getId());
+                    logger.debug("Reset isAssigned for user ID {} in UserProductMap", assignment.getAssignedUser().getId());
                 }
             }
         }
@@ -128,12 +107,12 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         if ("NEW".equals(newStatus.getName()) && "REJECTED".equals(assignment.getStatus().getName())) {
             if (!assignment.getProductMilestoneMap().isAllowRollback()) {
                 logger.warn("Rollback not allowed for milestone: {}", assignment.getProductMilestoneMap().getMilestone().getName());
-                throw new ValidationException("Rollback not allowed for milestone " + assignment.getProductMilestoneMap().getMilestone().getName(), "ROLLBACK_NOT_ALLOWED");
+                throw new ValidationException("Rollback not allowed for milestone", "ROLLBACK_NOT_ALLOWED");
             }
             if (assignment.getReworkAttempts() >= assignment.getProductMilestoneMap().getMaxAttempts()) {
-                logger.warn("Maximum rework attempts ({}) reached for milestone ID: {}",
+                logger.warn("Max rework attempts ({}) reached for milestone ID {}",
                         assignment.getProductMilestoneMap().getMaxAttempts(), updateDto.getAssignmentId());
-                throw new ValidationException("Maximum rework attempts reached for milestone", "MAX_REWORK_ATTEMPTS_REACHED");
+                throw new ValidationException("Maximum rework attempts reached", "MAX_REWORK_ATTEMPTS_REACHED");
             }
             assignment.setReworkAttempts(assignment.getReworkAttempts() + 1);
         }
@@ -161,7 +140,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         projectMilestoneAssignmentRepository.save(assignment);
         milestoneStatusHistoryRepository.save(history);
-        logger.info("Milestone assignment ID: {} updated to status: {}", updateDto.getAssignmentId(), newStatus.getName());
+        logger.info("Milestone assignment ID {} updated to status {}", updateDto.getAssignmentId(), newStatus.getName());
 
         Project project = assignment.getProject();
         updateProjectStatus(project, updateDto.getChangedById());
@@ -173,43 +152,39 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
     @Override
     public void reassignMilestone(ReassignMilestoneDto reassignDto) {
-        logger.info("Reassigning milestone assignment ID: {} to user ID: {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
+        logger.info("Reassigning milestone assignment ID {} to user ID {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
 
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findActiveUserById(reassignDto.getAssignmentId())
                 .orElseThrow(() -> {
-                    logger.error("Milestone assignment with ID {} not found or is deleted", reassignDto.getAssignmentId());
-                    return new ResourceNotFoundException("Milestone assignment with ID " + reassignDto.getAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
+                    logger.error("Milestone assignment ID {} not found or is deleted", reassignDto.getAssignmentId());
+                    return new ResourceNotFoundException("Milestone assignment not found", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
         User newUser = userRepository.findActiveUserById(reassignDto.getNewUserId())
                 .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", reassignDto.getNewUserId());
-                    return new ResourceNotFoundException("User with ID " + reassignDto.getNewUserId() + " not found or is deleted", "USER_NOT_FOUND");
+                    logger.error("User ID {} not found or is deleted", reassignDto.getNewUserId());
+                    return new ResourceNotFoundException("User not found", "USER_NOT_FOUND");
                 });
 
         User changedBy = userRepository.findActiveUserById(reassignDto.getChangedById())
                 .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", reassignDto.getChangedById());
-                    return new ResourceNotFoundException("User with ID " + reassignDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
+                    logger.error("User ID {} not found or is deleted", reassignDto.getChangedById());
+                    return new ResourceNotFoundException("User not found", "USER_NOT_FOUND");
                 });
 
         if (reassignDto.getReassignmentReason() == null || reassignDto.getReassignmentReason().trim().isEmpty()) {
-            logger.warn("Reassignment reason is required for milestone assignment ID: {}", reassignDto.getAssignmentId());
+            logger.warn("Reassignment reason required for milestone assignment ID {}", reassignDto.getAssignmentId());
             throw new ValidationException("Reassignment reason is required", "INVALID_REASSIGNMENT_REASON");
         }
 
         if ("COMPLETED".equals(assignment.getStatus().getName())) {
-            logger.warn("Cannot reassign completed milestone assignment ID: {}", reassignDto.getAssignmentId());
+            logger.warn("Cannot reassign completed milestone ID {}", reassignDto.getAssignmentId());
             throw new ValidationException("Cannot reassign a completed milestone", "COMPLETED_MILESTONE_REASSIGNMENT");
         }
 
-        if (assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(reassignDto.getNewUserId())) {
-            logger.warn("Milestone assignment ID: {} is already assigned to user ID: {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
-            throw new ValidationException("Milestone is already assigned to the specified user", "SAME_USER_REASSIGNMENT");
-        }
-
-        ProductMilestoneMap milestoneMap = assignment.getProductMilestoneMap();
-        if (!milestoneMap.isAutoGenerated()) {
+        if ("MANUAL_PENDING".equals(assignment.getStatus().getName())) {
+            // Ensure the new user is eligible for the milestone's department
+            ProductMilestoneMap milestoneMap = assignment.getProductMilestoneMap();
             List<Long> milestoneDepartmentIds = milestoneMap.getMilestone().getDepartments().stream()
                     .map(Department::getId)
                     .collect(Collectors.toList());
@@ -218,115 +193,196 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     .collect(Collectors.toList());
             boolean isEligible = userDepartmentIds.stream().anyMatch(milestoneDepartmentIds::contains);
             if (!isEligible) {
-                logger.warn("User ID: {} is not eligible for milestone: {}", reassignDto.getNewUserId(), milestoneMap.getMilestone().getName());
-                throw new ValidationException("User is not in a department associated with the milestone", "INELIGIBLE_USER");
-            }
-        }
-
-        // Decrement assignmentCount for the previous user, if any
-        if (assignment.getAssignedUser() != null) {
-            UserProductMap oldUserMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
-                            assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId())
-                    .orElse(null);
-            if (oldUserMap != null) {
-                oldUserMap.setAssigned(false);
-                userProductMapRepository.save(oldUserMap);
-                logger.debug("Reset isAssigned for user ID: {} in UserProductMap", assignment.getAssignedUser().getId());
+                logger.warn("User ID {} not eligible for milestone {}", reassignDto.getNewUserId(), milestoneMap.getMilestone().getName());
+                throw new ValidationException("User not in a department associated with the milestone", "INELIGIBLE_USER");
             }
 
-            UserPerformanceCount oldCount = userPerformanceCountRepository.findByUserIdAndProductId(
-                    assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId());
-            if (oldCount != null) {
-                oldCount.setAssignmentCount(Math.max(0, oldCount.getAssignmentCount() - 1));
-                oldCount.setLastUpdatedDate(new Date());
-                oldCount.setUpdatedDate(new Date());
-                oldCount.setUpdatedBy(reassignDto.getChangedById());
-                userPerformanceCountRepository.save(oldCount);
-                logger.debug("Decremented UserPerformanceCount assignmentCount for user ID: {}", assignment.getAssignedUser().getId());
+            // Update assignment
+            assignment.setAssignedUser(newUser);
+            assignment.setStatus(milestoneStatusRepository.findByName("NEW")
+                    .orElseThrow(() -> new ResourceNotFoundException("Milestone status NEW not found", "STATUS_NOT_FOUND")));
+            assignment.setStatusReason("Manually reassigned from MANUAL_PENDING");
+            assignment.setUpdatedBy(reassignDto.getChangedById());
+            assignment.setUpdatedDate(new Date());
+
+            // Increment assignment count for the new user
+            UserProductMap newUserMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
+                            newUser.getId(), assignment.getProject().getProduct().getId())
+                    .orElseGet(() -> {
+                        UserProductMap map = new UserProductMap();
+                        map.setUser(newUser);
+                        map.setProduct(assignment.getProject().getProduct());
+                        map.setRating(0.0);
+                        map.setAssigned(false);
+                        map.setDeleted(false);
+                        map.setCreatedDate(new Date());
+                        map.setUpdatedDate(new Date());
+                        map.setCreatedBy(reassignDto.getChangedById());
+                        map.setUpdatedBy(reassignDto.getChangedById());
+                        return map;
+                    });
+            newUserMap.setAssigned(true);
+            userProductMapRepository.save(newUserMap);
+
+            UserPerformanceCount newCount = userPerformanceCountRepository.findByUserIdAndProductId(
+                    newUser.getId(), assignment.getProject().getProduct().getId());
+            if (newCount == null) {
+                newCount = new UserPerformanceCount();
+                newCount.setUser(newUser);
+                newCount.setProduct(assignment.getProject().getProduct());
+                newCount.setAssignmentCount(1);
+                newCount.setTimeSpent(0.0);
+                newCount.setLastUpdatedDate(new Date());
+                newCount.setCreatedDate(new Date());
+                newCount.setUpdatedDate(new Date());
+                newCount.setCreatedBy(reassignDto.getChangedById());
+                newCount.setUpdatedBy(reassignDto.getChangedById());
+                newCount.setDeleted(false);
+            } else {
+                newCount.setAssignmentCount(newCount.getAssignmentCount() + 1);
+                newCount.setLastUpdatedDate(new Date());
+                newCount.setUpdatedDate(new Date());
+                newCount.setUpdatedBy(reassignDto.getChangedById());
             }
-        }
+            userPerformanceCountRepository.save(newCount);
 
-        // Increment assignmentCount for the new user
-        UserProductMap newUserMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
-                        newUser.getId(), assignment.getProject().getProduct().getId())
-                .orElseGet(() -> {
-                    UserProductMap map = new UserProductMap();
-                    map.setUser(newUser);
-                    map.setProduct(assignment.getProject().getProduct());
-                    map.setRating(0.0);
-                    map.setAssigned(false);
-                    map.setDeleted(false);
-                    map.setCreatedDate(new Date());
-                    map.setUpdatedDate(new Date());
-                    map.setCreatedBy(reassignDto.getChangedById());
-                    map.setUpdatedBy(reassignDto.getChangedById());
-                    return map;
-                });
-        newUserMap.setAssigned(true);
-        userProductMapRepository.save(newUserMap);
-        logger.debug("Set isAssigned to true for user ID: {} in UserProductMap", newUser.getId());
+            ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+            history.setProject(assignment.getProject());
+            history.setMilestoneAssignment(assignment);
+            history.setAssignedUser(newUser);
+            history.setAssignmentReason(reassignDto.getReassignmentReason());
+            history.setCreatedDate(new Date());
+            history.setUpdatedDate(new Date());
+            history.setCreatedBy(reassignDto.getChangedById());
+            history.setUpdatedBy(reassignDto.getChangedById());
+            history.setDeleted(false);
+            projectAssignmentHistoryRepository.save(history);
 
-        UserPerformanceCount newCount = userPerformanceCountRepository.findByUserIdAndProductId(newUser.getId(), assignment.getProject().getProduct().getId());
-        if (newCount == null) {
-            newCount = new UserPerformanceCount();
-            newCount.setUser(newUser);
-            newCount.setProduct(assignment.getProject().getProduct());
-            newCount.setAssignmentCount(1);
-            newCount.setTimeSpent(0.0);
-            newCount.setLastUpdatedDate(new Date());
-            newCount.setCreatedDate(new Date());
-            newCount.setUpdatedDate(new Date());
-            newCount.setCreatedBy(reassignDto.getChangedById());
-            newCount.setUpdatedBy(reassignDto.getChangedById());
-            newCount.setDeleted(false);
+            projectMilestoneAssignmentRepository.save(assignment);
+            logger.info("Milestone assignment ID {} reassigned from MANUAL_PENDING to user ID {}",
+                    reassignDto.getAssignmentId(), reassignDto.getNewUserId());
         } else {
-            newCount.setAssignmentCount(newCount.getAssignmentCount() + 1);
-            newCount.setLastUpdatedDate(new Date());
-            newCount.setUpdatedDate(new Date());
-            newCount.setUpdatedBy(reassignDto.getChangedById());
+            if (assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(reassignDto.getNewUserId())) {
+                logger.warn("Milestone assignment ID {} already assigned to user ID {}",
+                        reassignDto.getAssignmentId(), reassignDto.getNewUserId());
+                throw new ValidationException("Milestone already assigned to the specified user", "SAME_USER_REASSIGNMENT");
+            }
+
+            ProductMilestoneMap milestoneMap = assignment.getProductMilestoneMap();
+            List<Long> milestoneDepartmentIds = milestoneMap.getMilestone().getDepartments().stream()
+                    .map(Department::getId)
+                    .collect(Collectors.toList());
+            List<Long> userDepartmentIds = newUser.getDepartments().stream()
+                    .map(Department::getId)
+                    .collect(Collectors.toList());
+            boolean isEligible = userDepartmentIds.stream().anyMatch(milestoneDepartmentIds::contains);
+            if (!isEligible) {
+                logger.warn("User ID {} not eligible for milestone {}", reassignDto.getNewUserId(), milestoneMap.getMilestone().getName());
+                throw new ValidationException("User not in a department associated with the milestone", "INELIGIBLE_USER");
+            }
+
+            if (assignment.getAssignedUser() != null) {
+                UserProductMap oldUserMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
+                                assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId())
+                        .orElse(null);
+                if (oldUserMap != null) {
+                    oldUserMap.setAssigned(false);
+                    userProductMapRepository.save(oldUserMap);
+                    logger.debug("Reset isAssigned for user ID {} in UserProductMap", assignment.getAssignedUser().getId());
+                }
+
+                UserPerformanceCount oldCount = userPerformanceCountRepository.findByUserIdAndProductId(
+                        assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId());
+                if (oldCount != null) {
+                    oldCount.setAssignmentCount(Math.max(0, oldCount.getAssignmentCount() - 1));
+                    oldCount.setLastUpdatedDate(new Date());
+                    oldCount.setUpdatedDate(new Date());
+                    oldCount.setUpdatedBy(reassignDto.getChangedById());
+                    userPerformanceCountRepository.save(oldCount);
+                    logger.debug("Decremented UserPerformanceCount for user ID {}", assignment.getAssignedUser().getId());
+                }
+            }
+
+            UserProductMap newUserMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
+                            newUser.getId(), assignment.getProject().getProduct().getId())
+                    .orElseGet(() -> {
+                        UserProductMap map = new UserProductMap();
+                        map.setUser(newUser);
+                        map.setProduct(assignment.getProject().getProduct());
+                        map.setRating(0.0);
+                        map.setAssigned(false);
+                        map.setDeleted(false);
+                        map.setCreatedDate(new Date());
+                        map.setUpdatedDate(new Date());
+                        map.setCreatedBy(reassignDto.getChangedById());
+                        map.setUpdatedBy(reassignDto.getChangedById());
+                        return map;
+                    });
+            newUserMap.setAssigned(true);
+            userProductMapRepository.save(newUserMap);
+
+            UserPerformanceCount newCount = userPerformanceCountRepository.findByUserIdAndProductId(
+                    newUser.getId(), assignment.getProject().getProduct().getId());
+            if (newCount == null) {
+                newCount = new UserPerformanceCount();
+                newCount.setUser(newUser);
+                newCount.setProduct(assignment.getProject().getProduct());
+                newCount.setAssignmentCount(1);
+                newCount.setTimeSpent(0.0);
+                newCount.setLastUpdatedDate(new Date());
+                newCount.setCreatedDate(new Date());
+                newCount.setUpdatedDate(new Date());
+                newCount.setCreatedBy(reassignDto.getChangedById());
+                newCount.setUpdatedBy(reassignDto.getChangedById());
+                newCount.setDeleted(false);
+            } else {
+                newCount.setAssignmentCount(newCount.getAssignmentCount() + 1);
+                newCount.setLastUpdatedDate(new Date());
+                newCount.setUpdatedDate(new Date());
+                newCount.setUpdatedBy(reassignDto.getChangedById());
+            }
+            userPerformanceCountRepository.save(newCount);
+
+            ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+            history.setProject(assignment.getProject());
+            history.setMilestoneAssignment(assignment);
+            history.setAssignedUser(newUser);
+            history.setAssignmentReason(reassignDto.getReassignmentReason());
+            history.setCreatedDate(new Date());
+            history.setUpdatedDate(new Date());
+            history.setCreatedBy(reassignDto.getChangedById());
+            history.setUpdatedBy(reassignDto.getChangedById());
+            history.setDeleted(false);
+            projectAssignmentHistoryRepository.save(history);
+
+            assignment.setAssignedUser(newUser);
+            assignment.setUpdatedBy(reassignDto.getChangedById());
+            assignment.setUpdatedDate(new Date());
+            projectMilestoneAssignmentRepository.save(assignment);
+            logger.info("Milestone assignment ID {} reassigned to user ID {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
         }
-        userPerformanceCountRepository.save(newCount);
-        logger.debug("Updated UserPerformanceCount for user ID: {}", newUser.getId());
-
-        ProjectAssignmentHistory history = new ProjectAssignmentHistory();
-        history.setProject(assignment.getProject());
-        history.setMilestoneAssignment(assignment);
-        history.setAssignedUser(newUser);
-        history.setAssignmentReason(reassignDto.getReassignmentReason());
-        history.setCreatedDate(new Date());
-        history.setUpdatedDate(new Date());
-        history.setCreatedBy(reassignDto.getChangedById());
-        history.setUpdatedBy(reassignDto.getChangedById());
-        history.setDeleted(false);
-        projectAssignmentHistoryRepository.save(history);
-        logger.debug("Logged reassignment for milestone assignment ID: {} to user ID: {}", reassignDto.getAssignmentId(), newUser.getId());
-
-        assignment.setAssignedUser(newUser);
-        assignment.setUpdatedBy(reassignDto.getChangedById());
-        assignment.setUpdatedDate(new Date());
-        projectMilestoneAssignmentRepository.save(assignment);
-        logger.info("Milestone assignment ID: {} reassigned to user ID: {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
     }
 
     private void validateMilestoneStatusTransition(ProjectMilestoneAssignment assignment, MilestoneStatus newStatus, String statusReason) {
         String newStatusName = newStatus.getName();
         if (statusReason == null || statusReason.trim().isEmpty()) {
             if ("COMPLETED".equals(newStatusName) || "ON_HOLD".equals(newStatusName) || "REJECTED".equals(newStatusName)) {
-                logger.warn("Status reason is required for status: {}", newStatusName);
-                throw new ValidationException("Status reason is required for status: " + newStatusName, "INVALID_STATUS_REASON");
+                logger.warn("Status reason required for status: {}", newStatusName);
+                throw new ValidationException("Status reason required for status: " + newStatusName, "INVALID_STATUS_REASON");
             }
         }
 
         String currentStatusName = assignment.getStatus().getName();
         if (currentStatusName.equals(newStatusName)) {
-            logger.warn("Milestone assignment ID: {} already in status: {}", assignment.getId(), newStatusName);
-            throw new ValidationException("Milestone is already in status: " + newStatusName, "INVALID_STATUS_TRANSITION_SAME");
+            logger.warn("Milestone assignment ID {} already in status: {}", assignment.getId(), newStatusName);
+            throw new ValidationException("Milestone already in status: " + newStatusName, "INVALID_STATUS_TRANSITION_SAME");
         }
 
         switch (currentStatusName) {
             case "NEW":
+            case "MANUAL_PENDING":
                 if (!"IN_PROGRESS".equals(newStatusName) && !"ON_HOLD".equals(newStatusName)) {
-                    throw new ValidationException("Invalid transition from NEW to " + newStatusName, "INVALID_STATUS_TRANSITION_NEW");
+                    throw new ValidationException("Invalid transition from " + currentStatusName + " to " + newStatusName, "INVALID_STATUS_TRANSITION_NEW");
                 }
                 break;
             case "IN_PROGRESS":
@@ -351,7 +407,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         if (!assignment.isVisible() && !"NEW".equals(newStatusName)) {
-            logger.warn("Cannot update milestone ID: {} to {} when not visible", assignment.getId(), newStatusName);
+            logger.warn("Cannot update milestone ID {} to {} when not visible", assignment.getId(), newStatusName);
             throw new ValidationException("Milestone must be visible to change status to " + newStatusName, "MILESTONE_NOT_VISIBLE");
         }
     }
@@ -361,18 +417,22 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
 
         if (assignments.isEmpty()) {
-            project.setStatus(projectStatusRepository.findByName("OPEN").orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
+            project.setStatus(projectStatusRepository.findByName("OPEN")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
         } else if (assignments.stream().allMatch(a -> "COMPLETED".equals(a.getStatus().getName()))) {
-            project.setStatus(projectStatusRepository.findByName("COMPLETED").orElseThrow(() -> new ResourceNotFoundException("Project status COMPLETED not found", "STATUS_NOT_FOUND")));
+            project.setStatus(projectStatusRepository.findByName("COMPLETED")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status COMPLETED not found", "STATUS_NOT_FOUND")));
         } else if (assignments.stream().anyMatch(a -> "IN_PROGRESS".equals(a.getStatus().getName()) || "ON_HOLD".equals(a.getStatus().getName()))) {
-            project.setStatus(projectStatusRepository.findByName("IN_PROGRESS").orElseThrow(() -> new ResourceNotFoundException("Project status IN_PROGRESS not found", "STATUS_NOT_FOUND")));
+            project.setStatus(projectStatusRepository.findByName("IN_PROGRESS")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status IN_PROGRESS not found", "STATUS_NOT_FOUND")));
         } else {
-            project.setStatus(projectStatusRepository.findByName("OPEN").orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
+            project.setStatus(projectStatusRepository.findByName("OPEN")
+                    .orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
         }
 
         project.setUpdatedBy(updatedById);
         project.setUpdatedDate(new Date());
         projectRepository.save(project);
-        logger.debug("Project ID: {} status updated to: {}", project.getId(), project.getStatus().getName());
+        logger.debug("Project ID {} status updated to: {}", project.getId(), project.getStatus().getName());
     }
 }

@@ -1,7 +1,7 @@
 package com.doc.entity.client;
 
 
-import com.doc.entity.user.Department;
+import com.doc.entity.department.Department;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

@@ -4,7 +4,7 @@ import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.milestone.MilestoneRequestDto;
 import com.doc.dto.milestone.MilestoneResponseDto;
 import com.doc.entity.product.Milestone;
-import com.doc.entity.user.Department;
+import com.doc.entity.department.Department;
 import com.doc.repository.DepartmentRepository;
 import com.doc.repository.MilestoneRepository;
 import com.doc.service.MilestoneService;
@@ -12,8 +12,6 @@ import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

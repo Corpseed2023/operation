@@ -5,7 +5,7 @@ import com.doc.dto.companyUserAssignment.CompanyUserAssignmentRequestDto;
 import com.doc.dto.companyUserAssignment.CompanyUserAssignmentResponseDto;
 import com.doc.entity.client.Company;
 import com.doc.entity.client.CompanyUserAssignment;
-import com.doc.entity.user.Department;
+import com.doc.entity.department.Department;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;

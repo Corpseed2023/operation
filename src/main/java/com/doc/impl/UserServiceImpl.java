@@ -2,8 +2,8 @@ package com.doc.impl;
 
 import com.doc.dto.user.UserRequestDto;
 import com.doc.dto.user.UserResponseDto;
-import com.doc.entity.user.Department;
-import com.doc.entity.user.Designation;
+import com.doc.entity.department.Department;
+import com.doc.entity.department.Designation;
 import com.doc.entity.user.Role;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;

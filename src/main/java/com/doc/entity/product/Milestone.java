@@ -1,6 +1,6 @@
 package com.doc.entity.product;
 
-import com.doc.entity.user.Department;
+import com.doc.entity.department.Department;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

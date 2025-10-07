@@ -1,8 +1,10 @@
 package com.doc.controller.department;
 
+import com.doc.dto.DepartmentAutoConfigDto;
 import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.user.UserResponseDto;
+import com.doc.service.AutoAssignmentService;
 import com.doc.service.DepartmentService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,9 @@ public class DepartmentController {
 
     @Autowired
     private DepartmentService departmentService;
+
+    @Autowired
+    private AutoAssignmentService autoAssignmentService;
 
     @PostMapping
     public ResponseEntity<DepartmentResponseDto> createDepartment(@Valid @RequestBody DepartmentRequestDto requestDto) {
@@ -67,6 +72,15 @@ public class DepartmentController {
     public ResponseEntity<List<UserResponseDto>> getUsersByDepartmentId(@PathVariable Long id) {
         List<UserResponseDto> users = departmentService.getUsersByDepartmentId(id);
         return new ResponseEntity<>(users, HttpStatus.OK);
+    }
+
+    @PutMapping("/{id}/auto-config")
+    public ResponseEntity<Void> updateAutoConfig(
+            @PathVariable Long id,
+            @Valid @RequestBody DepartmentAutoConfigDto dto) {
+        dto.setDepartmentId(id);
+        autoAssignmentService.updateDepartmentAutoConfig(dto);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
 
