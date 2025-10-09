@@ -5,11 +5,14 @@ import com.doc.entity.department.Department;
 import com.doc.entity.department.DepartmentAutoConfig;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.project.AssignmentResult;
+import com.doc.entity.project.Project;
+import com.doc.entity.project.ProjectAssignmentHistory;
 import com.doc.entity.project.UserPerformanceCount;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserLoginStatus;
 import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
+import com.doc.exception.ValidationException;
 import com.doc.repository.*;
 import com.doc.repository.department.DepartmentAutoConfigRepository;
 import com.doc.service.AutoAssignmentService;
@@ -36,6 +39,8 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
     @Autowired private UserPerformanceCountRepository userPerformanceCountRepository;
     @Autowired private UserLoginStatusRepository userLoginStatusRepository;
     @Autowired private DepartmentRepository departmentRepository;
+    @Autowired private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
+    @Autowired private ProjectRepository projectRepository;
 
     @Override
     public AssignmentResult assignMilestoneUser(ProductMilestoneMap milestone, Long updatedById) {
@@ -64,6 +69,15 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             return new AssignmentResult(null, "Pending manual assignment");
         }
 
+        if (config.isManualOnly()) {
+            logger.info("Manual-only mode enabled for department {}. Pending manual assignment.", dept.getName());
+            return new AssignmentResult(null, "Pending manual assignment due to manual-only mode");
+        }
+
+        // Fetch project to get company and contact details
+        Project project = projectRepository.findByProductIdAndMilestoneId(milestone.getProduct().getId(), milestone.getMilestone().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found for milestone", "ERR_PROJECT_NOT_FOUND"));
+
         List<User> deptUsers = userRepository.findByDepartmentsIdAndIsActiveTrueAndIsDeletedFalse(dept.getId());
         if (deptUsers.isEmpty()) {
             return assignFallbackManager(milestone, dept, updatedById);
@@ -72,14 +86,23 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(milestone.getProduct().getId());
         List<UserProductMap> eligibleMappings = mappings.stream()
                 .filter(m -> deptUsers.stream().anyMatch(u -> u.getId().equals(m.getUser().getId())))
-                .filter(m -> m.getRating() != null && m.getRating() > 0)
-                .filter(m -> config.isAvailabilityCheckEnabled() ? isUserAvailable(m.getUser(), milestone.getProduct().getId()) : true)
+                .filter(m -> config.isRatingPrioritizationEnabled() ? m.getRating() != null && m.getRating() > 0 : true)
+                .filter(m -> config.isAvailabilityRequired() ? isUserAvailable(m.getUser(), milestone.getProduct().getId()) : true)
                 .collect(Collectors.toList());
 
         if (eligibleMappings.isEmpty()) {
             return assignFallbackManager(milestone, dept, updatedById);
         }
 
+        // Company Alignment Check
+        if (config.isCompanyAlignmentEnabled()) {
+            Optional<UserProductMap> alignedUser = findAlignedUser(project, milestone, dept, eligibleMappings);
+            if (alignedUser.isPresent()) {
+                return assignUser(alignedUser.get(), "Assigned based on company alignment", updatedById);
+            }
+        }
+
+        // Rating + Round-Robin with Bucket Size
         if (config.isRatingPrioritizationEnabled()) {
             Map<Double, List<UserProductMap>> ratingGroups = eligibleMappings.stream()
                     .collect(Collectors.groupingBy(UserProductMap::getRating));
@@ -94,13 +117,59 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
                 }
             }
         } else {
+            // Pure Round-Robin
             Optional<UserProductMap> selected = selectRoundRobin(eligibleMappings, milestone.getProduct().getId());
             if (selected.isPresent()) {
-                return assignUser(selected.get(), "Assigned based on availability and round-robin", updatedById);
+                return assignUser(selected.get(), "Assigned based on pure round-robin", updatedById);
             }
         }
 
         return assignFallbackManager(milestone, dept, updatedById);
+    }
+
+    private Optional<UserProductMap> findAlignedUser(Project project, ProductMilestoneMap milestone, Department dept, List<UserProductMap> eligibleMappings) {
+        // Fetch prior assignments for the same company and milestone in this department
+        List<ProjectAssignmentHistory> history = projectAssignmentHistoryRepository.findByProjectCompanyIdAndMilestoneIdAndDepartmentId(
+                project.getCompany().getId(), milestone.getMilestone().getId(), dept.getId());
+
+        // Sort by most recent
+        Optional<ProjectAssignmentHistory> recentAssignment = history.stream()
+                .filter(h -> h.getAssignedUser() != null)
+                .max(Comparator.comparing(ProjectAssignmentHistory::getCreatedDate));
+
+        if (recentAssignment.isPresent()) {
+            User alignedUser = recentAssignment.get().getAssignedUser();
+            // Check if aligned user is in eligible mappings
+            Optional<UserProductMap> alignedMapping = eligibleMappings.stream()
+                    .filter(m -> m.getUser().getId().equals(alignedUser.getId()))
+                    .findFirst();
+            if (alignedMapping.isPresent()) {
+                logger.debug("Found aligned user {} for company ID {}", alignedUser.getFullName(), project.getCompany().getId());
+                return alignedMapping;
+            }
+        }
+
+        // Fallback to contact-based matching (email/phone)
+        if (project.getContact() != null) {
+            String email = project.getContact().getEmails();
+            String phone = project.getContact().getContactNo();
+            history = projectAssignmentHistoryRepository.findByContactDetails(email, phone, milestone.getMilestone().getId(), dept.getId());
+            recentAssignment = history.stream()
+                    .filter(h -> h.getAssignedUser() != null)
+                    .max(Comparator.comparing(ProjectAssignmentHistory::getCreatedDate));
+            if (recentAssignment.isPresent()) {
+                User alignedUser = recentAssignment.get().getAssignedUser();
+                Optional<UserProductMap> alignedMapping = eligibleMappings.stream()
+                        .filter(m -> m.getUser().getId().equals(alignedUser.getId()))
+                        .findFirst();
+                if (alignedMapping.isPresent()) {
+                    logger.debug("Found aligned user {} via contact details for company ID {}", alignedUser.getFullName(), project.getCompany().getId());
+                    return alignedMapping;
+                }
+            }
+        }
+
+        return Optional.empty();
     }
 
     private boolean isUserAvailable(User user, Long productId) {
@@ -113,7 +182,6 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             return false;
         }
 
-        // Check if online today: isOnline = true or lastOnline is today
         LocalDate today = LocalDate.now();
         boolean isAvailable = loginStatus.isOnline() ||
                 (loginStatus.getLastOnline() != null && loginStatus.getLastOnline().toInstant().atZone(ZoneId.systemDefault()).toLocalDate().equals(today));
@@ -205,6 +273,14 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
     public void updateDepartmentAutoConfig(DepartmentAutoConfigDto dto) {
         logger.info("Updating auto config for department ID: {}", dto.getDepartmentId());
 
+        // MNC-level validation
+        if (dto.isRatingPrioritizationEnabled() && !dto.isAvailabilityRequired() && !dto.getDepartmentName().equalsIgnoreCase("LEGAL")) {
+            throw new ValidationException("Rating prioritization requires availability check unless department is LEGAL", "INVALID_CONFIG_COMBINATION");
+        }
+        if (dto.isManualOnly() && (dto.isCompanyAlignmentEnabled() || dto.isAvailabilityRequired() || dto.isRatingPrioritizationEnabled())) {
+            throw new ValidationException("Manual-only mode cannot be combined with other auto-assignment features", "INVALID_MANUAL_ONLY_COMBINATION");
+        }
+
         Department department = departmentRepository.findByIdAndIsDeletedFalse(dto.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found", "ERR_DEPARTMENT_NOT_FOUND"));
 
@@ -217,8 +293,10 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
                 });
 
         config.setAutoAssignmentEnabled(dto.isAutoAssignmentEnabled());
-        config.setAvailabilityCheckEnabled(dto.isAvailabilityCheckEnabled());
+        config.setAvailabilityRequired(dto.isAvailabilityRequired());
         config.setRatingPrioritizationEnabled(dto.isRatingPrioritizationEnabled());
+        config.setCompanyAlignmentEnabled(dto.isCompanyAlignmentEnabled());
+        config.setManualOnly(dto.isManualOnly());
         config.setUpdatedDate(new Date());
 
         departmentAutoConfigRepository.save(config);

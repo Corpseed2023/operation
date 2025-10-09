@@ -413,6 +413,8 @@ public class ProjectServiceImpl implements ProjectService {
                         assignment.setStatusReason(result.getReason());
                         projectMilestoneAssignmentRepository.save(assignment);
 
+                        // i want
+
                         ProjectAssignmentHistory history = new ProjectAssignmentHistory();
                         history.setProject(project);
                         history.setMilestoneAssignment(assignment);

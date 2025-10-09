@@ -17,32 +17,41 @@ public class DepartmentAutoConfig {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Comment("Primary key: Config ID")
+    @Comment("Primary key: Auto-config ID")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id", nullable = false)
-    @Comment("Associated department (e.g., CRT, Legal)")
+    @Comment("Associated department")
     private Department department;
 
     @Column(name = "auto_assignment_enabled", nullable = false)
-    @Comment("Toggle for auto-assignment in this department")
+    @Comment("Whether auto-assignment is enabled")
     private boolean autoAssignmentEnabled = false;
 
-    @Column(name = "availability_check_enabled", nullable = false)
-    @Comment("Toggle for availability check (login status)")
-    private boolean availabilityCheckEnabled = false;
+    @Column(name = "availability_required", nullable = false)
+    @Comment("Whether availability check is required")
+    private boolean availabilityRequired = true;
 
     @Column(name = "rating_prioritization_enabled", nullable = false)
-    @Comment("Toggle for rating-based prioritization per product/service")
+    @Comment("Whether rating prioritization is enabled")
     private boolean ratingPrioritizationEnabled = false;
 
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(updatable = false)
-    @Comment("Creation date")
-    private Date createdDate = new Date();
+    @Column(name = "company_alignment_enabled", nullable = false)
+    @Comment("Whether company alignment is enabled")
+    private boolean companyAlignmentEnabled = false;
+
+    @Column(name = "manual_only", nullable = false)
+    @Comment("Whether department requires manual assignment only")
+    private boolean manualOnly = false;
 
     @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_date", updatable = false)
+    @Comment("Creation date")
+    private Date createdDate;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_date")
     @Comment("Update date")
     private Date updatedDate;
 

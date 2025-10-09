@@ -55,4 +55,8 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      */
     @Query("SELECT DISTINCT p FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     Page<Project> findByAssignedUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
+
+    @Query("SELECT p FROM Project p WHERE p.product.id = :productId AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project.id = p.id AND a.milestone.id = :milestoneId)")
+    Optional<Project> findByProductIdAndMilestoneId(Long productId, Long milestoneId);
+
 }

@@ -20,8 +20,6 @@ import java.util.List;
 @NoArgsConstructor
 public class User {
 
-
-
     @Id
     @Comment("Primary key: User ID")
     private Long id;

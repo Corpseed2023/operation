@@ -6,8 +6,12 @@ import lombok.Setter;
 @Getter
 @Setter
 public class DepartmentAutoConfigDto {
+
     private Long departmentId;
+    private String departmentName;
     private boolean autoAssignmentEnabled;
-    private boolean availabilityCheckEnabled;
+    private boolean availabilityRequired;
     private boolean ratingPrioritizationEnabled;
+    private boolean companyAlignmentEnabled;
+    private boolean manualOnly;
 }
