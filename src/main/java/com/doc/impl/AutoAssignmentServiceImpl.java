@@ -33,14 +33,22 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
 
     private static final Logger logger = LoggerFactory.getLogger(AutoAssignmentServiceImpl.class);
 
-    @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private UserProductMapRepository userProductMapRepository;
-    @Autowired private UserPerformanceCountRepository userPerformanceCountRepository;
-    @Autowired private UserLoginStatusRepository userLoginStatusRepository;
-    @Autowired private DepartmentRepository departmentRepository;
-    @Autowired private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
-    @Autowired private ProjectRepository projectRepository;
+    @Autowired
+    private DepartmentAutoConfigRepository departmentAutoConfigRepository;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private UserProductMapRepository userProductMapRepository;
+    @Autowired
+    private UserPerformanceCountRepository userPerformanceCountRepository;
+    @Autowired
+    private UserLoginStatusRepository userLoginStatusRepository;
+    @Autowired
+    private DepartmentRepository departmentRepository;
+    @Autowired
+    private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @Override
     public AssignmentResult assignMilestoneUser(ProductMilestoneMap milestone, Long updatedById) {
@@ -127,7 +135,8 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         return assignFallbackManager(milestone, dept, updatedById);
     }
 
-    private Optional<UserProductMap> findAlignedUser(Project project, ProductMilestoneMap milestone, Department dept, List<UserProductMap> eligibleMappings) {
+    private Optional<UserProductMap> findAlignedUser(Project project, ProductMilestoneMap milestone, Department dept,
+                                                     List<UserProductMap> eligibleMappings) {
         // Fetch prior assignments for the same company and milestone in this department
         List<ProjectAssignmentHistory> history = projectAssignmentHistoryRepository.findByProjectCompanyIdAndMilestoneIdAndDepartmentId(
                 project.getCompany().getId(), milestone.getMilestone().getId(), dept.getId());

@@ -30,6 +30,8 @@ public class Contact {
     @Comment("Contact Emails")
     private String emails;
 
+    private String panNo;
+
     @Column(length = 20)
     @Comment("Contact Mobile Number")
     private String contactNo;

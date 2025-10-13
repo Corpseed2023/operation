@@ -36,6 +36,10 @@ public class Company {
     @Comment("Company GSTIN")
     private String gstNo;
 
+    @Column(name = "com_pan", length = 15)
+    @Comment("Company PAN Card")
+    private String panNo;
+
     @Temporal(TemporalType.DATE)
     @Comment("Establishment Date")
     private Date establishDate;
