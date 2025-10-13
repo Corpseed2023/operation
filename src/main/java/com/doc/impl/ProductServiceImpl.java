@@ -17,6 +17,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -147,7 +148,7 @@ public class ProductServiceImpl implements ProductService {
     private void mapRequestDtoToEntity(Product product, ProductRequestDto requestDto) {
         product.setProductName(requestDto.getProductName().trim());
         product.setDescription(requestDto.getDescription());
-        product.setDate(requestDto.getDate());
+        product.setDate(LocalDate.now());
         product.setActive(requestDto.isActive());
     }
 

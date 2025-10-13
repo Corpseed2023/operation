@@ -6,8 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDate;
-import java.util.List;
+import java.util.Date;
 
 @Getter
 @Setter
@@ -26,7 +25,7 @@ public class ProductRequestDto {
     @NotNull(message = "Updated by user ID cannot be null")
     private Long updatedBy;
 
-    private LocalDate date;
+    private Date date;
 
     private boolean isActive = true;
 
