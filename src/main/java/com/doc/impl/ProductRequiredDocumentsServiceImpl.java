@@ -50,8 +50,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             validateRequestDto(requestDto);
 
 
-
-
             String name = requestDto.getName().trim();
             String country = Optional.ofNullable(requestDto.getCountry()).orElse("");
             String centralName = Optional.ofNullable(requestDto.getCentralName()).orElse("");
