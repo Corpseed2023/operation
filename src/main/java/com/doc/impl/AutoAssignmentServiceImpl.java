@@ -253,8 +253,11 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
     }
 
     private AssignmentResult assignFallbackManager(ProductMilestoneMap milestone, Department department, Long updatedById) {
+        // Try assigning to department manager
         Optional<User> manager = userRepository.findManagerByDepartmentId(department.getId())
-                .stream().filter(u -> isUserAvailable(u, milestone.getProduct().getId())).findFirst();
+                .stream()
+                .filter(u -> isUserAvailable(u, milestone.getProduct().getId()))
+                .findFirst();
 
         if (manager.isPresent()) {
             UserProductMap managerMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(manager.get().getId(), milestone.getProduct().getId())
@@ -274,8 +277,35 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             return assignUser(managerMap, "Assigned to manager due to no available users", updatedById);
         }
 
-        logger.warn("No available manager for department {}, scheduling for OPERATION_HEAD", department.getName());
-        return new AssignmentResult(null, "Scheduled for OPERATION_HEAD after 2 days due to no available manager");
+        // Fallback to Operation Head if manager is unavailable
+        logger.info("No available manager for department {}, assigning to OPERATION_HEAD", department.getName());
+        Optional<User> operationHead = userRepository.findAdmins() // Assuming Operation Head is an ADMIN role
+                .stream()
+                .filter(u -> isUserAvailable(u, milestone.getProduct().getId()))
+                .findFirst();
+
+        if (operationHead.isPresent()) {
+            UserProductMap operationHeadMap = userProductMapRepository.
+                    findByUserIdAndProductIdAndIsDeletedFalse(operationHead.get().getId(), milestone.getProduct().getId())
+                    .orElseGet(() -> {
+                        UserProductMap newMap = new UserProductMap();
+                        newMap.setUser(operationHead.get());
+                        newMap.setProduct(milestone.getProduct());
+                        newMap.setRating(0.0);
+                        newMap.setAssigned(false);
+                        newMap.setDeleted(false);
+                        newMap.setCreatedDate(new Date());
+                        newMap.setUpdatedDate(new Date());
+                        newMap.setCreatedBy(updatedById);
+                        newMap.setUpdatedBy(updatedById);
+                        return newMap;
+                    });
+            return assignUser(operationHeadMap, "Assigned to Operation Head due to no available manager or users", updatedById);
+        }
+
+        // If Operation Head is also unavailable, fall back to manual assignment
+        logger.warn("No available Operation Head for department {}, pending manual assignment", department.getName());
+        return new AssignmentResult(null, "Pending manual assignment due to no available Operation Head or manager");
     }
 
     @Override
