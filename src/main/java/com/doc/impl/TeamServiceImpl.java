@@ -92,6 +92,8 @@ public class TeamServiceImpl implements TeamService {
         return mapToRequest(team);
     }
 
+
+
     @Override
     public TeamRequest getTeamById(Long id) {
         logger.info("Fetching team ID: {}", id);

@@ -119,4 +119,17 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     Optional<ProjectMilestoneAssignment> findByProjectIdAndAssignedUserIdAndIsDeletedFalse(
             @Param("projectId") Long projectId,
             @Param("userId") Long userId);
+
+    /**
+     * Finds a non-deleted ProjectMilestoneAssignment for a specific project ID and milestone ID.
+     *
+     * @param projectId The ID of the project.
+     * @param milestoneId The ID of the milestone.
+     * @return An Optional containing the ProjectMilestoneAssignment if found, or empty if not found or deleted.
+     */
+    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId " +
+            "AND a.milestone.id = :milestoneId AND a.isDeleted = false")
+    Optional<ProjectMilestoneAssignment> findByProjectIdAndMilestoneIdAndIsDeletedFalse(
+            @Param("projectId") Long projectId,
+            @Param("milestoneId") Long milestoneId);
 }
