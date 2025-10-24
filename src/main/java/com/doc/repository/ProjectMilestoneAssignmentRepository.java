@@ -132,4 +132,13 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     Optional<ProjectMilestoneAssignment> findByProjectIdAndMilestoneIdAndIsDeletedFalse(
             @Param("projectId") Long projectId,
             @Param("milestoneId") Long milestoneId);
+
+    /**
+     * Finds non-deleted ProjectMilestoneAssignment entities with specified statuses.
+     *
+     * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
+     * @return A List of ProjectMilestoneAssignment entities.
+     */
+    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.status IN :statuses AND a.isDeleted = false")
+    List<ProjectMilestoneAssignment> findByStatusInAndIsDeletedFalse(@Param("statuses") List<String> statuses);
 }

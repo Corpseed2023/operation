@@ -71,6 +71,15 @@ public class Team {
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
+    @Column(name = "is_temporary", nullable = false)
+    @Comment("Flag indicating if the team is temporary (for auto-deletion scheduling)")
+    private boolean isTemporary = false;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "end_date")
+    @Comment("End date for temporary teams (null for permanent teams)")
+    private Date endDate;
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", updatable = false)
     @Comment("Creation date")

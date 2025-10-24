@@ -36,7 +36,6 @@ public interface UserProductMapRepository extends JpaRepository<UserProductMap, 
 
     Optional<UserProductMap> findByUserIdAndProductIdAndIsDeletedFalse(@Param("userId") Long userId, @Param("productId") Long productId);
 
-
     List<UserProductMap> findByIsDeletedFalse();
 
     // Additions to UserProductMapRepository

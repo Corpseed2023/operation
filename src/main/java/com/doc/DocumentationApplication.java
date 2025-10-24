@@ -50,6 +50,7 @@ public class DocumentationApplication {
 				createMilestoneStatus(milestoneStatusRepository, "QUEUED", "Milestone queued for manual assignment");
 			}
 
+
 			// Populate document_statuses if empty
 			if (documentStatusRepository.count() == 0) {
 				createDocumentStatus(documentStatusRepository, "PENDING", "Document not yet uploaded");

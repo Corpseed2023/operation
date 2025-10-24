@@ -8,6 +8,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * DTO for creating or updating a team.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,6 +22,8 @@ public class TeamRequest {
     private List<Long> memberIds = new ArrayList<>();
     private List<Long> productIds = new ArrayList<>();
     private boolean isActive = true;
+    private boolean isTemporary = false; // Indicates if team is temporary
+    private Date endDate; // End date for temporary teams (optional)
     private Long createdBy;
     private Long updatedBy;
     private Date createdDate;
