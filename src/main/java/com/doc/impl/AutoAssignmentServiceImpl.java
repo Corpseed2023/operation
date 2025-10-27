@@ -615,4 +615,6 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         logger.info("Auto-config fetched successfully for department: {}", department.getName());
         return dto;
     }
+
+
 }

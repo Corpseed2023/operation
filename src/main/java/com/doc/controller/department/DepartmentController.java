@@ -74,21 +74,5 @@ public class DepartmentController {
         return new ResponseEntity<>(users, HttpStatus.OK);
     }
 
-    @PutMapping("/{id}/auto-config")
-    public ResponseEntity<Void> updateAutoConfig(
-            @PathVariable Long id,
-            @Valid @RequestBody DepartmentAutoConfigDto dto) {
-        dto.setDepartmentId(id);
-        autoAssignmentService.updateDepartmentAutoConfig(dto);
-        return new ResponseEntity<>(HttpStatus.OK);
-    }
-
-
-
-    @GetMapping("/{id}/auto-config")
-    public ResponseEntity<DepartmentAutoConfigDto> getAutoConfig(@PathVariable Long id) {
-        DepartmentAutoConfigDto autoConfig = autoAssignmentService.getDepartmentAutoConfig(id);
-        return new ResponseEntity<>(autoConfig, HttpStatus.OK);
-    }
 
 }
