@@ -1,6 +1,7 @@
 package com.doc.controller.project;
 
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
+import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
 import com.doc.service.ProjectMilestoneAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,19 +34,18 @@ public class ProjectMilestoneAssignmentController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "Reassign a project milestone to a new user")
+    @Operation(summary = "Manually reassign a project milestone to a new user by manager")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Milestone reassigned successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid request data or ineligible user"),
+            @ApiResponse(responseCode = "400", description = "Invalid request data, ineligible user, or not a manager"),
             @ApiResponse(responseCode = "404", description = "Milestone assignment or user not found")
     })
     @PutMapping("/{assignmentId}/reassign")
-    public ResponseEntity<Void> reassignMilestone(
+    public ResponseEntity<ReassignMilestoneResponseDto> reassignMilestone(
             @PathVariable Long assignmentId,
             @Valid @RequestBody ReassignMilestoneDto reassignDto) {
         reassignDto.setAssignmentId(assignmentId);
-        projectMilestoneAssignmentService.reassignMilestone(reassignDto);
-        return ResponseEntity.ok().build();
+        ReassignMilestoneResponseDto response = projectMilestoneAssignmentService.reassignMilestone(reassignDto);
+        return ResponseEntity.ok(response);
     }
-
 }
