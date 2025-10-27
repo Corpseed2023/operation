@@ -7,4 +7,6 @@ import com.doc.entity.project.AssignmentResult;
 public interface AutoAssignmentService {
     AssignmentResult assignMilestoneUser(ProductMilestoneMap milestone, Long updatedById);
     void updateDepartmentAutoConfig(DepartmentAutoConfigDto dto);
+
+    DepartmentAutoConfigDto getDepartmentAutoConfig(Long id);
 }

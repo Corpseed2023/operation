@@ -3,6 +3,8 @@ package com.doc.service;
 
 import com.doc.dto.user.UserLoginStatusResponseDto;
 
+import java.util.List;
+
 public interface UserLoginStatusService {
 
     /**
@@ -28,4 +30,6 @@ public interface UserLoginStatusService {
      * @return UserOnlineStatusResponseDto with current status
      */
     UserLoginStatusResponseDto getStatus(Long userId);
+
+    List<UserLoginStatusResponseDto> getAllStatuses();
 }

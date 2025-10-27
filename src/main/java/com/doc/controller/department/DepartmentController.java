@@ -85,5 +85,10 @@ public class DepartmentController {
 
 
 
+    @GetMapping("/{id}/auto-config")
+    public ResponseEntity<DepartmentAutoConfigDto> getAutoConfig(@PathVariable Long id) {
+        DepartmentAutoConfigDto autoConfig = autoAssignmentService.getDepartmentAutoConfig(id);
+        return new ResponseEntity<>(autoConfig, HttpStatus.OK);
+    }
 
 }

@@ -571,4 +571,48 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         departmentAutoConfigRepository.save(config);
         logger.info("Auto-config updated successfully for department: {}", department.getName());
     }
+
+
+    @Override
+    public DepartmentAutoConfigDto getDepartmentAutoConfig(Long departmentId) {
+        logger.info("Fetching auto-config for department ID: {}", departmentId);
+
+        // Fetch department
+        Department department = departmentRepository.findByIdAndIsDeletedFalse(departmentId)
+                .orElseThrow(() -> {
+                    logger.error("Department ID {} not found", departmentId);
+                    return new ResourceNotFoundException("Department not found", "ERR_DEPARTMENT_NOT_FOUND");
+                });
+        logger.debug("Found department: {} (ID: {})", department.getName(), department.getId());
+
+        // Load auto-configuration or return default if not found
+        DepartmentAutoConfig config = departmentAutoConfigRepository.findByDepartmentIdAndIsDeletedFalse(departmentId)
+                .orElseGet(() -> {
+                    logger.info("No auto-config found for department ID {}, returning default config", departmentId);
+                    DepartmentAutoConfig newConfig = new DepartmentAutoConfig();
+                    newConfig.setDepartment(department);
+                    newConfig.setAutoAssignmentEnabled(false);
+                    newConfig.setAvailabilityRequired(true);
+                    newConfig.setRatingPrioritizationEnabled(false);
+                    newConfig.setCompanyAlignmentEnabled(false);
+                    newConfig.setManualOnly(false);
+                    return newConfig;
+                });
+        logger.debug("Retrieved auto-config: enabled={}, manualOnly={}, alignment={}, availability={}, rating={}",
+                config.isAutoAssignmentEnabled(), config.isManualOnly(), config.isCompanyAlignmentEnabled(),
+                config.isAvailabilityRequired(), config.isRatingPrioritizationEnabled());
+
+        // Map to DTO
+        DepartmentAutoConfigDto dto = new DepartmentAutoConfigDto();
+        dto.setDepartmentId(departmentId);
+        dto.setDepartmentName(department.getName());
+        dto.setAutoAssignmentEnabled(config.isAutoAssignmentEnabled());
+        dto.setAvailabilityRequired(config.isAvailabilityRequired());
+        dto.setRatingPrioritizationEnabled(config.isRatingPrioritizationEnabled());
+        dto.setCompanyAlignmentEnabled(config.isCompanyAlignmentEnabled());
+        dto.setManualOnly(config.isManualOnly());
+
+        logger.info("Auto-config fetched successfully for department: {}", department.getName());
+        return dto;
+    }
 }

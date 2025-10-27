@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -94,5 +96,14 @@ public class UserOnlineStatusServiceImpl implements UserLoginStatusService {
         dto.setOnline(status.isOnline());
         dto.setLastOnline(status.getLastOnline());
         return dto;
+    }
+
+    @Override
+    public List<UserLoginStatusResponseDto> getAllStatuses() {
+        logger.info("Fetching online status for all users");
+        List<UserLoginStatus> statuses = userOnlineStatusRepository.findAllByIsDeletedFalse();
+        return statuses.stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
     }
 }
