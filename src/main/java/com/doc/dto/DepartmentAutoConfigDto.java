@@ -14,4 +14,5 @@ public class DepartmentAutoConfigDto {
     private boolean ratingPrioritizationEnabled;
     private boolean companyAlignmentEnabled;
     private boolean manualOnly;
+    private boolean roundRobinEnabled = true; // NEW: Toggle round-robin
 }

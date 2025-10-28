@@ -38,6 +38,7 @@ public class DepartmentAutoConfigController {
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
+
     @Operation(summary = "Retrieve the auto-configuration settings for a department")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Auto-configuration retrieved successfully"),

@@ -45,6 +45,10 @@ public class DepartmentAutoConfig {
     @Comment("Whether department requires manual assignment only")
     private boolean manualOnly = false;
 
+    @Column(name = "round_robin_enabled", nullable = false)
+    @Comment("Whether round-robin selection is enabled")
+    private boolean roundRobinEnabled = true; // NEW
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", updatable = false)
     @Comment("Creation date")
