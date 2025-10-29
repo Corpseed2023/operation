@@ -47,7 +47,7 @@ public class DepartmentAutoConfig {
 
     @Column(name = "round_robin_enabled", nullable = false)
     @Comment("Whether round-robin selection is enabled")
-    private boolean roundRobinEnabled = true; // NEW
+    private boolean roundRobinEnabled = true;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", updatable = false)
