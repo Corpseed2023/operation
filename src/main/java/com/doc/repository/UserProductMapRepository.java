@@ -24,6 +24,8 @@ public interface UserProductMapRepository extends JpaRepository<UserProductMap, 
     @Query("SELECT upm FROM UserProductMap upm WHERE upm.product.id = :productId AND upm.isDeleted = false ORDER BY upm.rating DESC")
     List<UserProductMap> findByProductIdAndIsDeletedFalse(@Param("productId") Long productId);
 
+
+
     /**
      * Checks if a mapping exists for the given user and product.
      *

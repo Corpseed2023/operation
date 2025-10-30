@@ -78,6 +78,8 @@ public class ProjectMilestoneAssignment {
     @Comment("Date when the milestone became visible")
     private Date visibleDate;
 
+    //
+
     @Temporal(TemporalType.TIMESTAMP)
     @Comment("Date when the milestone was started (set to IN_PROGRESS)")
     private Date startedDate;

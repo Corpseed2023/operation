@@ -111,13 +111,23 @@ public class ProjectServiceImpl implements ProjectService {
             if (paidAmount != totalAmount) {
                 throw new ValidationException("FULL payment requires the entire amount of " + totalAmount, "ERR_INVALID_FULL_PAYMENT");
             }
-        } else if (paymentTypeName.equals("PARTIAL")) {
+        }
+
+        else if (paymentTypeName.equals("PARTIAL")) {
             double paymentPercentage = (paidAmount / totalAmount) * 100.0;
-            if (Math.abs(paymentPercentage - 8.0) < 0.01) { // Check if paidAmount is exactly 8% of totalAmount
-                throw new ValidationException("PARTIAL payment of " + paidAmount + " (8% of total amount " + totalAmount + ") is not allowed", "ERR_INVALID_PARTIAL_PAYMENT");
+            if (Math.abs(paymentPercentage - 50.0) > 0.01) {
+                throw new ValidationException(
+                        "PARTIAL payment must be exactly 50% of total amount. "
+                                + "Expected: " + (totalAmount * 0.5) + ", Received: " + paidAmount,
+                        "ERR_PARTIAL_MUST_BE_50_PERCENT"
+                );
             }
+
             if (!(paidAmount > 0 && paidAmount < totalAmount)) {
-                throw new ValidationException("PARTIAL payment must be greater than 0 and less than total amount " + totalAmount, "ERR_INVALID_PARTIAL_PAYMENT");
+                throw new ValidationException(
+                        "PARTIAL payment must be greater than 0 and less than total amount " + totalAmount,
+                        "ERR_INVALID_PARTIAL_PAYMENT"
+                );
             }
         } else if (paymentTypeName.equals("INSTALLMENT")) {
             if (paidAmount > totalAmount) {
@@ -207,7 +217,10 @@ public class ProjectServiceImpl implements ProjectService {
                         project.getProjectNo());
                 System.out.println("Attempting to assign user for milestone: " + milestone.getMilestone().getName() +
                         " in project: " + project.getProjectNo());
-                AssignmentResult result = autoAssignmentService.assignMilestoneUser(milestone, createdBy.getId());
+
+                // FIXED: Pass 'project' object
+                AssignmentResult result = autoAssignmentService.assignMilestoneUser(milestone, project, createdBy.getId());
+
                 if (result != null && result.getUser() != null) {
                     assignment.setAssignedUser(result.getUser());
                     assignment.setStatusReason(result.getReason());
@@ -224,6 +237,7 @@ public class ProjectServiceImpl implements ProjectService {
                     history.setUpdatedBy(updatedBy.getId());
                     history.setDeleted(false);
                     projectAssignmentHistoryRepository.save(history);
+
                     logger.info("Assigned milestone {} (project ID: {}) to user ID: {} (Name: {}) with reason: {}",
                             milestone.getMilestone().getName(), project.getId(), result.getUser().getId(),
                             result.getUser().getFullName(), result.getReason());
@@ -232,8 +246,8 @@ public class ProjectServiceImpl implements ProjectService {
                             + ") with reason: " + result.getReason());
                 } else {
                     assignment.setAssignedUser(null);
-                    assignment.setStatusReason(result.getReason());
-                    if ("Queued due to no department mapping".equals(result.getReason())) {
+                    assignment.setStatusReason(result != null ? result.getReason() : "Unknown");
+                    if (result != null && "Queued due to no department mapping".equals(result.getReason())) {
                         MilestoneStatus queuedStatus = milestoneStatusRepository.findByName("QUEUED")
                                 .orElseThrow(() -> new ResourceNotFoundException("QUEUED status not found", "ERR_STATUS_NOT_FOUND"));
                         assignment.setStatus(queuedStatus);
@@ -244,17 +258,18 @@ public class ProjectServiceImpl implements ProjectService {
                     history.setProject(project);
                     history.setMilestoneAssignment(assignment);
                     history.setAssignedUser(null);
-                    history.setAssignmentReason(result.getReason());
+                    history.setAssignmentReason(result != null ? result.getReason() : "Unknown");
                     history.setCreatedDate(new Date());
                     history.setUpdatedDate(new Date());
                     history.setCreatedBy(createdBy.getId());
                     history.setUpdatedBy(updatedBy.getId());
                     history.setDeleted(false);
                     projectAssignmentHistoryRepository.save(history);
+
                     logger.info("No user assigned for milestone {} (project ID: {}), reason: {}",
-                            milestone.getMilestone().getName(), project.getId(), result.getReason());
+                            milestone.getMilestone().getName(), project.getId(), result != null ? result.getReason() : "Unknown");
                     System.out.println("No user assigned for milestone " + milestone.getMilestone().getName() +
-                            " (project ID: " + project.getId() + "), reason: " + result.getReason());
+                            " (project ID: " + project.getId() + "), reason: " + (result != null ? result.getReason() : "Unknown"));
                 }
             }
         }
@@ -262,7 +277,6 @@ public class ProjectServiceImpl implements ProjectService {
         updateMilestoneVisibilities(project, createdBy.getId());
         return mapToResponseDto(project);
     }
-
     @Override
     public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
         logger.info("Fetching projects for user ID: {}, page: {}, size: {}", userId, page, size);
@@ -329,9 +343,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         double amount = transactionDto.getAmount();
         String paymentTypeName = paymentDetail.getPaymentType().getName();
-        double totalAmount = paymentDetail.getTotalAmount();
         double dueAmount = paymentDetail.getDueAmount();
-        double paidAmount = totalAmount - dueAmount;
 
         if (amount <= 0) {
             logger.warn("Invalid payment amount: {}", amount);
@@ -443,7 +455,10 @@ public class ProjectServiceImpl implements ProjectService {
                             project.getProjectNo());
                     System.out.println("Attempting to assign user for milestone: " + map.getMilestone().getName() +
                             " in project: " + project.getProjectNo());
-                    AssignmentResult result = autoAssignmentService.assignMilestoneUser(map, updatedById);
+
+                    // FIXED: Pass 'project'
+                    AssignmentResult result = autoAssignmentService.assignMilestoneUser(map, project, updatedById);
+
                     if (result != null && result.getUser() != null) {
                         assignment.setAssignedUser(result.getUser());
                         assignment.setStatusReason(result.getReason());
@@ -460,6 +475,7 @@ public class ProjectServiceImpl implements ProjectService {
                         history.setUpdatedBy(updatedById);
                         history.setDeleted(false);
                         projectAssignmentHistoryRepository.save(history);
+
                         logger.info("Assigned milestone {} (project ID: {}) to user ID: {} (Name: {}) with reason: {}",
                                 map.getMilestone().getName(), project.getId(), result.getUser().getId(),
                                 result.getUser().getFullName(), result.getReason());
@@ -468,24 +484,25 @@ public class ProjectServiceImpl implements ProjectService {
                                 result.getUser().getFullName() + ") with reason: " + result.getReason());
                     } else {
                         assignment.setAssignedUser(null);
-                        assignment.setStatusReason(result.getReason());
+                        assignment.setStatusReason(result != null ? result.getReason() : "Unknown");
                         projectMilestoneAssignmentRepository.save(assignment);
 
                         ProjectAssignmentHistory history = new ProjectAssignmentHistory();
                         history.setProject(project);
                         history.setMilestoneAssignment(assignment);
                         history.setAssignedUser(null);
-                        history.setAssignmentReason(result.getReason());
+                        history.setAssignmentReason(result != null ? result.getReason() : "Unknown");
                         history.setCreatedDate(new Date());
                         history.setUpdatedDate(new Date());
                         history.setCreatedBy(updatedById);
                         history.setUpdatedBy(updatedById);
                         history.setDeleted(false);
                         projectAssignmentHistoryRepository.save(history);
+
                         logger.info("No user assigned for milestone {} (project ID: {}), reason: {}",
-                                map.getMilestone().getName(), project.getId(), result.getReason());
+                                map.getMilestone().getName(), project.getId(), result != null ? result.getReason() : "Unknown");
                         System.out.println("No user assigned for milestone " + map.getMilestone().getName() +
-                                " (project ID: " + project.getId() + "), reason: " + result.getReason());
+                                " (project ID: " + project.getId() + "), reason: " + (result != null ? result.getReason() : "Unknown"));
                     }
                 }
             }
@@ -536,7 +553,10 @@ public class ProjectServiceImpl implements ProjectService {
                             project.getProjectNo());
                     System.out.println("Attempting to assign user for milestone: " + map.getMilestone().getName() + " in project: " +
                             project.getProjectNo());
-                    AssignmentResult result = autoAssignmentService.assignMilestoneUser(map, updatedById);
+
+                    // FIXED: Pass 'project'
+                    AssignmentResult result = autoAssignmentService.assignMilestoneUser(map, project, updatedById);
+
                     if (result != null && result.getUser() != null) {
                         assignment.setAssignedUser(result.getUser());
                         assignment.setStatusReason(result.getReason());
@@ -553,31 +573,34 @@ public class ProjectServiceImpl implements ProjectService {
                         history.setUpdatedBy(updatedById);
                         history.setDeleted(false);
                         projectAssignmentHistoryRepository.save(history);
+
                         logger.info("Assigned milestone {} (project ID: {}) to user ID: {} (Name: {}) with reason: {}",
                                 map.getMilestone().getName(), project.getId(), result.getUser().getId(),
                                 result.getUser().getFullName(), result.getReason());
                         System.out.println("Assigned milestone " + map.getMilestone().getName() + " (project ID: " +
-                                project.getId() + ") to user ID: " + result.getUser().getId() + " (Name: " + result.getUser().getFullName() + ") with reason: " + result.getReason());
+                                project.getId() + ") to user ID: " + result.getUser().getId() + " (Name: " +
+                                result.getUser().getFullName() + ") with reason: " + result.getReason());
                     } else {
                         assignment.setAssignedUser(null);
-                        assignment.setStatusReason(result.getReason());
+                        assignment.setStatusReason(result != null ? result.getReason() : "Unknown");
                         projectMilestoneAssignmentRepository.save(assignment);
 
                         ProjectAssignmentHistory history = new ProjectAssignmentHistory();
                         history.setProject(project);
                         history.setMilestoneAssignment(assignment);
                         history.setAssignedUser(null);
-                        history.setAssignmentReason(result.getReason());
+                        history.setAssignmentReason(result != null ? result.getReason() : "Unknown");
                         history.setCreatedDate(new Date());
                         history.setUpdatedDate(new Date());
                         history.setCreatedBy(updatedById);
                         history.setUpdatedBy(updatedById);
                         history.setDeleted(false);
                         projectAssignmentHistoryRepository.save(history);
+
                         logger.info("No user assigned for milestone {} (project ID: {}), reason: {}",
-                                map.getMilestone().getName(), project.getId(), result.getReason());
+                                map.getMilestone().getName(), project.getId(), result != null ? result.getReason() : "Unknown");
                         System.out.println("No user assigned for milestone " + map.getMilestone().getName() +
-                                " (project ID: " + project.getId() + "), reason: " + result.getReason());
+                                " (project ID: " + project.getId() + "), reason: " + (result != null ? result.getReason() : "Unknown"));
                     }
                 }
             }
