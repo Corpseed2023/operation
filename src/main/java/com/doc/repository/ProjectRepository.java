@@ -14,7 +14,7 @@ import java.util.Optional;
 /**
  * Repository interface for managing {@link Project} entities.
  * Provides CRUD operations and custom queries for projects, ensuring soft deletion
- * and filtering by project number, company, and product.
+ * and filtering by project number, company, contact, and project name.
  */
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, Long> {
@@ -35,7 +35,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @return an {@link Optional} containing the project if found and not deleted, empty otherwise
      */
     @Query("SELECT p FROM Project p WHERE p.id = :id AND p.isDeleted = false")
-    Optional<Project> findByIdAndIsDeletedFalse(@Param("id") Long id);
+    Optional<Project> findActiveUserById(@Param("id") Long id);
 
     /**
      * Retrieves all non-deleted projects with pagination.
@@ -47,26 +47,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Page<Project> findByIsDeletedFalse(Pageable pageable);
 
     /**
-     * Retrieves non-deleted projects associated with a specific company, with pagination.
-     *
-     * @param companyId the ID of the company
-     * @param pageable pagination information
-     * @return a {@link Page} of non-deleted projects for the given company
-     */
-    @Query("SELECT p FROM Project p WHERE p.company.id = :companyId AND p.isDeleted = false")
-    Page<Project> findByCompanyIdAndIsDeletedFalse(@Param("companyId") Long companyId, Pageable pageable);
-
-    /**
-     * Retrieves non-deleted projects associated with a specific product, with pagination.
-     *
-     * @param productId the ID of the product
-     * @param pageable pagination information
-     * @return a {@link Page} of non-deleted projects for the given product
-     */
-    @Query("SELECT p FROM Project p WHERE p.product.id = :productId AND p.isDeleted = false")
-    Page<Project> findByProductIdAndIsDeletedFalse(@Param("productId") Long productId, Pageable pageable);
-
-    /**
      * Retrieves non-deleted projects assigned to specific users (based on milestone assignments), with pagination.
      *
      * @param userIds the list of user IDs
@@ -76,5 +56,89 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT DISTINCT p FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     Page<Project> findByAssignedUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
 
+    /**
+     * Finds projects by product ID and milestone ID.
+     *
+     * @param productId the product ID
+     * @param milestoneId the milestone ID
+     * @return an {@link Optional} containing the project if found, empty otherwise
+     */
+    @Query("SELECT p FROM Project p WHERE p.product.id = :productId AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project.id = p.id AND a.milestone.id = :milestoneId)")
+    Optional<Project> findByProductIdAndMilestoneId(@Param("productId") Long productId, @Param("milestoneId") Long milestoneId);
 
+    /**
+     * Finds projects by company name (case-insensitive partial match) and not deleted.
+     *
+     * @param companyName the company name to search
+     * @return a list of matching projects
+     */
+    @Query("SELECT p FROM Project p WHERE LOWER(p.company.name) LIKE LOWER(CONCAT('%', :companyName, '%')) AND p.isDeleted = false")
+    List<Project> findByCompanyNameContainingAndIsDeletedFalse(@Param("companyName") String companyName);
+
+    /**
+     * Finds projects by company name (case-insensitive partial match) for specific assigned users and not deleted.
+     *
+     * @param companyName the company name to search
+     * @param userIds the list of user IDs
+     * @return a list of matching projects
+     */
+    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.company.name) LIKE LOWER(CONCAT('%', :companyName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    List<Project> findByCompanyNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("companyName") String companyName, @Param("userIds") List<Long> userIds);
+
+    /**
+     * Finds projects by project number (case-insensitive partial match) and not deleted.
+     *
+     * @param projectNo the project number to search
+     * @return a list of matching projects
+     */
+    @Query("SELECT p FROM Project p WHERE LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false")
+    List<Project> findByProjectNoContainingAndIsDeletedFalse(@Param("projectNo") String projectNo);
+
+    /**
+     * Finds projects by project number (case-insensitive partial match) for specific assigned users and not deleted.
+     *
+     * @param projectNo the project number to search
+     * @param userIds the list of user IDs
+     * @return a list of matching projects
+     */
+    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    List<Project> findByProjectNoContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("projectNo") String projectNo, @Param("userIds") List<Long> userIds);
+
+    /**
+     * Finds projects by contact name (case-insensitive partial match) and not deleted.
+     *
+     * @param contactName the contact name to search
+     * @return a list of matching projects
+     */
+    @Query("SELECT p FROM Project p WHERE LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false")
+    List<Project> findByContactNameContainingAndIsDeletedFalse(@Param("contactName") String contactName);
+
+    /**
+     * Finds projects by contact name (case-insensitive partial match) for specific assigned users and not deleted.
+     *
+     * @param contactName the contact name to search
+     * @param userIds the list of user IDs
+     * @return a list of matching projects
+     */
+    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    List<Project> findByContactNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("contactName") String contactName, @Param("userIds") List<Long> userIds);
+
+    /**
+     * Finds projects by project name (case-insensitive partial match) and not deleted.
+     *
+     * @param name the project name to search
+     * @return a list of matching projects
+     */
+    @Query("SELECT p FROM Project p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false")
+    List<Project> findByNameContainingAndIsDeletedFalse(@Param("name") String name);
+
+    /**
+     * Finds projects by project name (case-insensitive partial match) for specific assigned users and not deleted.
+     *
+     * @param name the project name to search
+     * @param userIds the list of user IDs
+     * @return a list of matching projects
+     */
+    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    List<Project> findByNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("name") String name, @Param("userIds") List<Long> userIds);
 }

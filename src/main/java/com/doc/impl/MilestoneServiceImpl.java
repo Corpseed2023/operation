@@ -4,7 +4,7 @@ import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.milestone.MilestoneRequestDto;
 import com.doc.dto.milestone.MilestoneResponseDto;
 import com.doc.entity.product.Milestone;
-import com.doc.entity.user.Department;
+import com.doc.entity.department.Department;
 import com.doc.repository.DepartmentRepository;
 import com.doc.repository.MilestoneRepository;
 import com.doc.service.MilestoneService;
@@ -12,8 +12,6 @@ import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -159,17 +157,6 @@ public class MilestoneServiceImpl implements MilestoneService {
         logger.info("Milestone deleted with ID: {}", id);
     }
 
-    @Override
-    public Page<MilestoneResponseDto> getMilestonesByDepartment(Long departmentId, Pageable pageable) {
-        logger.info("Fetching milestones for department ID: {} with pageable: {}", departmentId, pageable);
-        if (!departmentRepository.existsByIdAndIsDeletedFalse(departmentId)) {
-            logger.error("Department not found with ID: {}", departmentId);
-            throw new EntityNotFoundException("Department not found with ID: " + departmentId);
-        }
-        return milestoneRepository.findByDepartmentsId(departmentId, pageable)
-                .map(this::mapToResponseDto);
-    }
-
 
     private MilestoneResponseDto mapToResponseDto(Milestone milestone) {
 
@@ -196,7 +183,6 @@ public class MilestoneServiceImpl implements MilestoneService {
 
         return milestoneResponseDto;
     }
-
 
 
     @Override

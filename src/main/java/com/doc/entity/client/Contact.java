@@ -30,6 +30,8 @@ public class Contact {
     @Comment("Contact Emails")
     private String emails;
 
+    private String panNo;
+
     @Column(length = 20)
     @Comment("Contact Mobile Number")
     private String contactNo;
@@ -49,6 +51,10 @@ public class Contact {
     @Column(nullable = false)
     @Comment("Soft delete flag")
     private boolean deleteStatus = false;
+
+    @Column(nullable = false)
+    @Comment("Active status flag")
+    private boolean isActive = true;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(updatable = false)

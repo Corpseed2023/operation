@@ -1,5 +1,6 @@
 package com.doc.entity.product;
 
+import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
 import jakarta.persistence.*;

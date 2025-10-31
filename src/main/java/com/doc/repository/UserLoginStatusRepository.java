@@ -6,6 +6,7 @@ import com.doc.entity.user.UserLoginStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -18,6 +19,8 @@ public interface UserLoginStatusRepository extends JpaRepository<UserLoginStatus
      * @return Optional containing the UserOnlineStatus if found
      */
     Optional<UserLoginStatus> findByUserIdAndIsDeletedFalse(Long userId);
+
+    List<UserLoginStatus> findAllByIsDeletedFalse();
 
 
 }

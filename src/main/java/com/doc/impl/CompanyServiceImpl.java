@@ -8,7 +8,6 @@ import com.doc.entity.client.Contact;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-
 import com.doc.repository.CompanyRepository;
 import com.doc.repository.ContactRepository;
 import com.doc.repository.UserRepository;
@@ -42,7 +41,6 @@ public class CompanyServiceImpl implements CompanyService {
     @Autowired
     private UserRepository userRepository;
 
-
     @Override
     public CompanyResponseDto createCompany(CompanyRequestDto requestDto, Long companyId) {
         logger.info("Creating company with name: {}, number of contacts: {}, provided ID: {}",
@@ -53,22 +51,22 @@ public class CompanyServiceImpl implements CompanyService {
         validateRequestDto(requestDto);
 
         if (companyRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Company with name " + requestDto.getName() + " already exists");
+            throw new ValidationException("Company with name " + requestDto.getName() + " already exists", "DUPLICATE_COMPANY_NAME");
         }
 
         if (requestDto.getGstNo() != null && !requestDto.getGstNo().isEmpty() &&
                 companyRepository.existsByGstNoAndIsDeletedFalse(requestDto.getGstNo())) {
-            throw new ValidationException("Company with GSTIN " + requestDto.getGstNo() + " already exists");
+            throw new ValidationException("Company with GSTIN " + requestDto.getGstNo() + " already exists", "DUPLICATE_GSTIN");
         }
 
         userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Company company = new Company();
 
         if (companyId != null) {
             if (companyRepository.existsById(companyId)) {
-                throw new ValidationException("Company with ID " + companyId + " already exists");
+                throw new ValidationException("Company with ID " + companyId + " already exists", "DUPLICATE_COMPANY_ID");
             }
             company.setId(companyId);
         }
@@ -85,15 +83,12 @@ public class CompanyServiceImpl implements CompanyService {
         return mapToResponseDto(company);
     }
 
-
-
-
     @Override
     public CompanyResponseDto getCompanyById(Long id) {
         logger.info("Fetching company with ID: {}", id);
         Company company = companyRepository.findById(id)
                 .filter(c -> !c.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + id + " not found", "COMPANY_NOT_FOUND"));
         return mapToResponseDto(company);
     }
 
@@ -102,7 +97,7 @@ public class CompanyServiceImpl implements CompanyService {
         logger.info("Fetching companies, page: {}, size: {}", page, size);
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found", "USER_NOT_FOUND"));
 
         boolean isAdmin = user.getRoles().stream()
                 .anyMatch(role -> "ADMIN".equalsIgnoreCase(role.getName()));
@@ -113,9 +108,7 @@ public class CompanyServiceImpl implements CompanyService {
         if (isAdmin) {
             companyPage = companyRepository.findByIsDeletedFalse(pageable);
         } else {
-
             return Collections.emptyList();
-
         }
 
         return companyPage.getContent()
@@ -123,8 +116,6 @@ public class CompanyServiceImpl implements CompanyService {
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
-
-
 
     @Override
     public CompanyResponseDto updateCompany(Long id, CompanyRequestDto requestDto) {
@@ -134,17 +125,17 @@ public class CompanyServiceImpl implements CompanyService {
 
         Company company = companyRepository.findById(id)
                 .filter(c -> !c.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + id + " not found", "COMPANY_NOT_FOUND"));
 
         if (!company.getName().equals(requestDto.getName().trim()) &&
                 companyRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Company with name " + requestDto.getName() + " already exists");
+            throw new ValidationException("Company with name " + requestDto.getName() + " already exists", "DUPLICATE_COMPANY_NAME");
         }
 
         if (requestDto.getGstNo() != null && !requestDto.getGstNo().isEmpty() &&
                 !company.getGstNo().equals(requestDto.getGstNo()) &&
                 companyRepository.existsByGstNoAndIsDeletedFalse(requestDto.getGstNo())) {
-            throw new ValidationException("Company with GSTIN " + requestDto.getGstNo() + " already exists");
+            throw new ValidationException("Company with GSTIN " + requestDto.getGstNo() + " already exists", "DUPLICATE_GSTIN");
         }
 
         // Update company fields
@@ -165,7 +156,7 @@ public class CompanyServiceImpl implements CompanyService {
         logger.info("Deleting company with ID: {}", id);
         Company company = companyRepository.findById(id)
                 .filter(c -> !c.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + id + " not found", "COMPANY_NOT_FOUND"));
 
         company.setDeleted(true);
         company.setUpdatedDate(new Date());
@@ -174,27 +165,27 @@ public class CompanyServiceImpl implements CompanyService {
 
     private void validateRequestDto(CompanyRequestDto requestDto) {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Company name cannot be empty");
+            throw new ValidationException("Company name cannot be empty", "INVALID_COMPANY_NAME");
         }
         if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null");
+            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
         }
         if (requestDto.getContacts() != null) {
             for (ContactRequestDto contactDto : requestDto.getContacts()) {
                 if (contactDto.getName() == null || contactDto.getName().trim().isEmpty()) {
-                    throw new ValidationException("Contact name cannot be empty");
+                    throw new ValidationException("Contact name cannot be empty", "INVALID_CONTACT_NAME");
                 }
                 if (contactDto.getEmails() == null || contactDto.getEmails().trim().isEmpty()) {
-                    throw new ValidationException("Contact email cannot be empty");
+                    throw new ValidationException("Contact email cannot be empty", "INVALID_CONTACT_EMAIL");
                 }
                 if (contactDto.getCreatedBy() == null) {
-                    throw new ValidationException("Contact created by user ID cannot be null");
+                    throw new ValidationException("Contact created by user ID cannot be null", "INVALID_CONTACT_CREATED_BY");
                 }
                 if (contactDto.getUpdatedBy() == null) {
-                    throw new ValidationException("Contact updated by user ID cannot be null");
+                    throw new ValidationException("Contact updated by user ID cannot be null", "INVALID_CONTACT_UPDATED_BY");
                 }
-                if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalse(contactDto.getEmails(), null)) {
-                    throw new ValidationException("Contact with email " + contactDto.getEmails() + " already exists");
+                if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(contactDto.getEmails(), null)) {
+                    throw new ValidationException("Contact with email " + contactDto.getEmails() + " already exists", "DUPLICATE_CONTACT_EMAIL");
                 }
             }
         }

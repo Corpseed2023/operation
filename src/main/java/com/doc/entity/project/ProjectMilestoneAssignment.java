@@ -1,8 +1,8 @@
 package com.doc.entity.project;
 
+import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.product.Milestone;
 import com.doc.entity.product.ProductMilestoneMap;
-import com.doc.entity.product.ProductRequiredDocuments;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -20,7 +20,7 @@ import java.util.List;
         @Index(name = "idx_project_id", columnList = "project_id"),
         @Index(name = "idx_milestone_id", columnList = "milestone_id"),
         @Index(name = "idx_assigned_user_id", columnList = "assigned_user_id"),
-        @Index(name = "idx_status", columnList = "status"),
+        @Index(name = "idx_status_id", columnList = "status_id"),
         @Index(name = "idx_is_visible", columnList = "is_visible")
 })
 @Getter
@@ -53,10 +53,10 @@ public class ProjectMilestoneAssignment {
     @Comment("User assigned to the milestone")
     private User assignedUser;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    @Comment("Milestone status: NEW, IN_PROGRESS, ON_HOLD, COMPLETED, REJECTED")
-    private MilestoneStatus status = MilestoneStatus.NEW;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "status_id", nullable = false)
+    @Comment("Milestone status: Reference to MilestoneStatus entity")
+    private MilestoneStatus status;  // Changed from enum to entity reference
 
     @Column(name = "status_reason", length = 1000)
     @Comment("Reason for current status (required for ON_HOLD, REJECTED, COMPLETED)")

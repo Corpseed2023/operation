@@ -20,7 +20,7 @@ import java.util.List;
         @Index(name = "idx_project_no", columnList = "projectNo", unique = true),
         @Index(name = "idx_product_id", columnList = "product_id"),
         @Index(name = "idx_sales_person_id", columnList = "sales_person_id"),
-        @Index(name = "idx_status", columnList = "status")
+        @Index(name = "idx_status_id", columnList = "status_id")
 })
 @Getter
 @Setter
@@ -92,10 +92,10 @@ public class Project {
     @Comment("Is active flag")
     private boolean isActive = true;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    @Comment("Project status: OPEN, IN_PROGRESS, COMPLETED, CANCELLED, REFUNDED")
-    private ProjectStatus status = ProjectStatus.OPEN;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "status_id", nullable = false)
+    @Comment("Project status: Reference to ProjectStatus entity")
+    private ProjectStatus status;  // Changed from enum to entity reference
 
     @Comment("Project address")
     private String address;

@@ -7,189 +7,132 @@ import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
+import com.doc.entity.department.Department;
+import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.project.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
-import com.doc.entity.user.Department;
 import com.doc.entity.user.User;
-import com.doc.entity.user.UserProductMap;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
+import com.doc.repository.department.DepartmentAutoConfigRepository;
+import com.doc.repository.documentRepo.DocumentStatusRepository;
+import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
+import com.doc.repository.projectRepo.ProjectStatusRepository;
+import com.doc.service.AutoAssignmentService;
 import com.doc.service.ProjectService;
 import com.doc.validator.request.ProjectRequestValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Service implementation for managing project-related operations.
- */
 @Service
 @Transactional
 public class ProjectServiceImpl implements ProjectService {
 
     private static final Logger logger = LoggerFactory.getLogger(ProjectServiceImpl.class);
 
-    @Autowired
-    private ProjectRepository projectRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private ProductRepository productRepository;
-
-    @Autowired
-    private CompanyRepository companyRepository;
-
-    @Autowired
-    private ContactRepository contactRepository;
-
-    @Autowired
-    private PaymentTypeRepository paymentTypeRepository;
-
-    @Autowired
-    private ProjectPaymentDetailRepository projectPaymentDetailRepository;
-
-    @Autowired
-    private ProjectPaymentTransactionRepository projectPaymentTransactionRepository;
-
-    @Autowired
-    private UserProductMapRepository userProductMapRepository;
-
-    @Autowired
-    private ProductMilestoneMapRepository productMilestoneMapRepository;
-
-    @Autowired
-    private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
-
-    @Autowired
-    private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
-
-    @Autowired
-    private UserProjectCountRepository userProjectCountRepository;
-
-    @Autowired
-    private ProjectDocumentUploadRepository projectDocumentUploadRepository;
-
-    @Autowired
-    private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
-
-    @Autowired
-    private ProjectRequestValidator projectRequestValidator;
-
-
-
-    private static class AssignmentResult {
-        User user;
-        String reason;
-
-        AssignmentResult(User user, String reason) {
-            this.user = user;
-            this.reason = reason;
-        }
-    }
-
+    @Autowired private ProjectRepository projectRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private ProductRepository productRepository;
+    @Autowired private CompanyRepository companyRepository;
+    @Autowired private ContactRepository contactRepository;
+    @Autowired private PaymentTypeRepository paymentTypeRepository;
+    @Autowired private ProjectPaymentDetailRepository projectPaymentDetailRepository;
+    @Autowired private ProjectPaymentTransactionRepository projectPaymentTransactionRepository;
+    @Autowired private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+    @Autowired private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
+    @Autowired private UserPerformanceCountRepository userPerformanceCountRepository;
+    @Autowired private UserProductMapRepository userProductMapRepository;
+    @Autowired private UserLoginStatusRepository userOnlineStatusRepository;
+    @Autowired private ProductMilestoneMapRepository productMilestoneMapRepository;
+    @Autowired private ProjectDocumentUploadRepository projectDocumentUploadRepository;
+    @Autowired private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
+    @Autowired private MilestoneStatusRepository milestoneStatusRepository;
+    @Autowired private DocumentStatusRepository documentStatusRepository;
+    @Autowired private ProjectStatusRepository projectStatusRepository;
+    @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
+    @Autowired private AutoAssignmentService autoAssignmentService;
+    @Autowired private ProjectRequestValidator projectRequestValidator;
 
     @Override
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public ProjectResponseDto createProject(ProjectRequestDto requestDto) {
         logger.info("Creating project with projectNo: {}", requestDto.getProjectNo());
+        System.out.println("Creating project with projectNo: " + requestDto.getProjectNo());
         projectRequestValidator.validate(requestDto);
 
         if (projectRepository.existsByProjectNoAndIsDeletedFalse(requestDto.getProjectNo().trim())) {
             logger.warn("Project number {} already exists", requestDto.getProjectNo());
-            throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists");
+            System.out.println("Project number " + requestDto.getProjectNo() + " already exists");
+            throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists", "ERR_DUPLICATE_PROJECT_NO");
         }
 
-
-        User salesPerson = userRepository.findByIdAndIsDeletedFalse(requestDto.getSalesPersonId())
-                .orElseThrow(() -> {
-                    logger.error("Sales person with ID {} not found or is deleted", requestDto.getSalesPersonId());
-                    return new ResourceNotFoundException("Sales person with ID " + requestDto.getSalesPersonId() + " not found or is deleted");
-                });
-
-        Product product = productRepository.findByIdAndIsDeletedFalse(requestDto.getProductId())
-                .orElseThrow(() -> {
-                    logger.error("Product with ID {} not found or is deleted", requestDto.getProductId());
-                    return new ResourceNotFoundException("Product with ID " + requestDto.getProductId() + " not found or is deleted");
-                });
-
-        Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
-                .orElseThrow(() -> {
-                    logger.error("Company with ID {} not found or is deleted", requestDto.getCompanyId());
-                    return new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found or is deleted");
-                });
-
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalse(requestDto.getContactId())
-                .orElseThrow(() -> {
-                    logger.error("Contact with ID {} not found or is deleted", requestDto.getContactId());
-                    return new ResourceNotFoundException("Contact with ID " + requestDto.getContactId() + " not found or is deleted");
-                });
-
-        User createdBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getCreatedBy())
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", requestDto.getCreatedBy());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getCreatedBy() + " not found or is deleted");
-                });
-
-        User updatedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getUpdatedBy())
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", requestDto.getUpdatedBy());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getUpdatedBy() + " not found or is deleted");
-                });
-
-        User approvedBy = userRepository.findByIdAndIsDeletedFalse(requestDto.getApprovedById())
-                .orElseThrow(() -> {
-                    logger.error("Approved by user with ID {} not found or is deleted", requestDto.getApprovedById());
-                    return new ResourceNotFoundException("Approved by user with ID " + requestDto.getApprovedById() + " not found or is deleted");
-                });
-
+        User salesPerson = userRepository.findActiveUserById(requestDto.getSalesPersonId())
+                .orElseThrow(() -> new ResourceNotFoundException("Sales person not found", "ERR_SALES_PERSON_NOT_FOUND"));
+        Product product = productRepository.findActiveUserById(requestDto.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found", "ERR_PRODUCT_NOT_FOUND"));
+        Company company = companyRepository.findActiveUserById(requestDto.getCompanyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found", "ERR_COMPANY_NOT_FOUND"));
+        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getContactId())
+                .orElseThrow(() -> new ResourceNotFoundException("Contact not found", "ERR_CONTACT_NOT_FOUND"));
+        User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+        User approvedBy = userRepository.findActiveUserById(requestDto.getApprovedById())
+                .orElseThrow(() -> new ResourceNotFoundException("Approved by user not found", "ERR_APPROVED_BY_NOT_FOUND"));
         PaymentType paymentType = paymentTypeRepository.findById(requestDto.getPaymentTypeId())
-                .orElseThrow(() -> {
-                    logger.error("Payment type with ID {} not found", requestDto.getPaymentTypeId());
-                    return new ResourceNotFoundException("Payment type with ID " + requestDto.getPaymentTypeId() + " not found");
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("Payment type not found", "ERR_PAYMENT_TYPE_NOT_FOUND"));
 
-        // Fetch milestones for the product
-        List<ProductMilestoneMap> milestones = productMilestoneMapRepository.findByProductId(product.getId(),
-                PageRequest.of(0, Integer.MAX_VALUE)).getContent();
-
+        List<ProductMilestoneMap> milestones = getMilestoneMaps(product.getId());
         if (milestones.isEmpty()) {
-            logger.warn("No milestones found for product ID: {}", product.getId());
-            throw new ValidationException("No milestones defined for product ID " + product.getId());
-        }
-
-        // Validate that each milestone (except auto-generated) has at least one associated department
-        for (ProductMilestoneMap milestone : milestones) {
-            if (!milestone.isAutoGenerated() && milestone.getMilestone().getDepartments().isEmpty()) {
-                logger.warn("Milestone {} has no associated departments", milestone.getMilestone().getName());
-                throw new ValidationException("Milestone " + milestone.getMilestone().getName() + " has no associated departments");
-            }
+            throw new ValidationException("No milestones defined for product ID " + product.getId(), "ERR_NO_MILESTONES");
         }
 
         double totalAmount = requestDto.getTotalAmount();
         double paidAmount = requestDto.getPaidAmount() != null ? requestDto.getPaidAmount() : 0.0;
         double dueAmount = totalAmount - paidAmount;
 
-        // Validate initial payment based on payment type
         String paymentTypeName = paymentType.getName();
-        if (paymentTypeName.equals("Full Payment") && paidAmount != totalAmount) {
-            logger.warn("Full Payment requires the entire amount ({}), received: {}", totalAmount, paidAmount);
-            throw new ValidationException("Full Payment requires the entire amount of " + totalAmount);
-        }
-        if (paymentTypeName.equals("Purchase Order Payment") && paidAmount > 0) {
-            logger.warn("No initial payment allowed for PO-based project at creation");
-            throw new ValidationException("No initial payment allowed for Purchase Order Payment at project creation");
+        if (paymentTypeName.equals("FULL")) {
+            if (paidAmount != totalAmount) {
+                throw new ValidationException("FULL payment requires the entire amount of " + totalAmount, "ERR_INVALID_FULL_PAYMENT");
+            }
+        } else if (paymentTypeName.equals("PARTIAL")) {
+            double paymentPercentage = (paidAmount / totalAmount) * 100.0;
+            if (Math.abs(paymentPercentage - 50.0) > 0.01) {
+                throw new ValidationException(
+                        "PARTIAL payment must be exactly 50% of total amount. Expected: " + (totalAmount * 0.5) + ", Received: " + paidAmount,
+                        "ERR_PARTIAL_MUST_BE_50_PERCENT"
+                );
+            }
+            if (!(paidAmount > 0 && paidAmount < totalAmount)) {
+                throw new ValidationException(
+                        "PARTIAL payment must be greater than 0 and less than total amount " + totalAmount,
+                        "ERR_INVALID_PARTIAL_PAYMENT"
+                );
+            }
+        } else if (paymentTypeName.equals("INSTALLMENT")) {
+            if (paidAmount > totalAmount) {
+                throw new ValidationException("Payment cannot exceed total amount " + totalAmount, "ERR_EXCEEDS_TOTAL");
+            }
+        } else if (paymentTypeName.equals("PURCHASE_ORDER")) {
+            if (paidAmount > 0) {
+                throw new ValidationException("No initial payment allowed for PURCHASE_ORDER at project creation", "ERR_INVALID_PO_PAYMENT");
+            }
         }
 
         Project project = new Project();
@@ -204,13 +147,13 @@ public class ProjectServiceImpl implements ProjectService {
         project.setUpdatedDate(new Date());
         project.setDeleted(false);
         project.setActive(true);
-        project.setStatus(ProjectStatus.OPEN);
+        project.setStatus(projectStatusRepository.findByName("OPEN")
+                .orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
 
         ProjectPaymentDetail paymentDetail = new ProjectPaymentDetail();
         paymentDetail.setProject(project);
         paymentDetail.setTotalAmount(totalAmount);
         paymentDetail.setDueAmount(dueAmount);
-        paymentDetail.setPaymentStatus(requestDto.getPaymentStatus());
         paymentDetail.setPaymentType(paymentType);
         paymentDetail.setApprovedBy(approvedBy);
         paymentDetail.setCreatedBy(createdBy.getId());
@@ -221,11 +164,8 @@ public class ProjectServiceImpl implements ProjectService {
         paymentDetail.setDeleted(false);
 
         project.setPaymentDetail(paymentDetail);
-
         project = projectRepository.save(project);
-        logger.debug("Project saved with ID: {}", project.getId());
 
-        // Record initial payment transaction if any payment was made
         if (paidAmount > 0) {
             ProjectPaymentTransaction transaction = new ProjectPaymentTransaction();
             transaction.setProject(project);
@@ -234,16 +174,18 @@ public class ProjectServiceImpl implements ProjectService {
             transaction.setCreatedBy(createdBy.getId());
             transaction.setCreatedDate(new Date());
             projectPaymentTransactionRepository.save(transaction);
-            logger.debug("Initial payment transaction recorded for project ID: {}, amount: {}", project.getId(), paidAmount);
         }
 
-        // Create milestone assignments
+        MilestoneStatus newStatusEntity = milestoneStatusRepository.findByName("NEW")
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone status NEW not found", "STATUS_NOT_FOUND"));
+
+        // === ONLY SAVE ASSIGNMENTS — NO VISIBILITY, NO AUTO-ASSIGNMENT ===
         for (ProductMilestoneMap milestone : milestones) {
             ProjectMilestoneAssignment assignment = new ProjectMilestoneAssignment();
             assignment.setProject(project);
             assignment.setProductMilestoneMap(milestone);
             assignment.setMilestone(milestone.getMilestone());
-            assignment.setStatus(MilestoneStatus.NEW);
+            assignment.setStatus(newStatusEntity);
             assignment.setCreatedBy(createdBy.getId());
             assignment.setUpdatedBy(updatedBy.getId());
             assignment.setCreatedDate(new Date());
@@ -251,57 +193,40 @@ public class ProjectServiceImpl implements ProjectService {
             assignment.setDate(LocalDate.now());
             assignment.setDeleted(false);
 
-            // Set visibility for PO-based payment
-            if (paymentTypeName.equals("Purchase Order Payment")) {
-                if (milestone.getMilestone().getName().equalsIgnoreCase("Certification")) {
-                    assignment.setVisible(false);
-                    assignment.setVisibilityReason("Full payment required for Certification");
-                } else {
-                    assignment.setVisible(true);
-                    assignment.setVisibilityReason(null);
-                    assignment.setVisibleDate(new Date());
-                }
-            } else {
-                assignment.setVisible(false);
-                assignment.setVisibilityReason("Insufficient payment");
-            }
+            // === DO NOT SET VISIBILITY HERE ===
+            // Let updateMilestoneVisibilities() handle it
 
             projectMilestoneAssignmentRepository.save(assignment);
-            logger.debug("Milestone assignment created for project ID: {}, milestone: {}", project.getId(), milestone.getMilestone().getName());
         }
 
-        // Update milestone visibilities based on initial payment (also handles PO-based logic)
+        // === NOW: Compute visibility + auto-assign only visible ones ===
         updateMilestoneVisibilities(project, createdBy.getId());
 
-        logger.info("Project created successfully with projectNo: {}", requestDto.getProjectNo());
         return mapToResponseDto(project);
     }
 
+    // ... [REST OF THE METHODS UNCHANGED BELOW] ...
+    // (getAllProjects, deleteProject, addPaymentTransaction, updateMilestoneVisibilities, etc.)
 
     @Override
     public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
         logger.info("Fetching projects for user ID: {}, page: {}, size: {}", userId, page, size);
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", userId);
-                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
-                });
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
         PageRequest pageable = PageRequest.of(page, size);
         Page<Project> projectPage;
 
-        // Check if user has ADMIN role
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
         if (isAdmin) {
-            logger.debug("User ID: {} is ADMIN, fetching all projects", userId);
+            logger.debug("User ID {} is ADMIN, fetching all projects", userId);
             projectPage = projectRepository.findByIsDeletedFalse(pageable);
         } else {
             List<Long> userIds = new ArrayList<>();
             userIds.add(userId);
 
-            // If user is a manager, include subordinates
             if (user.isManagerFlag()) {
-                logger.debug("User ID: {} is a manager, fetching subordinates' projects", userId);
+                logger.debug("User ID {} is a manager, fetching subordinates' projects", userId);
                 List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
                 userIds.addAll(subordinates.stream().map(User::getId).collect(Collectors.toList()));
             }
@@ -319,11 +244,9 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public void deleteProject(Long id) {
         logger.info("Deleting project with ID: {}", id);
-        Project project = projectRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> {
-                    logger.error("Project with ID {} not found or is deleted", id);
-                    return new ResourceNotFoundException("Project with ID " + id + " not found or is deleted");
-                });
+        System.out.println("Deleting project with ID: " + id);
+        Project project = projectRepository.findActiveUserById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
         project.setDeleted(true);
         project.setUpdatedDate(new Date());
         project.getPaymentDetail().setDeleted(true);
@@ -334,79 +257,63 @@ public class ProjectServiceImpl implements ProjectService {
         });
         projectRepository.save(project);
         logger.info("Project deleted successfully with ID: {}", id);
+        System.out.println("Project deleted successfully with ID: " + id);
     }
+
+
 
     @Override
     public ProjectResponseDto addPaymentTransaction(Long projectId, ProjectPaymentTransactionDto transactionDto) {
         logger.info("Adding payment transaction for project ID: {}", projectId);
+        System.out.println("Adding payment transaction for project ID: " + projectId);
         validateTransactionDto(transactionDto);
 
-        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
-                .orElseThrow(() -> {
-                    logger.error("Project with ID {} not found or is deleted", projectId);
-                    return new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted");
-                });
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
 
         ProjectPaymentDetail paymentDetail = projectPaymentDetailRepository.findByProjectIdAndIsDeletedFalse(projectId)
-                .orElseThrow(() -> {
-                    logger.error("Payment detail for project ID {} not found or is deleted", projectId);
-                    return new ResourceNotFoundException("Payment detail for project ID " + projectId + " not found or is deleted");
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("Payment detail not found", "ERR_PAYMENT_DETAIL_NOT_FOUND"));
 
         double amount = transactionDto.getAmount();
         String paymentTypeName = paymentDetail.getPaymentType().getName();
-        double totalAmount = paymentDetail.getTotalAmount();
         double dueAmount = paymentDetail.getDueAmount();
-        double paidAmount = totalAmount - dueAmount;
 
-        // Validate payment amount based on payment type
         if (amount <= 0) {
             logger.warn("Invalid payment amount: {}", amount);
-            throw new ValidationException("Payment amount must be positive");
+            System.out.println("Invalid payment amount: " + amount);
+            throw new ValidationException("Payment amount must be positive", "ERR_INVALID_PAYMENT_AMOUNT");
+        }
+
+        if (amount > dueAmount) {
+            logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
+            System.out.println("Payment amount " + amount + " exceeds due amount " + dueAmount);
+            throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount, "ERR_EXCEEDS_DUE_AMOUNT");
         }
 
         if (paymentTypeName.equals("Full Payment")) {
-            // For Full Payment, the entire amount must be paid in one transaction
             if (dueAmount > 0 && amount != dueAmount) {
                 logger.warn("Full Payment requires the entire due amount ({}), received: {}", dueAmount, amount);
-                throw new ValidationException("Full Payment requires the entire due amount of " + dueAmount);
-            }
-        } else if (paymentTypeName.equals("Partial Payment")) {
-            // For Partial Payment, ensure some payment is made but allow less than total
-            if (amount > dueAmount) {
-                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
-                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount);
+                System.out.println("Full Payment requires the entire due amount (" + dueAmount + "), received: " + amount);
+                throw new ValidationException("Full Payment requires the entire due amount of " + dueAmount, "ERR_INVALID_FULL_PAYMENT_AMOUNT");
             }
         } else if (paymentTypeName.equals("Purchase Order Payment")) {
-            // For PO-based, ensure all non-Certification milestones are completed before accepting payment
             List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
             boolean allNonCertificationCompleted = assignments.stream()
                     .filter(a -> !a.getMilestone().getName().equalsIgnoreCase("Certification"))
-                    .allMatch(a -> a.getStatus() == MilestoneStatus.COMPLETED);
+                    .allMatch(a -> "COMPLETED".equals(a.getStatus().getName()));
             if (!allNonCertificationCompleted) {
                 logger.warn("Cannot add payment for PO-based project ID {} until all non-Certification milestones are completed", projectId);
-                throw new ValidationException("All non-Certification milestones must be completed before adding payment for PO-based project");
-            }
-            if (amount > dueAmount) {
-                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
-                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount);
-            }
-        } else if (paymentTypeName.equals("Installment Payment")) {
-            // For Installment Payment, allow partial payments (existing logic applies)
-            if (amount > dueAmount) {
-                logger.warn("Payment amount {} exceeds due amount {}", amount, dueAmount);
-                throw new ValidationException("Payment amount cannot exceed due amount of " + dueAmount);
+                System.out.println("Cannot add payment for PO-based project ID " + projectId +
+                        " until all non-Certification milestones are completed");
+                throw new ValidationException("All non-Certification milestones must be completed before adding payment for " +
+                        "PO-based project", "ERR_PO_PAYMENT_MILESTONE_NOT_COMPLETED");
             }
         }
 
-        // Update due amount
         paymentDetail.setDueAmount(dueAmount - amount);
 
-        User createdBy = userRepository.findByIdAndIsDeletedFalse(transactionDto.getCreatedBy())
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", transactionDto.getCreatedBy());
-                    return new ResourceNotFoundException("User with ID " + transactionDto.getCreatedBy() + " not found or is deleted");
-                });
+        User createdBy = userRepository.findActiveUserById(transactionDto.getCreatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
         ProjectPaymentTransaction transaction = new ProjectPaymentTransaction();
         transaction.setProject(project);
@@ -421,95 +328,15 @@ public class ProjectServiceImpl implements ProjectService {
         projectPaymentTransactionRepository.save(transaction);
         projectPaymentDetailRepository.save(paymentDetail);
         logger.info("Transaction added for project ID: {}, amount: {}", projectId, amount);
+        System.out.println("Transaction added for project ID: " + projectId + ", amount: " + amount);
 
-        // Update milestone visibilities based on payment
         updateMilestoneVisibilities(project, createdBy.getId());
-
         return mapToResponseDto(project);
     }
 
-    public void updateMilestoneStatus(Long assignmentId, MilestoneStatus newStatus, String statusReason, Long changedById) {
-        logger.info("Updating milestone assignment ID: {} to status: {}", assignmentId, newStatus);
-        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findByIdAndIsDeletedFalse(assignmentId)
-                .orElseThrow(() -> {
-                    logger.error("Milestone assignment with ID {} not found or is deleted", assignmentId);
-                    return new ResourceNotFoundException("Milestone assignment with ID " + assignmentId + " not found or is deleted");
-                });
-
-        User changedBy = userRepository.findByIdAndIsDeletedFalse(changedById)
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", changedById);
-                    return new ResourceNotFoundException("User with ID " + changedById + " not found or is deleted");
-                });
-
-        // Validate status transition
-        validateMilestoneStatusTransition(assignment, newStatus, statusReason);
-
-        // Validate documents for COMPLETED status
-        if (newStatus == MilestoneStatus.COMPLETED) {
-            List<ProjectDocumentUpload> documents = projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignmentId);
-            if (!assignment.getProductMilestoneMap().isAutoGenerated() && !documents.isEmpty()) {
-                boolean allVerified = documents.stream().allMatch(doc -> doc.getStatus() == DocumentStatus.VERIFIED);
-                if (!allVerified) {
-                    logger.warn("Cannot complete milestone ID: {} due to unverified documents", assignmentId);
-                    throw new ValidationException("All documents must be verified to complete milestone");
-                }
-            }
-        }
-
-        // Handle REJECTED → NEW for rework
-        if (newStatus == MilestoneStatus.NEW && assignment.getStatus() == MilestoneStatus.REJECTED) {
-            ProductMilestoneMap map = assignment.getProductMilestoneMap();
-            if (!map.isAllowRollback()) {
-                logger.warn("Rollback not allowed for milestone: {}", map.getMilestone().getName());
-                throw new ValidationException("Rollback not allowed for milestone " + map.getMilestone().getName());
-            }
-            if (assignment.getReworkAttempts() >= map.getMaxAttempts()) {
-                logger.warn("Maximum rework attempts ({}) reached for milestone ID: {}", map.getMaxAttempts(), assignmentId);
-                throw new ValidationException("Maximum rework attempts reached for milestone");
-            }
-            assignment.setReworkAttempts(assignment.getReworkAttempts() + 1);
-        }
-
-        // Log status change
-        MilestoneStatusHistory history = new MilestoneStatusHistory();
-        history.setMilestoneAssignment(assignment);
-        history.setPreviousStatus(assignment.getStatus());
-        history.setNewStatus(newStatus);
-        history.setChangeReason(statusReason);
-        history.setChangedBy(changedBy);
-        history.setChangeDate(new Date());
-        history.setDeleted(false);
-
-        // Update assignment
-        assignment.setStatus(newStatus);
-        assignment.setStatusReason(statusReason);
-        if (newStatus == MilestoneStatus.IN_PROGRESS) {
-            assignment.setStartedDate(new Date());
-        } else if (newStatus == MilestoneStatus.COMPLETED) {
-            assignment.setCompletedDate(new Date());
-        } else if (newStatus == MilestoneStatus.REJECTED || newStatus == MilestoneStatus.ON_HOLD) {
-            assignment.setStatusReason(statusReason);
-        }
-        assignment.setUpdatedBy(changedById);
-        assignment.setUpdatedDate(new Date());
-
-        projectMilestoneAssignmentRepository.save(assignment);
-        milestoneStatusHistoryRepository.save(history);
-        logger.info("Milestone assignment ID: {} updated to status: {}", assignmentId, newStatus);
-
-        // Update project status
-        updateProjectStatus(assignment.getProject(), changedById);
-
-        // If completed, re-check visibilities to unlock/assign next
-        if (newStatus == MilestoneStatus.COMPLETED) {
-            updateMilestoneVisibilities(assignment.getProject(), changedById);
-        }
-    }
-
-
     public void updateMilestoneVisibilities(Project project, Long updatedById) {
         logger.debug("Updating milestone visibilities for project ID: {}", project.getId());
+        System.out.println("Updating milestone visibilities for project ID: " + project.getId());
         double totalAmount = project.getPaymentDetail().getTotalAmount();
         double paidAmount = totalAmount - project.getPaymentDetail().getDueAmount();
         double paidPercentage = (paidAmount / totalAmount) * 100.0;
@@ -518,13 +345,13 @@ public class ProjectServiceImpl implements ProjectService {
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
         if (assignments.isEmpty()) {
             logger.warn("No milestone assignments found for project ID: {}", project.getId());
+            System.out.println("No milestone assignments found for project ID: " + project.getId());
             return;
         }
 
         assignments.sort(Comparator.comparing(a -> a.getProductMilestoneMap().getOrder()));
 
         if (paymentTypeName.equals("Purchase Order Payment")) {
-            // For PO-based payment, all milestones except Certification are visible from the start
             for (ProjectMilestoneAssignment assignment : assignments) {
                 ProductMilestoneMap map = assignment.getProductMilestoneMap();
                 boolean isCertification = map.getMilestone().getName().equalsIgnoreCase("Certification");
@@ -532,11 +359,13 @@ public class ProjectServiceImpl implements ProjectService {
                 String visibilityReason = null;
 
                 if (isCertification) {
-                    // Certification milestone requires full payment
-                    isVisible = Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
-                    visibilityReason = isVisible ? null : "Full payment required for Certification";
+                    boolean allPriorCompleted = assignments.stream()
+                            .filter(a -> a.getProductMilestoneMap().getOrder() < map.getOrder())
+                            .allMatch(a -> "COMPLETED".equals(a.getStatus().getName()));
+                    isVisible = allPriorCompleted && Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
+                    visibilityReason = isVisible ? null : (allPriorCompleted ? "Full payment required for Certification" :
+                            "Prior milestones incomplete");
                 } else {
-                    // Non-Certification milestones are visible regardless of payment
                     isVisible = true;
                     visibilityReason = null;
                 }
@@ -550,58 +379,66 @@ public class ProjectServiceImpl implements ProjectService {
                     projectMilestoneAssignmentRepository.save(assignment);
                     logger.debug("Milestone {} (ID: {}) visibility updated to {}, reason: {}",
                             map.getMilestone().getName(), assignment.getId(), isVisible, visibilityReason);
+                    System.out.println("Milestone " + map.getMilestone().getName() + " (ID: " + assignment.getId() + ") " +
+                            "visibility updated to " + isVisible + ", reason: " + visibilityReason);
                 }
 
                 if (isVisible && !map.isAutoGenerated() && assignment.getAssignedUser() == null) {
-                    try {
-                        AssignmentResult assignmentResult = assignMilestoneUser(map);
-                        if (assignmentResult != null && assignmentResult.user != null) {
-                            assignment.setAssignedUser(assignmentResult.user);
-                            logger.debug("Assigned user {} (ID: {}) to milestone {} for project ID: {}",
-                                    assignmentResult.user.getFullName(), assignmentResult.user.getId(),
-                                    map.getMilestone().getName(), project.getId());
+                    logger.info("Attempting to assign user for milestone: {} in project: {}", map.getMilestone().getName(),
+                            project.getProjectNo());
+                    System.out.println("Attempting to assign user for milestone: " + map.getMilestone().getName() +
+                            " in project: " + project.getProjectNo());
 
-                            ProjectAssignmentHistory history = new ProjectAssignmentHistory();
-                            history.setProject(project);
-                            history.setMilestoneAssignment(assignment);
-                            history.setAssignedUser(assignmentResult.user);
-                            history.setAssignmentReason(assignmentResult.reason);
-                            history.setCreatedDate(new Date());
-                            history.setUpdatedDate(new Date());
-                            history.setCreatedBy(updatedById);
-                            history.setUpdatedBy(updatedById);
-                            history.setDeleted(false);
-                            projectAssignmentHistoryRepository.save(history);
+                    AssignmentResult result = autoAssignmentService.assignMilestoneUser(map, project, updatedById);
 
+                    if (result != null && result.getUser() != null) {
+                        assignment.setAssignedUser(result.getUser());
+                        assignment.setStatusReason(result.getReason());
+                        projectMilestoneAssignmentRepository.save(assignment);
 
-                            UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
-                            if (count == null) {
-                                count = new UserProjectCount();
-                                count.setUser(assignmentResult.user);
-                                count.setProduct(project.getProduct());
-                                count.setProjectCount(1);
-                                count.setLastUpdatedDate(new Date());
-                                count.setCreatedDate(new Date());
-                                count.setUpdatedDate(new Date());
-                                count.setCreatedBy(updatedById);
-                                count.setUpdatedBy(updatedById);
-                                count.setDeleted(false);
-                            } else {
-                                count.setProjectCount(count.getProjectCount() + 1);
-                                count.setLastUpdatedDate(new Date());
-                                count.setUpdatedDate(new Date());
-                                count.setUpdatedBy(updatedById);
-                            }
-                            userProjectCountRepository.save(count);
-                        }
-                    } catch (ResourceNotFoundException e) {
-                        logger.error("Failed to assign user to milestone {}: {}", map.getMilestone().getName(), e.getMessage());
-                        throw e;
+                        ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+                        history.setProject(project);
+                        history.setMilestoneAssignment(assignment);
+                        history.setAssignedUser(result.getUser());
+                        history.setAssignmentReason(result.getReason());
+                        history.setCreatedDate(new Date());
+                        history.setUpdatedDate(new Date());
+                        history.setCreatedBy(updatedById);
+                        history.setUpdatedBy(updatedById);
+                        history.setDeleted(false);
+                        projectAssignmentHistoryRepository.save(history);
+
+                        logger.info("Assigned milestone {} (project ID: {}) to user ID: {} (Name: {}) with reason: {}",
+                                map.getMilestone().getName(), project.getId(), result.getUser().getId(),
+                                result.getUser().getFullName(), result.getReason());
+                        System.out.println("Assigned milestone " + map.getMilestone().getName() + " (project ID: " +
+                                project.getId() + ") to user ID: " + result.getUser().getId() + " (Name: " +
+                                result.getUser().getFullName() + ") with reason: " + result.getReason());
+                    } else {
+                        assignment.setAssignedUser(null);
+                        assignment.setStatusReason(result != null ? result.getReason() : "Unknown");
+                        projectMilestoneAssignmentRepository.save(assignment);
+
+                        ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+                        history.setProject(project);
+                        history.setMilestoneAssignment(assignment);
+                        history.setAssignedUser(null);
+                        history.setAssignmentReason(result != null ? result.getReason() : "Unknown");
+                        history.setCreatedDate(new Date());
+                        history.setUpdatedDate(new Date());
+                        history.setCreatedBy(updatedById);
+                        history.setUpdatedBy(updatedById);
+                        history.setDeleted(false);
+                        projectAssignmentHistoryRepository.save(history);
+
+                        logger.info("No user assigned for milestone {} (project ID: {}), reason: {}",
+                                map.getMilestone().getName(), project.getId(), result != null ? result.getReason() : "Unknown");
+                        System.out.println("No user assigned for milestone " + map.getMilestone().getName() +
+                                " (project ID: " + project.getId() + "), reason: " + (result != null ? result.getReason() : "Unknown"));
                     }
                 }
             }
         } else {
-            // Existing logic for other payment types (Full, Partial, Installment)
             double cumulativePaymentPercentage = 0.0;
             for (ProjectMilestoneAssignment assignment : assignments) {
                 ProductMilestoneMap map = assignment.getProductMilestoneMap();
@@ -610,7 +447,7 @@ public class ProjectServiceImpl implements ProjectService {
 
                 for (ProjectMilestoneAssignment prevAssignment : assignments) {
                     if (prevAssignment.getProductMilestoneMap().getOrder() < map.getOrder()) {
-                        if (prevAssignment.getStatus() != MilestoneStatus.COMPLETED) {
+                        if (!"COMPLETED".equals(prevAssignment.getStatus().getName())) {
                             allPreviousCompleted = false;
                             break;
                         }
@@ -620,8 +457,11 @@ public class ProjectServiceImpl implements ProjectService {
                 boolean isVisible;
                 String visibilityReason = null;
                 if (map.getMilestone().getName().equalsIgnoreCase("Certification")) {
-                    isVisible = Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
-                    visibilityReason = isVisible ? null : "Full payment required for Certification";
+                    boolean allPriorCompleted = assignments.stream()
+                            .filter(a -> a.getProductMilestoneMap().getOrder() < map.getOrder())
+                            .allMatch(a -> "COMPLETED".equals(a.getStatus().getName()));
+                    isVisible = allPriorCompleted && Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
+                    visibilityReason = isVisible ? null : (allPriorCompleted ? "Full payment required for Certification" : "Prior milestones incomplete");
                 } else {
                     isVisible = allPreviousCompleted && paidPercentage >= cumulativePaymentPercentage;
                     visibilityReason = !isVisible ? (allPreviousCompleted ? "Insufficient payment" : "Previous milestone incomplete") : null;
@@ -636,271 +476,89 @@ public class ProjectServiceImpl implements ProjectService {
                     projectMilestoneAssignmentRepository.save(assignment);
                     logger.debug("Milestone {} (ID: {}) visibility updated to {}, reason: {}",
                             map.getMilestone().getName(), assignment.getId(), isVisible, visibilityReason);
+                    System.out.println("Milestone " + map.getMilestone().getName() + " (ID: " + assignment.getId() +
+                            ") visibility updated to " + isVisible + ", reason: " + visibilityReason);
                 }
 
                 if (isVisible && !map.isAutoGenerated() && assignment.getAssignedUser() == null) {
-                    try {
-                        AssignmentResult assignmentResult = assignMilestoneUser(map);
-                        if (assignmentResult != null && assignmentResult.user != null) {
-                            assignment.setAssignedUser(assignmentResult.user);
-                            logger.debug("Assigned user {} (ID: {}) to milestone {} for project ID: {}",
-                                    assignmentResult.user.getFullName(), assignmentResult.user.getId(),
-                                    map.getMilestone().getName(), project.getId());
+                    logger.info("Attempting to assign user for milestone: {} in project: {}", map.getMilestone().getName(),
+                            project.getProjectNo());
+                    System.out.println("Attempting to assign user for milestone: " + map.getMilestone().getName() + " in project: " +
+                            project.getProjectNo());
 
-                            ProjectAssignmentHistory history = new ProjectAssignmentHistory();
-                            history.setProject(project);
-                            history.setMilestoneAssignment(assignment);
-                            history.setAssignedUser(assignmentResult.user);
-                            history.setAssignmentReason(assignmentResult.reason);
-                            history.setCreatedDate(new Date());
-                            history.setUpdatedDate(new Date());
-                            history.setCreatedBy(updatedById);
-                            history.setUpdatedBy(updatedById);
-                            history.setDeleted(false);
-                            projectAssignmentHistoryRepository.save(history);
+                    AssignmentResult result = autoAssignmentService.assignMilestoneUser(map, project, updatedById);
 
-                            UserProjectCount count = userProjectCountRepository.findByUserIdAndProductId(assignmentResult.user.getId(), project.getProduct().getId());
-                            if (count == null) {
-                                count = new UserProjectCount();
-                                count.setUser(assignmentResult.user);
-                                count.setProduct(project.getProduct());
-                                count.setProjectCount(1);
-                                count.setLastUpdatedDate(new Date());
-                                count.setCreatedDate(new Date());
-                                count.setUpdatedDate(new Date());
-                                count.setCreatedBy(updatedById);
-                                count.setUpdatedBy(updatedById);
-                                count.setDeleted(false);
-                            } else {
-                                count.setProjectCount(count.getProjectCount() + 1);
-                                count.setLastUpdatedDate(new Date());
-                                count.setUpdatedDate(new Date());
-                                count.setUpdatedBy(updatedById);
-                            }
-                            userProjectCountRepository.save(count);
-                        }
-                    } catch (ResourceNotFoundException e) {
-                        logger.error("Failed to assign user to milestone {}: {}", map.getMilestone().getName(), e.getMessage());
-                        throw e;
+                    if (result != null && result.getUser() != null) {
+                        assignment.setAssignedUser(result.getUser());
+                        assignment.setStatusReason(result.getReason());
+                        projectMilestoneAssignmentRepository.save(assignment);
+
+                        ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+                        history.setProject(project);
+                        history.setMilestoneAssignment(assignment);
+                        history.setAssignedUser(result.getUser());
+                        history.setAssignmentReason(result.getReason());
+                        history.setCreatedDate(new Date());
+                        history.setUpdatedDate(new Date());
+                        history.setCreatedBy(updatedById);
+                        history.setUpdatedBy(updatedById);
+                        history.setDeleted(false);
+                        projectAssignmentHistoryRepository.save(history);
+
+                        logger.info("Assigned milestone {} (project ID: {}) to user ID: {} (Name: {}) with reason: {}",
+                                map.getMilestone().getName(), project.getId(), result.getUser().getId(),
+                                result.getUser().getFullName(), result.getReason());
+                        System.out.println("Assigned milestone " + map.getMilestone().getName() + " (project ID: " +
+                                project.getId() + ") to user ID: " + result.getUser().getId() + " (Name: " +
+                                result.getUser().getFullName() + ") with reason: " + result.getReason());
+                    } else {
+                        assignment.setAssignedUser(null);
+                        assignment.setStatusReason(result != null ? result.getReason() : "Unknown");
+                        projectMilestoneAssignmentRepository.save(assignment);
+
+                        ProjectAssignmentHistory history = new ProjectAssignmentHistory();
+                        history.setProject(project);
+                        history.setMilestoneAssignment(assignment);
+                        history.setAssignedUser(null);
+                        history.setAssignmentReason(result != null ? result.getReason() : "Unknown");
+                        history.setCreatedDate(new Date());
+                        history.setUpdatedDate(new Date());
+                        history.setCreatedBy(updatedById);
+                        history.setUpdatedBy(updatedById);
+                        history.setDeleted(false);
+                        projectAssignmentHistoryRepository.save(history);
+
+                        logger.info("No user assigned for milestone {} (project ID: {}), reason: {}",
+                                map.getMilestone().getName(), project.getId(), result != null ? result.getReason() : "Unknown");
+                        System.out.println("No user assigned for milestone " + map.getMilestone().getName() +
+                                " (project ID: " + project.getId() + "), reason: " + (result != null ? result.getReason() : "Unknown"));
                     }
                 }
             }
         }
     }
-    private void updateProjectStatus(Project project, Long updatedById) {
-        logger.debug("Updating project status for project ID: {}", project.getId());
-        List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
 
-        if (assignments.isEmpty()) {
-            project.setStatus(ProjectStatus.OPEN);
-        } else if (assignments.stream().allMatch(a -> a.getStatus() == MilestoneStatus.COMPLETED)) {
-            project.setStatus(ProjectStatus.COMPLETED);
-        } else if (assignments.stream().anyMatch(a -> a.getStatus() == MilestoneStatus.IN_PROGRESS || a.getStatus() == MilestoneStatus.ON_HOLD)) {
-            project.setStatus(ProjectStatus.IN_PROGRESS);
-        } else {
-            project.setStatus(ProjectStatus.OPEN);
-        }
-
-        project.setUpdatedBy(updatedById);
-        project.setUpdatedDate(new Date());
-        projectRepository.save(project);
-        logger.debug("Project ID: {} status updated to: {}", project.getId(), project.getStatus());
-    }
-
-    private void validateMilestoneStatusTransition(ProjectMilestoneAssignment assignment, MilestoneStatus newStatus, String statusReason) {
-        if (statusReason == null || statusReason.trim().isEmpty()) {
-            if (newStatus == MilestoneStatus.COMPLETED || newStatus == MilestoneStatus.ON_HOLD || newStatus == MilestoneStatus.REJECTED) {
-                logger.warn("Status reason is required for status: {}", newStatus);
-                throw new ValidationException("Status reason is required for status: " + newStatus);
-            }
-        }
-
-        MilestoneStatus currentStatus = assignment.getStatus();
-        if (currentStatus == newStatus) {
-            logger.warn("Milestone assignment ID: {} already in status: {}", assignment.getId(), newStatus);
-            throw new ValidationException("Milestone is already in status: " + newStatus);
-        }
-
-        switch (currentStatus) {
-            case NEW:
-                if (newStatus != MilestoneStatus.IN_PROGRESS && newStatus != MilestoneStatus.ON_HOLD) {
-                    throw new ValidationException("Invalid transition from NEW to " + newStatus);
-                }
-                break;
-            case IN_PROGRESS:
-                if (newStatus != MilestoneStatus.COMPLETED && newStatus != MilestoneStatus.ON_HOLD && newStatus != MilestoneStatus.REJECTED) {
-                    throw new ValidationException("Invalid transition from IN_PROGRESS to " + newStatus);
-                }
-                break;
-            case ON_HOLD:
-                if (newStatus != MilestoneStatus.IN_PROGRESS) {
-                    throw new ValidationException("Invalid transition from ON_HOLD to " + newStatus);
-                }
-                break;
-            case REJECTED:
-                if (newStatus != MilestoneStatus.NEW) {
-                    throw new ValidationException("Invalid transition from REJECTED to " + newStatus);
-                }
-                break;
-            case COMPLETED:
-                throw new ValidationException("Cannot change status from COMPLETED");
-            default:
-                throw new ValidationException("Invalid current status: " + currentStatus);
-        }
-
-        if (!assignment.isVisible() && newStatus != MilestoneStatus.NEW) {
-            logger.warn("Cannot update milestone ID: {} to {} when not visible", assignment.getId(), newStatus);
-            throw new ValidationException("Milestone must be visible to change status to " + newStatus);
-        }
+    @Cacheable(value = "milestoneMaps", key = "#productId")
+    public List<ProductMilestoneMap> getMilestoneMaps(Long productId) {
+        return productMilestoneMapRepository.findByProductId(productId, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
     }
 
     private void validateTransactionDto(ProjectPaymentTransactionDto transactionDto) {
         if (transactionDto.getAmount() == null) {
             logger.warn("Transaction amount is null");
-            throw new ValidationException("Transaction amount cannot be null");
+            System.out.println("Transaction amount is null");
+            throw new ValidationException("Transaction amount cannot be null", "ERR_NULL_AMOUNT");
         }
         if (transactionDto.getPaymentDate() == null) {
             logger.warn("Transaction date is null");
-            throw new ValidationException("Transaction date cannot be null");
+            System.out.println("Transaction date is null");
+            throw new ValidationException("Transaction date cannot be null", "ERR_NULL_PAYMENT_DATE");
         }
         if (transactionDto.getCreatedBy() == null) {
             logger.warn("Created by user ID is null");
-            throw new ValidationException("Created by user ID cannot be null");
+            System.out.println("Created by user ID is null");
+            throw new ValidationException("Created by user ID cannot be null", "ERR_NULL_CREATED_BY");
         }
-    }
-
-    private AssignmentResult assignMilestoneUser(ProductMilestoneMap milestone) {
-        logger.info("Assigning user for milestone: {}, product ID: {}", milestone.getMilestone().getName(), milestone.getProduct().getId());
-
-        if (milestone.isAutoGenerated()) {
-            logger.debug("Milestone {} is auto-generated, no user assignment needed", milestone.getMilestone().getName());
-            return null;
-        }
-
-        List<Department> milestoneDepartments = milestone.getMilestone().getDepartments();
-        if (milestoneDepartments.isEmpty()) {
-            logger.error("No departments associated with milestone: {}", milestone.getMilestone().getName());
-            throw new ResourceNotFoundException("No departments associated with milestone " + milestone.getMilestone().getName());
-        }
-
-        Department primaryDepartment = milestoneDepartments.get(0);
-        logger.debug("Primary department for milestone {}: {} (ID: {})",
-                milestone.getMilestone().getName(), primaryDepartment.getName(), primaryDepartment.getId());
-
-        List<User> departmentUsers = userRepository.findByDepartmentsIdAndIsDeletedFalse(primaryDepartment.getId());
-        if (departmentUsers.isEmpty()) {
-            logger.warn("No users found in department {} (ID: {}) for milestone: {}",
-                    primaryDepartment.getName(), primaryDepartment.getId(), milestone.getMilestone().getName());
-            return assignAdmin(milestone);
-        }
-
-        List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(milestone.getProduct().getId());
-        List<UserProductMap> eligibleMappings = mappings.stream()
-                .filter(m -> departmentUsers.stream().anyMatch(u -> u.getId().equals(m.getUser().getId())))
-                .filter(m -> m.getRating() != null && m.getRating() > 0)
-                .filter(m -> isUserAvailable(m.getUser()))
-                .collect(Collectors.toList());
-
-        if (eligibleMappings.isEmpty()) {
-            logger.warn("No eligible users with positive ratings found for product ID: {} in department: {}",
-                    milestone.getProduct().getId(), primaryDepartment.getName());
-            return assignAdmin(milestone);
-        }
-
-        boolean allAssigned = eligibleMappings.stream().allMatch(UserProductMap::isAssigned);
-        if (allAssigned) {
-            logger.debug("All eligible users for product ID: {} are assigned, resetting isAssigned flags", milestone.getProduct().getId());
-            eligibleMappings.forEach(m -> {
-                m.setAssigned(false);
-                userProductMapRepository.save(m);
-            });
-        }
-
-        Optional<UserProductMap> selectedMappingOpt = eligibleMappings.stream()
-                .filter(m -> !m.isAssigned())
-                .max(Comparator.comparingDouble(m -> m.getRating() != null ? m.getRating() : 0.0));
-
-        if (selectedMappingOpt.isPresent()) {
-            UserProductMap selectedMapping = selectedMappingOpt.get();
-            User selectedUser = selectedMapping.getUser();
-            selectedMapping.setAssigned(true);
-            userProductMapRepository.save(selectedMapping);
-            logger.info("Assigned user: {} (ID: {}, Rating: {}) for milestone: {}",
-                    selectedUser.getFullName(), selectedUser.getId(), selectedMapping.getRating(), milestone.getMilestone().getName());
-            return new AssignmentResult(selectedUser, "Highest rating");
-        }
-
-        Optional<User> selectedManagerOpt = eligibleMappings.stream()
-                .filter(m -> !m.isAssigned())
-                .filter(m -> m.getUser().getManager() != null)
-                .map(m -> m.getUser().getManager())
-                .filter(this::isUserAvailable)
-                .findFirst();
-
-        if (selectedManagerOpt.isPresent()) {
-            User manager = selectedManagerOpt.get();
-            UserProductMap managerProductMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
-                    manager.getId(), milestone.getProduct().getId()).orElseGet(() -> {
-                UserProductMap newMap = new UserProductMap();
-                newMap.setUser(manager);
-                newMap.setProduct(milestone.getProduct());
-                newMap.setRating(0.0);
-                newMap.setAssigned(false);
-                newMap.setDeleted(false);
-                newMap.setCreatedDate(new Date());
-                newMap.setUpdatedDate(new Date());
-                newMap.setCreatedBy(0L);
-                newMap.setUpdatedBy(0L);
-                return newMap;
-            });
-            managerProductMap.setAssigned(true);
-            userProductMapRepository.save(managerProductMap);
-            logger.info("Assigned manager: {} (ID: {}) for milestone: {}",
-                    manager.getFullName(), manager.getId(), milestone.getMilestone().getName());
-            return new AssignmentResult(manager, "Manager assigned due to no available users");
-        }
-
-        return assignAdmin(milestone);
-    }
-
-    private AssignmentResult assignAdmin(ProductMilestoneMap milestone) {
-        List<User> admins = userRepository.findAdmins();
-        Optional<User> availableAdmin = admins.stream()
-                .filter(this::isUserAvailable)
-                .findFirst();
-
-        if (availableAdmin.isPresent()) {
-            User admin = availableAdmin.get();
-            UserProductMap adminProductMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
-                    admin.getId(), milestone.getProduct().getId()).orElseGet(() -> {
-                UserProductMap newMap = new UserProductMap();
-                newMap.setUser(admin);
-                newMap.setProduct(milestone.getProduct());
-                newMap.setRating(0.0);
-                newMap.setAssigned(false);
-                newMap.setDeleted(false);
-                newMap.setCreatedDate(new Date());
-                newMap.setUpdatedDate(new Date());
-                newMap.setCreatedBy(0L);
-                newMap.setUpdatedBy(0L);
-                return newMap;
-            });
-            adminProductMap.setAssigned(true);
-            userProductMapRepository.save(adminProductMap);
-            logger.info("Assigned admin: {} (ID: {}) for milestone: {}",
-                    admin.getFullName(), admin.getId(), milestone.getMilestone().getName());
-            return new AssignmentResult(admin, "Admin assigned due to no available users or managers");
-        }
-
-        logger.error("No available admins found for milestone: {}", milestone.getMilestone().getName());
-        throw new ResourceNotFoundException("No available users, managers, or admins found for milestone " + milestone.getMilestone().getName());
-    }
-
-    private boolean isUserAvailable(User user) {
-        boolean available = user != null && !user.isDeleted();
-        logger.debug("Checking user availability: {} (ID: {}), available: {}",
-                user != null ? user.getFullName() : "null", user != null ? user.getId() : "null", available);
-        return available;
     }
 
     private void mapRequestDtoToProject(Project project, ProjectRequestDto requestDto) {
@@ -933,7 +591,6 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setPrimaryPinCode(project.getPrimaryPinCode());
         dto.setTotalAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getTotalAmount() : 0.0);
         dto.setDueAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getDueAmount() : 0.0);
-        dto.setPaymentStatus(project.getPaymentDetail() != null ? project.getPaymentDetail().getPaymentStatus() : null);
         dto.setPaymentTypeId(project.getPaymentDetail() != null && project.getPaymentDetail().getPaymentType() != null
                 ? project.getPaymentDetail().getPaymentType().getId() : null);
         dto.setApprovedById(project.getPaymentDetail() != null && project.getPaymentDetail().getApprovedBy() != null
@@ -948,45 +605,37 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public Page<AssignedProjectResponseDto> getAssignedProjects(Long userId, int page, int size) {
         logger.info("Fetching assigned projects with milestones for user ID: {}, page: {}, size: {}", userId, page, size);
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+        System.out.println("Fetching assigned projects with milestones for user ID: " + userId + ", page: " + page + ", size: " + size);
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
-        PageRequest pageable = PageRequest.of(page, size * 10);// Adjust size to account for multiple assignments per project
+        PageRequest pageable = PageRequest.of(page, size * 10);
 
         Page<ProjectMilestoneAssignment> assignmentPage;
 
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
 
-        if (isAdmin) {
-
+        if (isAdmin || isOperationHead) {
             assignmentPage = projectMilestoneAssignmentRepository.findAllByIsDeletedFalse(pageable);
-
         } else if (user.isManagerFlag()) {
-
             List<Department> managerDepts = user.getDepartments();
-
             if (managerDepts.isEmpty()) {
-
                 return new PageImpl<>(new ArrayList<>(), pageable, 0);
             }
-
             List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
-
             List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
-
             List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
-
             if (!deptUserIds.contains(userId)) {
-
                 deptUserIds.add(userId);
             }
-
             assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-                    deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
-        }
-        else {
+                    deptUserIds, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(),
+                            milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()), pageable);
+        } else {
             assignmentPage = projectMilestoneAssignmentRepository.findByAssignedUserIdAndIsVisibleTrueAndStatusIn(
-                    userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS), pageable);
+                    userId, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(),
+                            milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()), pageable);
         }
 
         List<ProjectMilestoneAssignment> assignments = assignmentPage.getContent();
@@ -1001,10 +650,6 @@ public class ProjectServiceImpl implements ProjectService {
         for (Map.Entry<Project, List<ProjectMilestoneAssignment>> entry : groupedByProject.entrySet()) {
             AssignedProjectResponseDto dto = new AssignedProjectResponseDto();
             dto.setProject(mapToProjectDetailsDto(entry.getKey(), userId));
-            // Note: The commented-out line for setting assigned milestones is preserved as in the original code
-            // dto.setAssignedMilestones(entry.getValue().stream()
-            //         .map(this::mapToAssignedMilestoneDto)
-            //         .collect(Collectors.toList()));
             projectDtos.add(dto);
         }
 
@@ -1017,45 +662,54 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
         logger.info("Fetching project details and milestones for project ID: {}, user ID: {}", projectId, userId);
-        Project project = projectRepository.findByIdAndIsDeletedFalse(projectId)
-                .orElseThrow(() -> {
-                    logger.error("Project with ID {} not found or is deleted", projectId);
-                    return new ResourceNotFoundException("Project with ID " + projectId + " not found or is deleted");
-                });
+        System.out.println("Fetching project details and milestones for project ID: " + projectId + ", user ID: " + userId);
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
 
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", userId);
-                    return new ResourceNotFoundException("User with ID " + userId + " not found or is deleted");
-                });
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
+        boolean isAssignedUser = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId,
+                userId).isPresent();
+        boolean isManagerOfAssignedUser = false;
+
+        if (!isAdmin && !isOperationHead && !isAssignedUser) {
+            List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
+            List<Long> assignedUserIds = assignments.stream()
+                    .filter(a -> a.getAssignedUser() != null)
+                    .map(a -> a.getAssignedUser().getId())
+                    .collect(Collectors.toList());
+            List<User> managedUsers = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+            isManagerOfAssignedUser = managedUsers.stream().anyMatch(u -> assignedUserIds.contains(u.getId()));
+        }
+
+        if (!isAdmin && !isOperationHead && !isAssignedUser && !isManagerOfAssignedUser) {
+            logger.warn("User ID {} not authorized to view project ID {}", userId, projectId);
+            System.out.println("User ID " + userId + " not authorized to view project ID " + projectId);
+            throw new ValidationException("User not authorized to view this project", "ERR_UNAUTHORIZED_ACCESS");
+        }
 
         List<ProjectMilestoneAssignment> assignments;
 
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-
-        if (isAdmin) {
+        if (isAdmin || isOperationHead) {
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
-
-        } else if (user.isManagerFlag()) {
-
-            List<Department> managerDepts = user.getDepartments();
-
-            if (managerDepts.isEmpty()) {
-                return new ProjectMilestoneResponseDto();
+        } else if (isManagerOfAssignedUser) {
+            List<Long> managedUserIds = userRepository.findByManagerIdAndIsDeletedFalse(userId)
+                    .stream()
+                    .map(User::getId)
+                    .collect(Collectors.toList());
+            if (!managedUserIds.contains(userId)) {
+                managedUserIds.add(userId);
             }
-            List<Long> deptIds = managerDepts.stream().map(Department::getId).collect(Collectors.toList());
-            List<User> deptUsers = userRepository.findByDepartmentIdsIn(deptIds);
-            List<Long> deptUserIds = deptUsers.stream().map(User::getId).collect(Collectors.toList());
-            if (!deptUserIds.contains(userId)) {
-
-                deptUserIds.add(userId);
-            }
-
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-                    projectId, deptUserIds, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+                    projectId, managedUserIds, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(),
+                            milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()));
         } else {
             assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
-                    projectId, userId, Arrays.asList(MilestoneStatus.NEW, MilestoneStatus.IN_PROGRESS));
+                    projectId, userId, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(),
+                            milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()));
         }
 
         for (ProjectMilestoneAssignment assignment : assignments) {
@@ -1088,10 +742,10 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
 
-        // Fetch and map contact details based on user role and department
-        User user = userRepository.findByIdAndIsDeletedFalse(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User with ID " + userId + " not found or is deleted"));
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
+        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
         boolean isCrtDepartment = user.getDepartments().stream()
                 .anyMatch(dept -> dept.getName().equalsIgnoreCase("CRT"));
 
@@ -1106,13 +760,11 @@ public class ProjectServiceImpl implements ProjectService {
                 contactDto.setName(contact.getName());
                 contactDto.setDesignation(contact.getDesignation());
 
-                if (isAdmin || isCrtDepartment) {
-                    // ADMIN or CRT department sees unmasked details
+                if (isAdmin || isOperationHead || isCrtDepartment) {
                     contactDto.setEmails(contact.getEmails());
                     contactDto.setContactNo(contact.getContactNo());
                     contactDto.setWhatsappNo(contact.getWhatsappNo());
                 } else {
-                    // Non-ADMIN, non-CRT department sees masked details
                     contactDto.setEmails(maskEmail(contact.getEmails()));
                     contactDto.setContactNo(maskPhoneNumber(contact.getContactNo()));
                     contactDto.setWhatsappNo(maskPhoneNumber(contact.getWhatsappNo()));
@@ -1127,9 +779,8 @@ public class ProjectServiceImpl implements ProjectService {
 
     private String maskPhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.length() < 7) {
-            return phoneNumber; // Return as-is if too short to mask
+            return phoneNumber;
         }
-        // Show first 3 and last 4 digits, mask middle with "XXXX"
         String firstThree = phoneNumber.substring(0, 3);
         String lastFour = phoneNumber.substring(phoneNumber.length() - 4);
         return firstThree + "XXXX" + lastFour;
@@ -1137,14 +788,12 @@ public class ProjectServiceImpl implements ProjectService {
 
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) {
-            return email; // Return as-is if invalid email
+            return email;
         }
         String[] parts = email.split("@");
         String localPart = parts[0];
         String domainPart = parts[1];
-        // Mask local part: keep first 5 chars, replace rest with "XXXXX"
         String maskedLocalPart = localPart.length() > 5 ? localPart.substring(0, 5) + "XXXXX" : localPart;
-        // Mask domain: keep first 3 chars and TLD, mask middle with "XXX"
         int lastDotIndex = domainPart.lastIndexOf(".");
         if (lastDotIndex == -1) {
             return maskedLocalPart + "@" + domainPart;
@@ -1161,7 +810,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setProjectName(assignment.getProject().getName());
         dto.setMilestoneId(assignment.getMilestone().getId());
         dto.setMilestoneName(assignment.getMilestone().getName());
-        dto.setStatus(assignment.getStatus().name());
+        dto.setStatus(assignment.getStatus().getName());
         dto.setStatusReason(assignment.getStatusReason());
         dto.setVisibilityReason(assignment.getVisibilityReason());
         dto.setReworkAttempts(assignment.getReworkAttempts());
@@ -1191,17 +840,19 @@ public class ProjectServiceImpl implements ProjectService {
         DocumentResponseDto dto = new DocumentResponseDto();
         dto.setId(document.getId());
         dto.setFileUrl(document.getFileUrl());
+        dto.setFileName(document.getFileName());
+        dto.setOldFileUrl(document.getOldFileUrl());
+        dto.setOldFileName(document.getOldFileName());
         dto.setStatus(document.getStatus());
         dto.setRemarks(document.getRemarks());
         dto.setUploadTime(document.getUploadTime());
-        dto.setRequiredDocumentId(document.getRequiredDocument().getUuid());
+        dto.setRequiredDocumentId(document.getRequiredDocument().getId());
         dto.setMilestoneAssignmentId(document.getMilestoneAssignment().getId());
         dto.setProjectId(document.getProject().getId());
         dto.setUploadedById(document.getUploadedBy().getId());
         dto.setCreatedDate(document.getCreatedDate());
         dto.setUpdatedDate(document.getUpdatedDate());
+        dto.setReplacementCount(document.getReplacementCount());
         return dto;
     }
-
-
 }

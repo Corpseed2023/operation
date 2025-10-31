@@ -50,9 +50,6 @@ public class ProjectRequestDto {
     @NotNull(message = "paid amount cannot be null")
     private Double paidAmount;
 
-    @NotBlank(message = "Payment status cannot be empty")
-    private String paymentStatus;
-
     @NotNull(message = "Payment type ID cannot be null")
     private Long paymentTypeId;
 

@@ -16,11 +16,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
-
-/**
- * Controller for managing project document uploads and status updates.
- */
 @RestController
 @RequestMapping("/api/projects")
 @Validated
@@ -60,7 +55,7 @@ public class ProjectDocumentUploadController {
     })
     @PutMapping("/documents/{documentId}/status")
     public ResponseEntity<DocumentResponseDto> updateDocumentStatus(
-            @Parameter(description = "UUID of the document to update") @PathVariable UUID documentId,
+            @Parameter(description = "ID of the document to update") @PathVariable Long documentId,
             @Valid @RequestBody ProjectDocumentStatusUpdateDto updateDto) {
         DocumentResponseDto response = projectDocumentUploadService.updateDocumentStatus(documentId, updateDto);
         return new ResponseEntity<>(response, HttpStatus.OK);

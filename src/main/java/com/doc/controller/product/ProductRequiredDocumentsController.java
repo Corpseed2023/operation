@@ -1,5 +1,6 @@
 package com.doc.controller.product;
 
+import com.doc.dto.productRequiredDocument.GetRequiredDocumentsByProductRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsResponseDto;
 import com.doc.service.ProductRequiredDocumentsService;
@@ -27,40 +28,12 @@ public class ProductRequiredDocumentsController {
         return new ResponseEntity<>(responses, HttpStatus.CREATED);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ProductRequiredDocumentsResponseDto> getRequiredDocumentById(
-            @PathVariable Long id,
-            @RequestParam Long userId) {
-        ProductRequiredDocumentsResponseDto response = requiredDocumentsService.getRequiredDocumentById(id, userId);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    @GetMapping
-    public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> getAllRequiredDocuments(
-            @RequestParam Long userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) String country,
-            @RequestParam(required = false) String centralName,
-            @RequestParam(required = false) String stateName) {
-        List<ProductRequiredDocumentsResponseDto> responses = requiredDocumentsService.getAllRequiredDocuments(userId, page, size, name, type, country, centralName, stateName);
-        return new ResponseEntity<>(responses, HttpStatus.OK);
-    }
-
     @PutMapping("/{id}")
     public ResponseEntity<ProductRequiredDocumentsResponseDto> updateRequiredDocument(
             @PathVariable Long id,
             @Valid @RequestBody ProductRequiredDocumentsRequestDto requestDto) {
         ProductRequiredDocumentsResponseDto response = requiredDocumentsService.updateRequiredDocument(id, requestDto);
         return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteRequiredDocument(@PathVariable Long id) {
-        requiredDocumentsService.deleteRequiredDocument(id);
-        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @GetMapping("/project/{projectId}/product/{productId}")
@@ -73,5 +46,24 @@ public class ProductRequiredDocumentsController {
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
 
+    @PostMapping("/product/{productId}")
+    public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> getRequiredDocumentsByProduct(
+            @PathVariable Long productId,
+            @Valid @RequestBody GetRequiredDocumentsByProductRequestDto requestDto) {
+        List<ProductRequiredDocumentsResponseDto> responses =
+                requiredDocumentsService.getRequiredDocumentsByProduct(
+                        productId, requestDto.getProjectId(), requestDto.getStateName(), requestDto.getCentralName());
+        return new ResponseEntity<>(responses, HttpStatus.OK);
+    }
 
+    @GetMapping("/admin/product/{productId}")
+    public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> getRequiredDocumentsForAdmin(
+            @PathVariable Long productId,
+            @RequestParam Long userId,
+            @RequestParam(required = false) String stateName,
+            @RequestParam(required = false) String centralName) {
+        List<ProductRequiredDocumentsResponseDto> responses =
+                requiredDocumentsService.getRequiredDocumentsForAdmin(productId, userId, stateName, centralName);
+        return new ResponseEntity<>(responses, HttpStatus.OK);
+    }
 }

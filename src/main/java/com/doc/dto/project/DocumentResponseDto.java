@@ -1,16 +1,15 @@
 package com.doc.dto.project;
 
-import com.doc.entity.project.DocumentStatus;
+import com.doc.entity.document.DocumentStatus;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Date;
-import java.util.UUID;
 
 @Getter
 @Setter
 public class DocumentResponseDto {
-    private UUID id;
+    private Long id;
     private String fileUrl;
     private String fileName;
     private String oldFileUrl;
@@ -18,10 +17,11 @@ public class DocumentResponseDto {
     private DocumentStatus status;
     private String remarks;
     private Date uploadTime;
-    private UUID requiredDocumentId;
+    private Long requiredDocumentId;
     private Long milestoneAssignmentId;
     private Long projectId;
     private Long uploadedById;
     private Date createdDate;
     private Date updatedDate;
+    private int replacementCount;
 }

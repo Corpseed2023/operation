@@ -33,7 +33,7 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
      * @param assignmentId The ID of the milestone assignment.
      * @return An Optional containing the ProjectMilestoneAssignment if found, or empty if not found or deleted.
      */
-    Optional<ProjectMilestoneAssignment> findByIdAndIsDeletedFalse(@Param("assignmentId") Long assignmentId);
+    Optional<ProjectMilestoneAssignment> findActiveUserById(@Param("assignmentId") Long assignmentId);
 
     /**
      * Finds all non-deleted ProjectMilestoneAssignment entities with pagination.
@@ -47,7 +47,7 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
      * Finds non-deleted ProjectMilestoneAssignment entities for a list of assigned user IDs,
      * where milestones are visible and in specified statuses, with pagination.
      *
-     * @param userIds  List of user IDs assigned to the milestones.
+     * @param userIds List of user IDs assigned to the milestones.
      * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
      * @param pageable Pagination information.
      * @return A Page of ProjectMilestoneAssignment entities.
@@ -63,7 +63,7 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
      * Finds non-deleted ProjectMilestoneAssignment entities for a specific assigned user ID,
      * where milestones are visible and in specified statuses, with pagination.
      *
-     * @param userId   The ID of the assigned user.
+     * @param userId The ID of the assigned user.
      * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
      * @param pageable Pagination information.
      * @return A Page of ProjectMilestoneAssignment entities.
@@ -80,8 +80,8 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
      * where milestones are visible and in specified statuses.
      *
      * @param projectId The ID of the project.
-     * @param userIds   List of user IDs assigned to the milestones.
-     * @param statuses  List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
+     * @param userIds List of user IDs assigned to the milestones.
+     * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
      * @return A List of ProjectMilestoneAssignment entities.
      */
     @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId " +
@@ -96,8 +96,8 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
      * where milestones are visible and in specified statuses.
      *
      * @param projectId The ID of the project.
-     * @param userId    The ID of the assigned user.
-     * @param statuses  List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
+     * @param userId The ID of the assigned user.
+     * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
      * @return A List of ProjectMilestoneAssignment entities.
      */
     @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId " +
@@ -106,4 +106,39 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             @Param("projectId") Long projectId,
             @Param("userId") Long userId,
             @Param("statuses") List<MilestoneStatus> statuses);
+
+    /**
+     * Finds a non-deleted ProjectMilestoneAssignment for a specific project ID and assigned user ID.
+     *
+     * @param projectId The ID of the project.
+     * @param userId The ID of the assigned user.
+     * @return An Optional containing the ProjectMilestoneAssignment if found, or empty if not found or deleted.
+     */
+    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId " +
+            "AND a.assignedUser.id = :userId AND a.isDeleted = false")
+    Optional<ProjectMilestoneAssignment> findByProjectIdAndAssignedUserIdAndIsDeletedFalse(
+            @Param("projectId") Long projectId,
+            @Param("userId") Long userId);
+
+    /**
+     * Finds a non-deleted ProjectMilestoneAssignment for a specific project ID and milestone ID.
+     *
+     * @param projectId The ID of the project.
+     * @param milestoneId The ID of the milestone.
+     * @return An Optional containing the ProjectMilestoneAssignment if found, or empty if not found or deleted.
+     */
+    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId " +
+            "AND a.milestone.id = :milestoneId AND a.isDeleted = false")
+    Optional<ProjectMilestoneAssignment> findByProjectIdAndMilestoneIdAndIsDeletedFalse(
+            @Param("projectId") Long projectId,
+            @Param("milestoneId") Long milestoneId);
+
+    /**
+     * Finds non-deleted ProjectMilestoneAssignment entities with specified statuses.
+     *
+     * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
+     * @return A List of ProjectMilestoneAssignment entities.
+     */
+    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.status IN :statuses AND a.isDeleted = false")
+    List<ProjectMilestoneAssignment> findByStatusInAndIsDeletedFalse(@Param("statuses") List<String> statuses);
 }

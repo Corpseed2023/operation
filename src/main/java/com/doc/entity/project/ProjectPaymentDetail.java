@@ -38,20 +38,12 @@ public class ProjectPaymentDetail {
     @Comment("Remaining unpaid amount")
     private double dueAmount;
 
-    @Column(name = "estimate_id")
-    @Comment("Estimate ID from lead service")
-    private Long estimateId;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by")
     @Comment("User who approved payment")
     private User approvedBy;
 
-    @Column(name = "payment_status", nullable = false)
-    @Comment("Payment status: PENDING, APPROVED, REJECTED")
-    private String paymentStatus = "PENDING";
-
-    @Temporal(TemporalType.TIMESTAMP)
+     @Temporal(TemporalType.TIMESTAMP)
     @Column(updatable = false)
     private Date createdDate;
 

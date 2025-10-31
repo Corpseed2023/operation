@@ -1,12 +1,30 @@
 package com.doc.entity.project;
 
-/**
- * Enum representing the possible statuses of a project milestone assignment.
- */
-public enum MilestoneStatus {
-    NEW,         // Initial state after becoming visible
-    IN_PROGRESS, // User has started working (e.g., calling client)
-    ON_HOLD,     // Milestone paused (e.g., awaiting client response)
-    COMPLETED,   // Milestone finished (e.g., documents verified)
-    REJECTED     // Milestone failed (e.g., invalid documents, requires rework)
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.Comment;
+
+@Entity
+@Table(name = "milestone_statuses", indexes = {
+        @Index(name = "idx_name", columnList = "name", unique = true)
+})
+@Getter
+@Setter
+@NoArgsConstructor
+public class MilestoneStatus {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Comment("Primary key: Milestone status ID")
+    private Long id;
+
+    @Column(nullable = false, unique = true)
+    @Comment("Status name (e.g., NEW, IN_PROGRESS)")
+    private String name;
+
+    @Column(columnDefinition = "varchar(1000)")
+    @Comment("Detailed description of the status")
+    private String description;
 }

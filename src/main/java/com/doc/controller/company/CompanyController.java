@@ -24,7 +24,7 @@ public class CompanyController {
     @PostMapping("/createCompany")
     public ResponseEntity<CompanyResponseDto> createCompany(
             @Valid @RequestBody CompanyRequestDto requestDto,
-            @RequestParam(required = false) Long companyId) {
+            @RequestParam(required = true) Long companyId) {
 
         CompanyResponseDto response = companyService.createCompany(requestDto, companyId);
         return new ResponseEntity<>(response, HttpStatus.CREATED);

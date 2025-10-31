@@ -28,13 +28,13 @@ public class MilestoneStatusHistory {
     @Comment("Associated milestone assignment")
     private ProjectMilestoneAssignment milestoneAssignment;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "previous_status", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "previous_status_id", nullable = false)
     @Comment("Previous milestone status")
     private MilestoneStatus previousStatus;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "new_status", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "new_status_id", nullable = false)
     @Comment("New milestone status")
     private MilestoneStatus newStatus;
 

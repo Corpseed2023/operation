@@ -51,16 +51,6 @@ public interface MilestoneService {
      */
     void deleteMilestone(Long id);
 
-    /**
-     * Retrieves milestones by department ID with pagination.
-     *
-     * @param departmentId the department ID
-     * @param pageable pagination information
-     * @return a page of milestones
-     */
-    Page<MilestoneResponseDto> getMilestonesByDepartment(Long departmentId, Pageable pageable);
-
-
     List<MilestoneResponseDto> getAllMilestones();
 
 }

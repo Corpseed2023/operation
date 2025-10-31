@@ -5,11 +5,12 @@ import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
 import com.doc.service.ProductMilestoneMapService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
 
 /**
  * REST Controller for managing ProductMilestoneMap entities.
@@ -33,7 +34,6 @@ public class ProductMilestoneMapController {
         ProductMilestoneMapResponseDto response = productMilestoneMapService.createProductMilestoneMap(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
-
 
     /**
      * Updates an existing product-milestone mapping.
@@ -63,18 +63,6 @@ public class ProductMilestoneMapController {
     }
 
     /**
-     * Retrieves all product-milestone mappings with pagination.
-     *
-     * @param pageable pagination information
-     * @return a page of mappings
-     */
-    @GetMapping
-    public ResponseEntity<Page<ProductMilestoneMapResponseDto>> getAllProductMilestoneMaps(Pageable pageable) {
-        Page<ProductMilestoneMapResponseDto> mappings = productMilestoneMapService.getAllProductMilestoneMaps(pageable);
-        return new ResponseEntity<>(mappings, HttpStatus.OK);
-    }
-
-    /**
      * Deletes a product-milestone mapping by ID.
      *
      * @param id the mapping ID
@@ -87,16 +75,17 @@ public class ProductMilestoneMapController {
     }
 
     /**
-     * Retrieves product-milestone mappings by product ID with pagination.
+     * Retrieves all product-milestone mappings for a given product and user.
      *
-     * @param productId the product ID
-     * @param pageable pagination information
-     * @return a page of mappings for the product
+     * @param userId the ID of the user
+     * @param productId the ID of the product
+     * @return a list of product-milestone mappings
      */
-    @GetMapping("/product/{productId}")
-    public ResponseEntity<Page<ProductMilestoneMapResponseDto>> getProductMilestoneMapsByProduct(
-            @PathVariable Long productId, Pageable pageable) {
-        Page<ProductMilestoneMapResponseDto> mappings = productMilestoneMapService.getProductMilestoneMapsByProduct(productId, pageable);
-        return new ResponseEntity<>(mappings, HttpStatus.OK);
+    @GetMapping("/user/{userId}/product/{productId}")
+    public ResponseEntity<List<ProductMilestoneMapResponseDto>> getProductMilestoneMapsByUserAndProduct(
+            @PathVariable Long userId,
+            @PathVariable Long productId) {
+        List<ProductMilestoneMapResponseDto> response = productMilestoneMapService.getProductMilestoneMapsByUserAndProduct(userId, productId);
+        return new ResponseEntity<>(response, HttpStatus.OK);
     }
 }

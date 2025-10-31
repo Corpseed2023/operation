@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/users")
 public class UserLoginStatusController {
@@ -48,4 +50,15 @@ public class UserLoginStatusController {
         UserLoginStatusResponseDto dto = userLoginStatusService.getStatus(id);
         return ResponseEntity.ok(dto);
     }
+
+    @Operation(summary = "Get all users' online statuses")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "All user statuses retrieved successfully")
+    })
+    @GetMapping("/status/all")
+    public ResponseEntity<List<UserLoginStatusResponseDto>> getAllStatuses() {
+        List<UserLoginStatusResponseDto> statuses = userLoginStatusService.getAllStatuses();
+        return ResponseEntity.ok(statuses);
+    }
+
 }

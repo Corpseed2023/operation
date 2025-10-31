@@ -13,14 +13,16 @@ import java.util.Optional;
 @Repository
 public interface RoleRepository extends JpaRepository<Role, Long> {
 
-    boolean existsByNameAndIdNot(String name, Long id);
+    boolean existsByNameAndIsDeletedFalse(String name);
 
-    Optional<Role> findByIdAndName(Long id, String name);
+    boolean existsByIdAndIsDeletedFalse(Long id);
 
-    Page<Role> findAll(Pageable pageable);
+    boolean existsByNameAndIsDeletedFalseAndIdNot(String name, Long id);
 
-    @Query("SELECT r FROM Role r WHERE (:name IS NULL OR r.name LIKE %:name%)")
-    Page<Role> findByNameContaining(@Param("name") String name, Pageable pageable);
+    Optional<Role> findActiveUserById(Long id);
 
-    boolean existsById(Long id); // Added for duplicate ID check
+    @Query("SELECT r FROM Role r WHERE r.isDeleted = false AND LOWER(r.name) LIKE LOWER(CONCAT('%', :name, '%'))")
+    Page<Role> findByNameContainingIgnoreCaseAndIsDeletedFalse(@Param("name") String name, Pageable pageable);
+
+    Page<Role> findByIsDeletedFalse(Pageable pageable);
 }

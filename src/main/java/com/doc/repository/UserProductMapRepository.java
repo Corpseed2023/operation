@@ -24,6 +24,8 @@ public interface UserProductMapRepository extends JpaRepository<UserProductMap, 
     @Query("SELECT upm FROM UserProductMap upm WHERE upm.product.id = :productId AND upm.isDeleted = false ORDER BY upm.rating DESC")
     List<UserProductMap> findByProductIdAndIsDeletedFalse(@Param("productId") Long productId);
 
+
+
     /**
      * Checks if a mapping exists for the given user and product.
      *
@@ -36,6 +38,12 @@ public interface UserProductMapRepository extends JpaRepository<UserProductMap, 
 
     Optional<UserProductMap> findByUserIdAndProductIdAndIsDeletedFalse(@Param("userId") Long userId, @Param("productId") Long productId);
 
-
     List<UserProductMap> findByIsDeletedFalse();
+
+    // Additions to UserProductMapRepository
+    @Query("SELECT upm FROM UserProductMap upm WHERE upm.user.id = :userId AND upm.isDeleted = false AND upm.user.isActive = true AND upm.product.isActive = true")
+    List<UserProductMap> findActiveProductsForUser(@Param("userId") Long userId);
+
+    @Query("SELECT upm FROM UserProductMap upm WHERE upm.product.id = :productId AND upm.isDeleted = false AND upm.user.isActive = true AND upm.product.isActive = true")
+    List<UserProductMap> findActiveUsersForProduct(@Param("productId") Long productId);
 }

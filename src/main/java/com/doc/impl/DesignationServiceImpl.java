@@ -2,15 +2,16 @@ package com.doc.impl;
 
 import com.doc.dto.desigantion.DesignationRequestDto;
 import com.doc.dto.desigantion.DesignationResponseDto;
-import com.doc.entity.user.Department;
-import com.doc.entity.user.Designation;
-import com.doc.entity.user.User;
+import com.doc.entity.department.Department;
+import com.doc.entity.department.Designation;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.DepartmentRepository;
 import com.doc.repository.DesignationRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.DesignationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,9 +22,14 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Service implementation for managing designation-related operations.
+ */
 @Service
 @Transactional
 public class DesignationServiceImpl implements DesignationService {
+
+    private static final Logger logger = LoggerFactory.getLogger(DesignationServiceImpl.class);
 
     @Autowired
     private DesignationRepository designationRepository;
@@ -36,26 +42,30 @@ public class DesignationServiceImpl implements DesignationService {
 
     @Override
     public DesignationResponseDto createDesignation(DesignationRequestDto requestDto) {
+        logger.info("Creating designation with ID: {}, name: {}, department ID: {}",
+                requestDto.getId(), requestDto.getName(), requestDto.getDepartmentId());
         validateRequestDto(requestDto);
 
         // Check for duplicate designation ID
-        if (designationRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("Designation with ID " + requestDto.getId() + " already exists");
+        if (designationRepository.existsByIdAndIsDeletedFalse(requestDto.getId())) {
+            logger.warn("Designation with ID {} already exists", requestDto.getId());
+            throw new ValidationException("Designation with ID " + requestDto.getId() + " already exists", "ERR_DUPLICATE_DESIGNATION_ID");
         }
 
         // Check for duplicate name in department
         if (designationRepository.existsByNameAndDepartmentIdAndIsDeletedFalse(requestDto.getName().trim(), requestDto.getDepartmentId())) {
-            throw new ValidationException("Designation with name " + requestDto.getName() + " already exists in the department");
+            logger.warn("Designation with name '{}' already exists in department ID {}", requestDto.getName(), requestDto.getDepartmentId());
+            throw new ValidationException("Designation with name '" + requestDto.getName() + "' already exists in the department", "ERR_DUPLICATE_DESIGNATION_NAME");
         }
 
         // Validate department
         Department department = departmentRepository.findById(requestDto.getDepartmentId())
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + requestDto.getDepartmentId() + " not found"));
+                .orElseThrow(() -> {
+                    logger.error("Department with ID {} not found or is deleted", requestDto.getDepartmentId());
+                    return new ResourceNotFoundException("Department with ID " + requestDto.getDepartmentId() + " not found", "ERR_DEPARTMENT_NOT_FOUND");
+                });
 
-        // Validate createdBy user
-        userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found"));
 
         Designation designation = new Designation();
         designation.setId(requestDto.getId());
@@ -67,21 +77,37 @@ public class DesignationServiceImpl implements DesignationService {
         designation.setDeleted(false);
 
         designation = designationRepository.save(designation);
+        logger.info("Designation created successfully with ID: {}", designation.getId());
+
         return mapToResponseDto(designation);
     }
 
     @Override
     public DesignationResponseDto getDesignationById(Long id) {
-        Designation designation = designationRepository.findById(id)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Designation with ID " + id + " not found"));
+        logger.info("Fetching designation with ID: {}", id);
+        Designation designation = designationRepository.findActiveUserById(id)
+                .orElseThrow(() -> {
+                    logger.error("Designation with ID {} not found or is deleted", id);
+                    return new ResourceNotFoundException("Designation with ID " + id + " not found", "ERR_DESIGNATION_NOT_FOUND");
+                });
         return mapToResponseDto(designation);
     }
 
     @Override
     public List<DesignationResponseDto> getAllDesignations(int page, int size) {
+        logger.info("Fetching all designations, page: {}, size: {}", page, size);
+        if (page < 0 || size <= 0) {
+            logger.warn("Invalid pagination parameters: page={}, size={}", page, size);
+            throw new ValidationException("Page must be non-negative and size must be positive", "ERR_INVALID_PAGINATION");
+        }
+
         PageRequest pageable = PageRequest.of(page, size);
-        Page<Designation> designationPage = designationRepository.findByDepartmentIsDeletedFalse(pageable);
+        Page<Designation> designationPage = designationRepository.findByIsDeletedFalse(pageable);
+        if (designationPage.isEmpty()) {
+            logger.warn("No designations found for page: {}, size: {}", page, size);
+            throw new ResourceNotFoundException("No designations found", "ERR_DESIGNATIONS_NOT_FOUND");
+        }
+
         return designationPage.getContent()
                 .stream()
                 .map(this::mapToResponseDto)
@@ -90,19 +116,26 @@ public class DesignationServiceImpl implements DesignationService {
 
     @Override
     public DesignationResponseDto updateDesignation(Long id, DesignationRequestDto requestDto) {
+        logger.info("Updating designation with ID: {}", id);
         validateRequestDto(requestDto);
 
-        Designation designation = designationRepository.findById(id)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Designation with ID " + id + " not found"));
+        Designation designation = designationRepository.findActiveUserById(id)
+                .orElseThrow(() -> {
+                    logger.error("Designation with ID {} not found or is deleted", id);
+                    return new ResourceNotFoundException("Designation with ID " + id + " not found", "ERR_DESIGNATION_NOT_FOUND");
+                });
 
         Department department = departmentRepository.findById(requestDto.getDepartmentId())
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + requestDto.getDepartmentId() + " not found"));
+                .orElseThrow(() -> {
+                    logger.error("Department with ID {} not found or is deleted", requestDto.getDepartmentId());
+                    return new ResourceNotFoundException("Department with ID " + requestDto.getDepartmentId() + " not found", "ERR_DEPARTMENT_NOT_FOUND");
+                });
 
         if (!designation.getName().equals(requestDto.getName().trim()) &&
                 designationRepository.existsByNameAndDepartmentIdAndIsDeletedFalse(requestDto.getName().trim(), requestDto.getDepartmentId())) {
-            throw new ValidationException("Designation with name " + requestDto.getName() + " already exists in the department");
+            logger.warn("Designation with name '{}' already exists in department ID {}", requestDto.getName(), requestDto.getDepartmentId());
+            throw new ValidationException("Designation with name '" + requestDto.getName() + "' already exists in the department", "ERR_DUPLICATE_DESIGNATION_NAME");
         }
 
         designation.setName(requestDto.getName().trim());
@@ -110,38 +143,51 @@ public class DesignationServiceImpl implements DesignationService {
         designation.setDepartment(department);
         designation.setUpdatedDate(new Date());
         designation = designationRepository.save(designation);
+        logger.info("Designation updated successfully with ID: {}", id);
+
         return mapToResponseDto(designation);
     }
 
     @Override
     public void deleteDesignation(Long id) {
-        Designation designation = designationRepository.findById(id)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Designation with ID " + id + " not found"));
+        logger.info("Deleting designation with ID: {}", id);
+        Designation designation = designationRepository.findActiveUserById(id)
+                .orElseThrow(() -> {
+                    logger.error("Designation with ID {} not found or is deleted", id);
+                    return new ResourceNotFoundException("Designation with ID " + id + " not found", "ERR_DESIGNATION_NOT_FOUND");
+                });
 
         designation.setDeleted(true);
         designation.setUpdatedDate(new Date());
         designationRepository.save(designation);
+        logger.info("Designation soft-deleted successfully with ID: {}", id);
     }
 
     @Override
     public DesignationResponseDto createMasterDesignation(DesignationRequestDto requestDto) {
+        logger.info("Creating master designation with ID: {}, name: {}, department ID: {}",
+                requestDto.getId(), requestDto.getName(), requestDto.getDepartmentId());
         validateRequestDto(requestDto);
 
         // Check for duplicate designation ID
-        if (designationRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("Designation with ID " + requestDto.getId() + " already exists");
+        if (designationRepository.existsByIdAndIsDeletedFalse(requestDto.getId())) {
+            logger.warn("Designation with ID {} already exists", requestDto.getId());
+            throw new ValidationException("Designation with ID " + requestDto.getId() + " already exists", "ERR_DUPLICATE_DESIGNATION_ID");
         }
 
         // Check for duplicate name in department
         if (designationRepository.existsByNameAndDepartmentIdAndIsDeletedFalse(requestDto.getName().trim(), requestDto.getDepartmentId())) {
-            throw new ValidationException("Designation with name " + requestDto.getName() + " already exists in the department");
+            logger.warn("Designation with name '{}' already exists in department ID {}", requestDto.getName(), requestDto.getDepartmentId());
+            throw new ValidationException("Designation with name '" + requestDto.getName() + "' already exists in the department", "ERR_DUPLICATE_DESIGNATION_NAME");
         }
 
         // Validate department
         Department department = departmentRepository.findById(requestDto.getDepartmentId())
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + requestDto.getDepartmentId() + " not found"));
+                .orElseThrow(() -> {
+                    logger.error("Department with ID {} not found or is deleted", requestDto.getDepartmentId());
+                    return new ResourceNotFoundException("Department with ID " + requestDto.getDepartmentId() + " not found", "ERR_DEPARTMENT_NOT_FOUND");
+                });
 
         Designation designation = new Designation();
         designation.setId(requestDto.getId());
@@ -153,25 +199,29 @@ public class DesignationServiceImpl implements DesignationService {
         designation.setDeleted(false);
 
         designation = designationRepository.save(designation);
+        logger.info("Master designation created successfully with ID: {}", designation.getId());
+
         return mapToResponseDto(designation);
     }
 
     private void validateRequestDto(DesignationRequestDto requestDto) {
         if (requestDto.getId() == null) {
-            throw new ValidationException("Designation ID cannot be null");
+            logger.warn("Designation ID cannot be null");
+            throw new ValidationException("Designation ID cannot be null", "ERR_NULL_DESIGNATION_ID");
         }
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Designation name cannot be empty");
+            logger.warn("Designation name cannot be empty");
+            throw new ValidationException("Designation name cannot be empty", "ERR_NULL_DESIGNATION_NAME");
         }
         if (requestDto.getWeightValue() == null || requestDto.getWeightValue() < 0) {
-            throw new ValidationException("Weight value must be a non-negative number");
+            logger.warn("Weight value must be a non-negative number, got: {}", requestDto.getWeightValue());
+            throw new ValidationException("Weight value must be a non-negative number", "ERR_INVALID_WEIGHT_VALUE");
         }
         if (requestDto.getDepartmentId() == null) {
-            throw new ValidationException("Department ID cannot be null");
+            logger.warn("Department ID cannot be null");
+            throw new ValidationException("Department ID cannot be null", "ERR_NULL_DEPARTMENT_ID");
         }
-        if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null");
-        }
+
     }
 
     private DesignationResponseDto mapToResponseDto(Designation designation) {

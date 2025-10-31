@@ -37,8 +37,10 @@ public class ContactController {
     @GetMapping
     public ResponseEntity<List<ContactResponseDto>> getAllContacts(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        List<ContactResponseDto> responses = contactService.getAllContacts(page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Long companyId,
+            @RequestParam(required = false) Long userId) {
+        List<ContactResponseDto> responses = contactService.getAllContacts(page, size, companyId, userId);
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
 

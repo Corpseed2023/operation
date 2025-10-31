@@ -8,14 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 
 /**
  * Repository interface for managing {@link Product} entities.
  */
-
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
@@ -28,46 +25,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     boolean existsByProductNameAndIsDeletedFalse(String productName);
 
     /**
-     * Finds all non-deleted products with pagination.
+     * Finds all active and non-deleted products with pagination.
      *
      * @param pageable pagination information
-     * @return a page of non-deleted products
+     * @return a page of active and non-deleted products
      */
-    Page<Product> findByIsDeletedFalse(Pageable pageable);
-
-    /**
-     * Finds products by filters (name, active status, date range) with pagination.
-     *
-     * @param productName the product name to filter by (optional)
-     * @param isActive    the active status to filter by (optional)
-     * @param startDate   the start date to filter by (optional)
-     * @param endDate     the end date to filter by (optional)
-     * @param pageable    pagination information
-     * @return a page of non-deleted products matching the filters
-     */
-    @Query("SELECT p FROM Product p WHERE " +
-            "(:productName IS NULL OR p.productName LIKE %:productName%) AND " +
-            "(:isActive IS NULL OR p.isActive = :isActive) AND " +
-            "(:startDate IS NULL OR p.date >= :startDate) AND " +
-            "(:endDate IS NULL OR p.date <= :endDate) AND " +
-            "p.isDeleted = false")
-    Page<Product> findByFilters(
-            @Param("productName") String productName,
-            @Param("isActive") Boolean isActive,
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            Pageable pageable);
-
-
-
-    /**
-     * Finds products associated with a specific required document ID and not deleted.
-     *
-     * @param documentId the document ID
-     * @return a list of non-deleted products associated with the document
-     */
-    @Query("SELECT p FROM Product p JOIN p.requiredDocuments d WHERE d.id = :documentId AND p.isDeleted = false")
-    List<Product> findByRequiredDocumentsId(@Param("documentId") Long documentId);
+    @Query("SELECT p FROM Product p WHERE p.isActive = true AND p.isDeleted = false")
+    Page<Product> findByIsActiveTrueAndIsDeletedFalse(Pageable pageable);
 
     /**
      * Finds a product by ID if not deleted.
@@ -76,5 +40,24 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * @return an Optional containing the product if found and not deleted, empty otherwise
      */
     @Query("SELECT p FROM Product p WHERE p.id = :id AND p.isDeleted = false")
-    Optional<Product> findByIdAndIsDeletedFalse(@Param("id") Long id);
+    Optional<Product> findActiveUserById(@Param("id") Long id);
+
+    /**
+     * Finds active and non-deleted products associated with a user ID with pagination.
+     *
+     * @param userId the user ID
+     * @param pageable pagination information
+     * @return a page of active and non-deleted products associated with the user
+     */
+    @Query("SELECT p FROM Product p JOIN p.userProductMaps upm WHERE upm.user.id = :userId AND p.isActive = true AND p.isDeleted = false")
+    Page<Product> findByUserIdAndIsActiveTrueAndIsDeletedFalse(@Param("userId") Long userId, Pageable pageable);
+
+    /**
+     * Finds a product by ID if active and not deleted.
+     *
+     * @param id the product ID
+     * @return an Optional containing the product if found, active, and not deleted, empty otherwise
+     */
+    @Query("SELECT p FROM Product p WHERE p.id = :id AND p.isActive = true AND p.isDeleted = false")
+    Optional<Product> findByIdAndIsActiveTrueAndIsDeletedFalse(@Param("id") Long id);
 }
