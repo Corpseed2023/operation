@@ -46,6 +46,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Autowired private ProjectStatusRepository projectStatusRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
 
+
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
         logger.info("Updating milestone assignment ID: {} to status: {}", updateDto.getAssignmentId(), updateDto.getNewStatusName());
@@ -62,6 +63,15 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     return new ResourceNotFoundException("User not found", "USER_NOT_FOUND");
                 });
 
+        if (changedBy.isManagerFlag()) {
+            if (!isManagerOfMilestoneDepartment(changedBy, assignment)) {
+                logger.warn("Manager ID {} tried to change status of milestone {} belonging to a different department", changedBy.getId(), assignment.getId());
+                throw new ValidationException(
+                        "You can only change status of milestones that belong to your department(s)",
+                        "MANAGER_DEPARTMENT_MISMATCH");
+            }
+        }
+
         MilestoneStatus newStatus = milestoneStatusRepository.findByName(updateDto.getNewStatusName())
                 .orElseThrow(() -> {
                     logger.error("Milestone status {} not found", updateDto.getNewStatusName());
@@ -69,6 +79,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 });
 
         validateMilestoneStatusTransition(assignment, newStatus, updateDto.getStatusReason());
+
 
         if ("COMPLETED".equals(newStatus.getName())) {
             List<ProjectDocumentUpload> documents = projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(updateDto.getAssignmentId());
@@ -90,8 +101,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     count.setUpdatedDate(new Date());
                     count.setUpdatedBy(updateDto.getChangedById());
                     userPerformanceCountRepository.save(count);
-                    logger.debug("Updated UserPerformanceCount for user ID {}: timeSpent + {}, assignmentCount - 1",
-                            assignment.getAssignedUser().getId(), assignment.getProductMilestoneMap().getTatInDays());
                 }
 
                 UserProductMap userMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
@@ -100,7 +109,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 if (userMap != null) {
                     userMap.setAssigned(false);
                     userProductMapRepository.save(userMap);
-                    logger.debug("Reset isAssigned for user ID {} in UserProductMap", assignment.getAssignedUser().getId());
                 }
             }
         }
@@ -111,8 +119,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 throw new ValidationException("Rollback not allowed for milestone", "ROLLBACK_NOT_ALLOWED");
             }
             if (assignment.getReworkAttempts() >= assignment.getProductMilestoneMap().getMaxAttempts()) {
-                logger.warn("Max rework attempts ({}) reached for milestone ID {}",
-                        assignment.getProductMilestoneMap().getMaxAttempts(), updateDto.getAssignmentId());
+                logger.warn("Max rework attempts ({}) reached for milestone ID {}", assignment.getProductMilestoneMap().getMaxAttempts(), updateDto.getAssignmentId());
                 throw new ValidationException("Maximum rework attempts reached", "MAX_REWORK_ATTEMPTS_REACHED");
             }
             assignment.setReworkAttempts(assignment.getReworkAttempts() + 1);
@@ -151,141 +158,129 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
     }
 
+
     @Override
     public ReassignMilestoneResponseDto reassignMilestone(ReassignMilestoneDto reassignDto) {
         logger.info("Reassigning milestone assignment ID {} to user ID {} by user ID {}",
                 reassignDto.getAssignmentId(), reassignDto.getNewUserId(), reassignDto.getChangedById());
 
-        // Fetch milestone assignment
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findActiveUserById(reassignDto.getAssignmentId())
                 .orElseThrow(() -> {
                     logger.error("Milestone assignment ID {} not found or is deleted", reassignDto.getAssignmentId());
                     return new ResourceNotFoundException("Milestone assignment not found", "MILESTONE_ASSIGNMENT_NOT_FOUND");
                 });
 
-        // Fetch new user
         User newUser = userRepository.findActiveUserById(reassignDto.getNewUserId())
                 .orElseThrow(() -> {
                     logger.error("User ID {} not found or is deleted", reassignDto.getNewUserId());
                     return new ResourceNotFoundException("User not found", "USER_NOT_FOUND");
                 });
 
-        // Fetch manager (changedBy)
         User changedBy = userRepository.findActiveUserById(reassignDto.getChangedById())
                 .orElseThrow(() -> {
                     logger.error("User ID {} not found or is deleted", reassignDto.getChangedById());
                     return new ResourceNotFoundException("User not found", "USER_NOT_FOUND");
                 });
 
-        // Validate manager
-        if (!changedBy.isManagerFlag()) {
-            logger.warn("User ID {} is not a manager", reassignDto.getChangedById());
-            throw new ValidationException("Only managers can reassign milestones", "NOT_A_MANAGER");
+        // ---- NEW: Department-manager check for re-assignment ----
+        if (changedBy.isManagerFlag()) {
+            if (!isManagerOfMilestoneDepartment(changedBy, assignment)) {
+                logger.warn("Manager ID {} tried to reassign milestone {} belonging to a different department", changedBy.getId(), assignment.getId());
+                throw new ValidationException(
+                        "You can only reassign milestones that belong to your department(s)",
+                        "MANAGER_DEPARTMENT_MISMATCH");
+            }
         }
 
-        // Validate reassignment reason
+        // Existing role check (ADMIN / OPERATION_HEAD / MANAGER)
+        boolean isAdmin = changedBy.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
+        boolean isOperationHead = changedBy.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isManager = changedBy.isManagerFlag();
+
+        if (!isAdmin && !isOperationHead && !isManager) {
+            logger.warn("User ID {} is not authorized to reassign milestones. Required: ADMIN, OPERATION_HEAD, or MANAGER", changedBy.getId());
+            throw new ValidationException("Only ADMIN, OPERATION_HEAD, or MANAGER can reassign milestones", "NOT_AUTHORIZED_TO_REASSIGN");
+        }
+
         if (reassignDto.getReassignmentReason() == null || reassignDto.getReassignmentReason().trim().isEmpty()) {
-            logger.warn("Reassignment reason required for milestone assignment ID {}", reassignDto.getAssignmentId());
+            logger.warn("Reassignment reason is required for milestone assignment ID {}", reassignDto.getAssignmentId());
             throw new ValidationException("Reassignment reason is required", "INVALID_REASSIGNMENT_REASON");
         }
 
-        // Prevent reassignment of completed milestones
         if ("COMPLETED".equals(assignment.getStatus().getName())) {
             logger.warn("Cannot reassign completed milestone ID {}", reassignDto.getAssignmentId());
             throw new ValidationException("Cannot reassign a completed milestone", "COMPLETED_MILESTONE_REASSIGNMENT");
         }
 
-        // Prevent reassignment to same user
         if (assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(reassignDto.getNewUserId())) {
-            logger.warn("Milestone assignment ID {} already assigned to user ID {}",
-                    reassignDto.getAssignmentId(), reassignDto.getNewUserId());
+            logger.warn("Milestone assignment ID {} already assigned to user ID {}", reassignDto.getAssignmentId(), reassignDto.getNewUserId());
             throw new ValidationException("Milestone already assigned to the specified user", "SAME_USER_REASSIGNMENT");
         }
 
-        // Log milestone and project details
-        logger.info("Milestone Assignment Details: ID={}, Milestone Name={}, Project ID={}, Product ID={}",
-                assignment.getId(),
-                assignment.getProductMilestoneMap().getMilestone().getName(),
-                assignment.getProject().getId(),
-                assignment.getProject().getProduct().getId());
-
-        // Log departments associated with the milestone
         ProductMilestoneMap milestoneMap = assignment.getProductMilestoneMap();
-        List<Long> milestoneDepartmentIds = milestoneMap.getMilestone().getDepartments().stream()
-                .map(Department::getId)
-                .collect(Collectors.toList());
-        logger.info("Milestone '{}' is associated with department IDs: {}",
-                milestoneMap.getMilestone().getName(), milestoneDepartmentIds);
 
-        // Log departments associated with the new user
-        List<Long> userDepartmentIds = newUser.getDepartments().stream()
-                .map(Department::getId)
-                .collect(Collectors.toList());
-        logger.info("User ID={} (Name={}) is associated with department IDs: {}",
-                newUser.getId(), newUser.getFullName(), userDepartmentIds);
-
-        // Check department eligibility
-        boolean isEligible = userDepartmentIds.stream().anyMatch(milestoneDepartmentIds::contains);
-        if (!isEligible) {
-            // List eligible users in the department for error message
-            List<User> deptUsers = userRepository.findByDepartmentsIdAndIsActiveTrueAndIsDeletedFalse(milestoneDepartmentIds.get(0));
-            String eligibleUsers = deptUsers.stream()
-                    .filter(u -> u.isActive() && !u.isManagerFlag()) // Exclude managers
-                    .map(u -> "ID=" + u.getId() + ", Name=" + u.getFullName())
-                    .collect(Collectors.joining("; "));
-            logger.warn("User ID {} (Name={}) is not eligible for milestone '{}'. Expected department IDs: {}, Actual department IDs: {}. Eligible users: [{}]",
-                    reassignDto.getNewUserId(), newUser.getFullName(), milestoneMap.getMilestone().getName(),
-                    milestoneDepartmentIds, userDepartmentIds, eligibleUsers);
-
-            // Queue the milestone if no eligible users are available
-            List<User> availableExecutives = deptUsers.stream()
-                    .filter(u -> u.isActive() && !u.isManagerFlag())
+        if (!isAdmin && !isOperationHead) {
+            List<Long> milestoneDepartmentIds = milestoneMap.getMilestone().getDepartments().stream()
+                    .map(Department::getId)
                     .collect(Collectors.toList());
-            if (availableExecutives.isEmpty()) {
-                assignment.setStatus(milestoneStatusRepository.findByName("QUEUED")
-                        .orElseThrow(() -> new ResourceNotFoundException("Milestone status QUEUED not found", "STATUS_NOT_FOUND")));
-                assignment.setStatusReason("No eligible executives available in department for manual reassignment");
-                projectMilestoneAssignmentRepository.save(assignment);
-                logger.info("Milestone ID {} queued due to no eligible executives in department {}",
-                        reassignDto.getAssignmentId(), milestoneDepartmentIds);
+
+            List<Long> userDepartmentIds = newUser.getDepartments().stream()
+                    .map(Department::getId)
+                    .collect(Collectors.toList());
+
+            boolean isEligible = userDepartmentIds.stream().anyMatch(milestoneDepartmentIds::contains);
+            if (!isEligible) {
+                List<User> deptUsers = userRepository.findByDepartmentsIdAndIsActiveTrueAndIsDeletedFalse(milestoneDepartmentIds.get(0));
+                String eligibleUsers = deptUsers.stream()
+                        .filter(u -> u.isActive() && !u.isManagerFlag())
+                        .map(u -> "ID=" + u.getId() + ", Name=" + u.getFullName())
+                        .collect(Collectors.joining("; "));
+
+                List<User> availableExecutives = deptUsers.stream()
+                        .filter(u -> u.isActive() && !u.isManagerFlag())
+                        .collect(Collectors.toList());
+
+                if (availableExecutives.isEmpty()) {
+                    assignment.setStatus(milestoneStatusRepository.findByName("QUEUED")
+                            .orElseThrow(() -> new ResourceNotFoundException("Milestone status QUEUED not found", "STATUS_NOT_FOUND")));
+                    assignment.setStatusReason("No eligible executives available in department for manual reassignment");
+                    projectMilestoneAssignmentRepository.save(assignment);
+                    logger.info("Milestone ID {} queued due to no eligible executives in department {}", reassignDto.getAssignmentId(), milestoneDepartmentIds);
+                    throw new ValidationException(
+                            String.format("User ID %d (Name=%s) is not in department %s required for milestone '%s'. No eligible executives available; milestone queued.",
+                                    newUser.getId(), newUser.getFullName(), milestoneDepartmentIds, milestoneMap.getMilestone().getName()),
+                            "INELIGIBLE_USER");
+                }
+
                 throw new ValidationException(
-                        String.format("User ID %d (Name=%s) is not in department %s required for milestone '%s'. No eligible executives available; milestone queued.",
-                                newUser.getId(), newUser.getFullName(), milestoneDepartmentIds,
-                                milestoneMap.getMilestone().getName()),
+                        String.format("User ID %d (Name=%s) is not in department %s required for milestone '%s'. Eligible users: [%s]",
+                                newUser.getId(), newUser.getFullName(), milestoneDepartmentIds, milestoneMap.getMilestone().getName(), eligibleUsers),
                         "INELIGIBLE_USER");
             }
-
-            throw new ValidationException(
-                    String.format("User ID %d (Name=%s) is not in department %s required for milestone '%s'. Eligible users: [%s]",
-                            newUser.getId(), newUser.getFullName(), milestoneDepartmentIds,
-                            milestoneMap.getMilestone().getName(), eligibleUsers),
-                    "INELIGIBLE_USER");
         }
 
-        // Update previous user's records
         if (assignment.getAssignedUser() != null) {
+            User oldUser = assignment.getAssignedUser();
+
             UserProductMap oldUserMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
-                            assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId())
-                    .orElse(null);
+                    oldUser.getId(), assignment.getProject().getProduct().getId()).orElse(null);
             if (oldUserMap != null) {
                 oldUserMap.setAssigned(false);
                 userProductMapRepository.save(oldUserMap);
-                logger.debug("Reset isAssigned for user ID {} in UserProductMap", assignment.getAssignedUser().getId());
             }
 
             UserPerformanceCount oldCount = userPerformanceCountRepository.findByUserIdAndProductId(
-                    assignment.getAssignedUser().getId(), assignment.getProject().getProduct().getId());
+                    oldUser.getId(), assignment.getProject().getProduct().getId());
             if (oldCount != null) {
                 oldCount.setAssignmentCount(Math.max(0, oldCount.getAssignmentCount() - 1));
                 oldCount.setLastUpdatedDate(new Date());
                 oldCount.setUpdatedDate(new Date());
                 oldCount.setUpdatedBy(reassignDto.getChangedById());
                 userPerformanceCountRepository.save(oldCount);
-                logger.debug("Decremented UserPerformanceCount for user ID {}", assignment.getAssignedUser().getId());
             }
         }
 
-        // Update new user's records
+        // ----- new assignee setup -----
         UserProductMap newUserMap = userProductMapRepository.findByUserIdAndProductIdAndIsDeletedFalse(
                         newUser.getId(), assignment.getProject().getProduct().getId())
                 .orElseGet(() -> {
@@ -326,7 +321,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
         userPerformanceCountRepository.save(newCount);
 
-        // Log assignment history
+        // ----- assignment history -----
         ProjectAssignmentHistory history = new ProjectAssignmentHistory();
         history.setProject(assignment.getProject());
         history.setMilestoneAssignment(assignment);
@@ -339,18 +334,21 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         history.setDeleted(false);
         projectAssignmentHistoryRepository.save(history);
 
-        // Update assignment
+        // ----- final assignment update -----
         assignment.setAssignedUser(newUser);
         assignment.setStatus(milestoneStatusRepository.findByName("NEW")
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone status NEW not found", "STATUS_NOT_FOUND")));
-        assignment.setStatusReason("Manually reassigned by manager");
+        assignment.setStatusReason("Manually reassigned by " +
+                (isAdmin ? "ADMIN" : isOperationHead ? "OPERATION_HEAD" : "MANAGER"));
         assignment.setUpdatedBy(reassignDto.getChangedById());
         assignment.setUpdatedDate(new Date());
         projectMilestoneAssignmentRepository.save(assignment);
-        logger.info("Milestone assignment ID {} reassigned to user ID {} by manager ID {}",
-                reassignDto.getAssignmentId(), reassignDto.getNewUserId(), reassignDto.getChangedById());
 
-        // Create response
+        logger.info("Milestone assignment ID {} reassigned to user ID {} by {} (ID {})",
+                reassignDto.getAssignmentId(), reassignDto.getNewUserId(),
+                isAdmin ? "ADMIN" : isOperationHead ? "OPERATION_HEAD" : "MANAGER", reassignDto.getChangedById());
+
+        // ----- response -----
         ReassignMilestoneResponseDto response = new ReassignMilestoneResponseDto();
         response.setAssignmentId(assignment.getId());
         response.setNewUserId(newUser.getId());
@@ -362,7 +360,28 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         return response;
     }
 
+    /* --------------------------------------------------------------
+        HELPER – manager must belong to at least one milestone dept
+       -------------------------------------------------------------- */
+    private boolean isManagerOfMilestoneDepartment(User manager, ProjectMilestoneAssignment assignment) {
+        if (!manager.isManagerFlag()) return false;
+
+        List<Long> managerDeptIds = manager.getDepartments().stream()
+                .map(Department::getId)
+                .collect(Collectors.toList());
+
+        List<Long> milestoneDeptIds = assignment.getProductMilestoneMap()
+                .getMilestone()
+                .getDepartments()
+                .stream()
+                .map(Department::getId)
+                .collect(Collectors.toList());
+
+        return managerDeptIds.stream().anyMatch(milestoneDeptIds::contains);
+    }
+
     private void validateMilestoneStatusTransition(ProjectMilestoneAssignment assignment, MilestoneStatus newStatus, String statusReason) {
+        // ... (your original validation code – unchanged) ...
         String newStatusName = newStatus.getName();
         if (statusReason == null || statusReason.trim().isEmpty()) {
             if ("COMPLETED".equals(newStatusName) || "ON_HOLD".equals(newStatusName) || "REJECTED".equals(newStatusName)) {
