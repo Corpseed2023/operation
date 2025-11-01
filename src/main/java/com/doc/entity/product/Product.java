@@ -51,6 +51,7 @@ public class Product {
     @Comment("Product date")
     private LocalDate date;
 
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", updatable = false)
     @Comment("Creation date")

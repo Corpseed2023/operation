@@ -1,4 +1,4 @@
-package com.doc.controller.product;
+package com.doc.controller.document;
 
 import com.doc.dto.productRequiredDocument.GetRequiredDocumentsByProductRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;

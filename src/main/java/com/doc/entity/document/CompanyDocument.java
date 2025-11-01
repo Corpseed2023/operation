@@ -1,14 +1,12 @@
-package com.doc.entity.client;
+package com.doc.entity.document;
 
-import com.doc.entity.document.DocumentStatus;
-import com.doc.entity.document.ProductRequiredDocuments;
+import com.doc.entity.client.Company;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.Comment;
 
+import java.util.Calendar;
 import java.util.Date;
 
 @Entity
@@ -18,6 +16,7 @@ import java.util.Date;
                 @Index(name = "idx_company_id", columnList = "company_id"),
                 @Index(name = "idx_required_document_id", columnList = "required_document_id"),
                 @Index(name = "idx_status_id", columnList = "status_id"),
+                @Index(name = "idx_expiry_date", columnList = "expiry_date"),
                 @Index(name = "idx_company_doc_unique", columnList = "company_id, required_document_id", unique = true)
         },
         uniqueConstraints = @UniqueConstraint(
@@ -28,102 +27,145 @@ import java.util.Date;
 @Getter
 @Setter
 @NoArgsConstructor
-@Comment("Stores verified documents at company level for reuse across all projects")
+@Comment("Company-level reusable documents with MNC compliance")
 public class CompanyDocument {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Comment("Primary key: Unique ID for company-level document")
+    @Comment("Primary key")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
-    @Comment("Associated company (e.g., Microsoft)")
     private Company company;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "required_document_id", nullable = false)
-    @Comment("Reference to the required document type (e.g., PAN, EPR Authorization)")
     private ProductRequiredDocuments requiredDocument;
 
     @Column(name = "file_url", nullable = false, length = 1000)
-    @Comment("S3 URL of the uploaded document (shared across projects)")
     private String fileUrl;
 
     @Column(name = "file_name", nullable = false, length = 255)
-    @Comment("Original file name (sanitized)")
     private String fileName;
+
+    // === NEW: TRACK PREVIOUS FILE (FOR REPLACEMENT) ===
+    @Column(name = "old_file_url", length = 1000)
+    @Comment("URL of the previous file when replaced")
+    private String oldFileUrl;
+
+    @Column(name = "old_file_name", length = 255)
+    @Comment("Name of the previous file when replaced")
+    private String oldFileName;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status_id", nullable = false)
-    @Comment("Document status: PENDING → UPLOADED → VERIFIED")
     private DocumentStatus status;
 
     @Column(name = "remarks", length = 1000)
-    @Comment("Remarks (required if REJECTED)")
     private String remarks;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_by", nullable =false)
-    @Comment("User who uploaded the document (CRT/Admin)")
+    @JoinColumn(name = "uploaded_by", nullable = false)
     private User uploadedBy;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "upload_time", nullable = false)
-    @Comment("Timestamp when document was uploaded")
     private Date uploadTime;
 
     @Column(name = "created_by", nullable = false)
-    @Comment("User ID who created this record")
     private Long createdBy;
 
     @Column(name = "updated_by")
-    @Comment("User ID who last updated this record")
     private Long updatedBy;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", nullable = false, updatable = false)
-    @Comment("Record creation timestamp")
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "updated_date")
-    @Comment("Record update timestamp")
+    @Column(name = "updated_date", nullable = false)
     private Date updatedDate;
 
     @Column(name = "is_deleted", nullable = false)
-    @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
     @Column(name = "replacement_count", nullable = false)
-    @Comment("Number of times this document was replaced")
     private int replacementCount = 0;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "verified_by")
-    @Comment("User who verified the document (nullable until verified)")
     private User verifiedBy;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "verified_date")
-    @Comment("Date when document was marked VERIFIED")
     private Date verifiedDate;
 
-    // Optional: Expiry date for documents like CTO, EPR
     @Temporal(TemporalType.DATE)
     @Column(name = "expiry_date")
-    @Comment("Document expiry date (e.g., CTO, Lab Report)")
+    @Comment("NULL for FIXED docs")
     private Date expiryDate;
+
+    @Column(name = "expiry_set_by")
+    private Long expirySetBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "expiry_set_date")
+    private Date expirySetDate;
+
+    @Column(name = "is_permanent", nullable = false)
+    private boolean isPermanent = false;
+
+    @Column(name = "renewal_cycle_months")
+    private Integer renewalCycleMonths;
+
+    @Temporal(TemporalType.DATE)
+    @Column(name = "last_renewal_date")
+    private Date lastRenewalDate;
+
+    @Column(name = "file_size_kb", nullable = false)
+    private Integer fileSizeKb = 0;
+
+    @Column(name = "file_format", length = 10, nullable = false)
+    private String fileFormat = "";
+
+    @Column(name = "validation_passed", nullable = false)
+    private boolean validationPassed = false;
+
+    @Column(name = "validation_issues", length = 1000)
+    private String validationIssues;
+
+    @Column(name = "quality_score", columnDefinition = "DECIMAL(3,2)")
+    private Double qualityScore = 0.0;
 
     @PrePersist
     protected void onCreate() {
         this.createdDate = new Date();
         this.updatedDate = new Date();
         this.uploadTime = new Date();
+        if (this.expiryDate != null && this.expirySetDate == null) {
+            this.expirySetDate = new Date();
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         this.updatedDate = new Date();
+    }
+
+    public boolean isExpired() {
+        if (isPermanent || expiryDate == null) return false;
+        return expiryDate.before(new Date());
+    }
+
+
+    public boolean isReusable() {
+        return "VERIFIED".equals(status.getName()) && !isExpired();
+    }
+
+    public int getDaysUntilExpiry() {
+        if (expiryDate == null || isPermanent) return Integer.MAX_VALUE;
+        long diff = expiryDate.getTime() - System.currentTimeMillis();
+        return (int) (diff / (1000 * 60 * 60 * 24));
     }
 }

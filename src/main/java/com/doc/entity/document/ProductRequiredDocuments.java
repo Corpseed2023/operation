@@ -1,5 +1,6 @@
 package com.doc.entity.document;
 
+import com.doc.em.DocumentExpiryType;
 import com.doc.entity.product.Product;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -12,10 +13,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Represents a required document for a product based on region (state/central/international).
- * Ensures uniqueness of documents based on name, country, centralName, and stateName.
- */
 @Entity
 @Table(name = "product_required_documents",
         indexes = {@Index(name = "idx_name", columnList = "name")},
@@ -25,60 +22,89 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Comment("Master list of required documents with MNC compliance rules")
 public class ProductRequiredDocuments {
 
     @Id
-    @Comment("Primary Key: Unique identifier for the required document")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Comment("Primary Key: Unique identifier")
     private Long id;
 
-    @Column(nullable = false)
-    @Comment("Name of the required document (e.g., Aadhaar Card, PAN Card)")
+    @Column(nullable = false, length = 255)
+    @Comment("Document name (e.g., Aadhaar Card)")
     private String name;
 
     @Column(length = 1000)
-    @Comment("Description of the document")
+    @Comment("Detailed description")
     private String description;
 
-    @Column(nullable = false)
-    @Comment("Type of document (e.g., IDENTITY, FINANCIAL, PROOF)")
+    @Column(nullable = false, length = 50)
+    @Comment("Type: IDENTITY, FINANCIAL, PROOF, etc.")
     private String type;
 
     @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("Country for which the document is required (empty for central/international)")
+    @Comment("Country (empty for central)")
     private String country = "";
 
     @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("Central government name for central-level documents (empty for state/international)")
+    @Comment("Central govt name")
     private String centralName = "";
 
     @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("State name for state-level documents (empty for central/international)")
+    @Comment("State name")
     private String stateName = "";
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Comment("FIXED = never expires, EXPIRING = has expiry, UNKNOWN = CRT decides")
+    private DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
+
+    @Column(name = "standard_level", length = 20, nullable = false)
+    @Comment("MNC, SME, STARTUP, GOVERNMENT – affects validation strictness")
+    private String standardLevel = "MNC";
+
+    @Column(name = "is_mandatory", nullable = false)
+    @Comment("Is this document mandatory?")
+    private boolean isMandatory = true;
+
+    @Column(name = "max_validity_years")
+    @Comment("Max years for EXPIRING docs (e.g., 3 for CTO)")
+    private Integer maxValidityYears;
+
+    @Column(name = "min_file_size_kb")
+    @Comment("Min file size in KB")
+    private Integer minFileSizeKb;
+
+    @Column(name = "allowed_formats", length = 100)
+    @Comment("Comma-separated: pdf,jpg,png")
+    private String allowedFormats = "pdf,jpg,png";
+
+    @Column(name = "validation_regex", length = 500)
+    @Comment("Regex for filename/content (e.g., PAN: ^[A-Z]{5}[0-9]{4}[A-Z]{1}$)")
+    private String validationRegex;
+
+    @Column(name = "is_gst_specific", nullable = false)
+    @Comment("GST-specific document?")
+    private boolean isGstSpecific = false;
+
     @Column(name = "created_by", nullable = false)
-    @Comment("ID of the user who created the document")
     private Long createdBy;
 
     @Column(name = "updated_by", nullable = false)
-    @Comment("ID of the user who last updated the document")
     private Long updatedBy;
 
-    @Column(nullable = false)
-    @Comment("Is Deleted flag (soft delete)")
+    @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
-    @Column(nullable = false)
-    @Comment("Active status flag")
+    @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", nullable = false, updatable = false)
-    @Comment("Date when the document was created")
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "updated_date", nullable = false)
-    @Comment("Date when the document was last updated")
     private Date updatedDate;
 
     @ManyToMany(fetch = FetchType.LAZY)
@@ -87,7 +113,7 @@ public class ProductRequiredDocuments {
             joinColumns = @JoinColumn(name = "document_id"),
             inverseJoinColumns = @JoinColumn(name = "product_id")
     )
-    @Comment("List of products associated with this document")
+    @Comment("Products that require this document")
     private List<Product> products = new ArrayList<>();
 
     @PrePersist
@@ -99,5 +125,13 @@ public class ProductRequiredDocuments {
     @PreUpdate
     protected void onUpdate() {
         this.updatedDate = new Date();
+    }
+
+    public boolean isFixed() {
+        return expiryType == DocumentExpiryType.FIXED;
+    }
+
+    public boolean isExpiring() {
+        return expiryType == DocumentExpiryType.EXPIRING;
     }
 }

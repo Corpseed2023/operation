@@ -1,4 +1,4 @@
-package com.doc.controller.project;
+package com.doc.controller.document;
 
 import com.doc.dto.project.DocumentResponseDto;
 import com.doc.dto.project.ProjectDocumentUploadRequestDto;
