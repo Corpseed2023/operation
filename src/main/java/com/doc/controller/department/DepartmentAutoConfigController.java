@@ -1,6 +1,7 @@
+// src/main/java/com/doc/controller/department/DepartmentAutoConfigController.java
 package com.doc.controller.department;
 
-import com.doc.dto.DepartmentAutoConfigDto;
+import com.doc.dto.auto.DepartmentAutoConfigDto;
 import com.doc.service.AutoAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -12,9 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Controller for managing department auto-configuration settings for project assignment automation.
- */
 @RestController
 @RequestMapping("/api/department-auto-config")
 @Validated
@@ -30,14 +28,16 @@ public class DepartmentAutoConfigController {
             @ApiResponse(responseCode = "404", description = "Department not found")
     })
     @PutMapping("/{id}")
-    public ResponseEntity<Void> updateAutoConfig(
+    public ResponseEntity<DepartmentAutoConfigDto> updateAutoConfig(
             @PathVariable Long id,
             @Valid @RequestBody DepartmentAutoConfigDto dto) {
+
         dto.setDepartmentId(id);
         autoAssignmentService.updateDepartmentAutoConfig(dto);
-        return new ResponseEntity<>(HttpStatus.OK);
-    }
 
+        DepartmentAutoConfigDto updated = autoAssignmentService.getDepartmentAutoConfig(id);
+        return ResponseEntity.ok(updated);
+    }
 
     @Operation(summary = "Retrieve the auto-configuration settings for a department")
     @ApiResponses({
@@ -47,6 +47,6 @@ public class DepartmentAutoConfigController {
     @GetMapping("/{id}")
     public ResponseEntity<DepartmentAutoConfigDto> getAutoConfig(@PathVariable Long id) {
         DepartmentAutoConfigDto autoConfig = autoAssignmentService.getDepartmentAutoConfig(id);
-        return new ResponseEntity<>(autoConfig, HttpStatus.OK);
+        return ResponseEntity.ok(autoConfig);
     }
 }

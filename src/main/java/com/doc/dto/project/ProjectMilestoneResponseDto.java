@@ -12,4 +12,7 @@ import java.util.List;
 public class ProjectMilestoneResponseDto {
     private ProjectDetailsDto projectDetails;
     private List<AssignedMilestoneDto> milestones;
+
+
+
 }

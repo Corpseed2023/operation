@@ -2,7 +2,6 @@ package com.doc.entity.project;
 
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
-import com.doc.entity.user.User;
 import com.doc.entity.product.Product;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -50,10 +49,14 @@ public class Project {
     @Comment("Estimate number – optional, unique when present")
     private String estimateNumber;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sales_person_id")
-    @Comment("Sales person who brought this project")
-    private User salesPerson;
+    // ONLY THESE TWO FIELDS — FROM MICROSERVICE
+    @Column(name = "sales_person_id")
+    @Comment("Sales person ID from microservice")
+    private Long salesPersonId;
+
+    @Column(name = "sales_person_name")
+    @Comment("Sales person name from microservice")
+    private String salesPersonName;
 
     @OneToOne(mappedBy = "project", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @Comment("Payment details for the project")
@@ -105,7 +108,7 @@ public class Project {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status_id", nullable = false)
     @Comment("Project status: Reference to ProjectStatus entity")
-    private ProjectStatus status;  // Changed from enum to entity reference
+    private ProjectStatus status;
 
     @Comment("Project address")
     private String address;

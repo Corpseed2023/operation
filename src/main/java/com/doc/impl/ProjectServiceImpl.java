@@ -99,8 +99,6 @@ public class ProjectServiceImpl implements ProjectService {
             }
         }
 
-        User salesPerson = userRepository.findActiveUserById(requestDto.getSalesPersonId())
-                .orElseThrow(() -> new ResourceNotFoundException("Sales person not found", "ERR_SALES_PERSON_NOT_FOUND"));
         Product product = productRepository.findActiveUserById(requestDto.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found", "ERR_PRODUCT_NOT_FOUND"));
         Company company = companyRepository.findActiveUserById(requestDto.getCompanyId())
@@ -156,7 +154,6 @@ public class ProjectServiceImpl implements ProjectService {
 
         Project project = new Project();
         mapRequestDtoToProject(project, requestDto);
-        project.setSalesPerson(salesPerson);
         project.setProduct(product);
         project.setCompany(company);
         project.setContact(contact);
@@ -165,6 +162,8 @@ public class ProjectServiceImpl implements ProjectService {
         project.setCreatedDate(new Date());
         project.setUpdatedDate(new Date());
         project.setDeleted(false);
+        project.setSalesPersonId(requestDto.getSalesPersonId());
+        project.setSalesPersonName(requestDto.getSalesPersonName());
         project.setActive(true);
         project.setStatus(projectStatusRepository.findByName("OPEN")
                 .orElseThrow(() -> new ResourceNotFoundException("Project status OPEN not found", "STATUS_NOT_FOUND")));
@@ -599,7 +598,6 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setId(project.getId());
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
-        dto.setSalesPersonId(project.getSalesPerson() != null ? project.getSalesPerson().getId() : null);
         dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
         dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
         dto.setContactId(project.getContact() != null ? project.getContact().getId() : null);
@@ -622,6 +620,8 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setActive(project.isActive());
         dto.setUnbilledNumber(project.getUnbilledNumber());
         dto.setEstimateNumber(project.getEstimateNumber());
+        dto.setSalesPersonId(project.getSalesPersonId());
+        dto.setSalesPersonName(project.getSalesPersonName());
         return dto;
     }
 

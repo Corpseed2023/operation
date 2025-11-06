@@ -1,6 +1,5 @@
 package com.doc.controller.department;
 
-import com.doc.dto.DepartmentAutoConfigDto;
 import com.doc.dto.department.DepartmentRequestDto;
 import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.user.UserResponseDto;

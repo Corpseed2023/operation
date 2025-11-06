@@ -1,6 +1,5 @@
 package com.doc.service;
 
-import com.doc.dto.DepartmentAutoConfigDto;
 import com.doc.dto.project.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.entity.project.Project;

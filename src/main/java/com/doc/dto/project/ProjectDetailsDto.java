@@ -12,6 +12,7 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 public class ProjectDetailsDto {
+
     private Long id;
     private String name;
     private String projectNo;
@@ -20,11 +21,22 @@ public class ProjectDetailsDto {
     private String city;
     private String state;
     private String country;
+
     private Long productId;
     private String productName;
+
+    // Sales Person
+    private Long salesPersonId;
+    private String salesPersonName;          // NEW
+
+    private Long companyId;
+    private String companyName;              // NEW
+
+    private Long contactId;
+    private String contactName;              // NEW
+
+    private List<ContactDetailsDto> contacts;
+
     private Date createdDate;
     private Date updatedDate;
-    private Long companyId;
-    private String companyName;
-    private List<ContactDetailsDto> contacts;
 }

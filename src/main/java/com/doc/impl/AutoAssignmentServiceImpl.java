@@ -1,6 +1,6 @@
 package com.doc.impl;
 
-import com.doc.dto.DepartmentAutoConfigDto;
+import com.doc.dto.auto.DepartmentAutoConfigDto;
 import com.doc.entity.department.Department;
 import com.doc.entity.department.DepartmentAutoConfig;
 import com.doc.entity.product.Product;
@@ -418,7 +418,7 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
     @Override
     public void updateDepartmentAutoConfig(DepartmentAutoConfigDto dto) {
         System.out.println("Updating config for dept ID: " + dto.getDepartmentId());
-        // ... rest of method unchanged
+
         if (dto.isRatingPrioritizationEnabled() && !dto.isAvailabilityRequired() && !dto.getDepartmentName().equalsIgnoreCase("LEGAL")) {
             throw new ValidationException("Rating prioritization requires availability check unless department is LEGAL", "INVALID_CONFIG_COMBINATION");
         }
@@ -470,8 +470,14 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
                     return newConfig;
                 });
 
+        return buildDto(department, config);
+    }
+
+    // HELPER: Build DTO with enabledFeatures
+
+    private DepartmentAutoConfigDto buildDto(Department department, DepartmentAutoConfig config) {
         DepartmentAutoConfigDto dto = new DepartmentAutoConfigDto();
-        dto.setDepartmentId(departmentId);
+        dto.setDepartmentId(department.getId());
         dto.setDepartmentName(department.getName());
         dto.setAutoAssignmentEnabled(config.isAutoAssignmentEnabled());
         dto.setAvailabilityRequired(config.isAvailabilityRequired());
@@ -480,7 +486,16 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         dto.setManualOnly(config.isManualOnly());
         dto.setRoundRobinEnabled(config.isRoundRobinEnabled());
 
-        System.out.println("Config fetched for dept: " + department.getName());
+        List<String> active = new ArrayList<>();
+        if (config.isAutoAssignmentEnabled() && !config.isManualOnly()) {
+            if (config.isRoundRobinEnabled())            active.add("Round-Robin");
+            if (config.isRatingPrioritizationEnabled())  active.add("Rating Prioritization");
+            if (config.isCompanyAlignmentEnabled())      active.add("Company Alignment");
+            if (config.isAvailabilityRequired())         active.add("Availability Check");
+        }
+        if (config.isManualOnly()) active.add("Manual Only");
+
+        dto.setEnabledFeatures(active.isEmpty() ? "None" : String.join(", ", active));
         return dto;
     }
 }
