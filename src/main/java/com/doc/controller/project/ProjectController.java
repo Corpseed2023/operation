@@ -73,6 +73,7 @@ public class ProjectController {
         return ResponseEntity.ok(response);
     }
 
+
     @Operation(summary = "Get assigned projects with milestones for the logged-in user with pagination")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Paged list of assigned projects retrieved"),
@@ -105,4 +106,20 @@ public class ProjectController {
         ProjectMilestoneResponseDto response = projectService.getProjectMilestones(projectId, userId);
         return ResponseEntity.ok(response);
     }
+
+    @Operation(summary = "Add payment using unbilled number instead of project ID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Payment added successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid payment data"),
+            @ApiResponse(responseCode = "404", description = "No active project with given unbilled number")
+    })
+    @PostMapping("/payments/unbilled/{unbilledNumber}")
+    public ResponseEntity<ProjectResponseDto> addPaymentByUnbilledNumber(
+            @PathVariable @Parameter(description = "Unbilled number of the project") String unbilledNumber,
+            @Valid @RequestBody ProjectPaymentTransactionDto dto) {
+
+        ProjectResponseDto response = projectService.addPaymentByUnbilledNumber(unbilledNumber, dto);
+        return ResponseEntity.ok(response);
+    }
+
 }

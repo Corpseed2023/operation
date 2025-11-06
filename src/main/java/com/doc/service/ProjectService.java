@@ -16,6 +16,5 @@ public interface ProjectService {
     Page<AssignedProjectResponseDto> getAssignedProjects(Long userId, int page, int size);
     ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId);
     void updateMilestoneVisibilities(Project project, Long updatedById); // Added method
-
-
+    ProjectResponseDto addPaymentByUnbilledNumber(String unbilledNumber, ProjectPaymentTransactionDto dto);
 }

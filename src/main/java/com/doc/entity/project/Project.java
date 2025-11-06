@@ -20,7 +20,9 @@ import java.util.List;
         @Index(name = "idx_project_no", columnList = "projectNo", unique = true),
         @Index(name = "idx_product_id", columnList = "product_id"),
         @Index(name = "idx_sales_person_id", columnList = "sales_person_id"),
-        @Index(name = "idx_status_id", columnList = "status_id")
+        @Index(name = "idx_status_id", columnList = "status_id"),
+        @Index(name = "idx_unbilled_no", columnList = "unbilled_number"),
+        @Index(name = "idx_estimate_no", columnList = "estimate_number")
 })
 @Getter
 @Setter
@@ -39,6 +41,14 @@ public class Project {
     @Column(nullable = false, unique = true)
     @Comment("Unique project number")
     private String projectNo;
+
+    @Column(name = "unbilled_number", length = 50)
+    @Comment("Unbilled number – optional, unique when present")
+    private String unbilledNumber;
+
+    @Column(name = "estimate_number", length = 50)
+    @Comment("Estimate number – optional, unique when present")
+    private String estimateNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sales_person_id")

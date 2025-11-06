@@ -28,6 +28,17 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE p.projectNo = :projectNo AND p.isDeleted = false")
     boolean existsByProjectNoAndIsDeletedFalse(@Param("projectNo") String projectNo);
 
+    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
+    boolean existsByUnbilledNumberAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
+    /**
+     * Checks if a project with the given estimate number exists and is not deleted.
+     *
+     * @param estimateNumber the estimate number to check
+     * @return true if a project with the given estimate number exists and is not deleted, false otherwise
+     */
+    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE p.estimateNumber = :estimateNumber AND p.isDeleted = false")
+    boolean existsByEstimateNumberAndIsDeletedFalse(@Param("estimateNumber") String estimateNumber);
+
     /**
      * Finds a project by its ID if it is not deleted.
      *
@@ -105,6 +116,44 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<Project> findByProjectNoContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("projectNo") String projectNo, @Param("userIds") List<Long> userIds);
 
     /**
+     * Finds projects by unbilled number (case-insensitive partial match) and not deleted.
+     *
+     * @param unbilledNumber the unbilled number to search
+     * @return a list of matching projects
+     */
+    @Query("SELECT p FROM Project p WHERE LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :unbilledNumber, '%')) AND p.isDeleted = false")
+    List<Project> findByUnbilledNumberContainingAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
+
+    /**
+     * Finds projects by unbilled number (case-insensitive partial match) for specific assigned users and not deleted.
+     *
+     * @param unbilledNumber the unbilled number to search
+     * @param userIds the list of user IDs
+     * @return a list of matching projects
+     */
+    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :unbilledNumber, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    List<Project> findByUnbilledNumberContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber, @Param("userIds") List<Long> userIds);
+
+    /**
+     * Finds projects by estimate number (case-insensitive partial match) and not deleted.
+     *
+     * @param estimateNumber the estimate number to search
+     * @return a list of matching projects
+     */
+    @Query("SELECT p FROM Project p WHERE LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :estimateNumber, '%')) AND p.isDeleted = false")
+    List<Project> findByEstimateNumberContainingAndIsDeletedFalse(@Param("estimateNumber") String estimateNumber);
+
+    /**
+     * Finds projects by estimate number (case-insensitive partial match) for specific assigned users and not deleted.
+     *
+     * @param estimateNumber the estimate number to search
+     * @param userIds the list of user IDs
+     * @return a list of matching projects
+     */
+    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :estimateNumber, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    List<Project> findByEstimateNumberContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("estimateNumber") String estimateNumber, @Param("userIds") List<Long> userIds);
+
+    /**
      * Finds projects by contact name (case-insensitive partial match) and not deleted.
      *
      * @param contactName the contact name to search
@@ -141,4 +190,13 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      */
     @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("name") String name, @Param("userIds") List<Long> userIds);
+
+    @Query("SELECT p FROM Project p WHERE p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
+    Optional<Project> findByUnbilledNumberAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
+
+
+
+
+
+
 }

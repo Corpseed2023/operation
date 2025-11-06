@@ -59,10 +59,6 @@ public class ProductRequiredDocuments {
     @Comment("FIXED = never expires, EXPIRING = has expiry, UNKNOWN = CRT decides")
     private DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
 
-    @Column(name = "standard_level", length = 20, nullable = false)
-    @Comment("MNC, SME, STARTUP, GOVERNMENT – affects validation strictness")
-    private String standardLevel = "MNC";
-
     @Column(name = "is_mandatory", nullable = false)
     @Comment("Is this document mandatory?")
     private boolean isMandatory = true;
@@ -79,14 +75,6 @@ public class ProductRequiredDocuments {
     @Comment("Comma-separated: pdf,jpg,png")
     private String allowedFormats = "pdf,jpg,png";
 
-    @Column(name = "validation_regex", length = 500)
-    @Comment("Regex for filename/content (e.g., PAN: ^[A-Z]{5}[0-9]{4}[A-Z]{1}$)")
-    private String validationRegex;
-
-    @Column(name = "is_gst_specific", nullable = false)
-    @Comment("GST-specific document?")
-    private boolean isGstSpecific = false;
-
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
 
@@ -95,6 +83,7 @@ public class ProductRequiredDocuments {
 
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
+
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;

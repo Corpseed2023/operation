@@ -33,6 +33,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -78,6 +79,24 @@ public class ProjectServiceImpl implements ProjectService {
             logger.warn("Project number {} already exists", requestDto.getProjectNo());
             System.out.println("Project number " + requestDto.getProjectNo() + " already exists");
             throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists", "ERR_DUPLICATE_PROJECT_NO");
+        }
+
+        // after the projectNo check
+        if (StringUtils.hasText(requestDto.getUnbilledNumber())) {
+            String unbilled = requestDto.getUnbilledNumber().trim();
+            if (projectRepository.existsByUnbilledNumberAndIsDeletedFalse(unbilled)) {
+                throw new ValidationException(
+                        "Unbilled number " + unbilled + " already exists",
+                        "ERR_DUPLICATE_UNBILLED_NO");
+            }
+        }
+        if (StringUtils.hasText(requestDto.getEstimateNumber())) {
+            String estimate = requestDto.getEstimateNumber().trim();
+            if (projectRepository.existsByEstimateNumberAndIsDeletedFalse(estimate)) {
+                throw new ValidationException(
+                        "Estimate number " + estimate + " already exists",
+                        "ERR_DUPLICATE_ESTIMATE_NO");
+            }
         }
 
         User salesPerson = userRepository.findActiveUserById(requestDto.getSalesPersonId())
@@ -571,6 +590,8 @@ public class ProjectServiceImpl implements ProjectService {
         project.setState(requestDto.getState());
         project.setCountry(requestDto.getCountry());
         project.setPrimaryPinCode(requestDto.getPrimaryPinCode());
+        project.setUnbilledNumber(requestDto.getUnbilledNumber());
+        project.setEstimateNumber(requestDto.getEstimateNumber());
     }
 
     private ProjectResponseDto mapToResponseDto(Project project) {
@@ -599,6 +620,8 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setUpdatedDate(project.getUpdatedDate());
         dto.setDeleted(project.isDeleted());
         dto.setActive(project.isActive());
+        dto.setUnbilledNumber(project.getUnbilledNumber());
+        dto.setEstimateNumber(project.getEstimateNumber());
         return dto;
     }
 
@@ -855,4 +878,25 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setReplacementCount(document.getReplacementCount());
         return dto;
     }
+
+
+    @Override
+    @Transactional
+    public ProjectResponseDto addPaymentByUnbilledNumber(String unbilledNumber,
+                                                         ProjectPaymentTransactionDto dto) {
+        logger.info("Adding payment using unbilled number: {}", unbilledNumber);
+
+        validateTransactionDto(dto);
+        if (dto.getAmount() <= 0) {
+            throw new ValidationException("Payment amount must be positive", "ERR_INVALID_PAYMENT_AMOUNT");
+        }
+
+        Project project = projectRepository.findByUnbilledNumberAndIsDeletedFalse(unbilledNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project with unbilled number " + unbilledNumber + " not found",
+                        "ERR_PROJECT_NOT_FOUND"));
+
+        return addPaymentTransaction(project.getId(), dto);
+    }
+
 }

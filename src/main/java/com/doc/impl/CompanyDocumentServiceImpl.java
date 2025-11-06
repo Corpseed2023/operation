@@ -137,7 +137,8 @@ public class CompanyDocumentServiceImpl implements CompanyDocumentService {
 
     private void updateDocFromDto(CompanyDocument doc, CompanyDocumentUploadRequestDto dto,
                                   Company company, ProductRequiredDocuments reqDoc,
-                                  User uploadedBy, User createdBy, String fileUrl, String fileName, boolean isReplacement) {
+                                  User uploadedBy, User createdBy, String fileUrl,
+                                  String fileName, boolean isReplacement) {
         doc.setCompany(company);
         doc.setRequiredDocument(reqDoc);
         doc.setFileUrl(fileUrl);
@@ -219,7 +220,6 @@ public class CompanyDocumentServiceImpl implements CompanyDocumentService {
         dto.setRequiredDocumentId(doc.getRequiredDocument().getId());
         dto.setDocumentName(doc.getRequiredDocument().getName());
         dto.setDocumentType(doc.getRequiredDocument().getType());
-        dto.setStandardLevel(doc.getRequiredDocument().getStandardLevel());
         dto.setFileUrl(doc.getFileUrl());
         dto.setFileName(doc.getFileName());
         dto.setStatus(doc.getStatus().getName());

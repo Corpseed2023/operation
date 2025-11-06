@@ -13,6 +13,8 @@ public class ProjectResponseDto {
     private Long id;
     private String name;
     private String projectNo;
+    private String unbilledNumber;
+    private String estimateNumber;
     private Long salesPersonId;
     private Long productId;
     private Long companyId;
