@@ -46,4 +46,7 @@ public class ProjectResponseDto {
 
     private boolean isDeleted;
     private boolean isActive;
+
+    private Long statusId;
+    private String statusName;
 }
