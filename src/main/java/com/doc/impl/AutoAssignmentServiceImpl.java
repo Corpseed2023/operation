@@ -196,17 +196,20 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
     }
 
     private boolean isUserOnline(User user) {
-        UserLoginStatus status = userLoginStatusRepository.findByUserIdAndIsDeletedFalse(user.getId()).orElse(null);
-        if (status == null) return false;
+        Optional<UserLoginStatus> statusOpt = userLoginStatusRepository.findTodayStatusByUserId(user.getId());
 
-        boolean online = status.isOnline() ||
-                (status.getLastOnline() != null &&
-                        status.getLastOnline().toInstant().atZone(ZoneId.systemDefault()).toLocalDate().equals(LocalDate.now()));
+        if (statusOpt.isEmpty()) {
+            logger.debug("→ isUserOnline({}) = false (no login record for today)", user.getFullName());
+            return false;
+        }
 
-        logger.debug("→ isUserOnline({}) = {}", user.getFullName(), online);
+        UserLoginStatus status = statusOpt.get();
+        boolean online = status.isOnline();
+
+        logger.debug("→ isUserOnline({}) = {} (today record exists, isOnline={})",
+                user.getFullName(), online, status.isOnline());
         return online;
     }
-
     private boolean isBucketAvailable(User user, Long productId) {
         UserPerformanceCount cnt = userPerformanceCountRepository.findByUserIdAndProductId(user.getId(), productId);
         boolean available = cnt == null || cnt.getAssignmentCount() < user.getBucketSize();
@@ -410,6 +413,8 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         departmentAutoConfigRepository.save(config);
         logger.info("Config updated for dept: {}", department.getName());
     }
+
+    // suppose ADMIN configure enabled avaiblity
 
     @Override
     public DepartmentAutoConfigDto getDepartmentAutoConfig(Long departmentId) {

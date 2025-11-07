@@ -5,13 +5,17 @@ import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.entity.project.Project;
 import org.springframework.data.domain.Page;
 
+import java.util.List;
+
 public interface ProjectService {
 
     ProjectResponseDto createProject(ProjectRequestDto requestDto);
 
-    Page<ProjectResponseDto> getAllProjects(Long userId, int page, int size);
+    // CHANGED: List instead of Page
+    List<ProjectResponseDto> getAllProjects(Long userId, int page, int size);
 
-    void deleteProject(Long id);
+    // NEW: Separate count method
+    long getProjectCount(Long userId);
 
     ProjectResponseDto addPaymentTransaction(Long projectId, ProjectPaymentTransactionDto transactionDto);
 
@@ -22,4 +26,6 @@ public interface ProjectService {
     void updateMilestoneVisibilities(Project project, Long updatedById);
 
     ProjectResponseDto addPaymentByUnbilledNumber(String unbilledNumber, ProjectPaymentTransactionDto dto);
+
+    void deleteProject(Long id);
 }

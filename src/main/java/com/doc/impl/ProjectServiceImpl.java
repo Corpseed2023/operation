@@ -203,12 +203,13 @@ public class ProjectServiceImpl implements ProjectService {
         }
     }
 
+    // Updated Service Implementation (relevant methods only)
     @Override
-    public Page<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
+    public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
         User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
-        PageRequest pageable = PageRequest.of(page, size);
+        PageRequest pageable = PageRequest.of(page, size);  // page is 0-based
         Page<Project> projectPage;
 
         boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
@@ -223,8 +224,26 @@ public class ProjectServiceImpl implements ProjectService {
             projectPage = projectRepository.findByAssignedUserIds(userIds, pageable);
         }
 
-        // Return full Page with metadata + mapped DTOs
-        return projectPage.map(this::mapToResponseDto);
+        // CHANGED: Return only content list (no Page)
+        return projectPage.map(this::mapToResponseDto).getContent();
+    }
+
+    @Override
+    public long getProjectCount(Long userId) {
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
+        if (isAdmin) {
+            return projectRepository.countByIsDeletedFalse();
+        } else {
+            List<Long> userIds = new ArrayList<>(List.of(userId));
+            if (user.isManagerFlag()) {
+                List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+                userIds.addAll(subordinates.stream().map(User::getId).toList());
+            }
+            return projectRepository.countByAssignedUserIds(userIds);
+        }
     }
     @Override
     public void deleteProject(Long id) {
