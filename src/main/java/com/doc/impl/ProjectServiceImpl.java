@@ -204,7 +204,7 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
+    public Page<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
         User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
@@ -223,11 +223,9 @@ public class ProjectServiceImpl implements ProjectService {
             projectPage = projectRepository.findByAssignedUserIds(userIds, pageable);
         }
 
-        return projectPage.getContent().stream()
-                .map(this::mapToResponseDto)
-                .toList();
+        // Return full Page with metadata + mapped DTOs
+        return projectPage.map(this::mapToResponseDto);
     }
-
     @Override
     public void deleteProject(Long id) {
         Project project = projectRepository.findActiveUserById(id)

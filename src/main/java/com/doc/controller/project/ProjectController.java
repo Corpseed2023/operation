@@ -1,10 +1,6 @@
 package com.doc.controller.project;
 
-import com.doc.dto.project.AssignedMilestoneDto;
-import com.doc.dto.project.AssignedProjectResponseDto;
-import com.doc.dto.project.ProjectMilestoneResponseDto;
-import com.doc.dto.project.ProjectRequestDto;
-import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,8 +13,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -40,17 +34,27 @@ public class ProjectController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    @Operation(summary = "Get all projects with pagination")
+    @Operation(summary = "Get all projects with pagination (page starts from 1)")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "List of projects retrieved"),
+            @ApiResponse(responseCode = "200", description = "Paged list of projects retrieved"),
             @ApiResponse(responseCode = "400", description = "Invalid pagination parameters")
     })
     @GetMapping
-    public ResponseEntity<List<ProjectResponseDto>> getAllProjects(
+    public ResponseEntity<Page<ProjectResponseDto>> getAllProjects(
             @RequestParam Long userId,
-            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page number (starts from 1)", example = "1")
+            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "Number of records per page", example = "10")
             @RequestParam(defaultValue = "10") int size) {
-        List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page, size);
+
+        if (page < 1) {
+            throw new IllegalArgumentException("Page number must be at least 1");
+        }
+        if (size < 1) {
+            throw new IllegalArgumentException("Page size must be at least 1");
+        }
+
+        Page<ProjectResponseDto> responses = projectService.getAllProjects(userId, page - 1, size);
         return ResponseEntity.ok(responses);
     }
 
@@ -65,6 +69,7 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Add payment transaction to a project")
     @PostMapping("/{id}/payments")
     public ResponseEntity<ProjectResponseDto> addPaymentTransaction(
             @PathVariable Long id,
@@ -73,8 +78,7 @@ public class ProjectController {
         return ResponseEntity.ok(response);
     }
 
-
-    @Operation(summary = "Get assigned projects with milestones for the logged-in user with pagination")
+    @Operation(summary = "Get assigned projects with milestones for the logged-in user (page starts from 1)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Paged list of assigned projects retrieved"),
             @ApiResponse(responseCode = "404", description = "User not found")
@@ -82,11 +86,18 @@ public class ProjectController {
     @GetMapping("/my-projects")
     public ResponseEntity<Page<AssignedProjectResponseDto>> getAssignedProjects(
             @Parameter(description = "User ID of the logged-in user") @RequestParam Long userId,
-            @Parameter(description = "Page number (1-based)", example = "1") @RequestParam(defaultValue = "1") int page,
-            @Parameter(description = "Number of records per page", example = "10") @RequestParam(defaultValue = "10") int size) {
+            @Parameter(description = "Page number (starts from 1)", example = "1")
+            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "Number of records per page", example = "10")
+            @RequestParam(defaultValue = "10") int size) {
+
         if (page < 1) {
             throw new IllegalArgumentException("Page number must be at least 1");
         }
+        if (size < 1) {
+            throw new IllegalArgumentException("Page size must be at least 1");
+        }
+
         Page<AssignedProjectResponseDto> projects = projectService.getAssignedProjects(userId, page - 1, size);
         return ResponseEntity.ok(projects);
     }
@@ -121,5 +132,4 @@ public class ProjectController {
         ProjectResponseDto response = projectService.addPaymentByUnbilledNumber(unbilledNumber, dto);
         return ResponseEntity.ok(response);
     }
-
 }

@@ -1,6 +1,5 @@
 package com.doc.impl;
 
-
 import com.doc.dto.project.status.ProjectStatusRequestDto;
 import com.doc.dto.project.status.ProjectStatusResponseDto;
 import com.doc.entity.project.ProjectStatus;
@@ -11,10 +10,11 @@ import com.doc.service.ProjectStatusService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -64,10 +64,11 @@ public class ProjectStatusServiceImpl implements ProjectStatusService {
     }
 
     @Override
-    public Page<ProjectStatusResponseDto> getAllStatuses(Pageable pageable) {
-        logger.info("Fetching all project statuses - page: {}", pageable.getPageNumber());
-        return statusRepository.findAll(pageable)
-                .map(this::mapToResponseDto);
+    public List<ProjectStatusResponseDto> getAllStatuses() {
+        logger.info("Fetching all project statuses");
+        return statusRepository.findAll().stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -83,7 +84,6 @@ public class ProjectStatusServiceImpl implements ProjectStatusService {
         logger.info("Soft deleting project status ID: {}", id);
         ProjectStatus status = statusRepository.findActiveById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Project status not found", "ERR_STATUS_NOT_FOUND"));
-
 
         statusRepository.delete(status);
         logger.info("Project status deleted ID: {}", id);

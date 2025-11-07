@@ -8,11 +8,11 @@ import jakarta.validation.Valid;
 import com.doc.dto.project.status.ProjectStatusRequestDto;
 import com.doc.dto.project.status.ProjectStatusResponseDto;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/project-statuses")
@@ -42,12 +42,10 @@ public class ProjectStatusController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Get all project statuses with pagination")
+    @Operation(summary = "Get all project statuses")
     @GetMapping
-    public ResponseEntity<Page<ProjectStatusResponseDto>> getAllStatuses(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        Page<ProjectStatusResponseDto> statuses = statusService.getAllStatuses(PageRequest.of(page, size));
+    public ResponseEntity<List<ProjectStatusResponseDto>> getAllStatuses() {
+        List<ProjectStatusResponseDto> statuses = statusService.getAllStatuses();
         return ResponseEntity.ok(statuses);
     }
 
