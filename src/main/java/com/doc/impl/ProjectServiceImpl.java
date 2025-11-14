@@ -130,6 +130,10 @@ public class ProjectServiceImpl implements ProjectService {
         project.setSalesPersonName(requestDto.getSalesPersonName());
         project.setActive(true);
 
+
+
+
+
         ProjectStatus openStatus = projectStatusRepository.findById(StatusConstants.PROJECT_OPEN_ID)
                 .orElseThrow(() -> new ResourceNotFoundException("System status OPEN (ID=1) not found", "ERR_SYSTEM_STATUS_MISSING"));
         project.setStatus(openStatus);

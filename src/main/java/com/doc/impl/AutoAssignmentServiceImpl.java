@@ -21,8 +21,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -31,6 +29,7 @@ import java.util.stream.Collectors;
 public class AutoAssignmentServiceImpl implements AutoAssignmentService {
 
     private static final Logger logger = LoggerFactory.getLogger(AutoAssignmentServiceImpl.class);
+    private static final double DEFAULT_RATING = 3.0;
 
     @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
     @Autowired private UserRepository userRepository;
@@ -80,9 +79,10 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
 
         List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(milestone.getProduct().getId());
         logger.info("Found {} product mappings for Product {}", mappings.size(), milestone.getProduct().getId());
-
         List<UserProductMap> eligible = mappings.stream()
                 .filter(m -> deptUsers.stream().anyMatch(u -> u.getId().equals(m.getUser().getId())))
+                // ADD THIS LINE → EXCLUDE MANAGERS FROM AUTO-ASSIGNMENT
+                .filter(m -> !m.getUser().isManagerFlag())  // ← THIS IS THE FIX
                 .filter(m -> !config.isRatingPrioritizationEnabled() || (m.getRating() != null && m.getRating() > 0))
                 .filter(m -> !config.isAvailabilityRequired() || isUserAvailable(m.getUser(), milestone.getProduct().getId(), project, dept, config, deptUsers))
                 .sorted(Comparator.comparing(m -> m.getUser().getFullName()))
@@ -210,6 +210,7 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
                 user.getFullName(), online, status.isOnline());
         return online;
     }
+
     private boolean isBucketAvailable(User user, Long productId) {
         UserPerformanceCount cnt = userPerformanceCountRepository.findByUserIdAndProductId(user.getId(), productId);
         boolean available = cnt == null || cnt.getAssignmentCount() < user.getBucketSize();
@@ -414,7 +415,6 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         logger.info("Config updated for dept: {}", department.getName());
     }
 
-    // suppose ADMIN configure enabled avaiblity
 
     @Override
     public DepartmentAutoConfigDto getDepartmentAutoConfig(Long departmentId) {
