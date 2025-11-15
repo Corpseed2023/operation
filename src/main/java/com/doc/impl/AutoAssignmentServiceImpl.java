@@ -79,10 +79,10 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
 
         List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(milestone.getProduct().getId());
         logger.info("Found {} product mappings for Product {}", mappings.size(), milestone.getProduct().getId());
+
         List<UserProductMap> eligible = mappings.stream()
                 .filter(m -> deptUsers.stream().anyMatch(u -> u.getId().equals(m.getUser().getId())))
-                // ADD THIS LINE → EXCLUDE MANAGERS FROM AUTO-ASSIGNMENT
-                .filter(m -> !m.getUser().isManagerFlag())  // ← THIS IS THE FIX
+                .filter(m -> !m.getUser().isManagerFlag())
                 .filter(m -> !config.isRatingPrioritizationEnabled() || (m.getRating() != null && m.getRating() > 0))
                 .filter(m -> !config.isAvailabilityRequired() || isUserAvailable(m.getUser(), milestone.getProduct().getId(), project, dept, config, deptUsers))
                 .sorted(Comparator.comparing(m -> m.getUser().getFullName()))
@@ -90,21 +90,33 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
 
         logger.info("ELIGIBLE USERS ({}): {}", eligible.size(),
                 eligible.stream()
-                        .map(m -> String.format("%s (online=%b, bucket=%b, rating=%.1f)",
-                                m.getUser().getFullName(),
-                                isUserOnline(m.getUser()),
-                                isBucketAvailable(m.getUser(), milestone.getProduct().getId()),
-                                m.getRating() != null ? m.getRating() : 0.0))
+                        .map(m -> {
+                            User u = m.getUser();
+                            int bucketSize = Optional.ofNullable(u.getBucketSize()).orElse(0);
+                            return String.format("%s (online=%b, bucket=%b, rating=%.1f, bucketSize=%d)",
+                                    u.getFullName(),
+                                    isUserOnline(u),
+                                    isBucketAvailable(u, milestone.getProduct().getId()),
+                                    Optional.ofNullable(m.getRating()).orElse(0.0),
+                                    bucketSize);
+                        })
                         .collect(Collectors.joining(", ")));
 
-        // === COMPANY ALIGNMENT: BYPASS ALL FILTERS ===
-        if (config.isCompanyAlignmentEnabled()) {
-            logger.info("COMPANY ALIGNMENT ENABLED → checking history for Company ID: {}", project.getCompany().getId());
+        logger.warn("=== BUCKET SIZE & AVAILABILITY DEBUG (CRITICAL) ===");
+        eligible.forEach(m -> {
+            User u = m.getUser();
+            Integer bs = u.getBucketSize();
+            boolean avail = isBucketAvailable(u, milestone.getProduct().getId());
+            logger.warn("{} → bucketSize: {}, available: {}, rating: {}",
+                    u.getFullName(), bs != null ? bs : "NULL", avail,
+                    m.getRating() != null ? m.getRating() : 0.0);
+        });
+        logger.warn("=== END BUCKET DEBUG ===");
 
+        // === COMPANY ALIGNMENT BYPASS ===
+        if (config.isCompanyAlignmentEnabled()) {
             List<ProjectAssignmentHistory> history = projectAssignmentHistoryRepository
                     .findLatestByCompanyMilestoneDept(project.getCompany().getId(), milestone.getMilestone().getId(), dept.getId());
-
-            logger.info("Found {} history records", history.size());
 
             if (!history.isEmpty()) {
                 Optional<ProjectAssignmentHistory> latest = history.stream()
@@ -113,109 +125,173 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
 
                 if (latest.isPresent()) {
                     User lastUser = latest.get().getAssignedUser();
-                    logger.info("COMPANY-ALIGNED → MOST RECENT: {} (offline/bucket bypassed)", lastUser.getFullName());
-
+                    logger.info("COMPANY-ALIGNED → MOST RECENT: {} (bypassing bucket)", lastUser.getFullName());
                     UserProductMap map = userProductMapRepository
                             .findByUserIdAndProductIdAndIsDeletedFalse(lastUser.getId(), milestone.getProduct().getId())
-                            .orElseGet(() -> {
-                                logger.info("Creating new UserProductMap for {}", lastUser.getFullName());
-                                return createMap(lastUser, milestone.getProduct(), updatedById);
-                            });
-
+                            .orElseGet(() -> createMap(lastUser, milestone.getProduct(), updatedById));
                     return assignUser(map, "Assigned: company alignment (most recent)", updatedById);
                 }
-            } else {
-                logger.info("No alignment history found");
             }
         }
 
-        // === RATING PRIORITIZATION ===
+        // === RATING PRIORITIZATION (RESPECTS BUCKET) ===
         if (config.isRatingPrioritizationEnabled()) {
             logger.info("RATING PRIORITIZATION ENABLED");
+
             Map<Double, List<UserProductMap>> groups = eligible.stream()
                     .collect(Collectors.groupingBy(m -> m.getRating() != null ? m.getRating() : 0.0));
+
             List<Double> tiers = new ArrayList<>(groups.keySet());
             tiers.sort(Comparator.reverseOrder());
 
             for (Double tier : tiers) {
-                List<UserProductMap> tierUsers = groups.get(tier);
-                Optional<UserProductMap> selected = config.isRoundRobinEnabled()
-                        ? selectRoundRobin(tierUsers, milestone.getProduct().getId())
-                        : selectBestAvailable(tierUsers, milestone.getProduct().getId());
+                List<UserProductMap> tierUsers = groups.get(tier).stream()
+                        .filter(m -> isBucketAvailable(m.getUser(), milestone.getProduct().getId()))
+                        .collect(Collectors.toList());
 
-                if (selected.isPresent()) {
-                    String reason = String.format("Assigned: %.1f-star%s", tier, config.isRoundRobinEnabled() ? " + RR" : " + load");
-                    logger.info("RATING SELECTED: {} → {}", selected.get().getUser().getFullName(), reason);
-                    return assignUser(selected.get(), reason, updatedById);
+                if (tierUsers.isEmpty()) {
+                    logger.info("Tier {} has no available bucket → skipping", tier);
+                    continue;
+                }
+
+                tierUsers = tierUsers.stream()
+                        .sorted(Comparator.comparing(m -> m.getUser().getFullName()))
+                        .collect(Collectors.toList());
+
+                if (config.isRoundRobinEnabled()) {
+                    if (tierUsers.stream().allMatch(UserProductMap::isAssigned)) {
+                        logger.info("RR RESET in tier {}: all assigned → resetting", tier);
+                        tierUsers.forEach(m -> m.setAssigned(false));
+                        userProductMapRepository.saveAll(tierUsers);
+                    }
+                    Optional<UserProductMap> selected = tierUsers.stream()
+                            .filter(m -> !m.isAssigned())
+                            .findFirst();
+                    if (selected.isPresent()) {
+                        String reason = String.format("Assigned: %.1f-star + RR (tier)", tier);
+                        logger.info("RATING + RR SELECTED: {} → {}", selected.get().getUser().getFullName(), reason);
+                        return assignUser(selected.get(), reason, updatedById);
+                    }
+                } else {
+                    Optional<UserProductMap> selected = selectBestAvailable(tierUsers, milestone.getProduct().getId());
+                    if (selected.isPresent()) {
+                        String reason = String.format("Assigned: %.1f-star + load balance", tier);
+                        logger.info("RATING + LOAD SELECTED: {} → {}", selected.get().getUser().getFullName(), reason);
+                        return assignUser(selected.get(), reason, updatedById);
+                    }
                 }
             }
         }
 
-        // === PURE ROUND-ROBIN OR LOAD BALANCE ===
-        Optional<UserProductMap> selected = config.isRoundRobinEnabled()
-                ? selectRoundRobin(eligible, milestone.getProduct().getId())
-                : selectBestAvailable(eligible, milestone.getProduct().getId());
+        // === FINAL ROUND-ROBIN WITH TRUE OVERFLOW (PERFECT FAIRNESS) ===
+        List<UserProductMap> activeUsers = eligible.stream()
+                .filter(m -> {
+                    Integer bs = m.getUser().getBucketSize();
+                    return bs != null && bs > 0; // Exclude only bucketSize = 0
+                })
+                .sorted(Comparator.comparing(m -> m.getUser().getFullName()))
+                .collect(Collectors.toList());
 
-        if (selected.isPresent()) {
-            String reason = config.isRoundRobinEnabled() ? "Assigned: round-robin" : "Assigned: load balance";
-            logger.info("FINAL SELECTED: {} → {}", selected.get().getUser().getFullName(), reason);
-            return assignUser(selected.get(), reason, updatedById);
+        if (activeUsers.isEmpty()) {
+            logger.warn("NO USER HAS bucketSize > 0 → falling back to manual assignment");
+            return new AssignmentResult(null, "Pending manual assignment: all users disabled");
         }
 
-        // === FALLBACK: MANAGER IF NO ONE ONLINE ===
-        long onlineCount = deptUsers.stream().filter(this::isUserOnline).count();
+        // Try normal assignment (if someone has space)
+        boolean anyoneHasSpace = activeUsers.stream()
+                .anyMatch(m -> isBucketAvailable(m.getUser(), milestone.getProduct().getId()));
 
-        if (onlineCount == 0) {
-            logger.warn("NO ONLINE USERS → FALLING BACK TO MANAGER");
+        if (anyoneHasSpace) {
+            List<UserProductMap> withSpace = activeUsers.stream()
+                    .filter(m -> isBucketAvailable(m.getUser(), milestone.getProduct().getId()))
+                    .collect(Collectors.toList());
 
-            Optional<User> managerOpt = userRepository.findManagerByDepartmentId(dept.getId())
-                    .stream()
-                    .filter(m -> m.isActive() && !m.isDeleted())
-                    .findFirst();
+            Optional<UserProductMap> selected = config.isRoundRobinEnabled()
+                    ? selectRoundRobin(withSpace, milestone.getProduct().getId())
+                    : selectBestAvailable(withSpace, milestone.getProduct().getId());
 
-            if (managerOpt.isPresent()) {
-                User manager = managerOpt.get();
-                logger.info("Assigning to MANAGER: {} (offline OK)", manager.getFullName());
-
-                UserProductMap map = userProductMapRepository
-                        .findByUserIdAndProductIdAndIsDeletedFalse(manager.getId(), milestone.getProduct().getId())
-                        .orElseGet(() -> {
-                            logger.info("Creating map for manager: {}", manager.getFullName());
-                            return createMap(manager, milestone.getProduct(), updatedById);
-                        });
-
-                return assignUser(map, "Assigned to Department Manager (no online executives)", updatedById);
-            } else {
-                logger.warn("No manager found → PENDING MANUAL");
+            if (selected.isPresent()) {
+                String reason = config.isRoundRobinEnabled() ? "Assigned: round-robin" : "Assigned: load balance";
+                logger.info("NORMAL ASSIGNMENT: {} → {}", selected.get().getUser().getFullName(), reason);
+                return assignUser(selected.get(), reason, updatedById);
             }
-        } else {
-            logger.error("ONLINE USERS EXIST ({}) → SHOULD NOT REACH HERE (BUG)", onlineCount);
         }
 
-        return new AssignmentResult(null, "Pending manual assignment");
-    }
+        // ALL BUCKETS FULL → TRUE OVERFLOW ROUND-ROBIN (FAIR CYCLE)
+        logger.warn("ALL BUCKETS FULL → STARTING TRUE OVERFLOW ROUND-ROBIN (bucketSize > 0 only)");
 
+        Optional<UserProductMap> overflowSelected;
+
+        if (config.isRoundRobinEnabled()) {
+            overflowSelected = selectRoundRobin(activeUsers, milestone.getProduct().getId());
+        } else {
+            overflowSelected = selectBestAvailable(activeUsers, milestone.getProduct().getId());
+        }
+
+        // Safety fallback
+        if (overflowSelected.isEmpty()) {
+            overflowSelected = activeUsers.stream().findFirst();
+        }
+
+        UserProductMap map = overflowSelected.get();
+        map.setAssigned(true);
+        userProductMapRepository.save(map);
+
+        User user = map.getUser();
+        UserPerformanceCount count = userPerformanceCountRepository
+                .findByUserIdAndProductId(user.getId(), milestone.getProduct().getId());
+        int newCount = count != null ? count.getAssignmentCount() + 1 : 1;
+
+        if (count == null) {
+            count = new UserPerformanceCount();
+            count.setUser(user);
+            count.setProduct(milestone.getProduct());
+            count.setAssignmentCount(1);
+            count.setTimeSpent(0.0);
+            count.setCreatedDate(new Date());
+            count.setCreatedBy(updatedById);
+            count.setDeleted(false);
+        } else {
+            count.setAssignmentCount(newCount);
+        }
+        count.setLastUpdatedDate(new Date());
+        count.setUpdatedDate(new Date());
+        count.setUpdatedBy(updatedById);
+        userPerformanceCountRepository.save(count);
+
+        logger.info("OVERFLOW ASSIGNMENT → {} | New Count: {}/{} (overflow round-robin)",
+                user.getFullName(), newCount, user.getBucketSize());
+
+        return new AssignmentResult(user, "Assigned: overflow round-robin (all buckets full)");
+    }
     private boolean isUserOnline(User user) {
         Optional<UserLoginStatus> statusOpt = userLoginStatusRepository.findTodayStatusByUserId(user.getId());
-
         if (statusOpt.isEmpty()) {
             logger.debug("→ isUserOnline({}) = false (no login record for today)", user.getFullName());
             return false;
         }
-
-        UserLoginStatus status = statusOpt.get();
-        boolean online = status.isOnline();
-
-        logger.debug("→ isUserOnline({}) = {} (today record exists, isOnline={})",
-                user.getFullName(), online, status.isOnline());
+        boolean online = statusOpt.get().isOnline();
+        logger.debug("→ isUserOnline({}) = {}", user.getFullName(), online);
         return online;
     }
 
+    // FINAL FIXED VERSION
     private boolean isBucketAvailable(User user, Long productId) {
+        Integer bucketSize = user.getBucketSize();
+
+        // BLOCK USERS WITH 0 OR NULL BUCKET SIZE
+        if (bucketSize == null || bucketSize <= 0) {
+            logger.debug("→ isBucketAvailable({}) = false (bucketSize = {} → DISABLED FOR AUTO-ASSIGNMENT)",
+                    user.getFullName(), bucketSize);
+            return false;
+        }
+
         UserPerformanceCount cnt = userPerformanceCountRepository.findByUserIdAndProductId(user.getId(), productId);
-        boolean available = cnt == null || cnt.getAssignmentCount() < user.getBucketSize();
-        logger.debug("→ isBucketAvailable({}) = {} (count={}, size={})", user.getFullName(), available,
-                cnt != null ? cnt.getAssignmentCount() : 0, user.getBucketSize());
+        int currentCount = cnt != null ? cnt.getAssignmentCount() : 0;
+        boolean available = currentCount < bucketSize;
+
+        logger.debug("→ isBucketAvailable({}) = {} (currentCount={}, bucketSize={})",
+                user.getFullName(), available, currentCount, bucketSize);
         return available;
     }
 
@@ -233,20 +309,12 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
                 });
     }
 
-    // FIXED: Single atomic reset
     private Optional<UserProductMap> selectRoundRobin(List<UserProductMap> candidates, Long productId) {
-        if (candidates.isEmpty()) {
-            logger.info("RR: No candidates");
-            return Optional.empty();
-        }
+        if (candidates.isEmpty()) return Optional.empty();
 
         List<UserProductMap> pool = candidates.stream()
                 .sorted(Comparator.comparing(m -> m.getUser().getFullName()))
                 .collect(Collectors.toList());
-
-        logger.debug("RR Pool: {}", pool.stream()
-                .map(m -> m.getUser().getFullName() + "(assigned=" + m.isAssigned() + ")")
-                .collect(Collectors.joining(", ")));
 
         if (pool.stream().allMatch(UserProductMap::isAssigned)) {
             logger.info("RR: All assigned → resetting");
@@ -254,57 +322,31 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             userProductMapRepository.saveAll(pool);
         }
 
-        return pool.stream()
-                .filter(m -> !m.isAssigned())
-                .findFirst();
+        return pool.stream().filter(m -> !m.isAssigned()).findFirst();
     }
 
     private Optional<UserProductMap> selectBestAvailable(List<UserProductMap> candidates, Long productId) {
-        Optional<UserProductMap> best = candidates.stream()
+        return candidates.stream()
                 .min(Comparator.comparing((UserProductMap m) -> {
                     UserPerformanceCount c = userPerformanceCountRepository.findByUserIdAndProductId(m.getUser().getId(), productId);
                     return c != null ? c.getAssignmentCount() : 0;
                 }).thenComparing(m -> m.getRating() != null ? m.getRating() : 0.0, Comparator.reverseOrder()));
-
-        if (best.isPresent()) {
-            UserPerformanceCount c = userPerformanceCountRepository.findByUserIdAndProductId(best.get().getUser().getId(), productId);
-            int count = c != null ? c.getAssignmentCount() : 0;
-            logger.info("LOAD BALANCE: Selected {} (load={}, rating={})", best.get().getUser().getFullName(), count,
-                    best.get().getRating() != null ? best.get().getRating() : 0.0);
-        } else {
-            logger.info("LOAD BALANCE: No candidate");
-        }
-        return best;
     }
 
     private boolean isUserAvailable(User user, Long productId, Project project, Department dept,
                                     DepartmentAutoConfig config, List<User> deptUsers) {
-        if (!user.isActive()) {
-            logger.debug("→ {} is INACTIVE → EXCLUDED", user.getFullName());
-            return false;
-        }
+        if (!user.isActive()) return false;
 
         boolean online = isUserOnline(user);
         long onlineCount = deptUsers.stream().filter(this::isUserOnline).count();
 
-        // COMPANY ALIGNMENT: bypass everything
         if (config.isCompanyAlignmentEnabled()) {
             boolean hasHistory = projectAssignmentHistoryRepository
                     .existsByProjectCompanyIdAndAssignedUserIdAndDepartmentId(project.getCompany().getId(), user.getId(), dept.getId());
-            if (hasHistory) {
-                logger.debug("→ ALIGNMENT: {} has history → ALLOWED (offline/bucket OK)", user.getFullName());
-                return true;
-            }
+            if (hasHistory) return true;
         }
 
-        // LONE WOLF: only online user
-        if (online && onlineCount == 1) {
-            logger.debug("→ LONE WOLF: {} is ONLY online → BUCKET BYPASSED", user.getFullName());
-            return true;
-        }
-
-        // NORMAL: must be online
-        logger.debug("→ NORMAL CHECK: {} online={} → {}", user.getFullName(), online, online ? "ELIGIBLE" : "EXCLUDED");
+        if (online && onlineCount == 1) return true; // Lone wolf
         return online;
     }
 
@@ -333,7 +375,8 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         count.setUpdatedBy(updatedById);
         userPerformanceCountRepository.save(count);
 
-        logger.info("FINAL ASSIGNMENT → {} | Reason: {} | New Count: {}/{}", user.getFullName(), reason, newCount, user.getBucketSize());
+        logger.info("FINAL ASSIGNMENT → {} | Reason: {} | New Count: {}/{}",
+                user.getFullName(), reason, newCount, user.getBucketSize());
         return new AssignmentResult(user, reason);
     }
 
@@ -348,9 +391,9 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         map.setUpdatedDate(new Date());
         map.setCreatedBy(updatedById);
         map.setUpdatedBy(updatedById);
-        logger.info("Created new UserProductMap for {}", user.getFullName());
         return userProductMapRepository.save(map);
     }
+
 
     private void queueMilestone(ProductMilestoneMap milestone, Project project, Long updatedById) {
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository

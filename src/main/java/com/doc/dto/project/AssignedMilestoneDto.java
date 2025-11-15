@@ -17,6 +17,8 @@ public class AssignedMilestoneDto {
     private String projectName;
     private Long milestoneId;
     private String milestoneName;
+    private Long departmentId;
+    private String departmentName;
     private String status;
     private String statusReason;
     private String visibilityReason;

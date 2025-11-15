@@ -665,6 +665,8 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setProjectName(assignment.getProject().getName());
         dto.setMilestoneId(assignment.getMilestone().getId());
         dto.setMilestoneName(assignment.getMilestone().getName());
+        dto.setDepartmentId(assignment.getDepartmentId());
+        dto.setDepartmentName(assignment.getDepartmentName());
         dto.setStatus(assignment.getStatus().getName());
         dto.setStatusReason(assignment.getStatusReason());
         dto.setVisibilityReason(assignment.getVisibilityReason());
