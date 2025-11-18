@@ -75,7 +75,30 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         }
 
         List<User> deptUsers = userRepository.findByDepartmentsIdAndIsActiveTrueAndIsDeletedFalse(dept.getId());
-        logger.info("Found {} ACTIVE users in dept '{}'", deptUsers.size(), dept.getName());
+        logger.info("Found {} active users in department '{}'", deptUsers.size(), dept.getName());
+
+        deptUsers.forEach(user -> {
+            boolean hasProductMapping = user.getUserProductMaps().stream()
+                    .anyMatch(m -> !m.isDeleted() && m.getProduct().getId().equals(milestone.getProduct().getId()));
+
+            String status = user.isManagerFlag() ? "MANAGER → EXCLUDED" :
+                    (user.getBucketSize() <= 0 ? "BUCKET=0 → DISABLED" :
+                            (hasProductMapping ? "ELIGIBLE" : "NO PRODUCT MAPPING"));
+
+            logger.info("→ {} (ID:{}) | ManagerFlag: {} | BucketSize: {} | {} | ProductMapped: {}",
+                    String.format("%-20s", user.getFullName()),
+                    user.getId(),
+                    user.isManagerFlag(),
+                    user.getBucketSize(),
+                    status,
+                    hasProductMapping ? "YES" : "NO"
+            );
+        });
+
+// Save all modified users (to persist the removal of department)
+        userRepository.saveAll(deptUsers);
+
+        logger.info("All users removed from department '{}'", dept.getName());
 
         List<UserProductMap> mappings = userProductMapRepository.findByProductIdAndIsDeletedFalse(milestone.getProduct().getId());
         logger.info("Found {} product mappings for Product {}", mappings.size(), milestone.getProduct().getId());

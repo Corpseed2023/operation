@@ -678,16 +678,12 @@ public class ProjectServiceImpl implements ProjectService {
                 .collect(Collectors.toList()));
         dto.setAssignedUser(mapToUserResponseDto(assignment.getAssignedUser()));
 
-        // === Add Department Id and Name ===
         Milestone milestone = assignment.getMilestone();
         if (milestone != null && milestone.getDepartments() != null && !milestone.getDepartments().isEmpty()) {
-            // Option 1: Take the FIRST department (most common case)
             Department dept = milestone.getDepartments().get(0);
             dto.setDepartmentId(dept.getId());
             dto.setDepartmentName(dept.getName());
 
-            // Option 2: If multiple departments are possible and you want to support it later,
-            // change DTO to List<Long> departmentIds & List<String> departmentNames
         } else {
             dto.setDepartmentId(null);
             dto.setDepartmentName(null);
