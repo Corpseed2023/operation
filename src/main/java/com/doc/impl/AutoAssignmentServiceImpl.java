@@ -245,12 +245,14 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
 
         Optional<UserProductMap> overflowSelected;
 
+        // ALL BUCKETS FULL → TRUE FAIR OVERFLOW ROUND-ROBIN
+        logger.warn("ALL BUCKETS FULL → STARTING FAIR OVERFLOW ROUND-ROBIN (Rating + LastAssigned priority)");
+
         if (config.isRoundRobinEnabled()) {
-            overflowSelected = selectRoundRobin(activeUsers, milestone.getProduct().getId());
+            overflowSelected = selectFairOverflowRoundRobin(activeUsers, milestone.getProduct().getId());
         } else {
             overflowSelected = selectBestAvailable(activeUsers, milestone.getProduct().getId());
         }
-
         // Safety fallback
         if (overflowSelected.isEmpty()) {
             overflowSelected = activeUsers.stream().findFirst();
@@ -330,6 +332,47 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
                     cfg.setUpdatedDate(new Date());
                     return departmentAutoConfigRepository.save(cfg);
                 });
+    }
+
+    /**
+     * FAIR OVERFLOW ROUND-ROBIN
+     * Prioritizes:
+     * 1. Highest rating first (5.0 > 3.0)
+     * 2. Oldest last assignment (true round-robin fairness)
+     * 3. Name as final tiebreaker
+     */
+    private Optional<UserProductMap> selectFairOverflowRoundRobin(List<UserProductMap> candidates, Long productId) {
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<UserProductMap> sorted = candidates.stream()
+                .sorted(Comparator
+                        // 1. Highest rating first
+                        .comparing((UserProductMap m) -> Optional.ofNullable(m.getRating()).orElse(0.0), Comparator.reverseOrder())
+                        // 2. Oldest assignment first (true RR)
+                        .thenComparing(m -> {
+                            UserPerformanceCount count = userPerformanceCountRepository
+                                    .findByUserIdAndProductId(m.getUser().getId(), productId);
+                            return count != null && count.getLastUpdatedDate() != null
+                                    ? count.getLastUpdatedDate()
+                                    : new Date(0); // Never assigned = highest priority
+                        })
+                        // 3. Name as final tiebreaker
+                        .thenComparing(m -> m.getUser().getFullName())
+                )
+                .collect(Collectors.toList());
+
+        // Reset cycle if everyone has been assigned once
+        if (sorted.stream().allMatch(UserProductMap::isAssigned)) {
+            logger.info("FAIR OVERFLOW RR: All users assigned in cycle → RESETTING (Rating + LastAssigned priority)");
+            sorted.forEach(m -> m.setAssigned(false));
+            userProductMapRepository.saveAll(sorted);
+        }
+
+        return sorted.stream()
+                .filter(m -> !m.isAssigned())
+                .findFirst();
     }
 
     private Optional<UserProductMap> selectRoundRobin(List<UserProductMap> candidates, Long productId) {
