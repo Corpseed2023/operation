@@ -208,28 +208,54 @@ public class ProjectServiceImpl implements ProjectService {
         }
     }
 
-    // Updated Service Implementation (relevant methods only)
     @Override
     public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
         User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
-        PageRequest pageable = PageRequest.of(page, size);  // page is 0-based
+        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
+        boolean isOpHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+
+        PageRequest pageable = PageRequest.of(page, size);
         Page<Project> projectPage;
 
-        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
-        if (isAdmin) {
+        if (isAdmin || isOpHead) {
+            // Admins & Op Heads see ALL projects
             projectPage = projectRepository.findByIsDeletedFalse(pageable);
         } else {
-            List<Long> userIds = new ArrayList<>(List.of(userId));
+            List<Long> candidateUserIds = new ArrayList<>(List.of(userId));
             if (user.isManagerFlag()) {
                 List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
-                userIds.addAll(subordinates.stream().map(User::getId).toList());
+                candidateUserIds.addAll(subordinates.stream().map(User::getId).toList());
             }
-            projectPage = projectRepository.findByAssignedUserIds(userIds, pageable);
+
+            // Step 1: Get projects where this user (or team) is assigned
+            projectPage = projectRepository.findByAssignedUserIds(candidateUserIds, pageable);
+
+            // Step 2: FOR REGULAR USERS ONLY - filter out projects with ZERO visible milestones
+            if (!user.isManagerFlag()) {
+                List<Project> filteredProjects = new ArrayList<>();
+
+                for (Project project : projectPage.getContent()) {
+                    // Recalculate visibility (important!)
+                    updateMilestoneVisibilities(project, userId);
+
+                    // Check if THIS user has at least ONE visible milestone
+                    boolean hasVisibleMilestone = projectMilestoneAssignmentRepository
+                            .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(project.getId(), userId)
+                            .size() > 0;
+
+                    if (hasVisibleMilestone) {
+                        filteredProjects.add(project);
+                    }
+                    // else → project is hidden from this regular user
+                }
+
+                // Rebuild page with filtered content (preserve pagination info best-effort)
+                projectPage = new PageImpl<>(filteredProjects, pageable, filteredProjects.size());
+            }
         }
 
-        // CHANGED: Return only content list (no Page)
         return projectPage.map(this::mapToResponseDto).getContent();
     }
 
@@ -517,58 +543,90 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
         logger.info("Fetching project details and milestones for project ID: {}, user ID: {}", projectId, userId);
-        System.out.println("Fetching project details and milestones for project ID: " + projectId + ", user ID: " + userId);
+
         Project project = projectRepository.findActiveUserById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
 
         User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
-        boolean isAssignedUser = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId,
-                userId).isPresent();
-        boolean isManagerOfAssignedUser = false;
+        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
+        boolean isOperationHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
 
-        if (!isAdmin && !isOperationHead && !isAssignedUser) {
-            List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
-            List<Long> assignedUserIds = assignments.stream()
-                    .filter(a -> a.getAssignedUser() != null)
-                    .map(a -> a.getAssignedUser().getId())
-                    .collect(Collectors.toList());
-            List<User> managedUsers = userRepository.findByManagerIdAndIsDeletedFalse(userId);
-            isManagerOfAssignedUser = managedUsers.stream().anyMatch(u -> assignedUserIds.contains(u.getId()));
+        // Admins & Op Heads see ALL milestones (including completed)
+        if (isAdmin || isOperationHead) {
+            List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
+                    .findByProjectIdAndIsDeletedFalse(projectId);
+
+            assignments.forEach(a -> a.setDocuments(
+                    projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
+
+            ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
+            response.setProjectDetails(mapToProjectDetailsDto(project, userId));
+            response.setMilestones(assignments.stream()
+                    .map(this::mapToAssignedMilestoneDto)
+                    .collect(Collectors.toList()));
+            return response;
         }
 
-        if (!isAdmin && !isOperationHead && !isAssignedUser && !isManagerOfAssignedUser) {
-            logger.warn("User ID {} not authorized to view project ID {}", userId, projectId);
-            System.out.println("User ID " + userId + " not authorized to view project ID " + projectId);
-            throw new ValidationException("User not authorized to view this project", "ERR_UNAUTHORIZED_ACCESS");
+        // === RECALCULATE VISIBILITY FIRST (critical) ===
+        updateMilestoneVisibilities(project, userId);
+
+        // === Check authorization ===
+        boolean isAssignedToAnyMilestone = projectMilestoneAssignmentRepository
+                .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId).isPresent();
+
+        List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+        List<Long> managedUserIds = subordinates.stream().map(User::getId).collect(Collectors.toList());
+
+        boolean isManagerOfAssignedUser = projectMilestoneAssignmentRepository
+                .findByProjectIdAndIsDeletedFalse(projectId).stream()
+                .filter(a -> a.getAssignedUser() != null)
+                .map(a -> a.getAssignedUser().getId())
+                .anyMatch(managedUserIds::contains);
+
+        if (!isAssignedToAnyMilestone && !isManagerOfAssignedUser) {
+            throw new ValidationException("You are not authorized to view this project", "ERR_UNAUTHORIZED_ACCESS");
         }
 
+        // === FETCH MILESTONES DIFFERENTLY FOR REGULAR USER ===
         List<ProjectMilestoneAssignment> assignments;
 
-        if (isAdmin || isOperationHead) {
-            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId);
-        } else if (isManagerOfAssignedUser) {
-            List<Long> managedUserIds = userRepository.findByManagerIdAndIsDeletedFalse(userId)
-                    .stream()
-                    .map(User::getId)
-                    .collect(Collectors.toList());
-            if (!managedUserIds.contains(userId)) {
-                managedUserIds.add(userId);
-            }
-            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-                    projectId, managedUserIds, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(),
-                            milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()));
+        if (isManagerOfAssignedUser) {
+            // Manager sees team’s visible milestones (including completed ones for history)
+            List<Long> teamIds = new ArrayList<>(managedUserIds);
+            if (!teamIds.contains(userId)) teamIds.add(userId);
+
+            assignments = projectMilestoneAssignmentRepository
+                    .findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(projectId, teamIds);
         } else {
-            assignments = projectMilestoneAssignmentRepository.findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
-                    projectId, userId, Arrays.asList(milestoneStatusRepository.findByName("NEW").orElseThrow(),
-                            milestoneStatusRepository.findByName("IN_PROGRESS").orElseThrow()));
+            // Regular user: show ONLY HIS/HER milestones that are VISIBLE
+            // → Include COMPLETED ones too! (This was your bug)
+            assignments = projectMilestoneAssignmentRepository
+                    .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(projectId, userId);
         }
 
-        for (ProjectMilestoneAssignment assignment : assignments) {
-            assignment.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId()));
+        // Load documents
+        assignments.forEach(a -> a.setDocuments(
+                projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
+
+        System.out.println("=== DEBUG VISIBILITY ===");
+        System.out.println("User ID: " + userId);
+        System.out.println("Is Manager: " + isManagerOfAssignedUser);
+        System.out.println("Visible milestones count for this user: " + assignments.size());
+        assignments.forEach(a -> {
+            System.out.println("Milestone: " + a.getMilestone().getName() +
+                    " | Visible: " + a.isVisible() +
+                    " | Status: " + a.getStatus().getName() +
+                    " | Assigned To: " + (a.getAssignedUser() != null ? a.getAssignedUser().getId() : "null"));
+        });
+        System.out.println("=== END DEBUG ===");
+
+        // === ONLY BLOCK REGULAR USER IF NO VISIBLE MILESTONE AT ALL ===
+        if (!isManagerOfAssignedUser && assignments.isEmpty()) {
+            throw new ValidationException(
+                    "This project is currently not accessible. It will become available once the required payment is completed.",
+                    "ERR_PROJECT_HIDDEN_DUE_TO_PAYMENT");
         }
 
         ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();

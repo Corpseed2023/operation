@@ -40,31 +40,22 @@ public class ProjectController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    // Updated Controller (relevant methods only)
-// 1. getAllProjects: Now returns simple List, no headers/Page
+
     @GetMapping
-    @Operation(summary = "Get all projects with pagination")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "List of projects retrieved"),
-            @ApiResponse(responseCode = "400", description = "Invalid pagination parameters")
-    })
+    @Operation(summary = "Get all projects with pagination - hides projects for regular users if no visible milestone")
     public ResponseEntity<List<ProjectResponseDto>> getAllProjects(
             @RequestParam Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        if (page < 1) {
-            throw new IllegalArgumentException("Page number must be at least 1");
-        }
-        if (size < 1) {
-            throw new IllegalArgumentException("Page size must be at least 1");
+        if (page < 1 || size < 1) {
+            throw new IllegalArgumentException("Invalid pagination parameters");
         }
 
-        // Pass 0-based page to service, get List directly
         List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page - 1, size);
-
         return ResponseEntity.ok(responses);
     }
+
 
     // 2. NEW: Separate count endpoint
     @GetMapping("/count")
@@ -87,6 +78,8 @@ public class ProjectController {
         projectService.deleteProject(id);
         return ResponseEntity.noContent().build();
     }
+
+
 
     @PostMapping("/{id}/payments")
     public ResponseEntity<ProjectResponseDto> addPaymentTransaction(

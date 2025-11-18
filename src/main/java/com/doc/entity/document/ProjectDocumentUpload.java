@@ -122,12 +122,4 @@ public class ProjectDocumentUpload {
         if (this.uploadTime == null) this.uploadTime = new Date();
     }
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedDate = new Date();
-    }
-
-    public boolean requiresRenewal() {
-        return isExpired && !isPermanent;
-    }
 }
