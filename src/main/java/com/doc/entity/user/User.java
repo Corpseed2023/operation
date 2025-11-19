@@ -96,4 +96,7 @@ public class User {
     @Column(name = "bucket_size", nullable = false)
     @Comment("Max concurrent projects/assignments the user can handle (bucket size)")
     private int bucketSize = 0;
+
+    @Column(name = "daily_assignment_limit", nullable = false)
+    private int dailyAssignmentLimit = 3; // e.g., max 3 new assignments per day
 }

@@ -95,7 +95,8 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             );
         });
 
-// Save all modified users (to persist the removal of department)
+
+        // Save all modified users (to persist the removal of department)
         userRepository.saveAll(deptUsers);
 
         logger.info("All users removed from department '{}'", dept.getName());
