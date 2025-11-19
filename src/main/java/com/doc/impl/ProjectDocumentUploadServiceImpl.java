@@ -150,10 +150,20 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         }
 
         // Set or update fields
+        // Set or update fields
         documentUpload.setFileUrl(sanitizedFileUrl);
         documentUpload.setFileName(sanitizedFileName);
-        documentUpload.setStatus(uploadedStatus);  // Set to UPLOADED
-        documentUpload.setRemarks(null);
+        documentUpload.setFileFormat(requestDto.getFileFormat().toLowerCase());
+        documentUpload.setFileSizeKb(requestDto.getFileSizeKb());
+        documentUpload.setExpiryDate(requestDto.getExpiryDate() != null
+                ? java.sql.Date.valueOf(requestDto.getExpiryDate())
+                : null);
+        documentUpload.setPermanent(requestDto.getIsPermanent() != null && requestDto.getIsPermanent());
+        documentUpload.setFromCompanyDoc(requestDto.getIsFromCompanyDoc() != null && requestDto.getIsFromCompanyDoc());
+        documentUpload.setCompanyDocSourceId(requestDto.getCompanyDocSourceId());
+        documentUpload.setRemarks(requestDto.getRemarks());
+
+        documentUpload.setStatus(uploadedStatus);
         documentUpload.setUploadedBy(uploadedBy);
         documentUpload.setUploadTime(new Date());
         documentUpload.setUpdatedBy(requestDto.getCreatedById());
