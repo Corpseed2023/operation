@@ -4,6 +4,7 @@ import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsRequestDto;
 import com.doc.dto.productRequiredDocument.ProductRequiredDocumentsResponseDto;
 
 import java.util.List;
+import java.util.Map;
 
 public interface ProductRequiredDocumentsService {
 
@@ -20,4 +21,6 @@ public interface ProductRequiredDocumentsService {
 
 
     List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsForAdmin(Long productId, Long userId, String stateName, String centralName);
+
+    List<Map<String, Object>> getActiveRequiredDocumentIdsAndNames(Long userId);
 }

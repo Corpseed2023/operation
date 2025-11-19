@@ -12,6 +12,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/required-documents")
@@ -47,6 +48,7 @@ public class ProductRequiredDocumentsController {
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
 
+
     @PostMapping("/product/{productId}")
     public ResponseEntity<List<ProductRequiredDocumentsResponseDto>> getRequiredDocumentsByProduct(
             @PathVariable Long productId,
@@ -67,4 +69,17 @@ public class ProductRequiredDocumentsController {
                 requiredDocumentsService.getRequiredDocumentsForAdmin(productId, userId, stateName, centralName);
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
+
+    // ProductRequiredDocumentsController.java
+
+    @GetMapping("/admin/activeDocument")
+    public ResponseEntity<List<Map<String, Object>>> getActiveRequiredDocumentsIdAndName(
+            @RequestParam Long userId) {
+
+        List<Map<String, Object>> documents =
+                requiredDocumentsService.getActiveRequiredDocumentIdsAndNames(userId);
+
+        return ResponseEntity.ok(documents);
+    }
+
 }

@@ -352,4 +352,22 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
+
+    // ProductRequiredDocumentsServiceImpl.java
+    @Override
+    public List<Map<String, Object>> getActiveRequiredDocumentIdsAndNames(Long userId) {
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "USER_NOT_FOUND"));
+
+        boolean hasAccess = user.getRoles().stream()
+                .anyMatch(role -> "ADMIN".equals(role.getName()) || "OPERATION_HEAD".equals(role.getName()));
+
+        if (!hasAccess) {
+            throw new ValidationException("Access denied. Only ADMIN or OPERATION_HEAD can view this data", "UNAUTHORIZED_ACCESS");
+        }
+
+        return requiredDocumentsRepository.findActiveDocumentIdAndName();
+    }
+
+
 }
