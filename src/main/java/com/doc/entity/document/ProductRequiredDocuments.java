@@ -22,11 +22,9 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Comment("Master list of required documents with MNC compliance rules")
 public class ProductRequiredDocuments {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Comment("Primary Key: Unique identifier")
     private Long id;
 
@@ -83,7 +81,6 @@ public class ProductRequiredDocuments {
 
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
-
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;

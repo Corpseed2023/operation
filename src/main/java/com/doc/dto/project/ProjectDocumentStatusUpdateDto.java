@@ -1,6 +1,7 @@
+
 package com.doc.dto.project;
 
-import com.doc.entity.document.DocumentStatus;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -9,11 +10,11 @@ import lombok.Setter;
 @Setter
 public class ProjectDocumentStatusUpdateDto {
 
-    @NotNull(message = "New status cannot be null")
-    private DocumentStatus newStatus;
+    @NotBlank(message = "New status name is required")
+    private String newStatus; // e.g., "VERIFIED", "REJECTED"
 
-    private String remarks;
+    private String remarks; // REQUIRED when status = REJECTED
 
-    @NotNull(message = "Changed by user ID cannot be null")
+    @NotNull(message = "Changed by user ID is required")
     private Long changedById;
 }

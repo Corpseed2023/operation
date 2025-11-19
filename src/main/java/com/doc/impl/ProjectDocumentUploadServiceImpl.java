@@ -183,7 +183,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
-        DocumentStatus newStatusEntity = documentStatusRepository.findByName(updateDto.getNewStatus().getName())
+        DocumentStatus newStatusEntity = documentStatusRepository.findByName(updateDto.getNewStatus())
                 .orElseThrow(() -> {
                     logger.error("Document status {} not found", updateDto.getNewStatus());
                     return new ResourceNotFoundException("Document status " + updateDto.getNewStatus() + " not found", "STATUS_NOT_FOUND");

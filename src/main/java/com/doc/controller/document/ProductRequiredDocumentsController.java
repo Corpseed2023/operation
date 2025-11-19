@@ -28,6 +28,7 @@ public class ProductRequiredDocumentsController {
         return new ResponseEntity<>(responses, HttpStatus.CREATED);
     }
 
+
     @PutMapping("/{id}")
     public ResponseEntity<ProductRequiredDocumentsResponseDto> updateRequiredDocument(
             @PathVariable Long id,

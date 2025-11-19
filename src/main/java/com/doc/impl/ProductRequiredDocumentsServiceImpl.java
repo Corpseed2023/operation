@@ -221,6 +221,8 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
             throw new ValidationException("Product with ID " + productId + " is not associated with project ID " + projectId, "INVALID_PRODUCT_PROJECT_ASSOCIATION");
         }
 
+
+        // before i made
         List<ProductRequiredDocuments> documents = product.getRequiredDocuments()
                 .stream()
                 .filter(doc -> !doc.isDeleted())
@@ -235,6 +237,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                     }
                 })
                 .collect(Collectors.toList());
+
 
         return documents.stream()
                 .map(doc -> {
