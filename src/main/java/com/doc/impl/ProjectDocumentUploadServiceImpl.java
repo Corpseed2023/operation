@@ -189,6 +189,9 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("Document status " + updateDto.getNewStatus() + " not found", "STATUS_NOT_FOUND");
                 });
 
+
+
+
         // Validate status transition
         validateDocumentStatusTransition(documentUpload.getStatus(), newStatusEntity);
 

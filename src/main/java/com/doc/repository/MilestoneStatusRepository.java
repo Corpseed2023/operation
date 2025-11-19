@@ -11,3 +11,4 @@ import java.util.Optional;
 public interface MilestoneStatusRepository extends JpaRepository<MilestoneStatus, Long> {
     Optional<MilestoneStatus> findByName(String name);
 }
+
