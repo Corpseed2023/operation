@@ -1,4 +1,3 @@
-// src/main/java/com/doc/dto/productRequiredDocument/ProductRequiredDocumentsResponseDto.java
 
 package com.doc.dto.productRequiredDocument;
 
@@ -21,9 +20,6 @@ public class ProductRequiredDocumentsResponseDto {
     private String name;
 
     private String description;
-
-    @Comment("Comma-separated list: IMPORTER,BRAND_OWNER,MANUFACTURER")
-    private String applicableEntityTypes;
 
     private String type;
 

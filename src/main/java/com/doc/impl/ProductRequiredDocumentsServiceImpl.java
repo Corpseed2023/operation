@@ -204,6 +204,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
                 .collect(Collectors.toList());
     }
 
+
     @Override
     public List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProduct(Long productId, Long projectId,
                                                                                    String stateName, String centralName) {
@@ -269,7 +270,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     private void mapRequestDtoToEntity(ProductRequiredDocuments document, ProductRequiredDocumentsRequestDto requestDto) {
         document.setName(requestDto.getName().trim());
         document.setDescription(requestDto.getDescription());
-        document.setApplicableEntityTypes(requestDto.getApplicableEntityTypes());
         document.setType(requestDto.getType().trim());
         document.setCountry(Optional.ofNullable(requestDto.getCountry()).orElse(""));
         document.setCentralName(Optional.ofNullable(requestDto.getCentralName()).orElse(""));
@@ -288,7 +288,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         dto.setId(document.getId());
         dto.setName(document.getName());
         dto.setDescription(document.getDescription());
-        dto.setApplicableEntityTypes(document.getApplicableEntityTypes());
         dto.setType(document.getType());
         dto.setCountry(document.getCountry().isEmpty() ? null : document.getCountry());
         dto.setCentralName(document.getCentralName().isEmpty() ? null : document.getCentralName());

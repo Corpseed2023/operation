@@ -1,6 +1,7 @@
 package com.doc.entity.document;
 
 import com.doc.em.DocumentExpiryType;
+
 import com.doc.entity.product.Product;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -40,10 +41,6 @@ public class ProductRequiredDocuments {
     @Column(nullable = false, length = 50)
     @Comment("Type: IDENTITY, FINANCIAL, PROOF, etc.")
     private String type;
-
-    @Column(name = "applicable_entity_types", length = 500)
-    @Comment("Comma-separated list: IMPORTER,BRAND_OWNER,MANUFACTURER")
-    private String applicableEntityTypes;
 
     @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
     @Comment("Country (empty for central)")

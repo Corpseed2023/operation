@@ -18,8 +18,6 @@ public interface ProductRequiredDocumentsService {
 
     List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsByProduct(Long productId, Long projectId,
                                                                             String stateName, String centralName);
-
-
     List<ProductRequiredDocumentsResponseDto> getRequiredDocumentsForAdmin(Long productId, Long userId, String stateName, String centralName);
 
     List<Map<String, Object>> getActiveRequiredDocumentIdsAndNames(Long userId);

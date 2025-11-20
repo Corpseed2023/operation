@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Comment;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,9 +27,6 @@ public class ProductRequiredDocumentsRequestDto {
     @NotBlank(message = "Document type is required")
     @Size(max = 50)
     private String type;
-
-    @Comment("Comma-separated list: IMPORTER,BRAND_OWNER,MANUFACTURER")
-    private String applicableEntityTypes;
 
     @Size(max = 255)
     private String country;
