@@ -6,6 +6,7 @@ import com.doc.dto.project.DocumentResponseDto;
 import com.doc.em.DocumentExpiryType;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.Comment;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -20,6 +21,9 @@ public class ProductRequiredDocumentsResponseDto {
     private String name;
 
     private String description;
+
+    @Comment("Comma-separated list: IMPORTER,BRAND_OWNER,MANUFACTURER")
+    private String applicableEntityTypes;
 
     private String type;
 

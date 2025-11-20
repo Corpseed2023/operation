@@ -77,10 +77,6 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
 
             ProductRequiredDocuments document = new ProductRequiredDocuments();
 
-            if (requestDto.getId() == null) {
-                throw new ValidationException("ID must be provided for the required document", "INVALID_DOCUMENT_ID");
-            }
-            document.setId(requestDto.getId());
 
             mapRequestDtoToEntity(document, requestDto);
             document.setCreatedBy(requestDto.getCreatedBy());
@@ -273,10 +269,18 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
     private void mapRequestDtoToEntity(ProductRequiredDocuments document, ProductRequiredDocumentsRequestDto requestDto) {
         document.setName(requestDto.getName().trim());
         document.setDescription(requestDto.getDescription());
+        document.setApplicableEntityTypes(requestDto.getApplicableEntityTypes());
         document.setType(requestDto.getType().trim());
         document.setCountry(Optional.ofNullable(requestDto.getCountry()).orElse(""));
         document.setCentralName(Optional.ofNullable(requestDto.getCentralName()).orElse(""));
         document.setStateName(Optional.ofNullable(requestDto.getStateName()).orElse(""));
+        document.setExpiryType(requestDto.getExpiryType());
+        document.setMandatory(requestDto.getIsMandatory() != null ? requestDto.getIsMandatory() : true);
+        document.setMaxValidityYears(requestDto.getMaxValidityYears());
+        document.setMinFileSizeKb(requestDto.getMinFileSizeKb());
+        document.setAllowedFormats(
+                requestDto.getAllowedFormats() != null ? requestDto.getAllowedFormats() : "pdf,jpg,png"
+        );
     }
 
     private ProductRequiredDocumentsResponseDto mapToResponseDto(ProductRequiredDocuments document) {
@@ -284,6 +288,7 @@ public class ProductRequiredDocumentsServiceImpl implements ProductRequiredDocum
         dto.setId(document.getId());
         dto.setName(document.getName());
         dto.setDescription(document.getDescription());
+        dto.setApplicableEntityTypes(document.getApplicableEntityTypes());
         dto.setType(document.getType());
         dto.setCountry(document.getCountry().isEmpty() ? null : document.getCountry());
         dto.setCentralName(document.getCentralName().isEmpty() ? null : document.getCentralName());

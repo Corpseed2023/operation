@@ -84,7 +84,7 @@ public class CompanyServiceImpl implements CompanyService {
     }
 
     @Override
-    public CompanyResponseDto getCompanyById(Long id) {
+    public CompanyResponseDto   getCompanyById(Long id) {
         logger.info("Fetching company with ID: {}", id);
         Company company = companyRepository.findById(id)
                 .filter(c -> !c.isDeleted())

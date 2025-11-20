@@ -70,7 +70,6 @@ public class ProductRequiredDocumentsController {
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
 
-    // ProductRequiredDocumentsController.java
 
     @GetMapping("/admin/activeDocument")
     public ResponseEntity<List<Map<String, Object>>> getActiveRequiredDocumentsIdAndName(
@@ -83,3 +82,4 @@ public class ProductRequiredDocumentsController {
     }
 
 }
+
