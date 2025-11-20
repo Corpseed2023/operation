@@ -1,8 +1,8 @@
+// src/main/java/com/doc/entity/document/ProductRequiredDocuments.java
+
 package com.doc.entity.document;
 
 import com.doc.em.DocumentExpiryType;
-
-import com.doc.entity.product.Product;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -31,7 +31,7 @@ public class ProductRequiredDocuments {
     private Long id;
 
     @Column(nullable = false, length = 255)
-    @Comment("Document name (e.g., Aadhaar Card)")
+    @Comment("Document name (e.g., Aadhaar Card, PAN Card)")
     private String name;
 
     @Column(length = 1000)
@@ -39,7 +39,7 @@ public class ProductRequiredDocuments {
     private String description;
 
     @Column(nullable = false, length = 50)
-    @Comment("Type: IDENTITY, FINANCIAL, PROOF, etc.")
+    @Comment("Type: IDENTITY, FINANCIAL, PROOF, ADDRESS, etc.")
     private String type;
 
     @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
@@ -60,7 +60,7 @@ public class ProductRequiredDocuments {
     private DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
 
     @Column(name = "is_mandatory", nullable = false)
-    @Comment("Is this document mandatory?")
+    @Comment("Default mandatory flag (can be overridden per product/applicant)")
     private boolean isMandatory = true;
 
     @Column(name = "max_validity_years")
@@ -95,14 +95,12 @@ public class ProductRequiredDocuments {
     @Column(name = "updated_date", nullable = false)
     private Date updatedDate;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "product_document_mapping",
-            joinColumns = @JoinColumn(name = "document_id"),
-            inverseJoinColumns = @JoinColumn(name = "product_id")
-    )
-    @Comment("Products that require this document")
-    private List<Product> products = new ArrayList<>();
+    // REMOVED OLD ManyToMany
+    // @ManyToMany → product_document_mapping (join table)
+
+    // NEW: One-to-many to the new mapping table
+    @OneToMany(mappedBy = "requiredDocument", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProductDocumentMapping> productMappings = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {

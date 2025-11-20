@@ -6,8 +6,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-
-
 @Entity
 @Getter
 @Setter
@@ -23,5 +21,6 @@ public class ApplicantType {
     private String name;        // "Importer", "Brand Owner", etc.
 
     private String description;
+
     private boolean isActive = true;
 }
