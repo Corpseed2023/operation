@@ -21,40 +21,30 @@ import java.util.List;
 public class ProductRequiredDocumentController {
 
     @Autowired
-    private ProductRequiredDocumentService productRequiredDocumentService   ;
+    private ProductRequiredDocumentService productRequiredDocumentService;
 
     @Operation(summary = "Create a new required document template")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Required document created successfully"),
+            @ApiResponse(responseCode = "201", description = "Created successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid input"),
             @ApiResponse(responseCode = "409", description = "Duplicate name + location combination")
     })
     @PostMapping
     public ResponseEntity<ProductRequiredDocumentResponseDto> create(
             @Valid @RequestBody ProductRequiredDocumentRequestDto dto) {
-        ProductRequiredDocumentResponseDto response = productRequiredDocumentService.create(dto);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(productRequiredDocumentService.create(dto));
     }
 
     @Operation(summary = "Update an existing required document template")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Updated successfully"),
-            @ApiResponse(responseCode = "404", description = "Not found"),
-            @ApiResponse(responseCode = "409", description = "Duplicate name + location")
-    })
     @PutMapping("/{id}")
     public ResponseEntity<ProductRequiredDocumentResponseDto> update(
             @PathVariable Long id,
             @Valid @RequestBody ProductRequiredDocumentRequestDto dto) {
-        ProductRequiredDocumentResponseDto response = productRequiredDocumentService.update(id, dto);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(productRequiredDocumentService.update(id, dto));
     }
 
     @Operation(summary = "Soft delete a required document template")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Deleted successfully"),
-            @ApiResponse(responseCode = "404", description = "Not found")
-    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         productRequiredDocumentService.softDelete(id);
@@ -67,25 +57,30 @@ public class ProductRequiredDocumentController {
         return ResponseEntity.ok(productRequiredDocumentService.getById(id));
     }
 
-    @Operation(summary = "Get all required documents (paginated) - includes inactive")
+    @Operation(summary = "Get all required documents (paginated, includes inactive) - Admin Grid")
     @GetMapping
-    public ResponseEntity<Page<ProductRequiredDocumentResponseDto>> getAllPaged(
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(productRequiredDocumentService.getAllPaged(page, size));
-    }
-
-    @Operation(summary = "Get all active required documents (paginated)")
-    @GetMapping("/active")
-    public ResponseEntity<Page<ProductRequiredDocumentResponseDto>> getActivePaged(
-            @RequestParam(defaultValue = "0") int page,
+    public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getAllPaginated(
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(productRequiredDocumentService.getAllActivePaged(page, size));
+        return ResponseEntity.ok(productRequiredDocumentService.getAllPaginated(page, size));
     }
 
-    @Operation(summary = "Get all active required documents (no pagination) - for dropdowns")
+    // Active only, paginated (if needed)
+    @Operation(summary = "Get active required documents (paginated)")
+    @GetMapping("/active")
+    public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getActivePaginated(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(productRequiredDocumentService.getActivePaginated(page, size));
+    }
+
+    // For dropdowns: all active, no pagination
+    @Operation(summary = "Get all active required documents (no pagination) - For dropdowns")
     @GetMapping("/active/list")
-    public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getAllActiveList() {
-        return ResponseEntity.ok(productRequiredDocumentService.getAllActive());
+    public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getActiveList() {
+        return ResponseEntity.ok(productRequiredDocumentService.getActiveList());
     }
 }
+
+
+

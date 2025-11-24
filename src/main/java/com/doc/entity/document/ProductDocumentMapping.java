@@ -2,7 +2,9 @@ package com.doc.entity.document;
 
 import com.doc.entity.product.Product;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.Date;
@@ -12,7 +14,10 @@ import java.util.Date;
         uniqueConstraints = @UniqueConstraint(
                 columnNames = {"product_id", "required_document_id", "applicant_type_id"}
         ))
-@Getter @Setter
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class ProductDocumentMapping {
 
     @Id
@@ -27,8 +32,6 @@ public class ProductDocumentMapping {
     @JoinColumn(name = "required_document_id", nullable = false)
     private ProductRequiredDocuments requiredDocument;
 
-    // NULL = applies to ALL applicant types
-    // NOT NULL = applies only to this specific applicant type
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "applicant_type_id", nullable = true)
     private ApplicantType applicantType;

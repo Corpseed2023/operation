@@ -9,10 +9,7 @@ import com.doc.exception.ValidationException;
 import com.doc.repository.documentRepo.ProductRequiredDocumentRepository;
 import com.doc.service.ProductRequiredDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,79 +19,114 @@ import java.util.List;
 @Transactional
 public class ProductRequiredDocumentServiceImpl implements ProductRequiredDocumentService {
 
+    private final ProductRequiredDocumentRepository repository;
+
     @Autowired
-    private ProductRequiredDocumentRepository productRequiredDocumentRepository;
+    public ProductRequiredDocumentServiceImpl(ProductRequiredDocumentRepository repository) {
+        this.repository = repository;
+    }
 
     @Override
     public ProductRequiredDocumentResponseDto create(ProductRequiredDocumentRequestDto dto) {
-        validateUniqueConstraint(dto.getName(), dto.getCountry(), dto.getCentralName(), dto.getStateName(), null);
+        validateUniqueConstraint(dto, null);
 
         ProductRequiredDocuments entity = new ProductRequiredDocuments();
         mapDtoToEntity(dto, entity);
         entity.setActive(true);
         entity.setDeleted(false);
+        entity.setCreatedBy(dto.getCreatedBy());
+        entity.setUpdatedBy(dto.getUpdatedBy());
 
-        entity = productRequiredDocumentRepository.save(entity);
+        entity = repository.save(entity);
         return mapToResponseDto(entity);
     }
 
     @Override
     public ProductRequiredDocumentResponseDto update(Long id, ProductRequiredDocumentRequestDto dto) {
-        ProductRequiredDocuments entity = productRequiredDocumentRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Required document not found", "ERR_REQ_DOC_NOT_FOUND"));
+        ProductRequiredDocuments entity = findActiveById(id);
 
-        validateUniqueConstraint(dto.getName(), dto.getCountry(), dto.getCentralName(), dto.getStateName(), id);
+        validateUniqueConstraint(dto, id);
 
         mapDtoToEntity(dto, entity);
-        entity = productRequiredDocumentRepository.save(entity);
+        entity.setUpdatedBy(dto.getUpdatedBy());
+
+        entity = repository.save(entity);
         return mapToResponseDto(entity);
     }
 
     @Override
     public void softDelete(Long id) {
-        ProductRequiredDocuments entity = productRequiredDocumentRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Required document not found", "ERR_REQ_DOC_NOT_FOUND"));
+        ProductRequiredDocuments entity = findActiveById(id);
         entity.setDeleted(true);
         entity.setActive(false);
-        productRequiredDocumentRepository.save(entity);
+        repository.save(entity);
     }
 
     @Override
     public ProductRequiredDocumentResponseDto getById(Long id) {
-        return productRequiredDocumentRepository.findByIdAndIsDeletedFalse(id)
-                .map(this::mapToResponseDto)
-                .orElseThrow(() -> new ResourceNotFoundException("Required document not found", "ERR_REQ_DOC_NOT_FOUND"));
+        return mapToResponseDto(findActiveById(id));
     }
 
     @Override
-    public Page<ProductRequiredDocumentResponseDto> getAllPaged(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
-        return productRequiredDocumentRepository.findAllByIsDeletedFalse(pageable).map(this::mapToResponseDto);
-    }
+    public List<ProductRequiredDocumentResponseDto> getAllPaginated(int page, int size) {
+        page = Math.max(page, 1);
+        size = size > 0 ? size : 20;
 
-    @Override
-    public Page<ProductRequiredDocumentResponseDto> getAllActivePaged(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
-        return productRequiredDocumentRepository.findAllActive(pageable).map(this::mapToResponseDto);
-    }
-
-    @Override
-    public List<ProductRequiredDocumentResponseDto> getAllActive() {
-        Pageable pageable = PageRequest.of(0, 1000, Sort.by("name"));
-        return productRequiredDocumentRepository.findAllActive(pageable)
+        Pageable pageable = PageRequest.of(page - 1, size, Sort.by("name").ascending());
+        return repository.findAllByIsDeletedFalse(pageable)  // FIXED
                 .getContent()
                 .stream()
                 .map(this::mapToResponseDto)
                 .toList();
     }
 
-    private void validateUniqueConstraint(String name, String country, String centralName, String stateName, Long excludeId) {
-        boolean exists = (excludeId == null)
-                ? productRequiredDocumentRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(name, country, centralName, stateName)
-                : productRequiredDocumentRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseAndIdNot(name, country, centralName, stateName, excludeId);
+    @Override
+    public List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size) {
+        page = Math.max(page, 1);
+        size = size > 0 ? size : 20;
+
+        Pageable pageable = PageRequest.of(page - 1, size, Sort.by("name").ascending());
+        return repository.findAllByIsDeletedFalseAndIsActiveTrue(pageable)  // FIXED
+                .getContent()
+                .stream()
+                .map(this::mapToResponseDto)
+                .toList();
+    }
+
+    @Override
+    public List<ProductRequiredDocumentResponseDto> getActiveList() {
+        Sort sort = Sort.by(Sort.Direction.ASC, "name");
+        return repository.findAllByIsDeletedFalseAndIsActiveTrue(sort)  // FIXED
+                .stream()
+                .map(this::mapToResponseDto)
+                .toList();
+    }
+
+    // Helper: Find non-deleted record
+    private ProductRequiredDocuments findActiveById(Long id) {
+        return repository.findByIdAndIsDeletedFalse(id)  // FIXED
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Required document template not found with ID: " + id,
+                        "ERR_REQ_DOC_NOT_FOUND"));
+    }
+
+    // Unique constraint validation
+    private void validateUniqueConstraint(ProductRequiredDocumentRequestDto dto, Long excludeId) {
+        String name = dto.getName() != null ? dto.getName().trim() : "";
+        String country = dto.getCountry() != null ? dto.getCountry().trim() : "";
+        String centralName = dto.getCentralName() != null ? dto.getCentralName().trim() : "";
+        String stateName = dto.getStateName() != null ? dto.getStateName().trim() : "";
+
+        boolean exists = excludeId == null
+                ? repository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(
+                name, country, centralName, stateName)
+                : repository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseAndIdNot(
+                name, country, centralName, stateName, excludeId);
 
         if (exists) {
-            throw new ValidationException("A required document with this name and location combination already exists", "ERR_DUPLICATE_REQ_DOCUMENT");
+            throw new ValidationException(
+                    "A document template with the same name and location already exists.",
+                    "ERR_DUPLICATE_REQ_DOCUMENT");
         }
     }
 
@@ -110,12 +142,11 @@ public class ProductRequiredDocumentServiceImpl implements ProductRequiredDocume
         entity.setMaxValidityYears(dto.getMaxValidityYears());
         entity.setMinFileSizeKb(dto.getMinFileSizeKb());
         entity.setAllowedFormats(dto.getAllowedFormats());
-        entity.setCreatedBy(dto.getCreatedBy());
-        entity.setUpdatedBy(dto.getUpdatedBy());
     }
 
     private ProductRequiredDocumentResponseDto mapToResponseDto(ProductRequiredDocuments entity) {
         ProductRequiredDocumentResponseDto dto = new ProductRequiredDocumentResponseDto();
+
         dto.setId(entity.getId());
         dto.setName(entity.getName());
         dto.setDescription(entity.getDescription());
@@ -133,6 +164,7 @@ public class ProductRequiredDocumentServiceImpl implements ProductRequiredDocume
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setUpdatedDate(entity.getUpdatedDate());
         dto.setActive(entity.isActive());
+
         return dto;
     }
 }

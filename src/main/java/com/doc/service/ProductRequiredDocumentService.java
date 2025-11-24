@@ -1,4 +1,3 @@
-// src/main/java/com/doc/service/ProductRequiredDocumentService.java
 package com.doc.service;
 
 import com.doc.dto.document.ProductRequiredDocumentRequestDto;
@@ -12,7 +11,8 @@ public interface ProductRequiredDocumentService {
     ProductRequiredDocumentResponseDto update(Long id, ProductRequiredDocumentRequestDto dto);
     void softDelete(Long id);
     ProductRequiredDocumentResponseDto getById(Long id);
-    Page<ProductRequiredDocumentResponseDto> getAllPaged(int page, int size);
-    Page<ProductRequiredDocumentResponseDto> getAllActivePaged(int page, int size);
-    List<ProductRequiredDocumentResponseDto> getAllActive();
+
+    List<ProductRequiredDocumentResponseDto> getAllPaginated(int page, int size);     // includes inactive
+    List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size);  // only active
+    List<ProductRequiredDocumentResponseDto> getActiveList();                         // no pagination, active only
 }
