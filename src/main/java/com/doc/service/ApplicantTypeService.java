@@ -3,7 +3,6 @@ package com.doc.service;
 
 import com.doc.dto.document.ApplicantTypeRequestDto;
 import com.doc.dto.document.ApplicantTypeResponseDto;
-import org.springframework.data.domain.Page;
 
 import java.util.List;
 
@@ -13,5 +12,7 @@ public interface ApplicantTypeService {
     void deleteApplicantType(Long id); // soft delete
     ApplicantTypeResponseDto getApplicantTypeById(Long id);
     List<ApplicantTypeResponseDto> getAllActiveApplicantTypes();
-    Page<ApplicantTypeResponseDto> getApplicantTypesPaged(int page, int size);
+
+    // Custom pagination: page starts from 1
+    List<ApplicantTypeResponseDto> getApplicantTypesPaginated(int page, int size);
 }

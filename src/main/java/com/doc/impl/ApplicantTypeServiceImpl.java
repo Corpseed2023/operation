@@ -9,7 +9,6 @@ import com.doc.exception.ValidationException;
 import com.doc.repository.documentRepo.ApplicantTypeRepository;
 import com.doc.service.ApplicantTypeService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -83,10 +82,18 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
     }
 
     @Override
-    public Page<ApplicantTypeResponseDto> getApplicantTypesPaged(int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("name").ascending());
+    public List<ApplicantTypeResponseDto> getApplicantTypesPaginated(int page, int size) {
+        // Page starts from 1 → convert to 0-based for JPA
+        page = Math.max(page, 1);
+        size = size > 0 ? size : 10;
+
+        PageRequest pageRequest = PageRequest.of(page - 1, size, Sort.by("name").ascending());
+
         return applicantTypeRepository.findAll(pageRequest)
-                .map(this::mapToResponseDto);
+                .getContent()
+                .stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
     }
 
     private ApplicantTypeResponseDto mapToResponseDto(ApplicantType entity) {
