@@ -1,13 +1,8 @@
-// src/main/java/com/doc/entity/document/ProductRequiredDocuments.java
-
 package com.doc.entity.document;
 
 import com.doc.em.DocumentExpiryType;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.Comment;
 
 import java.util.ArrayList;
@@ -19,60 +14,45 @@ import java.util.List;
         indexes = {@Index(name = "idx_name", columnList = "name")},
         uniqueConstraints = {@UniqueConstraint(columnNames = {"name", "country", "centralName", "stateName"})}
 )
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class ProductRequiredDocuments {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Comment("Primary Key: Unique identifier")
     private Long id;
 
     @Column(nullable = false, length = 255)
-    @Comment("Document name (e.g., Aadhaar Card, PAN Card)")
     private String name;
 
     @Column(length = 1000)
-    @Comment("Detailed description")
     private String description;
 
     @Column(nullable = false, length = 50)
-    @Comment("Type: IDENTITY, FINANCIAL, PROOF, ADDRESS, etc.")
-    private String type;
+    private String type; // IDENTITY, ADDRESS, FINANCIAL, etc.
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("Country (empty for central)")
+    @Column(columnDefinition = "VARCHAR(255) DEFAULT ''")
     private String country = "";
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("Central govt name")
+    @Column(columnDefinition = "VARCHAR(255) DEFAULT ''")
     private String centralName = "";
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("State name")
+    @Column(columnDefinition = "VARCHAR(255) DEFAULT ''")
     private String stateName = "";
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    @Comment("FIXED = never expires, EXPIRING = has expiry, UNKNOWN = CRT decides")
     private DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
 
     @Column(name = "is_mandatory", nullable = false)
-    @Comment("Default mandatory flag (can be overridden per product/applicant)")
     private boolean isMandatory = true;
 
     @Column(name = "max_validity_years")
-    @Comment("Max years for EXPIRING docs (e.g., 3 for CTO)")
     private Integer maxValidityYears;
 
     @Column(name = "min_file_size_kb")
-    @Comment("Min file size in KB")
     private Integer minFileSizeKb;
 
     @Column(name = "allowed_formats", length = 100)
-    @Comment("Comma-separated: pdf,jpg,png")
     private String allowedFormats = "pdf,jpg,png";
 
     @Column(name = "created_by", nullable = false)
@@ -88,17 +68,14 @@ public class ProductRequiredDocuments {
     private boolean isActive = true;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "created_date", nullable = false, updatable = false)
+    @Column(name = "created_date", updatable = false)
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "updated_date", nullable = false)
+    @Column(name = "updated_date")
     private Date updatedDate;
 
-    // REMOVED OLD ManyToMany
-    // @ManyToMany → product_document_mapping (join table)
-
-    // NEW: One-to-many to the new mapping table
+    // Reverse mapping
     @OneToMany(mappedBy = "requiredDocument", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProductDocumentMapping> productMappings = new ArrayList<>();
 
@@ -111,13 +88,5 @@ public class ProductRequiredDocuments {
     @PreUpdate
     protected void onUpdate() {
         this.updatedDate = new Date();
-    }
-
-    public boolean isFixed() {
-        return expiryType == DocumentExpiryType.FIXED;
-    }
-
-    public boolean isExpiring() {
-        return expiryType == DocumentExpiryType.EXPIRING;
     }
 }

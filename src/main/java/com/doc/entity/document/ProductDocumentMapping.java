@@ -1,20 +1,11 @@
 package com.doc.entity.document;
 
-import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.product.Product;
-import com.doc.entity.user.User;
-import com.doc.entity.user.UserProductMap;
 import jakarta.persistence.*;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Comment;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
-
 
 @Entity
 @Table(name = "product_document_mapping",
@@ -36,13 +27,42 @@ public class ProductDocumentMapping {
     @JoinColumn(name = "required_document_id", nullable = false)
     private ProductRequiredDocuments requiredDocument;
 
-    // NULL = applies to all applicant types (global)
-    // Not null = only for this applicant type
+    // NULL = applies to ALL applicant types
+    // NOT NULL = applies only to this specific applicant type
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "applicant_type_id", nullable = true)
     private ApplicantType applicantType;
 
+    @Column(nullable = false)
     private boolean isMandatory = true;
+
     private Integer displayOrder;
+
+    @Column(nullable = false)
     private boolean isActive = true;
+
+    @Column(name = "created_by", nullable = false)
+    private Long createdBy;
+
+    @Column(name = "updated_by", nullable = false)
+    private Long updatedBy;
+
+    @Column(name = "created_date", updatable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdDate;
+
+    @Column(name = "updated_date")
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date updatedDate;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdDate = new Date();
+        this.updatedDate = new Date();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedDate = new Date();
+    }
 }

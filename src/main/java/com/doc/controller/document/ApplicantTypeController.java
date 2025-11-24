@@ -1,60 +1,95 @@
+// src/main/java/com/doc/controller/document/ApplicantTypeController.java
 package com.doc.controller.document;
 
-// package com.doc.controller.document;
-
-import com.doc.entity.document.ApplicantType;
+import com.doc.dto.document.ApplicantTypeRequestDto;
+import com.doc.dto.document.ApplicantTypeResponseDto;
 import com.doc.service.ApplicantTypeService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/applicant-types")
-@Validated
 public class ApplicantTypeController {
 
     @Autowired
     private ApplicantTypeService applicantTypeService;
 
-    // CREATE
+    @Operation(summary = "Create a new applicant type")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Applicant type created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid input or duplicate name"),
+            @ApiResponse(responseCode = "409", description = "Applicant type name already exists")
+    })
     @PostMapping
-    public ResponseEntity<ApplicantType> createApplicantType(@Valid @RequestBody ApplicantType applicantType) {
-        ApplicantType created = applicantTypeService.createApplicantType(applicantType);
-        return new ResponseEntity<>(created, HttpStatus.CREATED);
+    public ResponseEntity<ApplicantTypeResponseDto> createApplicantType(
+            @Valid @RequestBody ApplicantTypeRequestDto requestDto) {
+        ApplicantTypeResponseDto response = applicantTypeService.createApplicantType(requestDto);
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    // GET ALL ACTIVE
-    @GetMapping
-    public ResponseEntity<List<ApplicantType>> getAllActiveApplicantTypes() {
-        List<ApplicantType> types = applicantTypeService.getAllActiveApplicantTypes();
-        return ResponseEntity.ok(types);
-    }
-
-    // GET BY ID
-    @GetMapping("/{id}")
-    public ResponseEntity<ApplicantType> getApplicantTypeById(@PathVariable Long id) {
-        ApplicantType type = applicantTypeService.getApplicantTypeById(id);
-        return ResponseEntity.ok(type);
-    }
-
-    // UPDATE
+    @Operation(summary = "Update an existing applicant type")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Applicant type updated successfully"),
+            @ApiResponse(responseCode = "404", description = "Applicant type not found"),
+            @ApiResponse(responseCode = "409", description = "Duplicate name conflict")
+    })
     @PutMapping("/{id}")
-    public ResponseEntity<ApplicantType> updateApplicantType(
+    public ResponseEntity<ApplicantTypeResponseDto> updateApplicantType(
             @PathVariable Long id,
-            @Valid @RequestBody ApplicantType applicantType) {
-        ApplicantType updated = applicantTypeService.updateApplicantType(id, applicantType);
-        return ResponseEntity.ok(updated);
+            @Valid @RequestBody ApplicantTypeRequestDto requestDto) {
+        ApplicantTypeResponseDto response = applicantTypeService.updateApplicantType(id, requestDto);
+        return ResponseEntity.ok(response);
     }
 
-    // SOFT DELETE
+    @Operation(summary = "Soft delete an applicant type")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Applicant type deleted successfully"),
+            @ApiResponse(responseCode = "404", description = "Applicant type not found")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteApplicantType(@PathVariable Long id) {
-        applicantTypeService.softDeleteApplicantType(id);
+        applicantTypeService.deleteApplicantType(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Get applicant type by ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Applicant type found"),
+            @ApiResponse(responseCode = "404", description = "Applicant type not found")
+    })
+    @GetMapping("/{id}")
+    public ResponseEntity<ApplicantTypeResponseDto> getApplicantTypeById(@PathVariable Long id) {
+        ApplicantTypeResponseDto response = applicantTypeService.getApplicantTypeById(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Get all active applicant types (no pagination)")
+    @ApiResponse(responseCode = "200", description = "List of active applicant types")
+    @GetMapping("/active")
+    public ResponseEntity<List<ApplicantTypeResponseDto>> getAllActiveApplicantTypes() {
+        List<ApplicantTypeResponseDto> list = applicantTypeService.getAllActiveApplicantTypes();
+        return ResponseEntity.ok(list);
+    }
+
+    @Operation(summary = "Get all applicant types with pagination")
+    @GetMapping
+    public ResponseEntity<Page<ApplicantTypeResponseDto>> getApplicantTypesPaged(
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size", example = "10")
+            @RequestParam(defaultValue = "10") int size) {
+
+        Page<ApplicantTypeResponseDto> result = applicantTypeService.getApplicantTypesPaged(page, size);
+        return ResponseEntity.ok(result);
     }
 }

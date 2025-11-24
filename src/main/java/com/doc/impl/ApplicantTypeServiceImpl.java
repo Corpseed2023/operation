@@ -1,15 +1,22 @@
-package com.doc.impl;// package com.doc.impl;
+// src/main/java/com/doc/impl/ApplicantTypeServiceImpl.java
+package com.doc.impl;
 
+import com.doc.dto.document.ApplicantTypeRequestDto;
+import com.doc.dto.document.ApplicantTypeResponseDto;
 import com.doc.entity.document.ApplicantType;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-import com.doc.repository.ApplicantTypeRepository;
+import com.doc.repository.documentRepo.ApplicantTypeRepository;
 import com.doc.service.ApplicantTypeService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -19,56 +26,75 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
     private ApplicantTypeRepository applicantTypeRepository;
 
     @Override
-    public ApplicantType createApplicantType(ApplicantType applicantType) {
-        validateApplicantType(applicantType);
-
-        if (applicantTypeRepository.existsByNameIgnoreCaseAndIsActiveTrue(applicantType.getName())) {
-            throw new ValidationException("Applicant type with name '" + applicantType.getName() + "' already exists", "DUPLICATE_APPLICANT_TYPE");
+    public ApplicantTypeResponseDto createApplicantType(ApplicantTypeRequestDto dto) {
+        if (applicantTypeRepository.existsByNameIgnoreCaseAndIsDeletedFalse(dto.getName().trim())) {
+            throw new ValidationException("Applicant type with name '" + dto.getName() + "' already exists", "ERR_DUPLICATE_APPLICANT_TYPE");
         }
 
+        ApplicantType applicantType = new ApplicantType();
+        applicantType.setName(dto.getName().trim());
+        applicantType.setDescription(dto.getDescription());
         applicantType.setActive(true);
-        return applicantTypeRepository.save(applicantType);
+        applicantType.setDeleted(false);
+
+        applicantType = applicantTypeRepository.save(applicantType);
+        return mapToResponseDto(applicantType);
     }
 
     @Override
-    public List<ApplicantType> getAllActiveApplicantTypes() {
-        return applicantTypeRepository.findAllByIsActiveTrueOrderByName();
-    }
+    public ApplicantTypeResponseDto updateApplicantType(Long id, ApplicantTypeRequestDto dto) {
+        ApplicantType entity = applicantTypeRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
 
-    @Override
-    public ApplicantType getApplicantTypeById(Long id) {
-        return applicantTypeRepository.findByIdAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Applicant type with ID " + id + " not found or inactive", "APPLICANT_TYPE_NOT_FOUND"));
-    }
-
-    @Override
-    public ApplicantType updateApplicantType(Long id, ApplicantType applicantTypeDetails) {
-        ApplicantType existing = getApplicantTypeById(id);
-
-        if (!existing.getName().equalsIgnoreCase(applicantTypeDetails.getName())) {
-            if (applicantTypeRepository.existsByNameIgnoreCaseAndIdNotAndIsActiveTrue(applicantTypeDetails.getName(), id)) {
-                throw new ValidationException("Another applicant type with name '" + applicantTypeDetails.getName() + "' already exists", "DUPLICATE_APPLICANT_TYPE");
-            }
+        if (applicantTypeRepository.existsByNameIgnoreCaseAndIsDeletedFalseAndIdNot(dto.getName().trim(), id)) {
+            throw new ValidationException("Another applicant type with name '" + dto.getName() + "' already exists", "ERR_DUPLICATE_APPLICANT_TYPE");
         }
 
-        validateApplicantType(applicantTypeDetails);
+        entity.setName(dto.getName().trim());
+        entity.setDescription(dto.getDescription());
+        entity = applicantTypeRepository.save(entity);
 
-        existing.setName(applicantTypeDetails.getName().trim());
-        existing.setDescription(applicantTypeDetails.getDescription());
-
-        return applicantTypeRepository.save(existing);
+        return mapToResponseDto(entity);
     }
 
     @Override
-    public void softDeleteApplicantType(Long id) {
-        ApplicantType applicantType = getApplicantTypeById(id);
-        applicantType.setActive(false);
-        applicantTypeRepository.save(applicantType);
+    public void deleteApplicantType(Long id) {
+        ApplicantType entity = applicantTypeRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
+
+        entity.setDeleted(true);
+        entity.setActive(false);
+        applicantTypeRepository.save(entity);
     }
 
-    private void validateApplicantType(ApplicantType applicantType) {
-        if (applicantType.getName() == null || applicantType.getName().trim().isEmpty()) {
-            throw new ValidationException("Applicant type name cannot be empty", "INVALID_APPLICANT_TYPE_NAME");
-        }
+    @Override
+    public ApplicantTypeResponseDto getApplicantTypeById(Long id) {
+        ApplicantType entity = applicantTypeRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
+        return mapToResponseDto(entity);
+    }
+
+    @Override
+    public List<ApplicantTypeResponseDto> getAllActiveApplicantTypes() {
+        return applicantTypeRepository.findAllByIsDeletedFalseAndIsActiveTrue()
+                .stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Page<ApplicantTypeResponseDto> getApplicantTypesPaged(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("name").ascending());
+        return applicantTypeRepository.findAll(pageRequest)
+                .map(this::mapToResponseDto);
+    }
+
+    private ApplicantTypeResponseDto mapToResponseDto(ApplicantType entity) {
+        ApplicantTypeResponseDto dto = new ApplicantTypeResponseDto();
+        dto.setId(entity.getId());
+        dto.setName(entity.getName());
+        dto.setDescription(entity.getDescription());
+        dto.setActive(entity.isActive());
+        return dto;
     }
 }

@@ -1,17 +1,17 @@
-package com.doc.service;// package com.doc.service;
+// src/main/java/com/doc/service/ApplicantTypeService.java
+package com.doc.service;
 
-import com.doc.entity.document.ApplicantType;
+import com.doc.dto.document.ApplicantTypeRequestDto;
+import com.doc.dto.document.ApplicantTypeResponseDto;
+import org.springframework.data.domain.Page;
+
 import java.util.List;
 
 public interface ApplicantTypeService {
-
-    ApplicantType createApplicantType(ApplicantType applicantType);
-
-    List<ApplicantType> getAllActiveApplicantTypes();
-
-    ApplicantType getApplicantTypeById(Long id);
-
-    ApplicantType updateApplicantType(Long id, ApplicantType applicantType);
-
-    void softDeleteApplicantType(Long id);
+    ApplicantTypeResponseDto createApplicantType(ApplicantTypeRequestDto dto);
+    ApplicantTypeResponseDto updateApplicantType(Long id, ApplicantTypeRequestDto dto);
+    void deleteApplicantType(Long id); // soft delete
+    ApplicantTypeResponseDto getApplicantTypeById(Long id);
+    List<ApplicantTypeResponseDto> getAllActiveApplicantTypes();
+    Page<ApplicantTypeResponseDto> getApplicantTypesPaged(int page, int size);
 }

@@ -2,24 +2,17 @@ package com.doc.entity.product;
 
 import com.doc.entity.document.ProductApplicantType;
 import com.doc.entity.document.ProductDocumentMapping;
-import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Comment;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-
-/**
- * Entity representing a product.
- */
-// com.doc.entity.product.Product.java
 
 @Entity
 @Table(name = "products", indexes = {
@@ -31,7 +24,7 @@ public class Product {
     @Id
     private Long id;
 
-    @Column(name = "productName", nullable = false, unique = true)
+    @Column(name = "productName", nullable = false, unique = true, length = 255)
     private String productName;
 
     @Column(length = 1000)
@@ -62,18 +55,16 @@ public class Product {
     private boolean isActive = true;
 
     @OneToMany(mappedBy = "product", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    private List<UserProductMap> userProductMaps;
+    private List<UserProductMap> userProductMaps = new ArrayList<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<ProductMilestoneMap> milestoneSteps;
+    private List<ProductMilestoneMap> milestoneSteps = new ArrayList<>();
 
-    // NEW: Applicant Types for this product
+    // Applicant Types assigned to this product (e.g., Brand Owner, Manufacturer)
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProductApplicantType> applicantTypes = new ArrayList<>();
 
-    // NEW: Document mappings with optional applicant type
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    // Document requirements (per product + optional applicant type)
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<ProductDocumentMapping> documentMappings = new ArrayList<>();
-
-
 }

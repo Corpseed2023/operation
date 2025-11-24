@@ -1,19 +1,9 @@
 package com.doc.entity.document;
 
-import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.product.Product;
-import com.doc.entity.user.User;
-import com.doc.entity.user.UserProductMap;
 import jakarta.persistence.*;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Comment;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
 
 @Entity
 @Table(name = "product_applicant_type",
@@ -37,5 +27,6 @@ public class ProductApplicantType {
 
     private boolean isMandatory = false; // e.g., Brand Owner mandatory for EPR
 
+    @Column(nullable = false)
     private boolean isActive = true;
 }

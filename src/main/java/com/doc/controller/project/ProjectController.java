@@ -79,8 +79,6 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
-
-
     @PostMapping("/{id}/payments")
     public ResponseEntity<ProjectResponseDto> addPaymentTransaction(
             @PathVariable Long id,
