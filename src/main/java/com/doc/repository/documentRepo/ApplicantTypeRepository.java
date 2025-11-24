@@ -1,4 +1,3 @@
-// src/main/java/com/doc/repository/documentRepo/ApplicantTypeRepository.java
 package com.doc.repository.documentRepo;
 
 import com.doc.entity.document.ApplicantType;
@@ -10,8 +9,16 @@ import java.util.Optional;
 
 @Repository
 public interface ApplicantTypeRepository extends JpaRepository<ApplicantType, Long> {
+
     boolean existsByNameIgnoreCaseAndIsDeletedFalse(String name);
+
     boolean existsByNameIgnoreCaseAndIsDeletedFalseAndIdNot(String name, Long id);
+
     List<ApplicantType> findAllByIsDeletedFalseAndIsActiveTrue();
+
     Optional<ApplicantType> findByIdAndIsDeletedFalse(Long id);
+
+    // CORRECT return type
+    List<ApplicantType> findAllByIsActiveTrueAndIsDeletedFalse();
+
 }

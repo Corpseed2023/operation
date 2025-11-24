@@ -14,7 +14,7 @@ public class ProductDocumentMappingRequestDto {
 
     private Long productId;
 
-    private Long applicantTypeId;        // null = global (applies to all applicant types)
+    private Long applicantTypeId;
 
     private List<Long> requiredDocumentIds;
 

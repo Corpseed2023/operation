@@ -36,5 +36,5 @@ public interface ProductRequiredDocumentsRepository extends JpaRepository<Produc
     List<Map<String, Object>> findActiveDocumentIdAndName();
 
 
-
+    List<ProductRequiredDocuments> findAllByIdInAndIsActiveTrueAndIsDeletedFalse(List<Long> requiredDocumentIds);
 }

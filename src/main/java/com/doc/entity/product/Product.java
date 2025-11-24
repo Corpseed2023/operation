@@ -1,6 +1,5 @@
 package com.doc.entity.product;
 
-import com.doc.entity.document.ProductApplicantType;
 import com.doc.entity.document.ProductDocumentMapping;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
@@ -60,9 +59,9 @@ public class Product {
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<ProductMilestoneMap> milestoneSteps = new ArrayList<>();
 
-    // Applicant Types assigned to this product (e.g., Brand Owner, Manufacturer)
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ProductApplicantType> applicantTypes = new ArrayList<>();
+//    // Applicant Types assigned to this product (e.g., Brand Owner, Manufacturer)
+//    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+//    private List<ProductApplicantType> applicantTypes = new ArrayList<>();
 
     // Document requirements (per product + optional applicant type)
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
