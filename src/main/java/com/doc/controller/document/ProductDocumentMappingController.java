@@ -33,6 +33,7 @@ public class ProductDocumentMappingController {
             @ApiResponse(responseCode = "400", description = "Product ID mismatch or invalid request"),
             @ApiResponse(responseCode = "404", description = "Product or required documents not found")
     })
+
     @PostMapping("/{productId}/documents/map")
     public ResponseEntity<String> assignDocuments(
             @PathVariable @Parameter(description = "Product ID") Long productId,
