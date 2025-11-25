@@ -27,4 +27,15 @@ public interface ProductDocumentMappingRepository extends JpaRepository<ProductD
     List<ProductDocumentMapping> findByProductIdAndApplicantTypeIsNullAndIsActiveTrue(Long productId);
 
     List<ProductDocumentMapping> findByProductIdAndApplicantTypeIsNotNullAndIsActiveTrue(Long productId);
+
+    @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END " +
+            "FROM ProductDocumentMapping m " +
+            "WHERE m.product.id = :productId " +
+            "AND m.applicantType IS NOT NULL " +
+            "AND m.isActive = true")
+    boolean existsByProductIdAndApplicantTypeIsNotNullAndIsActiveTrue(@Param("productId") Long productId);
+
+
+
+
 }

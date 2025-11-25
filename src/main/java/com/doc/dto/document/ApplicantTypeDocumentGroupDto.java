@@ -14,7 +14,7 @@ public class ApplicantTypeDocumentGroupDto {
 
     private Long applicantTypeId;
 
-    private String applicantTypeName; // e.g., "Common Documents", "Brand Owner", "Importer"
+    private String applicantTypeName; // e.g., "Brand Owner", "Importer"
 
     private List<ProductDocumentMappingResponseDto> documents;
 }
