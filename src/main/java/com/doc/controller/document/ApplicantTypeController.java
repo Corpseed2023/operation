@@ -1,12 +1,12 @@
-// src/main/java/com/doc/controller/document/ApplicantTypeController.java
 package com.doc.controller.document;
 
 import com.doc.dto.document.ApplicantTypeRequestDto;
 import com.doc.dto.document.ApplicantTypeResponseDto;
 import com.doc.service.ApplicantTypeService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,17 +15,19 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/applicant-types")
+@RequiredArgsConstructor
+@Tag(name = "Applicant Types", description = "Manage applicant type master data")
 public class ApplicantTypeController {
 
-    @Autowired
-    private ApplicantTypeService applicantTypeService;
+    private final ApplicantTypeService applicantTypeService;
 
     @Operation(summary = "Create a new applicant type")
     @PostMapping
     public ResponseEntity<ApplicantTypeResponseDto> createApplicantType(
             @Valid @RequestBody ApplicantTypeRequestDto requestDto) {
+
         ApplicantTypeResponseDto response = applicantTypeService.createApplicantType(requestDto);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @Operation(summary = "Update an existing applicant type")
@@ -33,6 +35,7 @@ public class ApplicantTypeController {
     public ResponseEntity<ApplicantTypeResponseDto> updateApplicantType(
             @PathVariable Long id,
             @Valid @RequestBody ApplicantTypeRequestDto requestDto) {
+
         ApplicantTypeResponseDto response = applicantTypeService.updateApplicantType(id, requestDto);
         return ResponseEntity.ok(response);
     }
@@ -47,13 +50,15 @@ public class ApplicantTypeController {
     @Operation(summary = "Get applicant type by ID")
     @GetMapping("/{id}")
     public ResponseEntity<ApplicantTypeResponseDto> getApplicantTypeById(@PathVariable Long id) {
-        return ResponseEntity.ok(applicantTypeService.getApplicantTypeById(id));
+        ApplicantTypeResponseDto response = applicantTypeService.getApplicantTypeById(id);
+        return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Get all active applicant types (dropdown friendly)")
+    @Operation(summary = "Get all active applicant types (for dropdowns)")
     @GetMapping("/active")
     public ResponseEntity<List<ApplicantTypeResponseDto>> getAllActiveApplicantTypes() {
-        return ResponseEntity.ok(applicantTypeService.getAllActiveApplicantTypes());
+        List<ApplicantTypeResponseDto> activeTypes = applicantTypeService.getAllActiveApplicantTypes();
+        return ResponseEntity.ok(activeTypes);
     }
 
     @Operation(summary = "Get applicant types with pagination (page starts from 1)")

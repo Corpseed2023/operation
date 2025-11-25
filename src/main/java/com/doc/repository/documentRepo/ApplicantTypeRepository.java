@@ -10,15 +10,22 @@ import java.util.Optional;
 @Repository
 public interface ApplicantTypeRepository extends JpaRepository<ApplicantType, Long> {
 
+    // === Duplicate checks ===
     boolean existsByNameIgnoreCaseAndIsDeletedFalse(String name);
 
     boolean existsByNameIgnoreCaseAndIsDeletedFalseAndIdNot(String name, Long id);
 
-    List<ApplicantType> findAllByIsDeletedFalseAndIsActiveTrue();
-
     Optional<ApplicantType> findByIdAndIsDeletedFalse(Long id);
 
-    // CORRECT return type
+    Optional<ApplicantType> findByIdAndIsActiveTrueAndIsDeletedFalse(Long id);
+
     List<ApplicantType> findAllByIsActiveTrueAndIsDeletedFalse();
+
+    List<ApplicantType> findAllByIsDeletedFalseAndIsActiveTrue();
+
+    List<ApplicantType> findAllByIsActiveTrueAndIsDeletedFalseOrderByNameAsc();
+
+
+
 
 }
