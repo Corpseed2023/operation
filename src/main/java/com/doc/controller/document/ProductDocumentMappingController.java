@@ -17,6 +17,7 @@ public class ProductDocumentMappingController {
 
     private final ProductDocumentMappingService mappingService;
 
+
     /**
      * Assign / Update required documents for a Product + Applicant Type
      * Replaces all existing mappings for this combination
