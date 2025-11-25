@@ -150,10 +150,20 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         }
 
         // Set or update fields
+        // Set or update fields
         documentUpload.setFileUrl(sanitizedFileUrl);
         documentUpload.setFileName(sanitizedFileName);
-        documentUpload.setStatus(uploadedStatus);  // Set to UPLOADED
-        documentUpload.setRemarks(null);
+        documentUpload.setFileFormat(requestDto.getFileFormat().toLowerCase());
+        documentUpload.setFileSizeKb(requestDto.getFileSizeKb());
+        documentUpload.setExpiryDate(requestDto.getExpiryDate() != null
+                ? java.sql.Date.valueOf(requestDto.getExpiryDate())
+                : null);
+        documentUpload.setPermanent(requestDto.getIsPermanent() != null && requestDto.getIsPermanent());
+        documentUpload.setFromCompanyDoc(requestDto.getIsFromCompanyDoc() != null && requestDto.getIsFromCompanyDoc());
+        documentUpload.setCompanyDocSourceId(requestDto.getCompanyDocSourceId());
+        documentUpload.setRemarks(requestDto.getRemarks());
+
+        documentUpload.setStatus(uploadedStatus);
         documentUpload.setUploadedBy(uploadedBy);
         documentUpload.setUploadTime(new Date());
         documentUpload.setUpdatedBy(requestDto.getCreatedById());
@@ -183,11 +193,14 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     return new ResourceNotFoundException("User with ID " + updateDto.getChangedById() + " not found or is deleted", "USER_NOT_FOUND");
                 });
 
-        DocumentStatus newStatusEntity = documentStatusRepository.findByName(updateDto.getNewStatus().getName())
+        DocumentStatus newStatusEntity = documentStatusRepository.findByName(updateDto.getNewStatus())
                 .orElseThrow(() -> {
                     logger.error("Document status {} not found", updateDto.getNewStatus());
                     return new ResourceNotFoundException("Document status " + updateDto.getNewStatus() + " not found", "STATUS_NOT_FOUND");
                 });
+
+
+
 
         // Validate status transition
         validateDocumentStatusTransition(documentUpload.getStatus(), newStatusEntity);

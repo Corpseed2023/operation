@@ -2,7 +2,6 @@ package com.doc.entity.project;
 
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
-import com.doc.entity.user.User;
 import com.doc.entity.product.Product;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -20,7 +19,9 @@ import java.util.List;
         @Index(name = "idx_project_no", columnList = "projectNo", unique = true),
         @Index(name = "idx_product_id", columnList = "product_id"),
         @Index(name = "idx_sales_person_id", columnList = "sales_person_id"),
-        @Index(name = "idx_status_id", columnList = "status_id")
+        @Index(name = "idx_status_id", columnList = "status_id"),
+        @Index(name = "idx_unbilled_no", columnList = "unbilled_number"),
+        @Index(name = "idx_estimate_no", columnList = "estimate_number")
 })
 @Getter
 @Setter
@@ -40,10 +41,22 @@ public class Project {
     @Comment("Unique project number")
     private String projectNo;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sales_person_id")
-    @Comment("Sales person who brought this project")
-    private User salesPerson;
+    @Column(name = "unbilled_number", length = 50)
+    @Comment("Unbilled number – optional, unique when present")
+    private String unbilledNumber;
+
+    @Column(name = "estimate_number", length = 50)
+    @Comment("Estimate number – optional, unique when present")
+    private String estimateNumber;
+
+    // ONLY THESE TWO FIELDS — FROM MICROSERVICE
+    @Column(name = "sales_person_id")
+    @Comment("Sales person ID from microservice")
+    private Long salesPersonId;
+
+    @Column(name = "sales_person_name")
+    @Comment("Sales person name from microservice")
+    private String salesPersonName;
 
     @OneToOne(mappedBy = "project", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @Comment("Payment details for the project")
@@ -95,7 +108,7 @@ public class Project {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status_id", nullable = false)
     @Comment("Project status: Reference to ProjectStatus entity")
-    private ProjectStatus status;  // Changed from enum to entity reference
+    private ProjectStatus status;
 
     @Comment("Project address")
     private String address;

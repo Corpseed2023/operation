@@ -28,6 +28,18 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE p.projectNo = :projectNo AND p.isDeleted = false")
     boolean existsByProjectNoAndIsDeletedFalse(@Param("projectNo") String projectNo);
 
+    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
+    boolean existsByUnbilledNumberAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
+
+    /**
+     * Checks if a project with the given estimate number exists and is not deleted.
+     *
+     * @param estimateNumber the estimate number to check
+     * @return true if a project with the given estimate number exists and is not deleted, false otherwise
+     */
+    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE p.estimateNumber = :estimateNumber AND p.isDeleted = false")
+    boolean existsByEstimateNumberAndIsDeletedFalse(@Param("estimateNumber") String estimateNumber);
+
     /**
      * Finds a project by its ID if it is not deleted.
      *
@@ -104,6 +116,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByProjectNoContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("projectNo") String projectNo, @Param("userIds") List<Long> userIds);
 
+
     /**
      * Finds projects by contact name (case-insensitive partial match) and not deleted.
      *
@@ -141,4 +154,26 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      */
     @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("name") String name, @Param("userIds") List<Long> userIds);
+
+    @Query("SELECT p FROM Project p WHERE p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
+    Optional<Project> findByUnbilledNumberAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
+
+    /**
+     * Counts all non-deleted projects (for admins).
+     *
+     * @return total number of active projects
+     */
+    @Query("SELECT COUNT(p) FROM Project p WHERE p.isDeleted = false")
+    long countByIsDeletedFalse();
+
+    /**
+     * Counts non-deleted projects assigned to specific users (based on milestone assignments).
+     * Used for managers and regular users to get total accessible project count.
+     *
+     * @param userIds the list of user IDs (including subordinates if manager)
+     * @return total number of accessible projects
+     */
+    @Query("SELECT COUNT(DISTINCT p) FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    long countByAssignedUserIds(@Param("userIds") List<Long> userIds);
+
 }

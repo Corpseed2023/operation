@@ -14,102 +14,112 @@ import java.util.Date;
 @Entity
 @Table(name = "project_document_upload", indexes = {
         @Index(name = "idx_project_id", columnList = "project_id"),
-        @Index(name = "idx_milestone_assignment_id", columnList = "milestone_assignment_id")
+        @Index(name = "idx_milestone_assignment_id", columnList = "milestone_assignment_id"),
+        @Index(name = "idx_status_id", columnList = "status_id"),
+        @Index(name = "idx_company_source", columnList = "is_from_company_doc")
 })
 @Getter
 @Setter
 @NoArgsConstructor
+@Comment("Documents uploaded per project milestone with reuse tracking")
 public class ProjectDocumentUpload {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Comment("Primary key: Unique identifier for payment details")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
-    @Comment("Associated project")
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "milestone_assignment_id", nullable = false)
-    @Comment("Associated milestone assignment")
     private ProjectMilestoneAssignment milestoneAssignment;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "required_document_id", nullable = false)
-    @Comment("Required document for this upload (references ID)")
     private ProductRequiredDocuments requiredDocument;
 
+    @Column(name = "company_doc_source_id")
+    private Long companyDocSourceId;
+
+    @Column(name = "is_from_company_doc", nullable = false)
+    private boolean isFromCompanyDoc = false;
+
     @Column(name = "file_url", nullable = false, length = 1000)
-    @Comment("URL of the uploaded document")
     private String fileUrl;
 
     @Column(name = "file_name", nullable = false, length = 255)
-    @Comment("Name of the uploaded file")
     private String fileName;
 
     @Column(name = "old_file_url", length = 1000)
-    @Comment("URL of the previous file (if replaced)")
     private String oldFileUrl;
 
     @Column(name = "old_file_name", length = 255)
-    @Comment("Name of the previous file (if replaced)")
     private String oldFileName;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status_id", nullable = false)
-    @Comment("Document status: Reference to DocumentStatus entity")
-    private DocumentStatus status;  // Changed from enum to entity reference
+    private DocumentStatus status;
 
     @Column(name = "remarks", length = 1000)
-    @Comment("Remarks for the document status (required for REJECTED)")
     private String remarks;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by", nullable = false)
-    @Comment("User who uploaded the document")
     private User uploadedBy;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "upload_time")
-    @Comment("Time when the document was uploaded")
     private Date uploadTime;
 
+    @Temporal(TemporalType.DATE)
+    @Column(name = "expiry_date")
+    private Date expiryDate;
+
+    @Column(name = "is_permanent", nullable = false)
+    private boolean isPermanent = false;
+
+    @Column(name = "is_expired", nullable = false)
+    private boolean isExpired = false;
+
+    @Column(name = "file_size_kb", nullable = false)
+    private Integer fileSizeKb;
+
+    @Column(name = "file_format", length = 10, nullable = false)
+    private String fileFormat;
+
+    @Column(name = "validation_passed", nullable = false)
+    private boolean validationPassed = false;
+
+    @Column(name = "validation_issues", length = 1000)
+    private String validationIssues;
+
     @Column(name = "created_by", nullable = false)
-    @Comment("User ID who created the document upload")
     private Long createdBy;
 
     @Column(name = "updated_by", nullable = false)
-    @Comment("User ID who last updated the document upload")
     private Long updatedBy;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_date", nullable = false, updatable = false)
-    @Comment("Date when the document upload was created")
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "updated_date", nullable = false)
-    @Comment("Date when the document upload was last updated")
     private Date updatedDate;
 
     @Column(name = "is_deleted", nullable = false)
-    @Comment("Is deleted flag (soft delete)")
     private boolean isDeleted = false;
 
     @Column(name = "replacement_count", nullable = false)
-    @Comment("Number of times the document has been replaced")
     private int replacementCount = 0;
 
     @PrePersist
     protected void onCreate() {
         this.createdDate = new Date();
         this.updatedDate = new Date();
+        if (this.uploadTime == null) this.uploadTime = new Date();
     }
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedDate = new Date();
-    }
 }

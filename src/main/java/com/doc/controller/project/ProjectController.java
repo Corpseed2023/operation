@@ -40,20 +40,34 @@ public class ProjectController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    @Operation(summary = "Get all projects with pagination")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "List of projects retrieved"),
-            @ApiResponse(responseCode = "400", description = "Invalid pagination parameters")
-    })
+
     @GetMapping
+    @Operation(summary = "Get all projects with pagination - hides projects for regular users if no visible milestone")
     public ResponseEntity<List<ProjectResponseDto>> getAllProjects(
             @RequestParam Long userId,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
-        List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page, size);
+
+        if (page < 1 || size < 1) {
+            throw new IllegalArgumentException("Invalid pagination parameters");
+        }
+
+        List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page - 1, size);
         return ResponseEntity.ok(responses);
     }
 
+
+    // 2. NEW: Separate count endpoint
+    @GetMapping("/count")
+    @Operation(summary = "Get total count of projects for user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Total count retrieved"),
+            @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    public ResponseEntity<Long> getProjectCount(@RequestParam Long userId) {
+        long count = projectService.getProjectCount(userId);
+        return ResponseEntity.ok(count);
+    }
     @Operation(summary = "Delete a project by ID (soft delete)")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Project deleted successfully"),
@@ -72,6 +86,7 @@ public class ProjectController {
         ProjectResponseDto response = projectService.addPaymentTransaction(id, transactionDto);
         return ResponseEntity.ok(response);
     }
+
 
     @Operation(summary = "Get assigned projects with milestones for the logged-in user with pagination")
     @ApiResponses({
@@ -105,4 +120,20 @@ public class ProjectController {
         ProjectMilestoneResponseDto response = projectService.getProjectMilestones(projectId, userId);
         return ResponseEntity.ok(response);
     }
+
+    @Operation(summary = "Add payment using unbilled number instead of project ID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Payment added successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid payment data"),
+            @ApiResponse(responseCode = "404", description = "No active project with given unbilled number")
+    })
+    @PostMapping("/payments/unbilled/{unbilledNumber}")
+    public ResponseEntity<ProjectResponseDto> addPaymentByUnbilledNumber(
+            @PathVariable @Parameter(description = "Unbilled number of the project") String unbilledNumber,
+            @Valid @RequestBody ProjectPaymentTransactionDto dto) {
+
+        ProjectResponseDto response = projectService.addPaymentByUnbilledNumber(unbilledNumber, dto);
+        return ResponseEntity.ok(response);
+    }
+
 }

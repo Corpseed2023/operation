@@ -12,20 +12,28 @@ import java.time.LocalDate;
 @Setter
 public class ProjectRequestDto {
 
+
     @NotBlank(message = "Project name cannot be empty")
     private String name;
 
     @NotBlank(message = "Project number cannot be empty")
     private String projectNo;
 
-    @NotNull(message = "Sales person ID cannot be null")
+    @NotNull
     private Long salesPersonId;
+
+    @NotBlank
+    private String salesPersonName;
 
     @NotNull(message = "Product ID cannot be null")
     private Long productId;
 
     @NotNull(message = "Company ID cannot be null")
     private Long companyId;
+
+    private String unbilledNumber;
+
+    private String estimateNumber;
 
     @NotNull(message = "Contact ID cannot be null")
     private Long contactId;

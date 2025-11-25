@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+import java.util.Map;
 
 
 public interface ProductRequiredDocumentsRepository extends JpaRepository<ProductRequiredDocuments, Long> {
@@ -26,5 +28,13 @@ public interface ProductRequiredDocumentsRepository extends JpaRepository<Produc
     Page<ProductRequiredDocuments> findByIsDeletedFalse(Pageable pageable);
 
 
+    // ProductRequiredDocumentsRepository.java
+    @Query("SELECT new map(d.id as id, d.name as name) " +
+            "FROM ProductRequiredDocuments d " +
+            "WHERE d.isDeleted = false AND d.isActive = true " +
+            "ORDER BY d.name")
+    List<Map<String, Object>> findActiveDocumentIdAndName();
 
+
+    List<ProductRequiredDocuments> findAllByIdInAndIsActiveTrueAndIsDeletedFalse(List<Long> requiredDocumentIds);
 }

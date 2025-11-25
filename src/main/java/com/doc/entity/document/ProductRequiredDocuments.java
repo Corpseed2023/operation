@@ -1,94 +1,83 @@
 package com.doc.entity.document;
 
-import com.doc.entity.product.Product;
+import com.doc.em.DocumentExpiryType;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.Comment;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Represents a required document for a product based on region (state/central/international).
- * Ensures uniqueness of documents based on name, country, centralName, and stateName.
- */
 @Entity
 @Table(name = "product_required_documents",
         indexes = {@Index(name = "idx_name", columnList = "name")},
         uniqueConstraints = {@UniqueConstraint(columnNames = {"name", "country", "centralName", "stateName"})}
 )
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class ProductRequiredDocuments {
 
     @Id
-    @Comment("Primary Key: Unique identifier for the required document")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    @Comment("Name of the required document (e.g., Aadhaar Card, PAN Card)")
+    @Column(nullable = false, length = 255)
     private String name;
 
     @Column(length = 1000)
-    @Comment("Description of the document")
     private String description;
 
-    @Column(nullable = false)
-    @Comment("Type of document (e.g., IDENTITY, FINANCIAL, PROOF)")
-    private String type;
+    @Column(nullable = false, length = 50)
+    private String type; // IDENTITY, ADDRESS, FINANCIAL, etc.
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("Country for which the document is required (empty for central/international)")
+    @Column(columnDefinition = "VARCHAR(255) DEFAULT ''")
     private String country = "";
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("Central government name for central-level documents (empty for state/international)")
+    @Column(columnDefinition = "VARCHAR(255) DEFAULT ''")
     private String centralName = "";
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(255) DEFAULT ''")
-    @Comment("State name for state-level documents (empty for central/international)")
+    @Column(columnDefinition = "VARCHAR(255) DEFAULT ''")
     private String stateName = "";
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
+
+    @Column(name = "is_mandatory", nullable = false)
+    private boolean isMandatory = true;
+
+    @Column(name = "max_validity_years")
+    private Integer maxValidityYears;
+
+    @Column(name = "min_file_size_kb")
+    private Integer minFileSizeKb;
+
+    @Column(name = "allowed_formats", length = 100)
+    private String allowedFormats = "pdf,jpg,png";
+
     @Column(name = "created_by", nullable = false)
-    @Comment("ID of the user who created the document")
     private Long createdBy;
 
     @Column(name = "updated_by", nullable = false)
-    @Comment("ID of the user who last updated the document")
     private Long updatedBy;
 
-    @Column(nullable = false)
-    @Comment("Is Deleted flag (soft delete)")
+    @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
-    @Column(nullable = false)
-    @Comment("Active status flag")
+    @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "created_date", nullable = false, updatable = false)
-    @Comment("Date when the document was created")
+    @Column(name = "created_date", updatable = false)
     private Date createdDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "updated_date", nullable = false)
-    @Comment("Date when the document was last updated")
+    @Column(name = "updated_date")
     private Date updatedDate;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "product_document_mapping",
-            joinColumns = @JoinColumn(name = "document_id"),
-            inverseJoinColumns = @JoinColumn(name = "product_id")
-    )
-    @Comment("List of products associated with this document")
-    private List<Product> products = new ArrayList<>();
+    // Reverse mapping
+    @OneToMany(mappedBy = "requiredDocument", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProductDocumentMapping> productMappings = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {

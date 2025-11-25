@@ -141,4 +141,41 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
      */
     @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.status IN :statuses AND a.isDeleted = false")
     List<ProjectMilestoneAssignment> findByStatusInAndIsDeletedFalse(@Param("statuses") List<String> statuses);
+
+    /**
+     * For Managers: Get all VISIBLE milestones (including COMPLETED)
+     * assigned to any team member in a specific project
+     */
+    @Query("SELECT a FROM ProjectMilestoneAssignment a " +
+            "WHERE a.project.id = :projectId " +
+            "AND a.assignedUser.id IN :userIds " +
+            "AND a.isVisible = true " +
+            "AND a.isDeleted = false")
+    List<ProjectMilestoneAssignment> findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(
+            @Param("projectId") Long projectId,
+            @Param("userIds") List<Long> userIds);
+
+    /**
+     * For Regular Users: Get all VISIBLE milestones (including COMPLETED)
+     * assigned to this specific user in a specific project
+     */
+    @Query("SELECT a FROM ProjectMilestoneAssignment a " +
+            "WHERE a.project.id = :projectId " +
+            "AND a.assignedUser.id = :userId " +
+            "AND a.isVisible = true " +
+            "AND a.isDeleted = false")
+    List<ProjectMilestoneAssignment> findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(
+            @Param("projectId") Long projectId,
+            @Param("userId") Long userId);
+
+
+
+
+
+
+
+
+
+
+
 }

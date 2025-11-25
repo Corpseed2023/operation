@@ -1,5 +1,6 @@
 package com.doc.entity.client;
 
+import com.doc.entity.document.CompanyDocument;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -97,4 +98,8 @@ public class Company {
     @Column(name = "updated_date")
     @Comment("Update Date")
     private Date updatedDate;
+
+    @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @Comment("List of verified reusable documents for this company")
+    private List<CompanyDocument> companyDocuments = new ArrayList<>();
 }
