@@ -13,5 +13,6 @@ import java.util.List;
 public class ProductDocumentGroupDto {
     private Long applicantTypeId;
     private String applicantTypeName;  // "Common Documents" if null
+
     private List<ProductDocumentMappingResponseDto> documents;
 }
