@@ -12,15 +12,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-
 @Repository
 public interface ProductDocumentMappingRepository extends JpaRepository<ProductDocumentMapping, Long> {
 
-    @Modifying
-    @Query("DELETE FROM ProductDocumentMapping m WHERE m.product.id = :productId " +
-            "AND (m.applicantType.id = :applicantTypeId OR (:applicantTypeId IS NULL AND m.applicantType IS NULL))")
-    void deleteByProductIdAndApplicantTypeId(@Param("productId") Long productId,
-                                             @Param("applicantTypeId") Long applicantTypeId);
 
     List<ProductDocumentMapping> findByProductIdAndApplicantTypeIdAndIsActiveTrue(Long productId, Long applicantTypeId);
 
@@ -28,14 +22,8 @@ public interface ProductDocumentMappingRepository extends JpaRepository<ProductD
 
     List<ProductDocumentMapping> findByProductIdAndApplicantTypeIsNotNullAndIsActiveTrue(Long productId);
 
-    @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END " +
-            "FROM ProductDocumentMapping m " +
-            "WHERE m.product.id = :productId " +
-            "AND m.applicantType IS NOT NULL " +
-            "AND m.isActive = true")
-    boolean existsByProductIdAndApplicantTypeIsNotNullAndIsActiveTrue(@Param("productId") Long productId);
-
-
+    /** All active mappings for a product (regardless of applicant type) */
+    List<ProductDocumentMapping> findByProductIdAndIsActiveTrue(Long productId);
 
 
 }

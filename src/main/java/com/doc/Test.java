@@ -3,45 +3,41 @@ package com.doc;
 import java.util.*;
 
 public class Test {
+
+    public static List<String> palindrome(String value) {
+
+        StringBuilder s1 = new StringBuilder(value);
+
+        s1.reverse();
+        List list = new ArrayList<>();
+
+        if (value.equals(s1.toString()))
+
+            list.add(value);
+            System.out.println("palindrome");
+            return list;
+    }
+
+
     public static void main(String[] args) {
-        List<Employee> employees = Arrays.asList(
-                new Employee(1, "Alice", 5000, "HR"),
-                new Employee(2, "Bob", 6000, "IT"),
-                new Employee(3, "Charlie", 5500, "HR"),
-                new Employee(4, "David", 7000, "IT"),
-                new Employee(5, "Eve", 6500, "Finance")
-        );
 
-        Map<String, Double> totalSalaryByDept = new HashMap<>();
+        String a ="abaddddaaa";
 
-        Map<String,Integer> count = new HashMap<>();
-
-
-        for (Employee e : employees)
-        {
-                totalSalaryByDept.put(e.department(),totalSalaryByDept.getOrDefault(e.department(),0.0)+e.salary());
-
-                count.put(e.department(),count.getOrDefault(e.department(),0)+1);
-
-        }
-
-        Map<String, Double> avgSalaryByDept = new HashMap<>();
-
-        for (String dept: totalSalaryByDept.keySet())
+        for (int i =0 ; i<a.length();i++)
         {
 
-            double total= totalSalaryByDept.get(dept);
-            int count1 = count.get(dept) ;
+            for (int j = i; j<a.length();j++)
+            {
 
-            avgSalaryByDept.put(dept,total/count1);
+                String test = a.substring(i,j+1);
 
+                palindrome(test);
 
-
+            }
         }
-        System.out.println(avgSalaryByDept);
+
 
 
     }
 }
 
-record Employee(int id, String name, double salary, String department) {}
