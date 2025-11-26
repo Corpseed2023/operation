@@ -16,5 +16,5 @@ public class ProductDocumentRequirementResponseDto {
 
     private String productName;
 
-    private List<ApplicantTypeDocumentGroupDto> applicantTypeGroups;
+    private List<ProductDocumentMappingResponseDto> productDocumentMappingResponseDtos;
 }

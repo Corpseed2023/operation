@@ -48,7 +48,6 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
         Long updatedBy = request.getUpdatedBy();
 
 
-
         // If no documents requested → just cleared old ones
         if (request.getRequiredDocumentIds() == null || request.getRequiredDocumentIds().isEmpty()) {
             log.info("No new documents assigned. Cleared existing mappings only.");
@@ -171,8 +170,7 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
                 mapping.getDisplayOrder(),
                 doc.getAllowedFormats(),
                 doc.getExpiryType(),
-                doc.getMaxValidityYears()
-        );
+                doc.getMaxValidityYears());
     }
 
     private void validateAssignRequest(ProductDocumentMappingRequestDto request) {
@@ -236,8 +234,6 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
     }
 
 
-
-
     @Override
     public ProductDocumentRequirementResponseDto getDocumentRequirementsGrouped(Long productId) {
         log.info("Fetching document requirements grouped for product ID: {}", productId);
@@ -246,47 +242,50 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Product not found with ID: " + productId, "ERR_PRODUCT_NOT_FOUND"));
 
-        List<ApplicantTypeDocumentGroupDto> groups = new ArrayList<>();
+        List<ProductDocumentMappingResponseDto> resultDocuments = new ArrayList<>();
 
-        // Check if this product has ANY applicant-type-specific mappings
         boolean hasSpecificMappings = mappingRepository
                 .existsByProductIdAndApplicantTypeIsNotNullAndIsActiveTrue(productId);
 
         if (hasSpecificMappings) {
-            // Case 1: Product has applicant-type-specific documents → group by applicant type
+            // Case 1: Applicant-type-specific mappings exist → return grouped documents
             List<ApplicantType> applicantTypes = applicantTypeRepository
                     .findAllByIsActiveTrueAndIsDeletedFalseOrderByNameAsc();
 
+            // First: Add Common (global) documents with applicantType = null
+            List<ProductDocumentMappingResponseDto> commonDocs = getFinalRequiredDocuments(productId, null);
+            commonDocs.forEach(dto -> {
+                dto.setApplicantTypeId(null);
+                dto.setApplicantTypeName("Common Documents");
+            });
+            resultDocuments.addAll(commonDocs);
+
+            // Then: Add each applicant type's specific documents
             for (ApplicantType applicantType : applicantTypes) {
-                List<ProductDocumentMappingResponseDto> docs =
+                List<ProductDocumentMappingResponseDto> typeDocs =
                         getFinalRequiredDocuments(productId, applicantType.getId());
 
-                if (!docs.isEmpty()) {
-                    groups.add(new ApplicantTypeDocumentGroupDto(
-                            applicantType.getId(),
-                            applicantType.getName(),
-                            docs
-                    ));
-                }
+                typeDocs.forEach(dto -> {
+                    dto.setApplicantTypeId(applicantType.getId());
+                    dto.setApplicantTypeName(applicantType.getName());
+                });
+
+                resultDocuments.addAll(typeDocs);
             }
         } else {
-            // Case 2: No applicant-type-specific mappings → return single group with null applicantType
-            List<ProductDocumentMappingResponseDto> globalDocs =
-                    getFinalRequiredDocuments(productId, null);
-
-            if (!globalDocs.isEmpty()) {
-                groups.add(new ApplicantTypeDocumentGroupDto(
-                        null,           // applicantTypeId = null
-                        null,           // applicantTypeName = null (exactly as you want)
-                        globalDocs
-                ));
-            }
+            // Case 2: Only common documents exist → single group with null applicantType
+            List<ProductDocumentMappingResponseDto> globalDocs = getFinalRequiredDocuments(productId, null);
+            globalDocs.forEach(dto -> {
+                dto.setApplicantTypeId(null);
+                dto.setApplicantTypeName(null);
+            });
+            resultDocuments.addAll(globalDocs);
         }
 
         return new ProductDocumentRequirementResponseDto(
                 product.getId(),
                 product.getProductName(),
-                groups
+                resultDocuments
         );
     }
 
