@@ -4,6 +4,8 @@ import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
 import com.doc.entity.document.ProjectDocumentUpload;
+import com.doc.entity.milestone.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatusHistory;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.project.*;
 import com.doc.entity.department.Department;

@@ -3,7 +3,7 @@ package com.doc.impl;
 import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.milestone.MilestoneRequestDto;
 import com.doc.dto.milestone.MilestoneResponseDto;
-import com.doc.entity.product.Milestone;
+import com.doc.entity.milestone.Milestone;
 import com.doc.entity.department.Department;
 import com.doc.repository.DepartmentRepository;
 import com.doc.repository.MilestoneRepository;

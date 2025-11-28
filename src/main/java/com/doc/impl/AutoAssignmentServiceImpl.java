@@ -4,6 +4,7 @@ import com.doc.constants.StatusConstants;
 import com.doc.dto.auto.DepartmentAutoConfigDto;
 import com.doc.entity.department.Department;
 import com.doc.entity.department.DepartmentAutoConfig;
+import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.project.*;

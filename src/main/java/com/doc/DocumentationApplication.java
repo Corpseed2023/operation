@@ -1,7 +1,7 @@
 package com.doc;
 
 import com.doc.entity.document.DocumentStatus;
-import com.doc.entity.project.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.project.ProjectStatus;
 import com.doc.entity.client.PaymentType;
 import com.doc.repository.MilestoneStatusRepository;

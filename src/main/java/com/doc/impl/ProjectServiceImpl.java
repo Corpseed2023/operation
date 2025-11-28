@@ -10,7 +10,8 @@ import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
 import com.doc.entity.department.Department;
 import com.doc.entity.document.ProjectDocumentUpload;
-import com.doc.entity.product.Milestone;
+import com.doc.entity.milestone.Milestone;
+import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.project.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
@@ -130,7 +131,6 @@ public class ProjectServiceImpl implements ProjectService {
         project.setSalesPersonId(requestDto.getSalesPersonId());
         project.setSalesPersonName(requestDto.getSalesPersonName());
         project.setActive(true);
-
 
 
 

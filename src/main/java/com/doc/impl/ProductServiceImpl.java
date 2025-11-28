@@ -150,6 +150,10 @@ public class ProductServiceImpl implements ProductService {
         product.setDescription(requestDto.getDescription());
         product.setDate(LocalDate.now());
         product.setActive(requestDto.isActive());
+
+        product.setRequiresClientPortal(requestDto.isRequiresClientPortal());
+        product.setExpectedPortalName(requestDto.getExpectedPortalName());
+        product.setDefaultPortalUrl(requestDto.getDefaultPortalUrl());
     }
 
     private ProductResponseDto mapToResponseDto(Product product) {
@@ -163,6 +167,11 @@ public class ProductServiceImpl implements ProductService {
         dto.setCreatedDate(product.getCreatedDate());
         dto.setUpdatedDate(product.getUpdatedDate());
         dto.setActive(product.isActive());
+
+        dto.setRequiresClientPortal(product.isRequiresClientPortal());
+        dto.setExpectedPortalName(product.getExpectedPortalName());
+        dto.setDefaultPortalUrl(product.getDefaultPortalUrl());
+
         return dto;
     }
 }

@@ -1,13 +1,7 @@
 package com.doc.repository;
 
-import com.doc.entity.document.ApplicantType;
 import com.doc.entity.document.ProductDocumentMapping;
-import com.doc.entity.product.Product;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;

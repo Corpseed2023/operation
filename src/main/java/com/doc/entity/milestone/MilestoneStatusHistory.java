@@ -1,5 +1,7 @@
-package com.doc.entity.project;
+package com.doc.entity.milestone;
 
+import com.doc.entity.milestone.MilestoneStatus;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;

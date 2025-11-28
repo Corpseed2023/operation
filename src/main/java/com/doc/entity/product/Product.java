@@ -53,17 +53,39 @@ public class Product {
     @Column(nullable = false)
     private boolean isActive = true;
 
+    // ========== NEW FIELDS – PORTAL REQUIREMENT (PRODUCT LEVEL) ==========
+
+    /**
+     * Does this product require client portal login at any stage?
+     * Examples:
+     * YES → EPR Plastic, CTO/CTE, FSSAI, BIS CRS, Pollution Board portals
+     * NO  → ISO Certification, Trademark, Company Audits, Training
+     */
+    @Column(nullable = false)
+    private boolean requiresClientPortal = false;
+
+    /**
+     * Suggested/Expected portal name shown to user as hint
+     * e.g., "CPCB EPR Plastic Portal", "FoSCoS (FSSAI)", "BIS CRS Portal", "Parivesh / State SPCB"
+     */
+    @Column(length = 255)
+    private String expectedPortalName;
+
+    /**
+     * Default portal URL (optional) – auto-filled in frontend
+     * e.g., https://eprplastic.cpcb.gov.in
+     */
+    @Column(length = 512)
+    private String defaultPortalUrl;
+
+    // =====================================================================
+
     @OneToMany(mappedBy = "product", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<UserProductMap> userProductMaps = new ArrayList<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<ProductMilestoneMap> milestoneSteps = new ArrayList<>();
 
-//    // Applicant Types assigned to this product (e.g., Brand Owner, Manufacturer)
-//    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-//    private List<ProductApplicantType> applicantTypes = new ArrayList<>();
-
-    // Document requirements (per product + optional applicant type)
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<ProductDocumentMapping> documentMappings = new ArrayList<>();
 }

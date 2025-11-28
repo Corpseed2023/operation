@@ -1,4 +1,4 @@
-package com.doc.entity.project;
+package com.doc.entity.milestone;
 
 import jakarta.persistence.*;
 import lombok.Getter;

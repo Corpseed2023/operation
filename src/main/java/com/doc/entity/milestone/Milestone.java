@@ -1,4 +1,4 @@
-package com.doc.entity.product;
+package com.doc.entity.milestone;
 
 import com.doc.entity.department.Department;
 import jakarta.persistence.*;
