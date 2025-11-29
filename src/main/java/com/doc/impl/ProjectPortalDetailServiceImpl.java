@@ -1,9 +1,6 @@
 package com.doc.impl;
 
-
-import com.doc.dto.project.portal.ProjectPortalDetailListResponseDto;
-import com.doc.dto.project.portal.ProjectPortalDetailRequestDto;
-import com.doc.dto.project.portal.ProjectPortalDetailResponseDto;
+import com.doc.dto.project.portal.*;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectPortalDetail;
 import com.doc.entity.user.User;
@@ -19,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -36,11 +34,10 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         Project project = getProjectAndCheckAccess(projectId, userId);
 
         if (portalDetailRepo.existsByProjectIdAndPortalNameAndIsDeletedFalse(projectId, dto.getPortalName().trim())) {
-            throw new ValidationException("Portal '" + dto.getPortalName() + "' already exists for this project", "ERR_DUPLICATE_PORTAL");
+            throw new ValidationException("Portal '" + dto.getPortalName() + "' already exists", "ERR_DUPLICATE_PORTAL");
         }
 
-        User user = userRepo.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+        User user = getUser(userId);
 
         ProjectPortalDetail entity = new ProjectPortalDetail();
         entity.setProject(project);
@@ -52,6 +49,15 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         entity.setRemarks(dto.getRemarks());
         entity.setCreatedBy(user);
         entity.setUpdatedBy(user);
+
+        // Auto-approve only if user is Admin or Operation Head
+        if (isAdminOrOpHead(user)) {
+            entity.setStatus("APPROVED");
+            entity.setApprovedBy(user);
+            entity.setApprovalDate(new Date());
+        } else {
+            entity.setStatus("PENDING");
+        }
 
         entity = portalDetailRepo.save(entity);
         return mapToResponseDto(entity);
@@ -81,13 +87,13 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         getProjectAndCheckAccess(projectId, userId);
 
         ProjectPortalDetail entity = portalDetailRepo.findByIdAndIsDeletedFalse(detailId)
-                .orElseThrow(() -> new ResourceNotFoundException("Portal detail not found", "ERR_PORTAL_DETAIL_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Portal detail not found", "ERR_PORTAL_NOT_FOUND"));
 
         if (!entity.getProject().getId().equals(projectId)) {
-            throw new ValidationException("Portal detail does not belong to this project", "ERR_INVALID_PROJECT");
+            throw new ValidationException("Portal does not belong to this project", "ERR_INVALID_PROJECT");
         }
 
-        User user = userRepo.findActiveUserById(userId).orElseThrow();
+        User user = getUser(userId);
 
         entity.setPortalName(dto.getPortalName().trim());
         entity.setPortalUrl(dto.getPortalUrl());
@@ -98,6 +104,14 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         entity.setRemarks(dto.getRemarks());
         entity.setUpdatedBy(user);
 
+        // If not Admin/OpHead → force back to PENDING on edit
+        if (!isAdminOrOpHead(user)) {
+            entity.setStatus("PENDING");
+            entity.setApprovedBy(null);
+            entity.setApprovalDate(null);
+            entity.setApprovalRemarks(null);
+        }
+
         entity = portalDetailRepo.save(entity);
         return mapToResponseDto(entity);
     }
@@ -107,7 +121,7 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         getProjectAndCheckAccess(projectId, userId);
 
         ProjectPortalDetail entity = portalDetailRepo.findByIdAndIsDeletedFalse(detailId)
-                .orElseThrow(() -> new ResourceNotFoundException("Portal detail not found", "ERR_PORTAL_DETAIL_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Portal detail not found", "ERR_PORTAL_NOT_FOUND"));
 
         if (!entity.getProject().getId().equals(projectId)) {
             throw new ValidationException("Invalid project", "ERR_INVALID_PROJECT");
@@ -117,27 +131,75 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         portalDetailRepo.save(entity);
     }
 
-    // Reusable access check
+    @Override
+    public ProjectPortalDetailResponseDto approveOrRejectPortalDetail(
+            Long projectId, Long detailId, Long userId, ProjectPortalDetailApprovalDto approvalDto) {
+
+        Project project = getProjectAndCheckAccess(projectId, userId);
+
+        ProjectPortalDetail entity = portalDetailRepo.findByIdAndIsDeletedFalse(detailId)
+                .orElseThrow(() -> new ResourceNotFoundException("Portal detail not found", "ERR_PORTAL_NOT_FOUND"));
+
+        if (!entity.getProject().getId().equals(projectId)) {
+            throw new ValidationException("Invalid project", "ERR_INVALID_PROJECT");
+        }
+
+        if (!"PENDING".equals(entity.getStatus())) {
+            throw new ValidationException("Only PENDING entries can be approved/rejected", "ERR_NOT_PENDING");
+        }
+
+        User approver = getUser(userId);
+
+        if (!isAdminOrOpHead(approver) && !approver.isManagerFlag()) {
+            throw new ValidationException("Unauthorized: Only Admin, Operation Head or Manager can approve", "ERR_UNAUTHORIZED_APPROVAL");
+        }
+
+        String action = approvalDto.getStatus();
+        if (!"APPROVED".equals(action) && !"REJECTED".equals(action)) {
+            throw new ValidationException("Status must be APPROVED or REJECTED", "ERR_INVALID_STATUS");
+        }
+
+        entity.setStatus(action);
+        entity.setApprovedBy(approver);
+        entity.setApprovalDate(new Date());
+        entity.setApprovalRemarks(approvalDto.getApprovalRemarks());
+        entity.setUpdatedBy(approver);
+
+        entity = portalDetailRepo.save(entity);
+        return mapToResponseDto(entity);
+    }
+
+    // Helper Methods
+    private User getUser(Long userId) {
+        return userRepo.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+    }
+
+
+
+    private boolean isAdminOrOpHead(User user) {
+        return user.getRoles().stream()
+                .anyMatch(r -> "ADMIN".equals(r.getName()) || "OPERATION_HEAD".equals(r.getName()));
+    }
+
     private Project getProjectAndCheckAccess(Long projectId, Long userId) {
         Project project = projectRepo.findActiveUserById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
 
-        User user = userRepo.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+        User user = getUser(userId);
 
-        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
-        boolean isOpHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
-
-        if (isAdmin || isOpHead) return project;
+        if (isAdminOrOpHead(user)) {
+            return project;
+        }
 
         boolean isAssigned = assignmentRepo
                 .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId)
                 .isPresent();
 
         if (!isAssigned) {
-            throw new ValidationException("You are not authorized to manage portal details for this project",
-                    "ERR_UNAUTHORIZED_PORTAL_ACCESS");
+            throw new ValidationException("Access denied to this project", "ERR_UNAUTHORIZED_PORTAL_ACCESS");
         }
+
         return project;
     }
 
@@ -148,12 +210,17 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         dto.setPortalName(entity.getPortalName());
         dto.setPortalUrl(entity.getPortalUrl());
         dto.setUsername(entity.getUsername());
-        dto.setPassword("••••••••"); // Always masked
         dto.setRemarks(entity.getRemarks());
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setCreatedByName(entity.getCreatedBy() != null ? entity.getCreatedBy().getFullName() : null);
         dto.setUpdatedDate(entity.getUpdatedDate());
         dto.setUpdatedByName(entity.getUpdatedBy() != null ? entity.getUpdatedBy().getFullName() : null);
+
+        dto.setStatus(entity.getStatus());
+        dto.setApprovedByName(entity.getApprovedBy() != null ? entity.getApprovedBy().getFullName() : null);
+        dto.setApprovalDate(entity.getApprovalDate());
+        dto.setApprovalRemarks(entity.getApprovalRemarks());
+
         return dto;
     }
 }

@@ -1,6 +1,5 @@
 package com.doc.controller.project;
 
-import com.doc.dto.project.AssignedMilestoneDto;
 import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
 import com.doc.dto.project.ProjectRequestDto;

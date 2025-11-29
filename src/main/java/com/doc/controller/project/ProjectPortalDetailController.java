@@ -1,7 +1,6 @@
 package com.doc.controller.project;
 
-
-
+import com.doc.dto.project.portal.ProjectPortalDetailApprovalDto;
 import com.doc.dto.project.portal.ProjectPortalDetailListResponseDto;
 import com.doc.dto.project.portal.ProjectPortalDetailRequestDto;
 import com.doc.dto.project.portal.ProjectPortalDetailResponseDto;
@@ -26,7 +25,6 @@ public class ProjectPortalDetailController {
     public ProjectPortalDetailController(ProjectPortalDetailService projectPortalDetailService) {
         this.projectPortalDetailService = projectPortalDetailService;
     }
-
 
     @Operation(summary = "Add client portal login details",
             description = "Used by CRT/Operations team to save government portal credentials (e.g., CPCB EPR, FoSCoS, Parivesh)")
@@ -83,5 +81,24 @@ public class ProjectPortalDetailController {
 
         projectPortalDetailService.deletePortalDetail(projectId, detailId, userId);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Approve or reject portal details",
+            description = "Manager, Admin, or Operation Head can approve or reject pending portal details with remarks")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Approval status updated"),
+            @ApiResponse(responseCode = "400", description = "Invalid input"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Not found")
+    })
+    @PutMapping("/{projectId}/portal-details/{detailId}/approve")
+    public ResponseEntity<ProjectPortalDetailResponseDto> approveOrRejectPortalDetail(
+            @PathVariable Long projectId,
+            @PathVariable Long detailId,
+            @RequestParam Long userId,
+            @Valid @RequestBody ProjectPortalDetailApprovalDto approvalDto) {
+
+        ProjectPortalDetailResponseDto response = projectPortalDetailService.approveOrRejectPortalDetail(projectId, detailId, userId, approvalDto);
+        return ResponseEntity.ok(response);
     }
 }

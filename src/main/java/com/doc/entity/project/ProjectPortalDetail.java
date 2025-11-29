@@ -79,6 +79,25 @@ public class ProjectPortalDetail {
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
+    // New fields for approval process
+    @Column(name = "status", nullable = false)
+    @Comment("Status of the portal detail: PENDING, APPROVED, REJECTED")
+    private String status = "PENDING";
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "approved_by")
+    @Comment("User who approved or rejected")
+    private User approvedBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "approval_date")
+    @Comment("Date of approval or rejection")
+    private Date approvalDate;
+
+    @Column(name = "approval_remarks", length = 1000)
+    @Comment("Remarks provided during approval or rejection")
+    private String approvalRemarks;
+
     @PrePersist
     protected void onCreate() {
         createdDate = new Date();

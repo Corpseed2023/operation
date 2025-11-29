@@ -57,6 +57,7 @@ public class MilestoneServiceImpl implements MilestoneService {
                     .collect(Collectors.toList());
             milestone.setDepartments(departments);
 
+
             // Update the Department side of the relationship
             for (Department dept : departments) {
                 List<Milestone> deptMilestones = dept.getMilestones();
