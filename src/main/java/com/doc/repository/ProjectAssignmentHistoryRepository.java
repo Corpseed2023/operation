@@ -1,11 +1,14 @@
 package com.doc.repository;
 
 import com.doc.entity.project.ProjectAssignmentHistory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -44,4 +47,9 @@ public interface ProjectAssignmentHistoryRepository extends JpaRepository<Projec
             @Param("milestoneId") Long milestoneId,
             @Param("departmentId") Long departmentId
     );
+
+
+    @Query("SELECT h FROM ProjectAssignmentHistory h WHERE h.milestoneAssignment.id = :milestoneAssignmentId AND h.isDeleted = false")
+    List<ProjectAssignmentHistory> findByMilestoneAssignmentIdAndIsDeletedFalse(@Param("milestoneAssignmentId") Long milestoneAssignmentId);
+
 }

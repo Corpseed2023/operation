@@ -1,6 +1,7 @@
 package com.doc.repository;
 
 import com.doc.entity.milestone.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatusHistory;
 import com.doc.entity.project.ProjectMilestoneAssignment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

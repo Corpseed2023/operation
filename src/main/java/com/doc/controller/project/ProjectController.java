@@ -4,6 +4,7 @@ import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
 import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -134,5 +135,24 @@ public class ProjectController {
         ProjectResponseDto response = projectService.addPaymentByUnbilledNumber(unbilledNumber, dto);
         return ResponseEntity.ok(response);
     }
+
+
+    // In ProjectController.java, add the following endpoint
+
+    @Operation(summary = "Get project history including creation, milestones, assignments, and status changes",
+            description = "Retrieves detailed history for a project, including when it was created, its milestones (starting with the first), assignments (to whom and by whom), and status changes.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Project history retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "Project not found")
+    })
+    @GetMapping("/{projectId}/history")
+    public ResponseEntity<ProjectHistoryResponseDto> getProjectHistory(
+            @PathVariable @Parameter(description = "ID of the project") Long projectId) {
+        ProjectHistoryResponseDto response = projectService.getProjectHistory(projectId);
+        return ResponseEntity.ok(response);
+    }
+
+
+
 
 }
