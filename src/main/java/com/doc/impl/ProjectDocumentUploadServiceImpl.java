@@ -312,13 +312,24 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         dto.setStatus(documentUpload.getStatus());
         dto.setRemarks(documentUpload.getRemarks());
         dto.setUploadTime(documentUpload.getUploadTime());
+        dto.setExpiryDate(documentUpload.getExpiryDate());
+        dto.setPermanent(documentUpload.isPermanent());
+        dto.setExpired(documentUpload.isExpired());
+        dto.setFileSizeKb(documentUpload.getFileSizeKb());
+        dto.setFileFormat(documentUpload.getFileFormat());
+        dto.setValidationPassed(documentUpload.isValidationPassed());
+        dto.setValidationIssues(documentUpload.getValidationIssues());
         dto.setRequiredDocumentId(documentUpload.getRequiredDocument().getId());
         dto.setMilestoneAssignmentId(documentUpload.getMilestoneAssignment().getId());
         dto.setProjectId(documentUpload.getProject().getId());
         dto.setUploadedById(documentUpload.getUploadedBy().getId());
+        dto.setCreatedBy(documentUpload.getCreatedBy());
+        dto.setUpdatedBy(documentUpload.getUpdatedBy());
         dto.setCreatedDate(documentUpload.getCreatedDate());
         dto.setUpdatedDate(documentUpload.getUpdatedDate());
         dto.setReplacementCount(documentUpload.getReplacementCount());
+        dto.setFromCompanyDoc(documentUpload.isFromCompanyDoc());
+        dto.setCompanyDocSourceId(documentUpload.getCompanyDocSourceId());
         return dto;
     }
 }
