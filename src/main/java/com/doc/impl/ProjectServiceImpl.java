@@ -138,8 +138,6 @@ public class ProjectServiceImpl implements ProjectService {
         project.setActive(true);
 
 
-
-
         ProjectStatus openStatus = projectStatusRepository.findById(StatusConstants.PROJECT_OPEN_ID)
                 .orElseThrow(() -> new ResourceNotFoundException("System status OPEN (ID=1) not found", "ERR_SYSTEM_STATUS_MISSING"));
         project.setStatus(openStatus);
@@ -665,8 +663,7 @@ public class ProjectServiceImpl implements ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
         boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
-        boolean isCrtDepartment = user.getDepartments().stream()
-                .anyMatch(dept -> dept.getName().equalsIgnoreCase("CRT"));
+
 
         List<ContactDetailsDto> contactDtos = new ArrayList<>();
         if (project.getCompany() != null) {
@@ -679,7 +676,7 @@ public class ProjectServiceImpl implements ProjectService {
                 contactDto.setName(contact.getName());
                 contactDto.setDesignation(contact.getDesignation());
 
-                if (isAdmin || isOperationHead || isCrtDepartment) {
+                if (isAdmin || isOperationHead ) {
                     contactDto.setEmails(contact.getEmails());
                     contactDto.setContactNo(contact.getContactNo());
                     contactDto.setWhatsappNo(contact.getWhatsappNo());
