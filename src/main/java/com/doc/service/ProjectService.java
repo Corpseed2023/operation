@@ -1,6 +1,7 @@
 package com.doc.service;
 
 import com.doc.dto.project.*;
+import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.entity.project.Project;
@@ -30,4 +31,11 @@ public interface ProjectService {
 
 
     ProjectHistoryResponseDto getProjectHistory(Long projectId);
+
+    // In ProjectService.java
+    MilestoneHistoryResponseDto getMilestoneHistory(Long projectId, Long milestoneId, Long requestingUserId);
+
+
+
+
 }

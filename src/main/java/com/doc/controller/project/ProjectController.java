@@ -4,6 +4,7 @@ import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
 import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.service.ProjectService;
@@ -154,5 +155,21 @@ public class ProjectController {
 
 
 
+    @Operation(summary = "Get complete history of a specific milestone in a project",
+            description = "Returns assignment and status change history of one milestone. Accessible to assigned user, their manager, Admin, or Operation Head.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Milestone history retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized to view this milestone history"),
+            @ApiResponse(responseCode = "404", description = "Project or milestone not found")
+    })
+    @GetMapping("/{projectId}/milestones/{milestoneId}/history")
+    public ResponseEntity<MilestoneHistoryResponseDto> getMilestoneHistory(
+            @PathVariable Long projectId,
+            @PathVariable Long milestoneId,
+            @RequestParam Long userId) {
+
+        MilestoneHistoryResponseDto response = projectService.getMilestoneHistory(projectId, milestoneId, userId);
+        return ResponseEntity.ok(response);
+    }
 
 }

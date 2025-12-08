@@ -3,10 +3,7 @@ package com.doc.impl;
 import com.doc.constants.StatusConstants;
 import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.project.*;
-import com.doc.dto.project.projectHistory.AssignmentEventDto;
-import com.doc.dto.project.projectHistory.MilestoneHistoryDto;
-import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
-import com.doc.dto.project.projectHistory.StatusChangeEventDto;
+import com.doc.dto.project.projectHistory.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.client.Company;
@@ -343,6 +340,104 @@ public class ProjectServiceImpl implements ProjectService {
 
         updateMilestoneVisibilities(project, createdBy.getId());
         return mapToResponseDto(project);
+    }
+
+
+    @Override
+    public MilestoneHistoryResponseDto getMilestoneHistory(Long projectId, Long milestoneId, Long requestingUserId) {
+        logger.info("Fetching history for milestone ID: {} in project ID: {} by user ID: {}", milestoneId, projectId, requestingUserId);
+
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        User requestingUser = userRepository.findActiveUserById(requestingUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
+                .findByProjectIdAndMilestoneIdAndIsDeletedFalse(projectId, milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found in this project", "MILESTONE_NOT_FOUND"));
+
+        // Authorization: Admin, OpHead, Assigned user, Manager of assigned user, or milestone is visible
+        boolean isAdmin = requestingUser.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
+        boolean isOpHead = requestingUser.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isAssigned = assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(requestingUserId);
+
+        boolean isManagerOfAssigned = false;
+        if (assignment.getAssignedUser() != null) {
+            List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(requestingUserId);
+            isManagerOfAssigned = subordinates.stream()
+                    .anyMatch(u -> u.getId().equals(assignment.getAssignedUser().getId()));
+        }
+
+        if (!isAdmin && !isOpHead && !isAssigned && !isManagerOfAssigned && !assignment.isVisible()) {
+            throw new ValidationException("You are not authorized to view this milestone history", "UNAUTHORIZED_MILESTONE_HISTORY_ACCESS");
+        }
+
+        return mapToSingleMilestoneHistoryDto(assignment);
+    }
+
+    private MilestoneHistoryResponseDto mapToSingleMilestoneHistoryDto(ProjectMilestoneAssignment assignment) {
+        MilestoneHistoryResponseDto dto = new MilestoneHistoryResponseDto();
+
+        dto.setMilestoneAssignmentId(assignment.getId());
+        dto.setMilestoneName(assignment.getMilestone().getName());
+        dto.setOrder(assignment.getProductMilestoneMap().getOrder());
+        dto.setCreatedDate(assignment.getCreatedDate());
+
+        User createdByUser = userRepository.findActiveUserById(assignment.getCreatedBy()).orElse(null);
+        dto.setCreatedBy(assignment.getCreatedBy());
+        dto.setCreatedByName(createdByUser != null ? createdByUser.getFullName() : "Unknown");
+
+        dto.setCurrentStatus(assignment.getStatus().getName());
+        dto.setCurrentStatusReason(assignment.getStatusReason());
+        dto.setVisibleDate(assignment.getVisibleDate());
+        dto.setStartedDate(assignment.getStartedDate());
+        dto.setCompletedDate(assignment.getCompletedDate());
+        dto.setVisibilityReason(assignment.getVisibilityReason());
+        dto.setVisible(assignment.isVisible());
+        dto.setReworkAttempts(assignment.getReworkAttempts());
+
+        if (assignment.getAssignedUser() != null) {
+            dto.setCurrentAssignedUserId(assignment.getAssignedUser().getId());
+            dto.setCurrentAssignedUserName(assignment.getAssignedUser().getFullName());
+        }
+
+        // Assignment History
+        List<ProjectAssignmentHistory> assignmentHistories = projectAssignmentHistoryRepository
+                .findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId())
+                .stream()
+                .sorted(Comparator.comparing(ProjectAssignmentHistory::getCreatedDate))
+                .toList();
+
+        dto.setAssignmentEvents(assignmentHistories.stream()
+                .map(this::mapToAssignmentEventDto)
+                .toList());
+
+        // Status Change History
+        List<MilestoneStatusHistory> statusHistories = milestoneStatusHistoryRepository
+                .findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId())
+                .stream()
+                .sorted(Comparator.comparing(MilestoneStatusHistory::getChangeDate))
+                .toList();
+
+        List<StatusChangeEventDto> statusEvents = statusHistories.stream()
+                .map(this::mapToStatusChangeEventDto)
+                .toList();
+
+        if (statusEvents.isEmpty()) {
+            StatusChangeEventDto initial = new StatusChangeEventDto();
+            initial.setDate(assignment.getCreatedDate());
+            initial.setPreviousStatus(null);
+            initial.setNewStatus(assignment.getStatus().getName());
+            initial.setChangedBy(assignment.getCreatedBy());
+            User initialUser = userRepository.findActiveUserById(assignment.getCreatedBy()).orElse(null);
+            initial.setChangedByName(initialUser != null ? initialUser.getFullName() : "System");
+            initial.setReason("Initial status on project creation");
+            statusEvents = List.of(initial);
+        }
+
+        dto.setStatusChangeEvents(statusEvents);
+        return dto;
     }
 
     @Override

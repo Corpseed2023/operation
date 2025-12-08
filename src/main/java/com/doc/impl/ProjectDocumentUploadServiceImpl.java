@@ -200,8 +200,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 });
 
 
-
-
         // Validate status transition
         validateDocumentStatusTransition(documentUpload.getStatus(), newStatusEntity);
 
