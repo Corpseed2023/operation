@@ -27,12 +27,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id = :departmentId AND u.isActive = true AND u.isDeleted = false")
     List<User> findByDepartmentsIdAndIsActiveTrueAndIsDeletedFalse(@Param("departmentId") Long departmentId);
 
-    @Query("SELECT u FROM User u JOIN u.departments d WHERE d.id = :departmentId AND u.isActive = true AND u.isDeleted = false AND u.managerFlag = true")
-    List<User> findManagerByDepartmentId(@Param("departmentId") Long departmentId);
-
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = 'ADMIN' AND u.isActive = true AND u.isDeleted = false")
-    List<User> findAdmins();
-
     @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isActive = true AND u.isDeleted = false")
     Page<User> findByManagerIdAndIsDeletedFalseList(@Param("managerId") Long managerId, Pageable pageable);
 

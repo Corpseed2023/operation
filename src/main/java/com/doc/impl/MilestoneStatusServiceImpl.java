@@ -1,6 +1,6 @@
 package com.doc.impl;
 
-import com.doc.entity.project.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.repository.MilestoneStatusRepository;
 import com.doc.service.MilestoneStatusService;
 import org.springframework.beans.factory.annotation.Autowired;

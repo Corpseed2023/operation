@@ -1,6 +1,8 @@
 package com.doc.service;
 
 import com.doc.dto.project.*;
+import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
+import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.entity.project.Project;
 import org.springframework.data.domain.Page;
@@ -11,10 +13,8 @@ public interface ProjectService {
 
     ProjectResponseDto createProject(ProjectRequestDto requestDto);
 
-    // CHANGED: List instead of Page
     List<ProjectResponseDto> getAllProjects(Long userId, int page, int size);
 
-    // NEW: Separate count method
     long getProjectCount(Long userId);
 
     ProjectResponseDto addPaymentTransaction(Long projectId, ProjectPaymentTransactionDto transactionDto);
@@ -28,4 +28,14 @@ public interface ProjectService {
     ProjectResponseDto addPaymentByUnbilledNumber(String unbilledNumber, ProjectPaymentTransactionDto dto);
 
     void deleteProject(Long id);
+
+
+    ProjectHistoryResponseDto getProjectHistory(Long projectId);
+
+    // In ProjectService.java
+    MilestoneHistoryResponseDto getMilestoneHistory(Long projectId, Long milestoneId, Long requestingUserId);
+
+
+
+
 }

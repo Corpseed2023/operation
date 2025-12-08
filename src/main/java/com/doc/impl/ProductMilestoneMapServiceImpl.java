@@ -2,7 +2,7 @@ package com.doc.impl;
 
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapRequestDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
-import com.doc.entity.product.Milestone;
+import com.doc.entity.milestone.Milestone;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.repository.MilestoneRepository;
@@ -14,8 +14,6 @@ import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

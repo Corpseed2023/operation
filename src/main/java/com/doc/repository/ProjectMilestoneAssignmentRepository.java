@@ -1,6 +1,7 @@
 package com.doc.repository;
 
-import com.doc.entity.project.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatusHistory;
 import com.doc.entity.project.ProjectMilestoneAssignment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -75,37 +76,6 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             @Param("statuses") List<MilestoneStatus> statuses,
             Pageable pageable);
 
-    /**
-     * Finds non-deleted ProjectMilestoneAssignment entities for a specific project ID and a list of assigned user IDs,
-     * where milestones are visible and in specified statuses.
-     *
-     * @param projectId The ID of the project.
-     * @param userIds List of user IDs assigned to the milestones.
-     * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
-     * @return A List of ProjectMilestoneAssignment entities.
-     */
-    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId " +
-            "AND a.assignedUser.id IN :userIds AND a.isVisible = true AND a.status IN :statuses AND a.isDeleted = false")
-    List<ProjectMilestoneAssignment> findByProjectIdAndAssignedUserIdInAndIsVisibleTrueAndStatusIn(
-            @Param("projectId") Long projectId,
-            @Param("userIds") List<Long> userIds,
-            @Param("statuses") List<MilestoneStatus> statuses);
-
-    /**
-     * Finds non-deleted ProjectMilestoneAssignment entities for a specific project ID and assigned user ID,
-     * where milestones are visible and in specified statuses.
-     *
-     * @param projectId The ID of the project.
-     * @param userId The ID of the assigned user.
-     * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
-     * @return A List of ProjectMilestoneAssignment entities.
-     */
-    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId " +
-            "AND a.assignedUser.id = :userId AND a.isVisible = true AND a.status IN :statuses AND a.isDeleted = false")
-    List<ProjectMilestoneAssignment> findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndStatusIn(
-            @Param("projectId") Long projectId,
-            @Param("userId") Long userId,
-            @Param("statuses") List<MilestoneStatus> statuses);
 
     /**
      * Finds a non-deleted ProjectMilestoneAssignment for a specific project ID and assigned user ID.
@@ -132,15 +102,6 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     Optional<ProjectMilestoneAssignment> findByProjectIdAndMilestoneIdAndIsDeletedFalse(
             @Param("projectId") Long projectId,
             @Param("milestoneId") Long milestoneId);
-
-    /**
-     * Finds non-deleted ProjectMilestoneAssignment entities with specified statuses.
-     *
-     * @param statuses List of milestone statuses to filter (e.g., NEW, IN_PROGRESS).
-     * @return A List of ProjectMilestoneAssignment entities.
-     */
-    @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.status IN :statuses AND a.isDeleted = false")
-    List<ProjectMilestoneAssignment> findByStatusInAndIsDeletedFalse(@Param("statuses") List<String> statuses);
 
     /**
      * For Managers: Get all VISIBLE milestones (including COMPLETED)

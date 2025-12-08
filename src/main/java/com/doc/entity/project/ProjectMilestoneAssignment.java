@@ -1,7 +1,8 @@
 package com.doc.entity.project;
 
 import com.doc.entity.document.ProjectDocumentUpload;
-import com.doc.entity.product.Milestone;
+import com.doc.entity.milestone.Milestone;
+import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;

@@ -1,6 +1,6 @@
 package com.doc.entity.department;
 
-import com.doc.entity.product.Milestone;
+import com.doc.entity.milestone.Milestone;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;

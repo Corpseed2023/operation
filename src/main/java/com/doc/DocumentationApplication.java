@@ -1,7 +1,7 @@
 package com.doc;
 
 import com.doc.entity.document.DocumentStatus;
-import com.doc.entity.project.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.project.ProjectStatus;
 import com.doc.entity.client.PaymentType;
 import com.doc.repository.MilestoneStatusRepository;
@@ -30,6 +30,8 @@ public class DocumentationApplication {
 	 * Initializes predefined statuses and payment types if the respective tables are empty.
 	 * Uses explicit IDs to match StatusConstants.java — NEVER CHANGE THESE IDs!
 	 */
+	//
+
 	@Bean
 	public CommandLineRunner initStatuses(MilestoneStatusRepository milestoneStatusRepository,
 										  DocumentStatusRepository documentStatusRepository,

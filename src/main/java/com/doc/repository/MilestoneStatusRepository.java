@@ -1,7 +1,7 @@
 package com.doc.repository;
 
 
-import com.doc.entity.project.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

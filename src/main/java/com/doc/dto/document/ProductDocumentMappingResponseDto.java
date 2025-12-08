@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductDocumentMappingResponseDto {
+
+
     private Long mappingId;
     private Long requiredDocumentId;
     private String documentName;
@@ -19,4 +21,6 @@ public class ProductDocumentMappingResponseDto {
     private String allowedFormats;
     private DocumentExpiryType expiryType;
     private Integer maxValidityYears;
+
+
 }

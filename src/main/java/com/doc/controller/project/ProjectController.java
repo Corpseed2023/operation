@@ -1,10 +1,11 @@
 package com.doc.controller.project;
 
-import com.doc.dto.project.AssignedMilestoneDto;
 import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
 import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
+import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -133,6 +134,41 @@ public class ProjectController {
             @Valid @RequestBody ProjectPaymentTransactionDto dto) {
 
         ProjectResponseDto response = projectService.addPaymentByUnbilledNumber(unbilledNumber, dto);
+        return ResponseEntity.ok(response);
+    }
+
+
+    // In ProjectController.java, add the following endpoint
+
+    @Operation(summary = "Get project history including creation, milestones, assignments, and status changes",
+            description = "Retrieves detailed history for a project, including when it was created, its milestones (starting with the first), assignments (to whom and by whom), and status changes.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Project history retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "Project not found")
+    })
+    @GetMapping("/{projectId}/history")
+    public ResponseEntity<ProjectHistoryResponseDto> getProjectHistory(
+            @PathVariable @Parameter(description = "ID of the project") Long projectId) {
+        ProjectHistoryResponseDto response = projectService.getProjectHistory(projectId);
+        return ResponseEntity.ok(response);
+    }
+
+
+
+    @Operation(summary = "Get complete history of a specific milestone in a project",
+            description = "Returns assignment and status change history of one milestone. Accessible to assigned user, their manager, Admin, or Operation Head.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Milestone history retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized to view this milestone history"),
+            @ApiResponse(responseCode = "404", description = "Project or milestone not found")
+    })
+    @GetMapping("/{projectId}/milestones/{milestoneId}/history")
+    public ResponseEntity<MilestoneHistoryResponseDto> getMilestoneHistory(
+            @PathVariable Long projectId,
+            @PathVariable Long milestoneId,
+            @RequestParam Long userId) {
+
+        MilestoneHistoryResponseDto response = projectService.getMilestoneHistory(projectId, milestoneId, userId);
         return ResponseEntity.ok(response);
     }
 

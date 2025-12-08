@@ -3,6 +3,7 @@ package com.doc.impl;
 import com.doc.constants.StatusConstants;
 import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.project.*;
+import com.doc.dto.project.projectHistory.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.client.Company;
@@ -10,7 +11,9 @@ import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
 import com.doc.entity.department.Department;
 import com.doc.entity.document.ProjectDocumentUpload;
-import com.doc.entity.product.Milestone;
+import com.doc.entity.milestone.Milestone;
+import com.doc.entity.milestone.MilestoneStatus;
+import com.doc.entity.milestone.MilestoneStatusHistory;
 import com.doc.entity.project.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
@@ -130,9 +133,6 @@ public class ProjectServiceImpl implements ProjectService {
         project.setSalesPersonId(requestDto.getSalesPersonId());
         project.setSalesPersonName(requestDto.getSalesPersonName());
         project.setActive(true);
-
-
-
 
 
         ProjectStatus openStatus = projectStatusRepository.findById(StatusConstants.PROJECT_OPEN_ID)
@@ -340,6 +340,104 @@ public class ProjectServiceImpl implements ProjectService {
 
         updateMilestoneVisibilities(project, createdBy.getId());
         return mapToResponseDto(project);
+    }
+
+
+    @Override
+    public MilestoneHistoryResponseDto getMilestoneHistory(Long projectId, Long milestoneId, Long requestingUserId) {
+        logger.info("Fetching history for milestone ID: {} in project ID: {} by user ID: {}", milestoneId, projectId, requestingUserId);
+
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        User requestingUser = userRepository.findActiveUserById(requestingUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
+                .findByProjectIdAndMilestoneIdAndIsDeletedFalse(projectId, milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found in this project", "MILESTONE_NOT_FOUND"));
+
+        // Authorization: Admin, OpHead, Assigned user, Manager of assigned user, or milestone is visible
+        boolean isAdmin = requestingUser.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
+        boolean isOpHead = requestingUser.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isAssigned = assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(requestingUserId);
+
+        boolean isManagerOfAssigned = false;
+        if (assignment.getAssignedUser() != null) {
+            List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(requestingUserId);
+            isManagerOfAssigned = subordinates.stream()
+                    .anyMatch(u -> u.getId().equals(assignment.getAssignedUser().getId()));
+        }
+
+        if (!isAdmin && !isOpHead && !isAssigned && !isManagerOfAssigned && !assignment.isVisible()) {
+            throw new ValidationException("You are not authorized to view this milestone history", "UNAUTHORIZED_MILESTONE_HISTORY_ACCESS");
+        }
+
+        return mapToSingleMilestoneHistoryDto(assignment);
+    }
+
+    private MilestoneHistoryResponseDto mapToSingleMilestoneHistoryDto(ProjectMilestoneAssignment assignment) {
+        MilestoneHistoryResponseDto dto = new MilestoneHistoryResponseDto();
+
+        dto.setMilestoneAssignmentId(assignment.getId());
+        dto.setMilestoneName(assignment.getMilestone().getName());
+        dto.setOrder(assignment.getProductMilestoneMap().getOrder());
+        dto.setCreatedDate(assignment.getCreatedDate());
+
+        User createdByUser = userRepository.findActiveUserById(assignment.getCreatedBy()).orElse(null);
+        dto.setCreatedBy(assignment.getCreatedBy());
+        dto.setCreatedByName(createdByUser != null ? createdByUser.getFullName() : "Unknown");
+
+        dto.setCurrentStatus(assignment.getStatus().getName());
+        dto.setCurrentStatusReason(assignment.getStatusReason());
+        dto.setVisibleDate(assignment.getVisibleDate());
+        dto.setStartedDate(assignment.getStartedDate());
+        dto.setCompletedDate(assignment.getCompletedDate());
+        dto.setVisibilityReason(assignment.getVisibilityReason());
+        dto.setVisible(assignment.isVisible());
+        dto.setReworkAttempts(assignment.getReworkAttempts());
+
+        if (assignment.getAssignedUser() != null) {
+            dto.setCurrentAssignedUserId(assignment.getAssignedUser().getId());
+            dto.setCurrentAssignedUserName(assignment.getAssignedUser().getFullName());
+        }
+
+        // Assignment History
+        List<ProjectAssignmentHistory> assignmentHistories = projectAssignmentHistoryRepository
+                .findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId())
+                .stream()
+                .sorted(Comparator.comparing(ProjectAssignmentHistory::getCreatedDate))
+                .toList();
+
+        dto.setAssignmentEvents(assignmentHistories.stream()
+                .map(this::mapToAssignmentEventDto)
+                .toList());
+
+        // Status Change History
+        List<MilestoneStatusHistory> statusHistories = milestoneStatusHistoryRepository
+                .findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId())
+                .stream()
+                .sorted(Comparator.comparing(MilestoneStatusHistory::getChangeDate))
+                .toList();
+
+        List<StatusChangeEventDto> statusEvents = statusHistories.stream()
+                .map(this::mapToStatusChangeEventDto)
+                .toList();
+
+        if (statusEvents.isEmpty()) {
+            StatusChangeEventDto initial = new StatusChangeEventDto();
+            initial.setDate(assignment.getCreatedDate());
+            initial.setPreviousStatus(null);
+            initial.setNewStatus(assignment.getStatus().getName());
+            initial.setChangedBy(assignment.getCreatedBy());
+            User initialUser = userRepository.findActiveUserById(assignment.getCreatedBy()).orElse(null);
+            initial.setChangedByName(initialUser != null ? initialUser.getFullName() : "System");
+            initial.setReason("Initial status on project creation");
+            statusEvents = List.of(initial);
+        }
+
+        dto.setStatusChangeEvents(statusEvents);
+        return dto;
     }
 
     @Override
@@ -660,8 +758,7 @@ public class ProjectServiceImpl implements ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
         boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
-        boolean isCrtDepartment = user.getDepartments().stream()
-                .anyMatch(dept -> dept.getName().equalsIgnoreCase("CRT"));
+
 
         List<ContactDetailsDto> contactDtos = new ArrayList<>();
         if (project.getCompany() != null) {
@@ -674,7 +771,7 @@ public class ProjectServiceImpl implements ProjectService {
                 contactDto.setName(contact.getName());
                 contactDto.setDesignation(contact.getDesignation());
 
-                if (isAdmin || isOperationHead || isCrtDepartment) {
+                if (isAdmin || isOperationHead ) {
                     contactDto.setEmails(contact.getEmails());
                     contactDto.setContactNo(contact.getContactNo());
                     contactDto.setWhatsappNo(contact.getWhatsappNo());
@@ -790,4 +887,117 @@ public class ProjectServiceImpl implements ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
         return addPaymentTransaction(project.getId(), dto);
     }
+
+
+
+    @Override
+    public ProjectHistoryResponseDto getProjectHistory(Long projectId) {
+        logger.info("Fetching history for project ID: {}", projectId);
+
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        User createdByUser = userRepository.findActiveUserById(project.getCreatedBy())
+                .orElse(null); // In case user is deleted, handle gracefully
+
+        ProjectHistoryResponseDto response = new ProjectHistoryResponseDto();
+        response.setProjectId(project.getId());
+        response.setProjectName(project.getName());
+        response.setCreatedDate(project.getCreatedDate());
+        response.setCreatedBy(project.getCreatedBy());
+        response.setCreatedByName(createdByUser != null ? createdByUser.getFullName() : "Unknown");
+
+        // Fetch all milestone assignments, sorted by order
+        List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
+                .findByProjectIdAndIsDeletedFalse(projectId)
+                .stream()
+                .sorted(Comparator.comparing(a -> a.getProductMilestoneMap().getOrder()))
+                .collect(Collectors.toList());
+
+        List<MilestoneHistoryDto> milestoneHistories = assignments.stream()
+                .map(this::mapToMilestoneHistoryDto)
+                .collect(Collectors.toList());
+
+        response.setMilestones(milestoneHistories);
+
+        // Highlight the first milestone (smallest order)
+        if (!milestoneHistories.isEmpty()) {
+            logger.info("First milestone for project {}: {}", projectId, milestoneHistories.get(0).getMilestoneName());
+        }
+
+        return response;
+    }
+
+    private MilestoneHistoryDto mapToMilestoneHistoryDto(ProjectMilestoneAssignment assignment) {
+        MilestoneHistoryDto dto = new MilestoneHistoryDto();
+        dto.setMilestoneId(assignment.getMilestone().getId());
+        dto.setMilestoneName(assignment.getMilestone().getName());
+        dto.setOrder(assignment.getProductMilestoneMap().getOrder());
+        dto.setAssignmentCreatedDate(assignment.getCreatedDate());
+
+        // Assignment events from history
+        List<ProjectAssignmentHistory> assignmentHistories = projectAssignmentHistoryRepository
+                .findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId())
+                .stream()
+                .sorted(Comparator.comparing(ProjectAssignmentHistory::getCreatedDate))
+                .collect(Collectors.toList());
+
+        List<AssignmentEventDto> assignmentEvents = assignmentHistories.stream()
+                .map(this::mapToAssignmentEventDto)
+                .collect(Collectors.toList());
+
+        dto.setAssignmentEvents(assignmentEvents);
+
+        // Status change events from history
+        List<MilestoneStatusHistory> statusHistories = milestoneStatusHistoryRepository
+                .findByMilestoneAssignmentIdAndIsDeletedFalse(assignment.getId())
+                .stream()
+                .sorted(Comparator.comparing(MilestoneStatusHistory::getChangeDate))
+                .collect(Collectors.toList());
+
+        List<StatusChangeEventDto> statusChangeEvents = statusHistories.stream()
+                .map(this::mapToStatusChangeEventDto)
+                .collect(Collectors.toList());
+
+        // Include initial status if no history
+        if (statusChangeEvents.isEmpty()) {
+            StatusChangeEventDto initial = new StatusChangeEventDto();
+            initial.setDate(assignment.getCreatedDate());
+            initial.setPreviousStatus(null);
+            initial.setNewStatus(assignment.getStatus().getName());
+            initial.setChangedBy(assignment.getCreatedBy());
+            User initialChangedBy = userRepository.findActiveUserById(assignment.getCreatedBy()).orElse(null);
+            initial.setChangedByName(initialChangedBy != null ? initialChangedBy.getFullName() : "Unknown");
+            initial.setReason("Initial status");
+            statusChangeEvents.add(initial);
+        }
+
+        dto.setStatusChangeEvents(statusChangeEvents);
+
+        return dto;
+    }
+
+    private AssignmentEventDto mapToAssignmentEventDto(ProjectAssignmentHistory history) {
+        AssignmentEventDto dto = new AssignmentEventDto();
+        dto.setDate(history.getCreatedDate());
+        dto.setAssignedTo(history.getAssignedUser() != null ? history.getAssignedUser().getId() : null);
+        dto.setAssignedToName(history.getAssignedUser() != null ? history.getAssignedUser().getFullName() : "Unassigned");
+        dto.setAssignedBy(history.getCreatedBy());
+        User assignedByUser = userRepository.findActiveUserById(history.getCreatedBy()).orElse(null);
+        dto.setAssignedByName(assignedByUser != null ? assignedByUser.getFullName() : "Unknown");
+        dto.setReason(history.getAssignmentReason());
+        return dto;
+    }
+
+    private StatusChangeEventDto mapToStatusChangeEventDto(MilestoneStatusHistory history) {
+        StatusChangeEventDto dto = new StatusChangeEventDto();
+        dto.setDate(history.getChangeDate());
+        dto.setPreviousStatus(history.getPreviousStatus().getName());
+        dto.setNewStatus(history.getNewStatus().getName());
+        dto.setChangedBy(history.getChangedBy() != null ? history.getChangedBy().getId() : null);
+        dto.setChangedByName(history.getChangedBy() != null ? history.getChangedBy().getFullName() : "Unknown");
+        dto.setReason(history.getChangeReason());
+        return dto;
+    }
+
 }

@@ -42,15 +42,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE p.id = :id AND p.isDeleted = false")
     Optional<Product> findActiveUserById(@Param("id") Long id);
 
-    /**
-     * Finds active and non-deleted products associated with a user ID with pagination.
-     *
-     * @param userId the user ID
-     * @param pageable pagination information
-     * @return a page of active and non-deleted products associated with the user
-     */
-    @Query("SELECT p FROM Product p JOIN p.userProductMaps upm WHERE upm.user.id = :userId AND p.isActive = true AND p.isDeleted = false")
-    Page<Product> findByUserIdAndIsActiveTrueAndIsDeletedFalse(@Param("userId") Long userId, Pageable pageable);
 
     /**
      * Finds a product by ID if active and not deleted.
@@ -60,4 +51,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      */
     @Query("SELECT p FROM Product p WHERE p.id = :id AND p.isActive = true AND p.isDeleted = false")
     Optional<Product> findByIdAndIsActiveTrueAndIsDeletedFalse(@Param("id") Long id);
+
+
 }
