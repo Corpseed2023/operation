@@ -1,5 +1,7 @@
 package com.doc.impl;
 
+import java.util.*;
+import java.util.stream.Collectors;
 import com.doc.constants.StatusConstants;
 import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.project.*;
@@ -655,7 +657,10 @@ public class ProjectServiceImpl implements ProjectService {
         boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
         boolean isOperationHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
 
-        // Admins & Op Heads see ALL milestones (including completed)
+        ProjectDetailsDto projectDetails = mapToProjectDetailsDto(project, userId);
+        ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
+
+        // === Admins & Op Heads see ALL milestones ===
         if (isAdmin || isOperationHead) {
             List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndIsDeletedFalse(projectId);
@@ -663,8 +668,18 @@ public class ProjectServiceImpl implements ProjectService {
             assignments.forEach(a -> a.setDocuments(
                     projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
-            ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
-            response.setProjectDetails(mapToProjectDetailsDto(project, userId));
+            // Always fetch Documentation milestone for applicantType (even for admins)
+            ProjectMilestoneAssignment docAssignment = assignments.stream()
+                    .filter(a -> "Documentation".equalsIgnoreCase(a.getMilestone().getName()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (docAssignment != null && docAssignment.getApplicantType() != null) {
+                projectDetails.setApplicantTypeId(docAssignment.getApplicantType().getId());
+                projectDetails.setApplicantTypeName(docAssignment.getApplicantType().getName());
+            }
+
+            response.setProjectDetails(projectDetails);
             response.setMilestones(assignments.stream()
                     .map(this::mapToAssignedMilestoneDto)
                     .collect(Collectors.toList()));
@@ -679,7 +694,10 @@ public class ProjectServiceImpl implements ProjectService {
                 .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId).isPresent();
 
         List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
-        List<Long> managedUserIds = subordinates.stream().map(User::getId).collect(Collectors.toList());
+        List<Long> managedUserIds = new ArrayList<>();
+        for (User subordinate : subordinates) {
+            managedUserIds.add(subordinate.getId());
+        }
 
         boolean isManagerOfAssignedUser = projectMilestoneAssignmentRepository
                 .findByProjectIdAndIsDeletedFalse(projectId).stream()
@@ -691,32 +709,29 @@ public class ProjectServiceImpl implements ProjectService {
             throw new ValidationException("You are not authorized to view this project", "ERR_UNAUTHORIZED_ACCESS");
         }
 
-        // === FETCH MILESTONES DIFFERENTLY FOR REGULAR USER ===
-        List<ProjectMilestoneAssignment> assignments;
+        // === FETCH MILESTONES FOR DISPLAY (with visibility + assignment filters) ===
+        List<ProjectMilestoneAssignment> displayAssignments;
 
         if (isManagerOfAssignedUser) {
-            // Manager sees team’s visible milestones (including completed ones for history)
             List<Long> teamIds = new ArrayList<>(managedUserIds);
             if (!teamIds.contains(userId)) teamIds.add(userId);
 
-            assignments = projectMilestoneAssignmentRepository
+            displayAssignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(projectId, teamIds);
         } else {
-            // Regular user: show ONLY HIS/HER milestones that are VISIBLE
-            // → Include COMPLETED ones too! (This was your bug)
-            assignments = projectMilestoneAssignmentRepository
+            displayAssignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(projectId, userId);
         }
 
-        // Load documents
-        assignments.forEach(a -> a.setDocuments(
+        // Load documents for displayed milestones
+        displayAssignments.forEach(a -> a.setDocuments(
                 projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
         System.out.println("=== DEBUG VISIBILITY ===");
         System.out.println("User ID: " + userId);
         System.out.println("Is Manager: " + isManagerOfAssignedUser);
-        System.out.println("Visible milestones count for this user: " + assignments.size());
-        assignments.forEach(a -> {
+        System.out.println("Visible milestones count for this user: " + displayAssignments.size());
+        displayAssignments.forEach(a -> {
             System.out.println("Milestone: " + a.getMilestone().getName() +
                     " | Visible: " + a.isVisible() +
                     " | Status: " + a.getStatus().getName() +
@@ -724,22 +739,35 @@ public class ProjectServiceImpl implements ProjectService {
         });
         System.out.println("=== END DEBUG ===");
 
-        // === ONLY BLOCK REGULAR USER IF NO VISIBLE MILESTONE AT ALL ===
-        if (!isManagerOfAssignedUser && assignments.isEmpty()) {
+        // === BLOCK REGULAR USER IF NO VISIBLE MILESTONE ===
+        if (!isManagerOfAssignedUser && displayAssignments.isEmpty()) {
             throw new ValidationException(
                     "This project is currently not accessible. It will become available once the required payment is completed.",
                     "ERR_PROJECT_HIDDEN_DUE_TO_PAYMENT");
         }
 
-        ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
-        response.setProjectDetails(mapToProjectDetailsDto(project, userId));
-        response.setMilestones(assignments.stream()
+        // === SEPARATELY: Always fetch Documentation milestone to get saved applicantType ===
+        // This is the key fix — do NOT use filtered displayAssignments
+        ProjectMilestoneAssignment docAssignment = projectMilestoneAssignmentRepository
+                .findByProjectIdAndIsDeletedFalse(projectId)
+                .stream()
+                .filter(a -> "Documentation".equalsIgnoreCase(a.getMilestone().getName()))
+                .findFirst()
+                .orElse(null);
+
+        if (docAssignment != null && docAssignment.getApplicantType() != null) {
+            projectDetails.setApplicantTypeId(docAssignment.getApplicantType().getId());
+            projectDetails.setApplicantTypeName(docAssignment.getApplicantType().getName());
+        }
+
+        // Set response
+        response.setProjectDetails(projectDetails);
+        response.setMilestones(displayAssignments.stream()
                 .map(this::mapToAssignedMilestoneDto)
                 .collect(Collectors.toList()));
 
         return response;
     }
-
     private ProjectDetailsDto mapToProjectDetailsDto(Project project, Long userId) {
         ProjectDetailsDto dto = new ProjectDetailsDto();
         dto.setId(project.getId());
@@ -837,10 +865,9 @@ public class ProjectServiceImpl implements ProjectService {
                 .collect(Collectors.toList()));
         dto.setAssignedUser(mapToUserResponseDto(assignment.getAssignedUser()));
 
-        if (assignment.getApplicantType() != null) {
-            dto.setApplicantTypeId(assignment.getApplicantType().getId());
-            dto.setApplicantTypeName(assignment.getApplicantType().getName());
-        }
+        // === FIXED: Remove applicantType from milestone DTO (moved to projectDetails) ===
+        // dto.setApplicantTypeId(null);
+        // dto.setApplicantTypeName(null);
 
         Milestone milestone = assignment.getMilestone();
         if (milestone != null && milestone.getDepartments() != null && !milestone.getDepartments().isEmpty()) {
@@ -877,7 +904,6 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setOldFileName(document.getOldFileName());
         if (document.getStatus() != null) {
             dto.setStatus(document.getStatus().getName());
-//             dto.setst(document.getStatus().getId()); // if you added statusId
         } else {
             dto.setStatus(null);
         }

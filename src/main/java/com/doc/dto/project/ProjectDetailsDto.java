@@ -25,6 +25,9 @@ public class ProjectDetailsDto {
     private Long productId;
     private String productName;
 
+    private Long applicantTypeId;
+    private String applicantTypeName;
+
     // Sales Person
     private Long salesPersonId;
     private String salesPersonName;          // NEW

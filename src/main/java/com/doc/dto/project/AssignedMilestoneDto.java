@@ -26,8 +26,6 @@ public class AssignedMilestoneDto {
     private Date visibleDate;
     private Date startedDate;
     private Date completedDate;
-    private Long applicantTypeId;
-    private String applicantTypeName;
     private List<DocumentResponseDto> documents;
     private UserResponseDto assignedUser;
 }
