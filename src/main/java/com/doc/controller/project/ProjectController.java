@@ -1,9 +1,6 @@
 package com.doc.controller.project;
 
-import com.doc.dto.project.AssignedProjectResponseDto;
-import com.doc.dto.project.ProjectMilestoneResponseDto;
-import com.doc.dto.project.ProjectRequestDto;
-import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
@@ -138,6 +135,7 @@ public class ProjectController {
     }
 
 
+
     // In ProjectController.java, add the following endpoint
 
     @Operation(summary = "Get project history including creation, milestones, assignments, and status changes",
@@ -169,6 +167,23 @@ public class ProjectController {
             @RequestParam Long userId) {
 
         MilestoneHistoryResponseDto response = projectService.getMilestoneHistory(projectId, milestoneId, userId);
+        return ResponseEntity.ok(response);
+    }
+
+    // In ProjectController
+    @Operation(summary = "Update applicant type for a milestone (e.g., Documentation)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Applicant type updated"),
+            @ApiResponse(responseCode = "400", description = "Invalid data"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Not found")
+    })
+    @PutMapping("/{projectId}/milestones/{milestoneAssignmentId}/applicant-type")
+    public ResponseEntity<AssignedMilestoneDto> updateMilestoneApplicantType(
+            @PathVariable Long projectId,
+            @PathVariable Long milestoneAssignmentId,
+            @Valid @RequestBody MilestoneApplicantTypeUpdateDto dto) {
+        AssignedMilestoneDto response = projectService.updateMilestoneApplicantType(projectId, milestoneAssignmentId, dto);
         return ResponseEntity.ok(response);
     }
 

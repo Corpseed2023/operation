@@ -10,6 +10,7 @@ import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
 import com.doc.entity.department.Department;
+import com.doc.entity.document.ApplicantType;
 import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.milestone.MilestoneStatus;
@@ -22,6 +23,7 @@ import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
 import com.doc.repository.department.DepartmentAutoConfigRepository;
+import com.doc.repository.documentRepo.ApplicantTypeRepository;
 import com.doc.repository.documentRepo.DocumentStatusRepository;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
@@ -72,6 +74,8 @@ public class ProjectServiceImpl implements ProjectService {
     @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
     @Autowired private ProjectRequestValidator projectRequestValidator;
+
+    @Autowired private ApplicantTypeRepository applicantTypeRepository;
 
     @Override
     @Transactional(isolation = Isolation.SERIALIZABLE)
@@ -833,6 +837,11 @@ public class ProjectServiceImpl implements ProjectService {
                 .collect(Collectors.toList()));
         dto.setAssignedUser(mapToUserResponseDto(assignment.getAssignedUser()));
 
+        if (assignment.getApplicantType() != null) {
+            dto.setApplicantTypeId(assignment.getApplicantType().getId());
+            dto.setApplicantTypeName(assignment.getApplicantType().getName());
+        }
+
         Milestone milestone = assignment.getMilestone();
         if (milestone != null && milestone.getDepartments() != null && !milestone.getDepartments().isEmpty()) {
             Department dept = milestone.getDepartments().get(0);
@@ -866,7 +875,12 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setFileName(document.getFileName());
         dto.setOldFileUrl(document.getOldFileUrl());
         dto.setOldFileName(document.getOldFileName());
-        dto.setStatus(document.getStatus());
+        if (document.getStatus() != null) {
+            dto.setStatus(document.getStatus().getName());
+//             dto.setst(document.getStatus().getId()); // if you added statusId
+        } else {
+            dto.setStatus(null);
+        }
         dto.setRemarks(document.getRemarks());
         dto.setUploadTime(document.getUploadTime());
         dto.setRequiredDocumentId(document.getRequiredDocument().getId());
@@ -888,6 +902,35 @@ public class ProjectServiceImpl implements ProjectService {
         return addPaymentTransaction(project.getId(), dto);
     }
 
+    // In ProjectServiceImpl
+    @Override
+    @Transactional
+    public AssignedMilestoneDto updateMilestoneApplicantType(Long projectId, Long milestoneAssignmentId, MilestoneApplicantTypeUpdateDto dto) {
+        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
+                .findActiveUserById(milestoneAssignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone assignment not found", "ERR_MILESTONE_NOT_FOUND"));
+
+        if (!assignment.getProject().getId().equals(projectId)) {
+            throw new ValidationException("Milestone does not belong to project", "ERR_INVALID_ASSOCIATION");
+        }
+
+        // Optional: Check if this is the Documentation milestone (by name or type)
+        if (!"Documentation".equalsIgnoreCase(assignment.getMilestone().getName())) {
+            throw new ValidationException("Applicant type can only be set for Documentation milestone", "ERR_INVALID_MILESTONE");
+        }
+
+        ApplicantType applicantType = applicantTypeRepository
+                .findByIdAndIsActiveTrueAndIsDeletedFalse(dto.getApplicantTypeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
+
+        assignment.setApplicantType(applicantType);
+        assignment.setUpdatedBy(dto.getUpdatedById());
+        assignment.setUpdatedDate(new Date());
+        projectMilestoneAssignmentRepository.save(assignment);
+
+        // Return updated DTO (frontend can refresh the doc list)
+        return mapToAssignedMilestoneDto(assignment);
+    }
 
 
     @Override

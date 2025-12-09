@@ -17,7 +17,8 @@ public class DocumentResponseDto {
     private String fileName;
     private String oldFileUrl;
     private String oldFileName;
-    private DocumentStatus status;
+//    private DocumentStatus status;
+    private String status;        // e.g., "VERIFIED", "UPLOADED", "REJECTED"
     private String remarks;
     private Date uploadTime;
     private Date expiryDate;

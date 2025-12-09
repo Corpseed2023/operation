@@ -307,7 +307,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         dto.setFileName(documentUpload.getFileName());
         dto.setOldFileUrl(documentUpload.getOldFileUrl());
         dto.setOldFileName(documentUpload.getOldFileName());
-        dto.setStatus(documentUpload.getStatus());
+        if (documentUpload.getStatus() != null) {
+            dto.setStatus(documentUpload.getStatus().getName());
+            // dto.setStatusId(document.getStatus().getId()); // if you added statusId
+        } else {
+            dto.setStatus(null);
+        }
+
         dto.setRemarks(documentUpload.getRemarks());
         dto.setUploadTime(documentUpload.getUploadTime());
         dto.setExpiryDate(documentUpload.getExpiryDate());

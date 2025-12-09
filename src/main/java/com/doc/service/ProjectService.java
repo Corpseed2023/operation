@@ -36,6 +36,5 @@ public interface ProjectService {
     MilestoneHistoryResponseDto getMilestoneHistory(Long projectId, Long milestoneId, Long requestingUserId);
 
 
-
-
+    AssignedMilestoneDto updateMilestoneApplicantType(Long projectId, Long milestoneAssignmentId, MilestoneApplicantTypeUpdateDto dto);
 }

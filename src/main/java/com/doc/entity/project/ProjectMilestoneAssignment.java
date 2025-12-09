@@ -1,5 +1,6 @@
 package com.doc.entity.project;
 
+import com.doc.entity.document.ApplicantType;
 import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.milestone.MilestoneStatus;
@@ -109,4 +110,8 @@ public class ProjectMilestoneAssignment {
     @OneToMany(mappedBy = "milestoneAssignment", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @Comment("Documents uploaded for this milestone")
     private List<ProjectDocumentUpload> documents = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "applicant_type_id")
+    private ApplicantType applicantType;
 }
