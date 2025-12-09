@@ -660,7 +660,6 @@ public class ProjectServiceImpl implements ProjectService {
         ProjectDetailsDto projectDetails = mapToProjectDetailsDto(project, userId);
         ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
 
-        // === Admins & Op Heads see ALL milestones ===
         if (isAdmin || isOperationHead) {
             List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndIsDeletedFalse(projectId);
@@ -670,7 +669,7 @@ public class ProjectServiceImpl implements ProjectService {
 
             // Always fetch Documentation milestone for applicantType (even for admins)
             ProjectMilestoneAssignment docAssignment = assignments.stream()
-                    .filter(a -> "Documentation".equalsIgnoreCase(a.getMilestone().getName()))
+                    .filter(a -> "".equalsIgnoreCase(a.getMilestone().getName()))
                     .findFirst()
                     .orElse(null);
 
@@ -709,7 +708,6 @@ public class ProjectServiceImpl implements ProjectService {
             throw new ValidationException("You are not authorized to view this project", "ERR_UNAUTHORIZED_ACCESS");
         }
 
-        // === FETCH MILESTONES FOR DISPLAY (with visibility + assignment filters) ===
         List<ProjectMilestoneAssignment> displayAssignments;
 
         if (isManagerOfAssignedUser) {
@@ -746,12 +744,11 @@ public class ProjectServiceImpl implements ProjectService {
                     "ERR_PROJECT_HIDDEN_DUE_TO_PAYMENT");
         }
 
-        // === SEPARATELY: Always fetch Documentation milestone to get saved applicantType ===
-        // This is the key fix — do NOT use filtered displayAssignments
+
         ProjectMilestoneAssignment docAssignment = projectMilestoneAssignmentRepository
                 .findByProjectIdAndIsDeletedFalse(projectId)
                 .stream()
-                .filter(a -> "Documentation".equalsIgnoreCase(a.getMilestone().getName()))
+                .filter(a -> "".equalsIgnoreCase(a.getMilestone().getName()))
                 .findFirst()
                 .orElse(null);
 
@@ -928,22 +925,20 @@ public class ProjectServiceImpl implements ProjectService {
         return addPaymentTransaction(project.getId(), dto);
     }
 
-    // In ProjectServiceImpl
     @Override
     @Transactional
-    public AssignedMilestoneDto updateMilestoneApplicantType(Long projectId, Long milestoneAssignmentId, MilestoneApplicantTypeUpdateDto dto) {
+    public AssignedMilestoneDto updateProjectApplicantType(Long projectId, MilestoneApplicantTypeUpdateDto dto) {
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        // Find the Documentation milestone assignment (case-insensitive)
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
-                .findActiveUserById(milestoneAssignmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Milestone assignment not found", "ERR_MILESTONE_NOT_FOUND"));
-
-        if (!assignment.getProject().getId().equals(projectId)) {
-            throw new ValidationException("Milestone does not belong to project", "ERR_INVALID_ASSOCIATION");
-        }
-
-        // Optional: Check if this is the Documentation milestone (by name or type)
-        if (!"Documentation".equalsIgnoreCase(assignment.getMilestone().getName())) {
-            throw new ValidationException("Applicant type can only be set for Documentation milestone", "ERR_INVALID_MILESTONE");
-        }
+                .findByProjectIdAndIsDeletedFalse(projectId)
+                .stream()
+                .filter(a -> "Documentation".equalsIgnoreCase(a.getMilestone().getName()))
+                .findFirst()
+                .orElseThrow(() -> new ValidationException(
+                        "Documentation milestone not found in this project", "ERR_DOCUMENTATION_MILESTONE_NOT_FOUND"));
 
         ApplicantType applicantType = applicantTypeRepository
                 .findByIdAndIsActiveTrueAndIsDeletedFalse(dto.getApplicantTypeId())
@@ -952,9 +947,9 @@ public class ProjectServiceImpl implements ProjectService {
         assignment.setApplicantType(applicantType);
         assignment.setUpdatedBy(dto.getUpdatedById());
         assignment.setUpdatedDate(new Date());
+
         projectMilestoneAssignmentRepository.save(assignment);
 
-        // Return updated DTO (frontend can refresh the doc list)
         return mapToAssignedMilestoneDto(assignment);
     }
 

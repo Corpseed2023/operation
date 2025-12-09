@@ -170,20 +170,19 @@ public class ProjectController {
         return ResponseEntity.ok(response);
     }
 
-    // In ProjectController
-    @Operation(summary = "Update applicant type for a milestone (e.g., Documentation)")
+    @Operation(summary = "Update applicant type for the Documentation milestone in a project")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Applicant type updated"),
-            @ApiResponse(responseCode = "400", description = "Invalid data"),
+            @ApiResponse(responseCode = "200", description = "Applicant type updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid data or Documentation milestone not found"),
             @ApiResponse(responseCode = "403", description = "Unauthorized"),
-            @ApiResponse(responseCode = "404", description = "Not found")
+            @ApiResponse(responseCode = "404", description = "Project not found")
     })
-    @PutMapping("/{projectId}/milestones/{milestoneAssignmentId}/applicant-type")
-    public ResponseEntity<AssignedMilestoneDto> updateMilestoneApplicantType(
-            @PathVariable Long projectId,
-            @PathVariable Long milestoneAssignmentId,
+    @PutMapping("/{projectId}/applicant-type")
+    public ResponseEntity<AssignedMilestoneDto> updateProjectApplicantType(
+            @PathVariable @Parameter(description = "ID of the project") Long projectId,
             @Valid @RequestBody MilestoneApplicantTypeUpdateDto dto) {
-        AssignedMilestoneDto response = projectService.updateMilestoneApplicantType(projectId, milestoneAssignmentId, dto);
+
+        AssignedMilestoneDto response = projectService.updateProjectApplicantType(projectId, dto);
         return ResponseEntity.ok(response);
     }
 
