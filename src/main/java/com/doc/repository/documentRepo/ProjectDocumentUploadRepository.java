@@ -21,12 +21,8 @@ public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDo
      */
     Optional<ProjectDocumentUpload> findActiveUserById(Long id);
 
-
-
-    // ProjectDocumentUploadRepository.java
     @Query("SELECT u FROM ProjectDocumentUpload u WHERE u.project.id = :projectId AND u.isDeleted = false")
     List<ProjectDocumentUpload> findByProjectIdAndIsDeletedFalse(@Param("projectId") Long projectId);
-
 
 
     @Query("SELECT d FROM ProjectDocumentUpload d " +

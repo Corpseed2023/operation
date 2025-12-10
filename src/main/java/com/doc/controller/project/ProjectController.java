@@ -61,7 +61,6 @@ public class ProjectController {
     }
 
 
-    // 2. NEW: Separate count endpoint
     @GetMapping("/count")
     @Operation(summary = "Get total count of projects for user")
     @ApiResponses({

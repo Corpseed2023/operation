@@ -39,4 +39,7 @@ public class ProjectDetailsDto {
 
     private Date createdDate;
     private Date updatedDate;
+
+    private Long applicantId;
+    private String applicantName;
 }

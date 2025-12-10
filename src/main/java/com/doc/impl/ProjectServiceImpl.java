@@ -684,13 +684,9 @@ public class ProjectServiceImpl implements ProjectService {
         boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
         boolean isOperationHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
 
-        // Admins & Op Heads see ALL milestones (including completed)
         if (isAdmin || isOperationHead) {
             List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndIsDeletedFalse(projectId);
-
-//            assignments.forEach(a -> a.setDocuments(
-//                    projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
             ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
             response.setProjectDetails(mapToProjectDetailsDto(project, userId));
@@ -786,6 +782,12 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
         dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
+
+        if (project.getApplicantType() != null) {
+            dto.setApplicantId(project.getApplicantType().getId());
+            dto.setApplicantName(project.getApplicantType().getName());
+        }
+
 
         User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
