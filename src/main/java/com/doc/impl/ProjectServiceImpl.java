@@ -2,6 +2,7 @@ package com.doc.impl;
 
 import com.doc.constants.StatusConstants;
 import com.doc.dto.contact.ContactDetailsDto;
+import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
@@ -10,6 +11,9 @@ import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
 import com.doc.entity.department.Department;
+import com.doc.entity.document.ApplicantType;
+import com.doc.entity.document.ProductDocumentMapping;
+import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.milestone.MilestoneStatus;
@@ -22,6 +26,7 @@ import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
 import com.doc.repository.department.DepartmentAutoConfigRepository;
+import com.doc.repository.documentRepo.ApplicantTypeRepository;
 import com.doc.repository.documentRepo.DocumentStatusRepository;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
@@ -72,6 +77,11 @@ public class ProjectServiceImpl implements ProjectService {
     @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
     @Autowired private ProjectRequestValidator projectRequestValidator;
+
+    @Autowired private ProductDocumentMappingRepository productDocumentMappingRepository;
+
+    @Autowired
+    private ApplicantTypeRepository applicantTypeRepository;
 
     @Override
     @Transactional(isolation = Isolation.SERIALIZABLE)
@@ -536,6 +546,29 @@ public class ProjectServiceImpl implements ProjectService {
         if (dto.getCreatedBy() == null) throw new ValidationException("CreatedBy required", "ERR_NULL_CREATED_BY");
     }
 
+    @Override
+    @Transactional
+    public void setApplicantType(Long projectId, Long applicantTypeId) {
+        if (projectId == null || applicantTypeId == null) {
+            throw new ValidationException("Project ID and Applicant Type ID are required", "ERR_NULL_IDS");
+        }
+
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found or has been deleted", "ERR_PROJECT_NOT_FOUND"));
+
+        ApplicantType applicantType = applicantTypeRepository
+                .findByIdAndIsActiveTrueAndIsDeletedFalse(applicantTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Applicant Type not found or is inactive/deleted", "ERR_APPLICANT_TYPE_NOT_FOUND"));
+
+        project.setApplicantType(applicantType);
+        project.setUpdatedDate(new Date());
+
+        projectRepository.save(project);
+
+        logger.info("Applicant Type successfully set to '{}' (ID: {}) for project ID: {}",
+                applicantType.getName(), applicantType.getId(), projectId);
+    }
+
     private void mapRequestDtoToProject(Project project, ProjectRequestDto dto) {
         project.setName(dto.getName().trim());
         project.setProjectNo(dto.getProjectNo().trim());
@@ -891,11 +924,94 @@ public class ProjectServiceImpl implements ProjectService {
 
 
     @Override
+    public List<DocumentChecklistDTO> getDocumentChecklist(Long projectId, Long milestoneAssignmentId) {
+        logger.info("Fetching document checklist for project ID: {}, milestone assignment ID: {}", projectId, milestoneAssignmentId);
+
+        // 1. Load Project with relations (to avoid lazy loading issues)
+        Project project = projectRepository.findByIdWithApplicantTypeAndProduct(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        // 2. Verify Milestone Assignment exists and belongs to project
+        ProjectMilestoneAssignment milestoneAssignment = projectMilestoneAssignmentRepository
+                .findByIdAndProjectIdAndIsDeletedFalse(milestoneAssignmentId, projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone assignment not found", "ERR_MILESTONE_NOT_FOUND"));
+
+        // 3. If no Applicant Type → return empty (show dropdown in frontend)
+        if (project.getApplicantType() == null) {
+            return Collections.emptyList();
+        }
+
+        // 4. Load REQUIRED documents (filtered by product + applicantType)
+        List<ProductDocumentMapping> required = productDocumentMappingRepository.findByProductAndApplicantType(project.getProduct(), project.getApplicantType());
+
+        // 5. Load EXISTING UPLOADED documents (filtered by project + milestone)
+        List<ProjectDocumentUpload> uploaded = projectDocumentUploadRepository
+                .findByProjectAndMilestoneAssignmentId(project, milestoneAssignmentId);
+
+        // 6. Build merged checklist
+        List<DocumentChecklistDTO> checklist = required.stream().map(mapping -> {
+                    DocumentChecklistDTO dto = new DocumentChecklistDTO();
+                    ProductRequiredDocuments doc = mapping.getRequiredDocument();
+
+                    dto.setDocumentId(doc.getId());
+                    dto.setDocumentName(doc.getName());
+                    dto.setMandatory(mapping.isMandatory());
+                    dto.setDisplayOrder(mapping.getDisplayOrder());
+
+                    // Compare with uploaded
+                    uploaded.stream()
+                            .filter(u -> u.getRequiredDocument().getId().equals(doc.getId()))
+                            .findFirst()
+                            .ifPresentOrElse(u -> {
+                                dto.setStatus(u.getStatus().getName()); // UPLOADED, VERIFIED, REJECTED, etc.
+                                dto.setUploadId(u.getId());
+                                dto.setFileUrl(u.getFileUrl());
+                                dto.setUploadedAt(u.getUploadTime());
+                                dto.setVerified("VERIFIED".equals(u.getStatus().getName()));
+                                dto.setRemarks(u.getRemarks());
+                                dto.setReplacementCount(u.getReplacementCount());
+                            }, () -> dto.setStatus("PENDING"));
+
+                    return dto;
+                }).sorted(Comparator.comparingInt(d -> d.getDisplayOrder() != null ? d.getDisplayOrder() : Integer.MAX_VALUE))
+                .collect(Collectors.toList());
+
+        return checklist;
+    }
+
+    // Optional: Auth check method
+    @Override
+    public void checkMilestoneAccess(Long projectId, Long milestoneAssignmentId, Long userId) {
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found","ghjghjgh"));
+
+        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
+                .findByIdAndProjectIdAndIsDeletedFalse(milestoneAssignmentId, projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found","hjkhj"));
+
+        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
+        boolean isOpHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isAssigned = assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(userId);
+
+        boolean isManager = false;
+        if (assignment.getAssignedUser() != null) {
+            List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+            isManager = subordinates.stream()
+                    .anyMatch(u -> u.getId().equals(assignment.getAssignedUser().getId()));
+        }
+
+        if (!isAdmin && !isOpHead && !isAssigned && !isManager) {
+            throw new ValidationException("Unauthorized to access this milestone", "ERR_UNAUTHORIZED");
+        }
+    }
+
+
+    @Override
     public ProjectHistoryResponseDto getProjectHistory(Long projectId) {
         logger.info("Fetching history for project ID: {}", projectId);
 
         Project project = projectRepository.findActiveUserById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found  ", "ERR_PROJECT_NOT_FOUND"));
 
         User createdByUser = userRepository.findActiveUserById(project.getCreatedBy())
                 .orElse(null); // In case user is deleted, handle gracefully

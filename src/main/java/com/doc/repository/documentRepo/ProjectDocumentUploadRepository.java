@@ -1,6 +1,7 @@
 package com.doc.repository.documentRepo;
 
 import com.doc.entity.document.ProjectDocumentUpload;
+import com.doc.entity.project.Project;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -57,4 +58,16 @@ public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDo
 
     @Query("SELECT d FROM ProjectDocumentUpload d WHERE d.project.id = :projectId AND d.requiredDocument.id = :requiredDocumentId AND d.isDeleted = false")
     List<ProjectDocumentUpload> findByProjectIdAndRequiredDocumentIdAndIsDeletedFalse(@Param("projectId") Long projectId, @Param("requiredDocumentId") Long requiredDocumentId);
+
+
+
+    @Query("SELECT u FROM ProjectDocumentUpload u " +
+            "WHERE u.project = :project " +
+            "AND u.milestoneAssignment.id = :milestoneAssignmentId " +
+            "AND u.isDeleted = false")
+    List<ProjectDocumentUpload> findByProjectAndMilestoneAssignmentId(
+            @Param("project") Project project,
+            @Param("milestoneAssignmentId") Long milestoneAssignmentId);
+
+
 }

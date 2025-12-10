@@ -2,6 +2,7 @@ package com.doc.entity.project;
 
 import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
+import com.doc.entity.document.ApplicantType;
 import com.doc.entity.product.Product;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -128,4 +129,9 @@ public class Project {
     @OneToMany(mappedBy = "project", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @Comment("List of milestone assignments for this project")
     private List<ProjectMilestoneAssignment> milestoneAssignments = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "applicant_type_id")
+    private ApplicantType applicantType;
+
 }

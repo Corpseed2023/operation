@@ -111,52 +111,6 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
                 .toList();
     }
 
-    @Override
-    public List<ProductDocumentMappingGroupedDto> getAllMappingsGroupedByApplicantType(Long productId) {
-        log.debug("Fetching all document mappings grouped by applicant type for product ID: {}", productId);
-
-        validateProductExists(productId);
-
-        // Global (common) documents
-        List<ProductDocumentMapping> globalMappings = mappingRepository
-                .findByProductIdAndApplicantTypeIsNullAndIsActiveTrue(productId);
-
-        // Applicant-type specific
-        List<ProductDocumentMapping> typedMappings = mappingRepository
-                .findByProductIdAndApplicantTypeIsNotNullAndIsActiveTrue(productId);
-
-        Map<Long, List<ProductDocumentMapping>> groupedByApplicantType = typedMappings.stream()
-                .collect(Collectors.groupingBy(m -> m.getApplicantType().getId()));
-
-        List<ProductDocumentMappingGroupedDto> result = new ArrayList<>();
-
-        // Add Common Documents group
-        ProductDocumentMappingGroupedDto commonGroup = new ProductDocumentMappingGroupedDto();
-        commonGroup.setApplicantTypeId(null);
-        commonGroup.setApplicantTypeName("Common Documents");
-        commonGroup.setDocuments(globalMappings.stream()
-                .sorted(Comparator.comparingInt(m -> Optional.ofNullable(m.getDisplayOrder()).orElse(0)))
-                .map(this::mapToResponseDto)
-                .toList());
-        result.add(commonGroup);
-
-        // Add each applicant type group (even if empty — optional)
-        applicantTypeRepository.findAllByIsActiveTrueAndIsDeletedFalse()
-                .forEach(applicantType -> {
-                    List<ProductDocumentMapping> docs = groupedByApplicantType.getOrDefault(applicantType.getId(), List.of());
-
-                    ProductDocumentMappingGroupedDto group = new ProductDocumentMappingGroupedDto();
-                    group.setApplicantTypeId(applicantType.getId());
-                    group.setApplicantTypeName(applicantType.getName());
-                    group.setDocuments(docs.stream()
-                            .sorted(Comparator.comparingInt(m -> Optional.ofNullable(m.getDisplayOrder()).orElse(0)))
-                            .map(this::mapToResponseDto)
-                            .toList());
-                    result.add(group);
-                });
-
-        return result;
-    }
 
     private ProductDocumentMappingResponseDto mapToResponseDto(ProductDocumentMapping mapping) {
         ProductRequiredDocuments doc = mapping.getRequiredDocument();
@@ -193,7 +147,7 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
 
     private ApplicantType resolveApplicantType(Long applicantTypeId) {
         if (applicantTypeId == null) {
-            return null; // Global mapping
+            return null;
         }
         return applicantTypeRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(applicantTypeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -201,89 +155,6 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
     }
 
 
-    @Override
-    public List<ProductDocumentMappingResponseDto> getFinalRequiredDocuments(Long productId, Long applicantTypeId) {
-        log.debug("Fetching final required documents for productId: {}, applicantTypeId: {}", productId, applicantTypeId);
-
-        validateProductExists(productId);
-
-        // 1. Get global documents (common to all applicant types)
-        List<ProductDocumentMapping> global = mappingRepository
-                .findByProductIdAndApplicantTypeIsNullAndIsActiveTrue(productId);
-
-        // 2. Get specific documents for this applicant type
-        List<ProductDocumentMapping> specific = mappingRepository
-                .findByProductIdAndApplicantTypeIdAndIsActiveTrue(productId, applicantTypeId);
-
-        // 3. Merge: specific overrides global if same document exists
-        Map<Long, ProductDocumentMapping> finalMap = new LinkedHashMap<>();
-
-        // First: add all global
-        global.forEach(m -> finalMap.put(m.getRequiredDocument().getId(), m));
-
-        // Then: override with specific (higher priority)
-        specific.forEach(m -> finalMap.put(m.getRequiredDocument().getId(), m));
-
-        // 4. Sort by displayOrder (specific wins), fallback to global order
-        return finalMap.values().stream()
-                .sorted(Comparator.comparingInt(m ->
-                        Optional.ofNullable(m.getDisplayOrder()).orElse(Integer.MAX_VALUE)))
-                .map(this::mapToResponseDto)
-                .toList();
-    }
-
-
-    @Override
-    public ProductDocumentRequirementResponseDto getDocumentRequirementsGrouped(Long productId) {
-        log.info("Fetching grouped document requirements for product ID: {}", productId);
-
-        Product product = productRepository.findActiveUserById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Product not found with ID: " + productId, "ERR_PRODUCT_NOT_FOUND"));
-
-        List<ProductDocumentMapping> allMappings = mappingRepository
-                .findByProductIdAndIsActiveTrue(productId);
-
-        // Group by applicantTypeId
-        Map<Long, List<ProductDocumentMapping>> grouped = allMappings.stream()
-                .collect(Collectors.groupingBy(m -> m.getApplicantType().getId()));
-
-        List<ProductDocumentGroupDto> groups = new ArrayList<>();
-
-        // Get all active applicant types (sorted by name)
-        List<ApplicantType> applicantTypes = applicantTypeRepository
-                .findAllByIsActiveTrueAndIsDeletedFalseOrderByNameAsc();
-
-        for (ApplicantType type : applicantTypes) {
-            List<ProductDocumentMapping> mappings = grouped.getOrDefault(type.getId(), List.of());
-
-            if (!mappings.isEmpty()) {  // Only include if has documents
-                List<ProductDocumentMappingResponseDto> docs = mappings.stream()
-                        .sorted(Comparator.comparingInt(m ->
-                                Optional.ofNullable(m.getDisplayOrder()).orElse(Integer.MAX_VALUE)))
-                        .map(this::mapToResponseDto)
-                        .toList();
-
-                groups.add(new ProductDocumentGroupDto(
-                        type.getId(),
-                        type.getName(),
-                        docs
-                ));
-            }
-        }
-
-        // Optional: Sort groups by applicantType name (Common first)
-        groups.sort(Comparator.comparing(
-                ProductDocumentGroupDto::getApplicantTypeName,
-                Comparator.nullsLast(Comparator.naturalOrder())
-        ));
-
-        return new ProductDocumentRequirementResponseDto(
-                product.getId(),
-                product.getProductName(),
-                groups
-        );
-    }
 
 
 }

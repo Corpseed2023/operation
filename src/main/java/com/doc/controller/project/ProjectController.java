@@ -1,5 +1,6 @@
 package com.doc.controller.project;
 
+import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
@@ -7,6 +8,7 @@ import com.doc.dto.project.ProjectResponseDto;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
+import com.doc.exception.ValidationException;
 import com.doc.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -138,8 +141,6 @@ public class ProjectController {
     }
 
 
-    // In ProjectController.java, add the following endpoint
-
     @Operation(summary = "Get project history including creation, milestones, assignments, and status changes",
             description = "Retrieves detailed history for a project, including when it was created, its milestones (starting with the first), assignments (to whom and by whom), and status changes.")
     @ApiResponses({
@@ -152,7 +153,6 @@ public class ProjectController {
         ProjectHistoryResponseDto response = projectService.getProjectHistory(projectId);
         return ResponseEntity.ok(response);
     }
-
 
 
     @Operation(summary = "Get complete history of a specific milestone in a project",
@@ -171,5 +171,38 @@ public class ProjectController {
         MilestoneHistoryResponseDto response = projectService.getMilestoneHistory(projectId, milestoneId, userId);
         return ResponseEntity.ok(response);
     }
+
+
+    @PatchMapping("/{projectId}/applicant-type")
+    @Operation(summary = "CRT selects Applicant Type (Importer, Brand Owner, etc.)")
+    public ResponseEntity<Void> setApplicantType(
+            @PathVariable Long projectId,
+            @RequestParam("applicantTypeId") Long applicantTypeId) {
+
+
+        projectService.setApplicantType(projectId, applicantTypeId);
+        return ResponseEntity.ok().build();
+    }
+
+
+
+    @GetMapping("/{projectId}/milestones/{milestoneId}/document-checklist")
+    @Operation(summary = "Get document checklist for a milestone: shows required docs with status (Pending / Uploaded / Verified / Rejected)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Checklist retrieved"),
+            @ApiResponse(responseCode = "404", description = "Project or milestone not found"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
+    public ResponseEntity<List<DocumentChecklistDTO>> getDocumentChecklist(
+            @PathVariable @Parameter(description = "ID of the project") Long projectId,
+            @PathVariable @Parameter(description = "ID of the milestone assignment") Long milestoneId,
+            @RequestParam @Parameter(description = "User ID of the logged-in user") Long userId) {
+
+        projectService.checkMilestoneAccess(projectId, milestoneId, userId);
+
+        List<DocumentChecklistDTO> checklist = projectService.getDocumentChecklist(projectId, milestoneId);
+        return ResponseEntity.ok(checklist);
+    }
+
 
 }

@@ -9,9 +9,7 @@ import java.util.List;
 public interface ApplicantTypeService {
     ApplicantTypeResponseDto createApplicantType(ApplicantTypeRequestDto dto);
     ApplicantTypeResponseDto updateApplicantType(Long id, ApplicantTypeRequestDto dto);
-    void deleteApplicantType(Long id); // soft delete
     ApplicantTypeResponseDto getApplicantTypeById(Long id);
-    List<ApplicantTypeResponseDto> getAllActiveApplicantTypes();
 
     // Custom pagination: page starts from 1
     List<ApplicantTypeResponseDto> getApplicantTypesPaginated(int page, int size);

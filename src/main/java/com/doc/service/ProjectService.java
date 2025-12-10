@@ -1,5 +1,6 @@
 package com.doc.service;
 
+import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
@@ -36,6 +37,9 @@ public interface ProjectService {
     MilestoneHistoryResponseDto getMilestoneHistory(Long projectId, Long milestoneId, Long requestingUserId);
 
 
+    void setApplicantType(Long projectId, Long applicantId);
 
+    List<DocumentChecklistDTO> getDocumentChecklist(Long projectId, Long milestoneId);
 
+    void checkMilestoneAccess(Long projectId, Long milestoneId, Long userId);
 }
