@@ -922,34 +922,27 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
 
-
     @Override
-    public List<DocumentChecklistDTO> getDocumentChecklist(Long projectId, Long milestoneAssignmentId) {
-        logger.info("Fetching document checklist for project ID: {}, milestone assignment ID: {}", projectId, milestoneAssignmentId);
+    public List<DocumentChecklistDTO> getDocumentChecklist(Long projectId) {
+        logger.info("Fetching document checklist for project ID: {}", projectId);
 
-        // 1. Load Project with relations (to avoid lazy loading issues)
         Project project = projectRepository.findByIdWithApplicantTypeAndProduct(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
 
-        // 2. Verify Milestone Assignment exists and belongs to project
-        ProjectMilestoneAssignment milestoneAssignment = projectMilestoneAssignmentRepository
-                .findByIdAndProjectIdAndIsDeletedFalse(milestoneAssignmentId, projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Milestone assignment not found", "ERR_MILESTONE_NOT_FOUND"));
-
-        // 3. If no Applicant Type → return empty (show dropdown in frontend)
+        // If no Applicant Type → show dropdown
         if (project.getApplicantType() == null) {
             return Collections.emptyList();
         }
 
-        // 4. Load REQUIRED documents (filtered by product + applicantType)
-        List<ProductDocumentMapping> required = productDocumentMappingRepository.findByProductAndApplicantType(project.getProduct(), project.getApplicantType());
+        // Required documents (Product + Applicant Type)
+        List<ProductDocumentMapping> required = productDocumentMappingRepository
+                .findByProductAndApplicantType(project.getProduct(), project.getApplicantType());
 
-        // 5. Load EXISTING UPLOADED documents (filtered by project + milestone)
+        // All uploaded documents for this project (from any milestone)
         List<ProjectDocumentUpload> uploaded = projectDocumentUploadRepository
-                .findByProjectAndMilestoneAssignmentId(project, milestoneAssignmentId);
+                .findByProjectIdAndIsDeletedFalse(projectId);
 
-        // 6. Build merged checklist
-        List<DocumentChecklistDTO> checklist = required.stream().map(mapping -> {
+        return required.stream().map(mapping -> {
                     DocumentChecklistDTO dto = new DocumentChecklistDTO();
                     ProductRequiredDocuments doc = mapping.getRequiredDocument();
 
@@ -958,52 +951,24 @@ public class ProjectServiceImpl implements ProjectService {
                     dto.setMandatory(mapping.isMandatory());
                     dto.setDisplayOrder(mapping.getDisplayOrder());
 
-                    // Compare with uploaded
                     uploaded.stream()
                             .filter(u -> u.getRequiredDocument().getId().equals(doc.getId()))
                             .findFirst()
                             .ifPresentOrElse(u -> {
-                                dto.setStatus(u.getStatus().getName()); // UPLOADED, VERIFIED, REJECTED, etc.
+                                dto.setStatus(u.getStatus().getName());
                                 dto.setUploadId(u.getId());
                                 dto.setFileUrl(u.getFileUrl());
                                 dto.setUploadedAt(u.getUploadTime());
                                 dto.setVerified("VERIFIED".equals(u.getStatus().getName()));
                                 dto.setRemarks(u.getRemarks());
-                                dto.setReplacementCount(u.getReplacementCount());
                             }, () -> dto.setStatus("PENDING"));
 
                     return dto;
-                }).sorted(Comparator.comparingInt(d -> d.getDisplayOrder() != null ? d.getDisplayOrder() : Integer.MAX_VALUE))
+                })
+                .sorted(Comparator.comparingInt(d -> d.getDisplayOrder() != null ? d.getDisplayOrder() : 999))
                 .collect(Collectors.toList());
-
-        return checklist;
     }
-
     // Optional: Auth check method
-    @Override
-    public void checkMilestoneAccess(Long projectId, Long milestoneAssignmentId, Long userId) {
-        User user = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found","ghjghjgh"));
-
-        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
-                .findByIdAndProjectIdAndIsDeletedFalse(milestoneAssignmentId, projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found","hjkhj"));
-
-        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
-        boolean isOpHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
-        boolean isAssigned = assignment.getAssignedUser() != null && assignment.getAssignedUser().getId().equals(userId);
-
-        boolean isManager = false;
-        if (assignment.getAssignedUser() != null) {
-            List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
-            isManager = subordinates.stream()
-                    .anyMatch(u -> u.getId().equals(assignment.getAssignedUser().getId()));
-        }
-
-        if (!isAdmin && !isOpHead && !isAssigned && !isManager) {
-            throw new ValidationException("Unauthorized to access this milestone", "ERR_UNAUTHORIZED");
-        }
-    }
 
 
     @Override

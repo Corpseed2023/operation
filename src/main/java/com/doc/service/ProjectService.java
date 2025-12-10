@@ -39,7 +39,7 @@ public interface ProjectService {
 
     void setApplicantType(Long projectId, Long applicantId);
 
-    List<DocumentChecklistDTO> getDocumentChecklist(Long projectId, Long milestoneId);
 
-    void checkMilestoneAccess(Long projectId, Long milestoneId, Long userId);
+
+    List<DocumentChecklistDTO> getDocumentChecklist(Long projectId);
 }

@@ -186,21 +186,13 @@ public class ProjectController {
 
 
 
-    @GetMapping("/{projectId}/milestones/{milestoneId}/document-checklist")
-    @Operation(summary = "Get document checklist for a milestone: shows required docs with status (Pending / Uploaded / Verified / Rejected)")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Checklist retrieved"),
-            @ApiResponse(responseCode = "404", description = "Project or milestone not found"),
-            @ApiResponse(responseCode = "403", description = "Unauthorized access")
-    })
+    @GetMapping("/{projectId}/document-checklist")
+    @Operation(summary = "Get project document checklist (Applicant Type based) — visible to CRT, Legal, Technical, Admin")
     public ResponseEntity<List<DocumentChecklistDTO>> getDocumentChecklist(
-            @PathVariable @Parameter(description = "ID of the project") Long projectId,
-            @PathVariable @Parameter(description = "ID of the milestone assignment") Long milestoneId,
-            @RequestParam @Parameter(description = "User ID of the logged-in user") Long userId) {
+            @PathVariable Long projectId,
+            @RequestParam Long userId) {
 
-        projectService.checkMilestoneAccess(projectId, milestoneId, userId);
-
-        List<DocumentChecklistDTO> checklist = projectService.getDocumentChecklist(projectId, milestoneId);
+        List<DocumentChecklistDTO> checklist = projectService.getDocumentChecklist(projectId);
         return ResponseEntity.ok(checklist);
     }
 
