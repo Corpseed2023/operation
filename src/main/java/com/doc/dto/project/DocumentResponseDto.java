@@ -28,7 +28,6 @@ public class DocumentResponseDto {
     private boolean validationPassed;
     private String validationIssues;
     private Long requiredDocumentId;
-    private Long milestoneAssignmentId;
     private Long projectId;
     private Long uploadedById;
     private Long createdBy;

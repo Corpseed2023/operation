@@ -14,7 +14,6 @@ import java.util.Date;
 @Entity
 @Table(name = "project_document_upload", indexes = {
         @Index(name = "idx_project_id", columnList = "project_id"),
-        @Index(name = "idx_milestone_assignment_id", columnList = "milestone_assignment_id"),
         @Index(name = "idx_status_id", columnList = "status_id"),
         @Index(name = "idx_company_source", columnList = "is_from_company_doc")
 })
@@ -32,9 +31,7 @@ public class ProjectDocumentUpload {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "milestone_assignment_id", nullable = false)
-    private ProjectMilestoneAssignment milestoneAssignment;
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "required_document_id", nullable = false)

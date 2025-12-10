@@ -653,7 +653,7 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         List<ProjectMilestoneAssignment> assignments = assignmentPage.getContent();
-        assignments.forEach(a -> a.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
+//        assignments.forEach(a -> a.setDocuments(projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
         Map<Project, List<ProjectMilestoneAssignment>> grouped = assignments.stream()
                 .collect(Collectors.groupingBy(ProjectMilestoneAssignment::getProject));
@@ -689,8 +689,8 @@ public class ProjectServiceImpl implements ProjectService {
             List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndIsDeletedFalse(projectId);
 
-            assignments.forEach(a -> a.setDocuments(
-                    projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
+//            assignments.forEach(a -> a.setDocuments(
+//                    projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
             ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
             response.setProjectDetails(mapToProjectDetailsDto(project, userId));
@@ -738,8 +738,8 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         // Load documents
-        assignments.forEach(a -> a.setDocuments(
-                projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
+//        assignments.forEach(a -> a.setDocuments(
+//                projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
         System.out.println("=== DEBUG VISIBILITY ===");
         System.out.println("User ID: " + userId);
@@ -861,9 +861,9 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setVisibleDate(assignment.getVisibleDate());
         dto.setStartedDate(assignment.getStartedDate());
         dto.setCompletedDate(assignment.getCompletedDate());
-        dto.setDocuments(assignment.getDocuments().stream()
-                .map(this::mapToDocumentResponseDto)
-                .collect(Collectors.toList()));
+//        dto.setDocuments(assignment.getDocuments().stream()
+//                .map(this::mapToDocumentResponseDto)
+//                .collect(Collectors.toList()));
         dto.setAssignedUser(mapToUserResponseDto(assignment.getAssignedUser()));
 
         Milestone milestone = assignment.getMilestone();
@@ -903,7 +903,6 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setRemarks(document.getRemarks());
         dto.setUploadTime(document.getUploadTime());
         dto.setRequiredDocumentId(document.getRequiredDocument().getId());
-        dto.setMilestoneAssignmentId(document.getMilestoneAssignment().getId());
         dto.setProjectId(document.getProject().getId());
         dto.setUploadedById(document.getUploadedBy().getId());
         dto.setCreatedDate(document.getCreatedDate());

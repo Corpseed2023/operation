@@ -13,9 +13,6 @@ public class ProjectDocumentUploadRequestDto {
     @NotNull(message = "Project ID is required")
     private Long projectId;
 
-    @NotNull(message = "Milestone assignment ID is required")
-    private Long milestoneAssignmentId;
-
     @NotNull(message = "Required document ID is required")
     private Long requiredDocumentId;
 
@@ -46,6 +43,5 @@ public class ProjectDocumentUploadRequestDto {
     @Pattern(regexp = "pdf|jpg|jpeg|png", message = "Only pdf, jpg, jpeg, png allowed")
     private String fileFormat;
 
-    // Optional: initial remarks
     private String remarks;
 }

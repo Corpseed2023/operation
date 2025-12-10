@@ -14,14 +14,6 @@ import java.util.Optional;
 public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDocumentUpload, Long> {
 
     /**
-     * Finds all non-deleted document uploads by milestone assignment ID.
-     *
-     * @param milestoneAssignmentId the milestone assignment ID
-     * @return a list of non-deleted document uploads
-     */
-    List<ProjectDocumentUpload> findByMilestoneAssignmentIdAndIsDeletedFalse(Long milestoneAssignmentId);
-
-    /**
      * Finds a non-deleted document upload by ID.
      *
      * @param id the document upload ID
@@ -29,37 +21,21 @@ public interface ProjectDocumentUploadRepository extends JpaRepository<ProjectDo
      */
     Optional<ProjectDocumentUpload> findActiveUserById(Long id);
 
-    /**
-     * Checks if a non-deleted document upload exists for the given project, milestone assignment, and required document.
-     *
-     * @param projectId the project ID
-     * @param milestoneAssignmentId the milestone assignment ID
-     * @param requiredDocumentId the required document ID
-     * @return true if a matching non-deleted upload exists, false otherwise
-     */
-    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM ProjectDocumentUpload d " +
-            "WHERE d.project.id = :projectId AND d.milestoneAssignment.id = :milestoneAssignmentId " +
-            "AND d.requiredDocument.id = :requiredDocumentId AND d.isDeleted = false")
-    boolean existsByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentIdAndIsDeletedFalse(
-            @Param("projectId") Long projectId,
-            @Param("milestoneAssignmentId") Long milestoneAssignmentId,
-            @Param("requiredDocumentId") Long requiredDocumentId);
-
-    /**
-     * Finds a non-deleted document upload by project ID, milestone assignment ID, and required document ID.
-     *
-     * @param projectId the project ID
-     * @param milestoneAssignmentId the milestone assignment ID
-     * @param requiredDocumentId the required document ID
-     * @return an Optional containing the document upload if found and not deleted
-     */
-    Optional<ProjectDocumentUpload> findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentIdAndIsDeletedFalse(
-            Long projectId, Long milestoneAssignmentId, Long requiredDocumentId);
-
 
 
     // ProjectDocumentUploadRepository.java
     @Query("SELECT u FROM ProjectDocumentUpload u WHERE u.project.id = :projectId AND u.isDeleted = false")
     List<ProjectDocumentUpload> findByProjectIdAndIsDeletedFalse(@Param("projectId") Long projectId);
+
+
+
+    @Query("SELECT d FROM ProjectDocumentUpload d " +
+            "WHERE d.project.id = :projectId " +
+            "  AND d.requiredDocument.id = :requiredDocumentId " +
+            "  AND d.isDeleted = false")
+    Optional<ProjectDocumentUpload> findActiveProjectLevelDocument(
+            @Param("projectId") Long projectId,
+            @Param("requiredDocumentId") Long requiredDocumentId);
+
 
 }

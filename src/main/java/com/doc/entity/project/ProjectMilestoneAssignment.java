@@ -106,7 +106,4 @@ public class ProjectMilestoneAssignment {
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
-    @OneToMany(mappedBy = "milestoneAssignment", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    @Comment("Documents uploaded for this milestone")
-    private List<ProjectDocumentUpload> documents = new ArrayList<>();
 }

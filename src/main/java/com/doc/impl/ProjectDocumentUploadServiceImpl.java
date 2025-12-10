@@ -62,121 +62,92 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
     @Override
     public DocumentResponseDto uploadDocument(ProjectDocumentUploadRequestDto requestDto) {
-        logger.info("Initiating document upload for project ID: {}, milestone assignment ID: {}, required document ID: {}",
-                requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
+        logger.info("Initiating document upload for project ID: {}, required document ID: {}",
+                requestDto.getProjectId(), requestDto.getRequiredDocumentId());
 
-        // Validate inputs
         validateUploadRequest(requestDto);
 
-        // Sanitize file name
-        String sanitizedFileName = sanitizeFileName(requestDto.getFileName());
+        String fileName = sanitizeFileName(requestDto.getFileName());
+        String fileUrl = bucketUrl + "/" + fileName;
 
-        // Construct file URL using bucket URL and file name
-        String sanitizedFileUrl = bucketUrl + "/" + sanitizedFileName;
-
-        // Fetch entities
+        // Fetch required entities
         Project project = projectRepository.findActiveUserById(requestDto.getProjectId())
-                .orElseThrow(() -> {
-                    logger.error("Project with ID {} not found or is deleted", requestDto.getProjectId());
-                    return new ResourceNotFoundException("Project with ID " + requestDto.getProjectId() + " not found or is deleted", "PROJECT_NOT_FOUND");
-                });
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found: " + requestDto.getProjectId(), "PROJECT_NOT_FOUND"));
 
-        ProjectMilestoneAssignment milestoneAssignment = projectMilestoneAssignmentRepository
-                .findActiveUserById(requestDto.getMilestoneAssignmentId())
-                .orElseThrow(() -> {
-                    logger.error("Milestone assignment with ID {} not found or is deleted", requestDto.getMilestoneAssignmentId());
-                    return new ResourceNotFoundException("Milestone assignment with ID " + requestDto.getMilestoneAssignmentId() + " not found or is deleted", "MILESTONE_ASSIGNMENT_NOT_FOUND");
-                });
-
-        if (!milestoneAssignment.getProject().getId().equals(project.getId())) {
-            logger.warn("Milestone assignment ID {} does not belong to project ID {}", requestDto.getMilestoneAssignmentId(), requestDto.getProjectId());
-            throw new ValidationException("Milestone assignment does not belong to the specified project", "INVALID_MILESTONE_PROJECT_ASSOCIATION");
-        }
-
-        ProductRequiredDocuments requiredDocument = productRequiredDocumentsRepository
-                .findById(requestDto.getRequiredDocumentId())
-                .orElseThrow(() -> {
-                    logger.error("Required document with ID {} not found or is deleted", requestDto.getRequiredDocumentId());
-                    return new ResourceNotFoundException("Required document with ID " + requestDto.getRequiredDocumentId() + " not found or is deleted", "DOCUMENT_NOT_FOUND");
-                });
+        ProductRequiredDocuments requiredDoc = productRequiredDocumentsRepository.findById(requestDto.getRequiredDocumentId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Required document not found: " + requestDto.getRequiredDocumentId(), "DOCUMENT_NOT_FOUND"));
 
         User uploadedBy = userRepository.findActiveUserById(requestDto.getUploadedById())
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", requestDto.getUploadedById());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getUploadedById() + " not found or is deleted", "USER_NOT_FOUND");
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("Uploader not found", "USER_NOT_FOUND"));
 
         User createdBy = userRepository.findActiveUserById(requestDto.getCreatedById())
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or is deleted", requestDto.getCreatedById());
-                    return new ResourceNotFoundException("User with ID " + requestDto.getCreatedById() + " not found or is deleted", "USER_NOT_FOUND");
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("Creator not found", "USER_NOT_FOUND"));
 
-        // Fetch the PENDING and UPLOADED statuses from the repository
         DocumentStatus pendingStatus = documentStatusRepository.findByName("PENDING")
-                .orElseThrow(() -> new ResourceNotFoundException("Document status PENDING not found", "STATUS_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Status PENDING not found", "STATUS_NOT_FOUND"));
         DocumentStatus uploadedStatus = documentStatusRepository.findByName("UPLOADED")
-                .orElseThrow(() -> new ResourceNotFoundException("Document status UPLOADED not found", "STATUS_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException("Status UPLOADED not found", "STATUS_NOT_FOUND"));
 
-        // Check for existing upload
-        Optional<ProjectDocumentUpload> existingUploadOpt = projectDocumentUploadRepository
-                .findByProjectIdAndMilestoneAssignmentIdAndRequiredDocumentIdAndIsDeletedFalse(
-                        requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
+        // Check for existing project-level document (same project + same required document type)
+        var existingOpt = projectDocumentUploadRepository
+                .findActiveProjectLevelDocument(
+                        requestDto.getProjectId(), requestDto.getRequiredDocumentId());
 
-        ProjectDocumentUpload documentUpload;
-        boolean isReplacement = false;
+        ProjectDocumentUpload doc;
+        boolean isReplacement = existingOpt.isPresent();
 
-        if (existingUploadOpt.isPresent()) {
-            documentUpload = existingUploadOpt.get();
-            if ("VERIFIED".equals(documentUpload.getStatus().getName())) {
-                logger.warn("Cannot replace verified document for project ID: {}, milestone assignment ID: {}, required document ID: {}",
-                        requestDto.getProjectId(), requestDto.getMilestoneAssignmentId(), requestDto.getRequiredDocumentId());
-                throw new ValidationException("Cannot replace a verified document", "VERIFIED_DOCUMENT_REPLACEMENT");
+        if (isReplacement) {
+            doc = existingOpt.get();
+
+            if ("VERIFIED".equals(doc.getStatus().getName())) {
+                throw new ValidationException("Cannot replace a VERIFIED document", "VERIFIED_DOCUMENT_REPLACEMENT");
             }
-            isReplacement = true;
-            documentUpload.setOldFileUrl(documentUpload.getFileUrl());
-            documentUpload.setOldFileName(documentUpload.getFileName());
-            documentUpload.setReplacementCount(documentUpload.getReplacementCount() + 1);
-            logger.info("Replacing existing document with ID: {}", documentUpload.getId());
+
+            // Keep old file for history
+            doc.setOldFileUrl(doc.getFileUrl());
+            doc.setOldFileName(doc.getFileName());
+            doc.setReplacementCount(doc.getReplacementCount() + 1);
+            logger.info("Replacing existing document ID: {}", doc.getId());
         } else {
-            documentUpload = new ProjectDocumentUpload();
-            documentUpload.setProject(project);
-            documentUpload.setMilestoneAssignment(milestoneAssignment);
-            documentUpload.setRequiredDocument(requiredDocument);
-            documentUpload.setCreatedBy(requestDto.getCreatedById());
-            documentUpload.setCreatedDate(new Date());
-            documentUpload.setReplacementCount(0);
-            documentUpload.setStatus(pendingStatus);  // Default to PENDING
+            doc = new ProjectDocumentUpload();
+            doc.setProject(project);
+            doc.setRequiredDocument(requiredDoc);
+            doc.setCreatedBy(requestDto.getCreatedById());
+            doc.setCreatedDate(new Date());
+            doc.setReplacementCount(0);
+            doc.setStatus(pendingStatus);
+            logger.info("Creating new project-level document");
         }
 
-        // Set or update fields
-        // Set or update fields
-        documentUpload.setFileUrl(sanitizedFileUrl);
-        documentUpload.setFileName(sanitizedFileName);
-        documentUpload.setFileFormat(requestDto.getFileFormat().toLowerCase());
-        documentUpload.setFileSizeKb(requestDto.getFileSizeKb());
-        documentUpload.setExpiryDate(requestDto.getExpiryDate() != null
-                ? java.sql.Date.valueOf(requestDto.getExpiryDate())
-                : null);
-        documentUpload.setPermanent(requestDto.getIsPermanent() != null && requestDto.getIsPermanent());
-        documentUpload.setFromCompanyDoc(requestDto.getIsFromCompanyDoc() != null && requestDto.getIsFromCompanyDoc());
-        documentUpload.setCompanyDocSourceId(requestDto.getCompanyDocSourceId());
-        documentUpload.setRemarks(requestDto.getRemarks());
+        // Common fields (new upload or replacement)
+        doc.setFileUrl(fileUrl);
+        doc.setFileName(fileName);
+        doc.setFileFormat(requestDto.getFileFormat().toLowerCase());
+        doc.setFileSizeKb(requestDto.getFileSizeKb());
+        doc.setExpiryDate(requestDto.getExpiryDate() != null ? java.sql.Date.valueOf(requestDto.getExpiryDate()) : null);
+        doc.setPermanent(Boolean.TRUE.equals(requestDto.getIsPermanent()));
+        doc.setFromCompanyDoc(Boolean.TRUE.equals(requestDto.getIsFromCompanyDoc()));
+        doc.setCompanyDocSourceId(requestDto.getCompanyDocSourceId());
+        doc.setRemarks(requestDto.getRemarks());
 
-        documentUpload.setStatus(uploadedStatus);
-        documentUpload.setUploadedBy(uploadedBy);
-        documentUpload.setUploadTime(new Date());
-        documentUpload.setUpdatedBy(requestDto.getCreatedById());
-        documentUpload.setUpdatedDate(new Date());
-        documentUpload.setDeleted(false);
+        // Final state
+        doc.setStatus(uploadedStatus);
+        doc.setUploadedBy(uploadedBy);
+        doc.setUploadTime(new Date());
+        doc.setUpdatedBy(requestDto.getCreatedById());
+        doc.setUpdatedDate(new Date());
+        doc.setDeleted(false);
 
-        documentUpload = projectDocumentUploadRepository.save(documentUpload);
-        logger.info("Document {} successfully with ID: {}", isReplacement ? "replaced" : "uploaded", documentUpload.getId());
+        doc = projectDocumentUploadRepository.save(doc);
+        logger.info("Document {} successfully - ID: {}", isReplacement ? "replaced" : "uploaded", doc.getId());
 
-        return mapToDocumentResponseDto(documentUpload);
+        return mapToDocumentResponseDto(doc);
     }
 
-    // now telll me flow first not code how we can do it
+
+
     @Override
     public DocumentResponseDto updateDocumentStatus(Long documentId, ProjectDocumentStatusUpdateDto updateDto) {
         logger.info("Updating document status for ID: {} to {}", documentId, updateDto.getNewStatus());
@@ -319,7 +290,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         dto.setValidationPassed(documentUpload.isValidationPassed());
         dto.setValidationIssues(documentUpload.getValidationIssues());
         dto.setRequiredDocumentId(documentUpload.getRequiredDocument().getId());
-        dto.setMilestoneAssignmentId(documentUpload.getMilestoneAssignment().getId());
         dto.setProjectId(documentUpload.getProject().getId());
         dto.setUploadedById(documentUpload.getUploadedBy().getId());
         dto.setCreatedBy(documentUpload.getCreatedBy());
