@@ -286,6 +286,8 @@ public class ProjectServiceImpl implements ProjectService {
             return projectRepository.countByAssignedUserIds(userIds);
         }
     }
+
+
     @Override
     public void deleteProject(Long id) {
         Project project = projectRepository.findActiveUserById(id)

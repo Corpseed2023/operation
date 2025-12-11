@@ -8,7 +8,7 @@ import com.doc.dto.project.ProjectResponseDto;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
-import com.doc.exception.ValidationException;
+import com.doc.service.ProjectSearchService;
 import com.doc.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -30,6 +30,9 @@ public class ProjectController {
 
     @Autowired
     private ProjectService projectService;
+    @Autowired
+    private ProjectSearchService projectSearchService;
+
 
     @Operation(summary = "Create a new project")
     @ApiResponses({
@@ -62,15 +65,49 @@ public class ProjectController {
 
 
     @GetMapping("/count")
-    @Operation(summary = "Get total count of projects for user")
+    @Operation(summary = "Get total count of searched projects")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Total count retrieved"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
-    public ResponseEntity<Long> getProjectCount(@RequestParam Long userId) {
-        long count = projectService.getProjectCount(userId);
-        return ResponseEntity.ok(count);
+    public ResponseEntity<Long> getProjectCount(
+            @RequestParam Long userId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String value) {
+
+        // If no search filter is provided → return total project count
+        if (type == null || value == null) {
+            long totalCount = projectService.getProjectCount(userId);
+            return ResponseEntity.ok(totalCount);
+        }
+
+        // Search-based counting
+        List<ProjectResponseDto> projects;
+
+        switch (type.toLowerCase()) {
+            case "company":
+                projects = projectSearchService.searchProjectsByCompanyName(value, userId);
+                break;
+
+            case "projectnumber":
+                projects = projectSearchService.searchProjectsByProjectNumber(value, userId);
+                break;
+
+            case "contact":
+                projects = projectSearchService.searchProjectsByContactName(value, userId);
+                break;
+
+            case "projectname":
+                projects = projectSearchService.searchProjectsByProjectName(value, userId);
+                break;
+
+            default:
+                return ResponseEntity.badRequest().body(0L);
+        }
+
+        return ResponseEntity.ok((long) projects.size());
     }
+
     @Operation(summary = "Delete a project by ID (soft delete)")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Project deleted successfully"),
