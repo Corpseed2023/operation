@@ -20,3 +20,20 @@ out/
 # OS
 .DS_Store
 Thumbs.db
+
+# Spring Boot / Application config (DO NOT commit to Git)
+application.properties
+application.yml
+application.yaml
+
+# Profile-specific properties (e.g. application-dev.properties)
+application-*.properties
+application-*.yml
+application-*.yaml
+
+# Other common sensitive or local files
+*.log
+logs/
+*.env
+.env
+secrets/

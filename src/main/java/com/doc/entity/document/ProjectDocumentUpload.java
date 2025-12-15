@@ -18,6 +18,7 @@ import java.util.Date;
         @Index(name = "idx_company_source", columnList = "is_from_company_doc")
 })
 @Getter
+
 @Setter
 @NoArgsConstructor
 @Comment("Documents uploaded per project milestone with reuse tracking")
@@ -26,10 +27,10 @@ public class ProjectDocumentUpload {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
-
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "required_document_id", nullable = false)
