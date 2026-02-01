@@ -1,39 +1,80 @@
-﻿# Compiled classes
+﻿# Compiled class file
 *.class
 
-# Package files
+# Package Files #
 *.jar
 *.war
+*.nar
 *.ear
+*.zip
+*.tar.gz
+*.rar
 
-# Maven/Gradle build directory
+# Maven / Gradle build directories
 target/
 build/
 out/
 
-# IDE
+# Gradle
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+
+# IDE files
 .idea/
 *.iml
 *.iws
 *.ipr
+*.sublime-*
+.vscode/
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+desktop.ini
 
-# Spring Boot / Application config (DO NOT commit to Git)
+# Logs and temporary files
+*.log
+logs/
+log/
+tmp/
+temp/
+
+# Environment / sensitive files
+.env
+.env.*
+*.env
+secrets/
+credentials/
+config/secrets/
+
+# Spring Boot / Application config files – DO NOT commit to Git
 application.properties
 application.yml
 application.yaml
-
-# Profile-specific properties (e.g. application-dev.properties)
 application-*.properties
 application-*.yml
 application-*.yaml
+bootstrap.properties
+bootstrap.yml
+bootstrap-*.properties
+bootstrap-*.yml
 
-# Other common sensitive or local files
-*.log
-logs/
-*.env
-.env
-secrets/
+# Local development overrides / profiles
+application-local.*
+application-dev.*
+application-test.*
+application-prod.*
+
+# Database / migration files with credentials
+*.sql.bak
+flyway*
+liquibase*
+
+# Other common ignores
+.classpath
+.project
+.settings/
+bin/
