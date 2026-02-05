@@ -36,53 +36,69 @@ public class ProductServiceImpl implements ProductService {
     private UserRepository userRepository;
 
     @Override
-    public List<ProductResponseDto> createProducts(List<ProductRequestDto> requestDtoList) {
-        logger.info("Creating products for request: {}", requestDtoList);
-        List<ProductResponseDto> responseList = new ArrayList<>();
+    public ProductResponseDto createProduct(ProductRequestDto requestDto) {
 
-        for (ProductRequestDto requestDto : requestDtoList) {
-            validateRequestDto(requestDto);
+        logger.info("Creating product for request: {}", requestDto);
 
-            // Validate that id is provided by client (since no auto-generation now)
-            if (requestDto.getProductId() == null) {
-                throw new ValidationException("Product ID must be provided", "INVALID_PRODUCT_ID");
-            }
+        validateRequestDto(requestDto);
 
-            // Check if product with same id already exists (avoid overwrite)
-            if (productRepository.existsById(requestDto.getProductId())) {
-                throw new ValidationException("Product with ID " + requestDto.getProductId() + " already exists", "DUPLICATE_PRODUCT_ID");
-            }
-
-            // Check for duplicate product name as before
-            if (productRepository.existsByProductNameAndIsDeletedFalse(requestDto.getProductName().trim())) {
-                throw new ValidationException("Product with name " + requestDto.getProductName() + " already exists", "DUPLICATE_PRODUCT_NAME");
-            }
-
-            User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
-
-            User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found", "USER_NOT_FOUND"));
-
-            Product product = new Product();
-
-            // Explicitly set id from DTO
-            product.setId(requestDto.getProductId());
-
-            mapRequestDtoToEntity(product, requestDto);
-            product.setCreatedBy(createdBy);
-            product.setUpdatedBy(updatedBy);
-            product.setCreatedDate(new Date());
-            product.setUpdatedDate(new Date());
-            product.setDeleted(false);
-            product.setActive(requestDto.isActive());
-
-            product = productRepository.save(product);
-            logger.info("Product created successfully with ID: {}", product.getId());
-
-            responseList.add(mapToResponseDto(product));
+        // Product ID must be provided
+        if (requestDto.getProductId() == null) {
+            throw new ValidationException(
+                    "Product ID must be provided",
+                    "INVALID_PRODUCT_ID"
+            );
         }
-        return responseList;
+
+        // Prevent overwrite
+        if (productRepository.existsById(requestDto.getProductId())) {
+            throw new ValidationException(
+                    "Product with ID " + requestDto.getProductId() + " already exists",
+                    "DUPLICATE_PRODUCT_ID"
+            );
+        }
+
+        // Prevent duplicate product name
+        if (productRepository.existsByProductNameAndIsDeletedFalse(
+                requestDto.getProductName().trim()
+        )) {
+            throw new ValidationException(
+                    "Product with name " + requestDto.getProductName() + " already exists",
+                    "DUPLICATE_PRODUCT_NAME"
+            );
+        }
+
+        User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user with ID " + requestDto.getCreatedBy() + " not found",
+                        "USER_NOT_FOUND"
+                ));
+
+        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user with ID " + requestDto.getUpdatedBy() + " not found",
+                        "USER_NOT_FOUND"
+                ));
+
+        Product product = new Product();
+
+        // Explicit ID from client
+        product.setId(requestDto.getProductId());
+
+        mapRequestDtoToEntity(product, requestDto);
+
+        product.setCreatedBy(createdBy);
+        product.setUpdatedBy(updatedBy);
+        product.setCreatedDate(new Date());
+        product.setUpdatedDate(new Date());
+        product.setDeleted(false);
+        product.setActive(requestDto.isActive());
+
+        product = productRepository.save(product);
+
+        logger.info("Product created successfully with ID: {}", product.getId());
+
+        return mapToResponseDto(product);
     }
 
     @Override

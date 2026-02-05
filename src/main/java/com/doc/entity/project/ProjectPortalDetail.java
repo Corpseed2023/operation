@@ -1,6 +1,6 @@
 package com.doc.entity.project;
 
-import com.doc.entity.client.Company;
+import com.doc.entity.client. Company;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;

@@ -11,7 +11,7 @@ public interface ProductService {
 
     void deleteProduct(Long id);
 
-    List<ProductResponseDto> createProducts(List<ProductRequestDto> requestDtoList);
+    ProductResponseDto createProduct(ProductRequestDto requestDto);
 
     List<ProductResponseDto> getAllProducts(Long userId, int page, int size);
 

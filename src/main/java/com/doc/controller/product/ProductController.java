@@ -21,18 +21,21 @@ public class ProductController {
 
     private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
 
-
-
     @Autowired
     private ProductService productService;
 
     @PostMapping
-    public ResponseEntity<List<ProductResponseDto>> createProducts(@Valid @RequestBody List<ProductRequestDto> requestDtoList) {
-        logger.info("Creating products for request: {}", requestDtoList);
-        List<ProductResponseDto> responses = productService.createProducts(requestDtoList);
-        logger.info("Created {} products successfully", responses.size());
-        return new ResponseEntity<>(responses, HttpStatus.CREATED);
+    public ResponseEntity<ProductResponseDto> createProduct(
+            @Valid @RequestBody ProductRequestDto requestDto
+    ) {
+        logger.info("Creating product for request: {}", requestDto);
+
+        ProductResponseDto response = productService.createProduct(requestDto);
+
+        logger.info("Product created successfully with ID: {}", response.getId());
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponseDto> getProductById(@PathVariable Long id) {

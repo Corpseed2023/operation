@@ -25,14 +25,14 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
     private ApplicantTypeRepository applicantTypeRepository;
 
     @Override
-    public ApplicantTypeResponseDto createApplicantType(ApplicantTypeRequestDto dto) {
-        if (applicantTypeRepository.existsByNameIgnoreCaseAndIsDeletedFalse(dto.getName().trim())) {
-            throw new ValidationException("Applicant type with name '" + dto.getName() + "' already exists", "ERR_DUPLICATE_APPLICANT_TYPE");
+    public ApplicantTypeResponseDto createApplicantType(ApplicantTypeRequestDto applicantTypeRequestDto) {
+        if (applicantTypeRepository.existsByNameIgnoreCaseAndIsDeletedFalse(applicantTypeRequestDto.getName().trim())) {
+            throw new ValidationException("Applicant type with name '" + applicantTypeRequestDto.getName() + "' already exists", "ERR_DUPLICATE_APPLICANT_TYPE");
         }
 
         ApplicantType applicantType = new ApplicantType();
-        applicantType.setName(dto.getName().trim());
-        applicantType.setDescription(dto.getDescription());
+        applicantType.setName(applicantTypeRequestDto.getName().trim());
+        applicantType.setDescription(applicantTypeRequestDto.getDescription());
         applicantType.setActive(true);
         applicantType.setDeleted(false);
 
@@ -46,7 +46,8 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
 
         if (applicantTypeRepository.existsByNameIgnoreCaseAndIsDeletedFalseAndIdNot(dto.getName().trim(), id)) {
-            throw new ValidationException("Another applicant type with name '" + dto.getName() + "' already exists", "ERR_DUPLICATE_APPLICANT_TYPE");
+            throw new ValidationException("Another applicant type with name '" + dto.getName() + "' already exists",
+                    "ERR_DUPLICATE_APPLICANT_TYPE");
         }
 
         entity.setName(dto.getName().trim());
@@ -88,4 +89,6 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
         dto.setActive(entity.isActive());
         return dto;
     }
+
+
 }
