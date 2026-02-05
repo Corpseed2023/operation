@@ -2,7 +2,11 @@ package com.doc.controller.product;
 
 import com.doc.dto.product.ProductRequestDto;
 import com.doc.dto.product.ProductResponseDto;
+import com.doc.exception.ValidationException;
 import com.doc.service.ProductService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,5 +68,33 @@ public class ProductController {
         productService.deleteProduct(id);
         logger.info("Product deleted successfully with ID: {}", id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @Operation(summary = "Update an existing product")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Product updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data or validation failed"),
+            @ApiResponse(responseCode = "403", description = "Insufficient privileges"),
+            @ApiResponse(responseCode = "404", description = "Product or user not found")
+    })
+    @PutMapping("/{id}")
+    public ResponseEntity<ProductResponseDto> updateProduct(
+            @PathVariable Long id,
+            @Valid @RequestBody ProductRequestDto requestDto) {
+
+        logger.info("Updating product with ID: {}, request: {}", id, requestDto);
+
+        // Optional: you can enforce that productId in DTO matches path id (recommended)
+        if (requestDto.getProductId() != null && !requestDto.getProductId().equals(id)) {
+            throw new ValidationException("Product ID in body must match path ID", "ID_MISMATCH");
+        }
+
+        // Usually we don't require productId in update body → set it from path
+        requestDto.setProductId(id);
+
+        ProductResponseDto updated = productService.updateProduct(id, requestDto);
+
+        logger.info("Product updated successfully with ID: {}", updated.getId());
+        return ResponseEntity.ok(updated);
     }
 }

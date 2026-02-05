@@ -15,4 +15,5 @@ public interface ProductService {
 
     List<ProductResponseDto> getAllProducts(Long userId, int page, int size);
 
+    ProductResponseDto updateProduct(Long id, ProductRequestDto requestDto);
 }

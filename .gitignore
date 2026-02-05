@@ -1,39 +1,99 @@
-﻿# Compiled classes
+﻿# ┌─────────────────────────────────────────────────────────────┐
+# │                     Java / JVM related                      │
+# └─────────────────────────────────────────────────────────────┘
 *.class
-
-# Package files
 *.jar
 *.war
 *.ear
+*.log
 
-# Maven/Gradle build directory
+# ┌─────────────────────────────────────────────────────────────┐
+# │                   Build directories                         │
+# └─────────────────────────────────────────────────────────────┘
 target/
 build/
 out/
+*.gradle/
+.gradle/
 
-# IDE
+# ┌─────────────────────────────────────────────────────────────┐
+# │                        IDE / Editor                         │
+# └─────────────────────────────────────────────────────────────┘
 .idea/
 *.iml
 *.iws
 *.ipr
+.vscode/
+*.sublime-*
+*.swp
+*.swo
 
-# OS
+# ┌─────────────────────────────────────────────────────────────┐
+# │                   OS / Filesystem junk                      │
+# └─────────────────────────────────────────────────────────────┘
 .DS_Store
 Thumbs.db
+ehthumbs.db
+desktop.ini
 
-# Spring Boot / Application config (DO NOT commit to Git)
+# ┌─────────────────────────────────────────────────────────────┐
+# │               Spring Boot / Configuration                   │
+# └─────────────────────────────────────────────────────────────┘
+# Local / sensitive configuration files – NEVER commit these!
 application.properties
 application.yml
 application.yaml
 
-# Profile-specific properties (e.g. application-dev.properties)
+# Profile-specific files (dev, test, prod, local, etc.)
 application-*.properties
 application-*.yml
 application-*.yaml
 
-# Other common sensitive or local files
-*.log
-logs/
+# Externalized config / secrets
 *.env
 .env
+.env.*
 secrets/
+config/local/
+docker-compose.override.yml
+
+# ┌─────────────────────────────────────────────────────────────┐
+# │                      Logging & temp                         │
+# └─────────────────────────────────────────────────────────────┘
+logs/
+*.log.*
+log/
+tmp/
+temp/
+
+# ┌─────────────────────────────────────────────────────────────┐
+# │                 Maven / Gradle wrapper                      │
+# └─────────────────────────────────────────────────────────────┘
+.mvn/
+mvnw
+mvnw.cmd
+gradlew
+gradlew.bat
+gradle-wrapper.jar
+gradle-wrapper.properties
+
+# ┌─────────────────────────────────────────────────────────────┐
+# │                   Database / migrations                     │
+# └─────────────────────────────────────────────────────────────┘
+*.sql.bak
+*.h2.db
+*.mv.db
+*.trace.db
+
+# ┌─────────────────────────────────────────────────────────────┐
+# │                   Miscellaneous                             │
+# └─────────────────────────────────────────────────────────────┘
+.classpath
+.project
+.settings/
+bin/
+*.launch
+*.jks
+*.keystore
+*.p12
+*.pfx

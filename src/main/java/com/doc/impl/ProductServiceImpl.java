@@ -35,6 +35,7 @@ public class ProductServiceImpl implements ProductService {
     @Autowired
     private UserRepository userRepository;
 
+
     @Override
     public ProductResponseDto createProduct(ProductRequestDto requestDto) {
 
@@ -190,4 +191,65 @@ public class ProductServiceImpl implements ProductService {
 
         return dto;
     }
+
+    @Override
+    public ProductResponseDto updateProduct(Long id, ProductRequestDto requestDto) {
+
+        logger.info("Updating product ID: {}", id);
+
+        validateRequestDto(requestDto);
+
+        // 1. Find existing product
+        Product product = productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active product with ID " + id + " not found",
+                        "PRODUCT_NOT_FOUND"
+                ));
+
+        // 2. Authorization check – same logic as getAllProducts
+        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user with ID " + requestDto.getUpdatedBy() + " not found",
+                        "USER_NOT_FOUND"
+                ));
+
+        boolean hasRequiredRole = updatedBy.getRoles().stream()
+                .anyMatch(role -> role.getName().equals("ADMIN") || role.getName().equals("OPERATION_HEAD"));
+
+        if (!hasRequiredRole) {
+            throw new ValidationException(
+                    "User does not have the required role to update products",
+                    "INSUFFICIENT_PRIVILEGES"
+            );
+        }
+
+        // 3. Check for name conflict (exclude current product)
+        if (!product.getProductName().equalsIgnoreCase(requestDto.getProductName().trim()) &&
+                productRepository.existsByProductNameAndIsDeletedFalse(requestDto.getProductName().trim())) {
+
+            throw new ValidationException(
+                    "Another product with name '" + requestDto.getProductName() + "' already exists",
+                    "DUPLICATE_PRODUCT_NAME"
+            );
+        }
+
+        // 4. Apply updates
+        mapRequestDtoToEntity(product, requestDto);
+
+        // Important fields
+        product.setUpdatedBy(updatedBy);
+        product.setUpdatedDate(new Date());
+        product.setActive(requestDto.isActive());
+
+        // Optional: allow changing requiresClientPortal / portal fields
+        // (already handled in mapRequestDtoToEntity)
+
+        product = productRepository.save(product);
+
+        logger.info("Product updated successfully - ID: {}, name: {}", product.getId(), product.getProductName());
+
+        return mapToResponseDto(product);
+    }
+
+
 }
