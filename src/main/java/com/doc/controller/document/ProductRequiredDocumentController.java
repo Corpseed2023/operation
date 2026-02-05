@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -42,13 +43,31 @@ public class ProductRequiredDocumentController {
         return ResponseEntity.ok(productRequiredDocumentService.update(id, dto));
     }
 
-    // Active only, paginated (if needed)
     @Operation(summary = "Get active required documents (paginated)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Paginated list of active required document templates"),
+            @ApiResponse(responseCode = "400", description = "Invalid pagination parameters or missing/invalid userId"),
+            @ApiResponse(responseCode = "404", description = "User not found or inactive")
+    })
     @GetMapping("/active")
     public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getActivePaginated(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(productRequiredDocumentService.getActivePaginated(page, size));
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = true) Long userId) {          // ← added here
+
+        // Basic input validation (optional but recommended)
+        if (userId == null || userId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid userId is required"
+            );
+        }
+
+        // Call service with userId
+        List<ProductRequiredDocumentResponseDto> documents =
+                productRequiredDocumentService.getActivePaginated(page, size, userId);
+
+        return ResponseEntity.ok(documents);
     }
 
 

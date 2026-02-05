@@ -4,8 +4,10 @@
     import com.doc.dto.document.ProductRequiredDocumentRequestDto;
     import com.doc.dto.document.ProductRequiredDocumentResponseDto;
     import com.doc.entity.document.ProductRequiredDocuments;
+    import com.doc.entity.user.User;
     import com.doc.exception.ResourceNotFoundException;
     import com.doc.exception.ValidationException;
+    import com.doc.repository.UserRepository;
     import com.doc.repository.documentRepo.ProductRequiredDocumentRepository;
     import com.doc.service.ProductRequiredDocumentService;
     import org.springframework.beans.factory.annotation.Autowired;
@@ -14,10 +16,15 @@
     import org.springframework.transaction.annotation.Transactional;
 
     import java.util.List;
+    import java.util.Optional;
 
     @Service
     @Transactional
     public class ProductRequiredDocumentServiceImpl implements ProductRequiredDocumentService {
+
+
+        @Autowired
+        private UserRepository userRepository;
 
         private final ProductRequiredDocumentRepository productRequiredDocumentRepository;
 
@@ -54,20 +61,51 @@
             return mapToResponseDto(entity);
         }
 
-
-
         @Override
-        public List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size) {
-            page = Math.max(page, 1);
-            size = size > 0 ? size : 20;
+        public List<ProductRequiredDocumentResponseDto> getActivePaginated(
+                int page,
+                int size,
+                Long userId) {
 
-            Pageable pageable = PageRequest.of(page - 1, size, Sort.by("name").ascending());
-            return productRequiredDocumentRepository.findAllByIsDeletedFalseAndIsActiveTrue(pageable)  // FIXED
-                    .getContent()
+            // 1. Basic validation of userId
+            if (userId == null || userId <= 0) {
+                throw new IllegalArgumentException("userId is required and must be a positive number");
+            }
+
+            // 2. Check if active user exists
+            Optional<User> userOpt = userRepository.findActiveUserById(userId);
+            if (userOpt.isEmpty()) {
+                throw new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "USER_NOT_FOUND_OR_INACTIVE"
+                );
+            }
+
+            // Optional: you can keep the User object if you need it later (e.g. for filtering)
+            // User requestingUser = userOpt.get();
+
+            // 3. Pagination
+            page = Math.max(page, 1);
+            size = size > 0 ? Math.min(size, 100) : 20;
+
+            Pageable pageable = PageRequest.of(
+                    page - 1,
+                    size,
+                    Sort.by("name").ascending()
+            );
+
+            // 4. Fetch data
+            Page<ProductRequiredDocuments> pageResult =
+                    productRequiredDocumentRepository.findAllByIsDeletedFalseAndIsActiveTrue(pageable);
+
+            return pageResult.getContent()
                     .stream()
                     .map(this::mapToResponseDto)
                     .toList();
         }
+
+
+
 
         private ProductRequiredDocuments findActiveById(Long id) {
             return productRequiredDocumentRepository.findByIdAndIsDeletedFalse(id)  // FIXED

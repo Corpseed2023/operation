@@ -8,8 +8,5 @@ import java.util.List;
 public interface ProductRequiredDocumentService {
     ProductRequiredDocumentResponseDto create(ProductRequiredDocumentRequestDto dto);
     ProductRequiredDocumentResponseDto update(Long id, ProductRequiredDocumentRequestDto dto);
-
-    List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size);
-
-
+    List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size, Long userId);
 }
