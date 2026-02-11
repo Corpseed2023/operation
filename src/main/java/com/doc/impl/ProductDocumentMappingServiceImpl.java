@@ -97,19 +97,22 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
 
     @Override
     public List<ProductDocumentMappingResponseDto> getRequiredDocuments(Long productId, Long applicantTypeId) {
-        log.debug("Fetching required documents for product ID: {}, applicantType ID: {}", productId, applicantTypeId);
-
+        log.debug("Fetching required documents for product={}, applicantType={}", productId, applicantTypeId);
         validateProductExists(productId);
 
-        List<ProductDocumentMapping> mappings = mappingRepository
-                .findByProductIdAndApplicantTypeIdAndIsActiveTrue(productId, applicantTypeId);
+        List<ProductDocumentMapping> mappings;
+        if (applicantTypeId == null) {
+            mappings = mappingRepository.findByProductIdAndApplicantTypeIsNullAndIsActiveTrue(productId);
+        } else {
+            mappings = mappingRepository.findByProductIdAndApplicantTypeIdAndIsActiveTrue(productId, applicantTypeId);
+        }
 
         return mappings.stream()
-                .sorted(Comparator.comparingInt(m ->
-                        m.getDisplayOrder() != null ? m.getDisplayOrder() : Integer.MAX_VALUE))
+                .sorted(Comparator.comparingInt(m -> m.getDisplayOrder() != null ? m.getDisplayOrder() : Integer.MAX_VALUE))
                 .map(this::mapToResponseDto)
                 .toList();
     }
+
 
 
     private ProductDocumentMappingResponseDto mapToResponseDto(ProductDocumentMapping mapping) {

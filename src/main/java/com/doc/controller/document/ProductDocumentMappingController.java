@@ -39,9 +39,6 @@ public class ProductDocumentMappingController {
                     .body("Product ID in path (" + productId + ") must match body (" + request.getProductId() + ")");
         }
 
-
-
-
         mappingService.assignDocuments(request);
         return ResponseEntity.ok("Required documents assigned successfully");
     }
