@@ -206,6 +206,8 @@ public class UserServiceImpl implements UserService {
 
     private User validateManager(Long managerId, List<Role> roles) {
         boolean hasAdminRole = roles.stream().anyMatch(role -> role.getName().equalsIgnoreCase("ADMIN"));
+        System.out.println("roles: "+roles);
+        System.out.println("hasAdminRole: "+hasAdminRole);
         if (!hasAdminRole && managerId == null) {
             throw new ValidationException("Manager ID is required for non-ADMIN roles", "INVALID_MANAGER_ID");
         }
