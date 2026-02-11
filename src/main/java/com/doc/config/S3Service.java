@@ -16,10 +16,10 @@ public class S3Service {
 
     private final AmazonS3 amazonS3;
 
-    @Value("${aws.s3.bucket}")
+    @Value("${aws.s3.bucket-name}")          // ← changed here
     private String bucketName;
 
-    @Value("${aws.s3.base-url}")
+    @Value("${aws_path}")                    // ← changed here (or use aws.s3.base-url if you rename the property)
     private String baseUrl;
 
     public S3Service(AmazonS3 amazonS3) {
@@ -38,11 +38,11 @@ public class S3Service {
         metadata.setContentType(file.getContentType());
 
         PutObjectRequest request = new PutObjectRequest(bucketName, "corpseed/" + s3Key, file.getInputStream(), metadata)
-                .withCannedAcl(CannedAccessControlList.PublicRead);  // Makes file publicly accessible
+                .withCannedAcl(CannedAccessControlList.PublicRead);
 
         amazonS3.putObject(request);
 
-        return "corpseed/" + s3Key;  // Include folder if needed
+        return "corpseed/" + s3Key;
     }
 
     public String getFullUrl(String s3Key) {
