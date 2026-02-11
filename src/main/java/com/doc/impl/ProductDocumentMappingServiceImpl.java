@@ -96,27 +96,29 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ProductDocumentMappingResponseDto> getRequiredDocuments(Long productId, Long applicantTypeId) {
         log.debug("Fetching required documents for product={}, applicantType={}", productId, applicantTypeId);
         validateProductExists(productId);
 
         List<ProductDocumentMapping> mappings;
-        if (applicantTypeId == null) {
-            mappings = mappingRepository.findByProductIdAndApplicantTypeIsNullAndIsActiveTrue(productId);
+        if (applicantTypeId == null || applicantTypeId == -1) {
+            mappings = mappingRepository.findByProductIdAndIsActiveTrue(productId);
         } else {
             mappings = mappingRepository.findByProductIdAndApplicantTypeIdAndIsActiveTrue(productId, applicantTypeId);
         }
 
         return mappings.stream()
                 .sorted(Comparator.comparingInt(m -> m.getDisplayOrder() != null ? m.getDisplayOrder() : Integer.MAX_VALUE))
-                .map(this::mapToResponseDto)
+                .map(this::mapToResponseDtoInDocs)
                 .toList();
     }
 
+    private ProductDocumentMappingResponseDto mapToResponseDtoInDocs(ProductDocumentMapping mapping) {
 
-
-    private ProductDocumentMappingResponseDto mapToResponseDto(ProductDocumentMapping mapping) {
         ProductRequiredDocuments doc = mapping.getRequiredDocument();
+        ApplicantType applicantType = mapping.getApplicantType(); // get it from mapping
+
         return new ProductDocumentMappingResponseDto(
                 mapping.getId(),
                 doc.getId(),
@@ -127,8 +129,31 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
                 mapping.getDisplayOrder(),
                 doc.getAllowedFormats(),
                 doc.getExpiryType(),
-                doc.getMaxValidityYears());
+                doc.getMaxValidityYears(),
+
+                // ✅ new fields
+                applicantType != null ? applicantType.getId() : null,
+                applicantType != null ? applicantType.getName() : null
+        );
     }
+
+
+
+
+//    private ProductDocumentMappingResponseDto mapToResponseDto(ProductDocumentMapping mapping) {
+//        ProductRequiredDocuments doc = mapping.getRequiredDocument();
+//        return new ProductDocumentMappingResponseDto(
+//                mapping.getId(),
+//                doc.getId(),
+//                doc.getName(),
+//                doc.getType(),
+//                doc.getDescription(),
+//                mapping.isMandatory(),
+//                mapping.getDisplayOrder(),
+//                doc.getAllowedFormats(),
+//                doc.getExpiryType(),
+//                doc.getMaxValidityYears());
+//    }
 
     private void validateAssignRequest(ProductDocumentMappingRequestDto request) {
         if (request.getProductId() == null) {

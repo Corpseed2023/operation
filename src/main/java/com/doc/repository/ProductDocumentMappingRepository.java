@@ -35,6 +35,6 @@ public interface ProductDocumentMappingRepository extends JpaRepository<ProductD
             @Param("productId") Long productId,
             @Param("applicantTypeId") Long applicantTypeId);
 
-    List<ProductDocumentMapping> findByProductIdAndApplicantTypeIsNullAndIsActiveTrue(Long productId);
+    List<ProductDocumentMapping> findByProductIdAndIsActiveTrue(Long productId);
 
 }
