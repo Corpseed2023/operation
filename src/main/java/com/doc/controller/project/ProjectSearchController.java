@@ -7,10 +7,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -76,4 +73,17 @@ public class ProjectSearchController {
         List<ProjectResponseDto> projects = projectSearchService.searchProjectsByProjectName(projectName, userId);
         return ResponseEntity.ok(projects);
     }
+
+    @GetMapping("/{type}")
+    public ResponseEntity<List<ProjectResponseDto>> searchProjects(
+            @PathVariable String type,
+            @RequestParam String value,
+            @RequestParam Long userId) {
+
+        List<ProjectResponseDto> projects =
+                projectSearchService.searchProjects(type, value, userId);
+
+        return ResponseEntity.ok(projects);
+    }
+
 }

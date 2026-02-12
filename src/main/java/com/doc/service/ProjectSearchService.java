@@ -13,4 +13,7 @@ public interface ProjectSearchService {
     List<ProjectResponseDto> searchProjectsByContactName(String contactName, Long userId);
 
     List<ProjectResponseDto> searchProjectsByProjectName(String projectName, Long userId);
+
+    List<ProjectResponseDto> searchProjects(String type, String value, Long userId);
+
 }
