@@ -14,6 +14,7 @@ import jakarta.persistence.criteria.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -108,10 +109,148 @@ public class ProjectSearchServiceImpl implements ProjectSearchService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Maps Project entity to ProjectResponseDto
-     * Uses salesPersonId and salesPersonName directly from Project (from microservice)
-     */
+
+    @Override
+    public List<ProjectResponseDto> searchProjects(
+            String type,
+            String value,
+            Long userId,
+            String statusName,
+            LocalDate fromDate,
+            LocalDate toDate) {
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found or deleted",
+                                "ERR_USER_NOT_FOUND"
+                        )
+                );
+
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> role.getName().equals("ADMIN"));
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Project> query = cb.createQuery(Project.class);
+        Root<Project> project = query.from(Project.class);
+
+        // fetch status to avoid LazyInitializationException
+        project.fetch("status", JoinType.LEFT);
+
+        List<Predicate> predicates = new ArrayList<>();
+
+        // Always filter soft delete
+        predicates.add(cb.isFalse(project.get("isDeleted")));
+
+        // ================= SEARCH CONDITION =================
+        if (value != null && !value.isBlank()) {
+
+            String likeValue = "%" + value.toLowerCase() + "%";
+
+            switch (type.toLowerCase()) {
+
+                case "company":
+                    Join<Object, Object> companyJoin = project.join("company", JoinType.LEFT);
+                    predicates.add(cb.like(
+                            cb.lower(companyJoin.get("name")),
+                            likeValue
+                    ));
+                    break;
+
+                case "project-number":
+                    predicates.add(cb.like(
+                            cb.lower(project.get("projectNo")),
+                            likeValue
+                    ));
+                    break;
+
+                case "contact":
+                    Join<Object, Object> contactJoin = project.join("contact", JoinType.LEFT);
+                    predicates.add(cb.like(
+                            cb.lower(contactJoin.get("name")),
+                            likeValue
+                    ));
+                    break;
+
+                case "project-name":
+                    predicates.add(cb.like(
+                            cb.lower(project.get("name")),
+                            likeValue
+                    ));
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Invalid search type");
+            }
+        }
+
+        // ================= STATUS FILTER =================
+        if (statusName != null &&
+                !statusName.equalsIgnoreCase("all") &&
+                !statusName.isBlank()) {
+
+            predicates.add(cb.equal(
+                    cb.lower(project.get("status").get("name")),
+                    statusName.toLowerCase()
+            ));
+
+        }
+
+        // ================= DATE FILTER =================
+
+        if (fromDate != null && toDate != null) {
+            predicates.add(cb.between(
+                    project.get("date"),
+                    fromDate,
+                    toDate
+            ));
+        } else if (fromDate != null) {
+            predicates.add(cb.greaterThanOrEqualTo(
+                    project.get("date"),
+                    fromDate
+            ));
+        } else if (toDate != null) {
+            predicates.add(cb.lessThanOrEqualTo(
+                    project.get("date"),
+                    toDate
+            ));
+        }
+
+        // ================= ROLE FILTER =================
+
+        if (!isAdmin) {
+
+            List<Long> accessibleUserIds = getAccessibleUserIds(user);
+
+            Subquery<Long> subquery = query.subquery(Long.class);
+            Root<ProjectMilestoneAssignment> assignment =
+                    subquery.from(ProjectMilestoneAssignment.class);
+
+            subquery.select(assignment.get("project").get("id"))
+                    .where(
+                            cb.and(
+                                    cb.equal(assignment.get("project"), project),
+                                    assignment.get("assignedUser").get("id").in(accessibleUserIds),
+                                    cb.isFalse(assignment.get("isDeleted"))
+                            )
+                    );
+
+            predicates.add(cb.exists(subquery));
+        }
+
+        query.select(project)
+                .where(cb.and(predicates.toArray(new Predicate[0])))
+                .distinct(true);
+
+        List<Project> projects =
+                entityManager.createQuery(query).getResultList();
+
+        return projects.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+
     private ProjectResponseDto mapToResponseDto(Project project) {
         ProjectResponseDto dto = new ProjectResponseDto();
         dto.setId(project.getId());
@@ -160,116 +299,4 @@ public class ProjectSearchServiceImpl implements ProjectSearchService {
 
         return dto;
     }
-
-    @Override
-    public List<ProjectResponseDto> searchProjects(String type, String value, Long userId) {
-
-        User user = userRepository.findActiveUserById(userId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "User not found or deleted",
-                                "ERR_USER_NOT_FOUND"
-                        )
-                );
-
-        boolean isAdmin = user.getRoles().stream()
-                .anyMatch(role -> role.getName().equals("ADMIN"));
-
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Project> query = cb.createQuery(Project.class);
-        Root<Project> project = query.from(Project.class);
-
-        List<Predicate> predicates = new ArrayList<>();
-
-        // Always filter soft delete
-        predicates.add(cb.isFalse(project.get("isDeleted")));
-
-        // 🔹 Dynamic Search Condition
-        String likeValue = "%" + value.toLowerCase() + "%";
-
-        switch (type.toLowerCase()) {
-
-            case "company":
-                Join<Object, Object> companyJoin = project.join("company", JoinType.LEFT);
-                predicates.add(
-                        cb.like(
-                                cb.lower(companyJoin.get("name")),
-                                likeValue
-                        )
-                );
-                break;
-
-            case "project-number":
-                predicates.add(
-                        cb.like(
-                                cb.lower(project.get("projectNo")),
-                                likeValue
-                        )
-                );
-                break;
-
-            case "contact":
-                Join<Object, Object> contactJoin = project.join("contact", JoinType.LEFT);
-                predicates.add(
-                        cb.like(
-                                cb.lower(contactJoin.get("name")),
-                                likeValue
-                        )
-                );
-                break;
-
-            case "project-name":
-                predicates.add(
-                        cb.like(
-                                cb.lower(project.get("name")),
-                                likeValue
-                        )
-                );
-                break;
-
-            default:
-                throw new IllegalArgumentException("Invalid search type");
-        }
-
-        // 🔹 Role-Based Filtering (EXISTS subquery for non-admin)
-        if (!isAdmin) {
-
-            List<Long> accessibleUserIds = getAccessibleUserIds(user);
-
-            Subquery<Long> subquery = query.subquery(Long.class);
-            Root<ProjectMilestoneAssignment> assignment =
-                    subquery.from(ProjectMilestoneAssignment.class);
-
-            subquery.select(assignment.get("project").get("id"))
-                    .where(
-                            cb.and(
-                                    cb.equal(
-                                            assignment.get("project"),
-                                            project
-                                    ),
-                                    assignment.get("assignedUser")
-                                            .get("id")
-                                            .in(accessibleUserIds),
-                                    cb.isFalse(assignment.get("isDeleted"))
-                            )
-                    );
-
-            predicates.add(cb.exists(subquery));
-        }
-
-        query.select(project)
-                .where(cb.and(predicates.toArray(new Predicate[0])))
-                .distinct(true);
-
-        List<Project> projects =
-                entityManager.createQuery(query).getResultList();
-
-        return projects.stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    // ================= DTO MAPPER (UNCHANGED) =================
-
-
 }

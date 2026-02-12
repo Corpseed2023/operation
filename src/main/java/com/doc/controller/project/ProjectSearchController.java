@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -78,10 +79,13 @@ public class ProjectSearchController {
     public ResponseEntity<List<ProjectResponseDto>> searchProjects(
             @PathVariable String type,
             @RequestParam String value,
-            @RequestParam Long userId) {
+            @RequestParam Long userId,
+            @RequestParam(required = false) String statusName,
+            @RequestParam(required = false) LocalDate fromDate,
+            @RequestParam(required = false) LocalDate toDate) {
 
         List<ProjectResponseDto> projects =
-                projectSearchService.searchProjects(type, value, userId);
+                projectSearchService.searchProjects(type, value, userId,statusName, fromDate, toDate);
 
         return ResponseEntity.ok(projects);
     }
