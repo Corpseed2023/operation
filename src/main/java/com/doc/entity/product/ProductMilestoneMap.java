@@ -86,4 +86,5 @@ public class ProductMilestoneMap {
     private Date updatedDate;
 
     private LocalDate date;
+
 }
