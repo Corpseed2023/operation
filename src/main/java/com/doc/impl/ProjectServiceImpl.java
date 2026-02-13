@@ -903,7 +903,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setFileName(document.getFileName());
         dto.setOldFileUrl(document.getOldFileUrl());
         dto.setOldFileName(document.getOldFileName());
-        dto.setStatus(document.getStatus());
+        dto.setStatus(document.getStatus().getName());
         dto.setRemarks(document.getRemarks());
         dto.setUploadTime(document.getUploadTime());
         dto.setRequiredDocumentId(document.getRequiredDocument().getId());
