@@ -34,7 +34,7 @@ public class ProjectDocumentUploadController {
             @ApiResponse(responseCode = "404", description = "Project, milestone assignment, or required document not found"),
             @ApiResponse(responseCode = "409", description = "Duplicate document upload")
     })
-    @PostMapping("/{projectId}/milestones/{milestoneAssignmentId}/documents")
+    @PostMapping("/{projectId}/milestones/documents")
     public ResponseEntity<DocumentResponseDto> uploadDocument(
             @Parameter(description = "ID of the project") @PathVariable Long projectId,
             @Valid @RequestBody ProjectDocumentUploadRequestDto requestDto) {
