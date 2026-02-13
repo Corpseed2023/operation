@@ -15,6 +15,4 @@ public class DepartmentRequestDto {
     @NotBlank(message = "Department name cannot be empty")
     private String name;
 
-    @NotNull(message = "Created by user ID cannot be null")
-    private Long createdBy;
 }

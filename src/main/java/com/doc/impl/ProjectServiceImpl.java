@@ -896,24 +896,6 @@ public class ProjectServiceImpl implements ProjectService {
         return dto;
     }
 
-    private DocumentResponseDto mapToDocumentResponseDto(ProjectDocumentUpload document) {
-        DocumentResponseDto dto = new DocumentResponseDto();
-        dto.setId(document.getId());
-        dto.setFileUrl(document.getFileUrl());
-        dto.setFileName(document.getFileName());
-        dto.setOldFileUrl(document.getOldFileUrl());
-        dto.setOldFileName(document.getOldFileName());
-        dto.setStatus(document.getStatus().getName());
-        dto.setRemarks(document.getRemarks());
-        dto.setUploadTime(document.getUploadTime());
-        dto.setRequiredDocumentId(document.getRequiredDocument().getId());
-        dto.setProjectId(document.getProject().getId());
-        dto.setUploadedById(document.getUploadedBy().getId());
-        dto.setCreatedDate(document.getCreatedDate());
-        dto.setUpdatedDate(document.getUpdatedDate());
-        dto.setReplacementCount(document.getReplacementCount());
-        return dto;
-    }
 
     @Override
     @Transactional

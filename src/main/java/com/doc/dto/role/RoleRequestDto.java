@@ -16,7 +16,5 @@ public class RoleRequestDto {
     @NotBlank(message = "Role name is mandatory")
     private String name;
 
-    private Long createdBy;
 
-    private Long updatedBy;
 }

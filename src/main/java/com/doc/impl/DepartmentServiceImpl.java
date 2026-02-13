@@ -46,8 +46,8 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
 
         // Validate createdBy user
-        userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
+//        userRepository.findActiveUserById(requestDto.getCreatedBy())
+//                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Department department = new Department();
         department.setId(requestDto.getId());
@@ -140,9 +140,9 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
             throw new ValidationException("Department name cannot be empty", "INVALID_DEPARTMENT_NAME");
         }
-        if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
-        }
+//        if (requestDto.getCreatedBy() == null) {
+//            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
+//        }
     }
 
     private DepartmentResponseDto mapToResponseDto(Department department) {
