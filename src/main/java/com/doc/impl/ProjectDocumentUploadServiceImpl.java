@@ -40,8 +40,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final UserRepository userRepository;
     private final DocumentStatusRepository documentStatusRepository;
 
-    @Value("${aws.s3.bucket.url}")
-    private String bucketUrl;
+//    @Value("${aws.s3.bucket.url}")
+//    private String bucketUrl;
 
     @Autowired
     public ProjectDocumentUploadServiceImpl(
@@ -67,7 +67,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         validateUploadRequest(requestDto);
 
         String fileName = sanitizeFileName(requestDto.getFileName());
-        String fileUrl = bucketUrl + "/" + fileName;
+        String fileUrl = fileName;
 
         // Fetch required entities
         Project project = projectRepository.findActiveUserById(requestDto.getProjectId())
