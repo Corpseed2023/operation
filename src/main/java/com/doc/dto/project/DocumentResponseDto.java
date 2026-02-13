@@ -17,7 +17,7 @@ public class DocumentResponseDto {
     private String fileName;
     private String oldFileUrl;
     private String oldFileName;
-    private DocumentStatus status;
+    private String status;
     private String remarks;
     private Date uploadTime;
     private Date expiryDate;
