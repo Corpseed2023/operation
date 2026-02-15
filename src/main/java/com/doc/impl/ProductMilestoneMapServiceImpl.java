@@ -61,6 +61,20 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
             throw new IllegalArgumentException("Order " + requestDto.getOrder() + " already exists for product ID: " + requestDto.getProductId());
         }
 
+        double currentSum = productMilestoneMapRepository
+                .findByProductId(requestDto.getProductId())
+                .stream()
+                .mapToDouble(ProductMilestoneMap::getPaymentPercentage)
+                .sum();
+
+        double newTotal = currentSum + requestDto.getPaymentPercentage();
+
+        if (newTotal > 100.0) {
+            throw new IllegalArgumentException(
+                    String.format("Cannot create milestone: total payment percentage would be %.1f%% (maximum allowed is 100%%). " +
+                                    "Current sum for product %d is %.1f%%.",
+                            newTotal, requestDto.getProductId(), currentSum));
+        }
         ProductMilestoneMap mapping = new ProductMilestoneMap();
         mapping.setProduct(product);
         mapping.setMilestone(milestone);
@@ -100,6 +114,23 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
                 productMilestoneMapRepository.existsByProductIdAndOrder(requestDto.getProductId(), requestDto.getOrder())) {
             throw new IllegalArgumentException("Order " + requestDto.getOrder() + " already exists for product ID: " + requestDto.getProductId());
         }
+
+        double currentSumExcludingThis = productMilestoneMapRepository
+                .findByProductId(existingMapping.getProduct().getId())
+                .stream()
+                .filter(m -> !m.getId().equals(id))           // exclude self
+                .mapToDouble(ProductMilestoneMap::getPaymentPercentage)
+                .sum();
+
+        double newTotal = currentSumExcludingThis + requestDto.getPaymentPercentage();
+
+        if (newTotal > 100.0) {
+            throw new IllegalArgumentException(
+                    String.format("Update would make total payment percentage %.1f%% (max 100%%). " +
+                                    "Current sum excluding this milestone: %.1f%%",
+                            newTotal, currentSumExcludingThis));
+        }
+
 
         existingMapping.setProduct(product);
         existingMapping.setMilestone(milestone);
