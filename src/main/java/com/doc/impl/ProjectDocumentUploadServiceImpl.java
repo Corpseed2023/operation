@@ -3,6 +3,9 @@ package com.doc.impl;
 import com.doc.dto.project.DocumentResponseDto;
 import com.doc.dto.project.ProjectDocumentStatusUpdateDto;
 import com.doc.dto.project.ProjectDocumentUploadRequestDto;
+import com.doc.em.DocumentExpiryType;
+import com.doc.entity.client.Company;
+import com.doc.entity.document.CompanyDocument;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.document.ProjectDocumentUpload;
@@ -15,10 +18,12 @@ import com.doc.repository.documentRepo.*;
 import com.doc.service.ProjectDocumentUploadService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -31,6 +36,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final ProductRequiredDocumentsRepository productRequiredDocumentsRepository;
     private final UserRepository userRepository;
     private final DocumentStatusRepository documentStatusRepository;
+    @Autowired
+    private CompanyDocumentRepository companyDocumentRepository;
 
     public ProjectDocumentUploadServiceImpl(
             ProjectDocumentUploadRepository projectDocumentUploadRepository,
@@ -125,6 +132,10 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         doc.setDeleted(false);
 
         doc = projectDocumentUploadRepository.save(doc);
+
+        // Auto-create reusable company document for FIXED expiry type
+        handleFixedCompanyDocument(doc);
+
 
         return mapToDocumentResponseDto(doc);
     }
@@ -226,4 +237,67 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         return dto;
     }
+
+    private void handleFixedCompanyDocument(ProjectDocumentUpload projectDoc) {
+
+        ProductRequiredDocuments requiredDoc = projectDoc.getRequiredDocument();
+
+        if (requiredDoc == null) return;
+
+        // Only for FIXED expiry documents
+        if (requiredDoc.getExpiryType() != DocumentExpiryType.FIXED) {
+            return;
+        }
+
+        Company company = projectDoc.getProject().getCompany();
+
+        if (company == null) {
+            return;
+        }
+
+        Optional<CompanyDocument> existingOpt =
+                companyDocumentRepository.findByCompanyIdAndRequiredDocumentIdAndIsDeletedFalse(
+                        company.getId(), projectDoc.getRequiredDocument().getId()
+                );
+
+        CompanyDocument companyDoc;
+
+        if (existingOpt.isPresent()) {
+
+            companyDoc = existingOpt.get();
+
+            // Prevent replacing VERIFIED reusable doc
+            if ("VERIFIED".equals(companyDoc.getStatus().getName())) {
+                return;
+            }
+
+            companyDoc.setOldFileUrl(companyDoc.getFileUrl());
+            companyDoc.setOldFileName(companyDoc.getFileName());
+            companyDoc.setReplacementCount(companyDoc.getReplacementCount() + 1);
+
+        } else {
+
+            companyDoc = new CompanyDocument();
+            companyDoc.setCompany(company);
+            companyDoc.setRequiredDocument(requiredDoc);
+            companyDoc.setCreatedBy(projectDoc.getCreatedBy());
+            companyDoc.setReplacementCount(0);
+        }
+
+        companyDoc.setFileUrl(projectDoc.getFileUrl());
+        companyDoc.setFileName(projectDoc.getFileName());
+        companyDoc.setFileFormat(projectDoc.getFileFormat());
+        companyDoc.setFileSizeKb(projectDoc.getFileSizeKb());
+        companyDoc.setRemarks(projectDoc.getRemarks());
+        companyDoc.setUploadedBy(projectDoc.getUploadedBy());
+        companyDoc.setStatus(projectDoc.getStatus());
+        companyDoc.setUpdatedBy(projectDoc.getUpdatedBy());
+
+        // FIXED → No expiry
+        companyDoc.setExpiryDate(null);
+        companyDoc.setPermanent(true);
+
+        companyDocumentRepository.save(companyDoc);
+    }
+
 }
