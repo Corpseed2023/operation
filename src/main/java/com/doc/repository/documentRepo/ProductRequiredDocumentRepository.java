@@ -1,7 +1,9 @@
 // src/main/java/com/doc/repository/documentRepo/ProductRequiredDocumentRepository.java
 package com.doc.repository.documentRepo;
 
+import com.doc.entity.document.ApplicantType;
 import com.doc.entity.document.ProductRequiredDocuments;
+import com.doc.entity.product.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -26,4 +28,5 @@ public interface ProductRequiredDocumentRepository extends JpaRepository<Product
 
     boolean existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseAndIdNot(
             String name, String country, String centralName, String stateName, Long id);
+
 }

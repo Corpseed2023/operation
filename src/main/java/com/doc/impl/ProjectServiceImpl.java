@@ -617,6 +617,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setSalesPersonName(project.getSalesPersonName());
         dto.setStatusId(project.getStatus() != null ? project.getStatus().getId() : null);
         dto.setStatusName(project.getStatus() != null ? project.getStatus().getName() : null);
+        dto.setCreatedById(project.getCreatedBy() );
         return dto;
     }
 
@@ -737,7 +738,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         // Load documents
 //        assignments.forEach(a -> a.setDocuments(
-//                projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
+//                projectDocumentUpload Repository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
         System.out.println("=== DEBUG VISIBILITY ===");
         System.out.println("User ID: " + userId);
@@ -926,6 +927,9 @@ public class ProjectServiceImpl implements ProjectService {
         // All uploaded documents for this project (from any milestone)
         List<ProjectDocumentUpload> uploaded = projectDocumentUploadRepository
                 .findByProjectIdAndIsDeletedFalse(projectId);
+
+        System.out.println("ProductDocumentMapping: "+required);
+        System.out.println("ProductDocumentMapping: "+required);
 
         return required.stream().map(mapping -> {
                     DocumentChecklistDTO dto = new DocumentChecklistDTO();

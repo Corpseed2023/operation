@@ -56,10 +56,23 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
         Milestone milestone = milestoneRepository.findById(requestDto.getMilestoneId())
                 .orElseThrow(() -> new EntityNotFoundException("Milestone not found with ID: " + requestDto.getMilestoneId()));
 
-        // Check for duplicate order for the product
-        if (productMilestoneMapRepository.existsByProductIdAndOrder(requestDto.getProductId(), requestDto.getOrder())) {
-            throw new IllegalArgumentException("Order " + requestDto.getOrder() + " already exists for product ID: " + requestDto.getProductId());
+        // Shift existing milestone orders if conflict occurs
+        int requestedOrder = requestDto.getOrder();
+
+// Fetch all mappings for this product ordered descending (important to avoid overwrite)
+        List<ProductMilestoneMap> existingMappings =
+                productMilestoneMapRepository.findByProductId(requestDto.getProductId())
+                        .stream()
+                        .filter(m -> m.getOrder() >= requestedOrder)
+                        .sorted((a, b) -> Integer.compare(b.getOrder(), a.getOrder())) // descending
+                        .collect(Collectors.toList());
+
+        for (ProductMilestoneMap existing : existingMappings) {
+            existing.setOrder(existing.getOrder() + 1);
+            existing.setUpdatedDate(new Date());
+            productMilestoneMapRepository.save(existing);
         }
+
 
         double currentSum = productMilestoneMapRepository
                 .findByProductId(requestDto.getProductId())
@@ -110,6 +123,8 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
                 .orElseThrow(() -> new EntityNotFoundException("Milestone not found with ID: " + requestDto.getMilestoneId()));
 
         // Check for duplicate order for the product (excluding this mapping)
+        System.out.println("existingMapping.getOrder(): "+existingMapping.getOrder() + "\n" +
+              "requestDto.getOrder(): "+requestDto.getOrder() );
         if (existingMapping.getOrder() != requestDto.getOrder() &&
                 productMilestoneMapRepository.existsByProductIdAndOrder(requestDto.getProductId(), requestDto.getOrder())) {
             throw new IllegalArgumentException("Order " + requestDto.getOrder() + " already exists for product ID: " + requestDto.getProductId());

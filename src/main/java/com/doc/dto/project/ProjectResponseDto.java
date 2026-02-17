@@ -40,6 +40,7 @@ public class ProjectResponseDto {
     private String paymentStatus;
     private Long paymentTypeId;
     private Long approvedById;
+    private Long createdById;
 
     private Date createdDate;
     private Date updatedDate;

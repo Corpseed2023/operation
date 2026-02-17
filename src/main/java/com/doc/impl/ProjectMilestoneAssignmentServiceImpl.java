@@ -19,6 +19,7 @@ import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.service.AutoAssignmentService;
 import com.doc.service.ProjectService;
 import com.doc.service.ProjectMilestoneAssignmentService;
+import com.doc.validation.MilestoneValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Autowired private MilestoneStatusRepository milestoneStatusRepository;
     @Autowired private ProjectStatusRepository projectStatusRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
+    @Autowired private MilestoneValidator milestoneValidator;
 
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
@@ -93,6 +95,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 });
 
         validateMilestoneStatusTransition(assignment, newStatus, updateDto.getStatusReason());
+        // 🔒 Business validation before marking COMPLETED
+        if ("COMPLETED".equals(newStatus.getName())) {
+            milestoneValidator.validateDocumentMilestone(assignment);
+        }
 
         if ("COMPLETED".equals(newStatus.getName())) {
             // Update performance & unassign old user

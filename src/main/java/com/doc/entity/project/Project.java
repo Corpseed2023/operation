@@ -4,6 +4,7 @@ import com.doc.entity.client.Company;
 import com.doc.entity.client.Contact;
 import com.doc.entity.document.ApplicantType;
 import com.doc.entity.product.Product;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -132,6 +133,7 @@ public class Project {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "applicant_type_id")
+    @JsonIgnore
     private ApplicantType applicantType;
 
 }

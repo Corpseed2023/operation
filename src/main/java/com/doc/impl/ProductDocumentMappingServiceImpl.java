@@ -97,7 +97,7 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductDocumentMappingResponseDto> getRequiredDocuments(Long productId, Long applicantTypeId) {
+    public List<ProductDocumentMappingResponseDto>  getRequiredDocuments(Long productId, Long applicantTypeId) {
         log.debug("Fetching required documents for product={}, applicantType={}", productId, applicantTypeId);
         validateProductExists(productId);
 
