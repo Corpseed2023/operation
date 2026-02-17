@@ -8,13 +8,11 @@ import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.product.Product;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
+import com.doc.entity.project.ProjectPortalDetail;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
-import com.doc.repository.documentRepo.ProductRequiredDocumentRepository;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
-import com.doc.repository.projectRepo.ProjectStatusRepository;
-import com.doc.service.ProjectService;
-import jakarta.annotation.Nonnull;
+import com.doc.repository.projectRepo.ProjectPortalDetailRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -27,10 +25,20 @@ import java.util.stream.Collectors;
 public class MilestoneValidator {
     @Autowired private ProjectDocumentUploadRepository projectDocumentUploadRepository;
     @Autowired private ProductDocumentMappingRepository productDocumentMappingRepository;
+    @Autowired
+    private ProjectPortalDetailRepository portalDetailRepository;
 
 
 
     public void validateDocumentMilestone(ProjectMilestoneAssignment assignment) {
+        validateDocuments(assignment, false); // verification NOT required
+    }
+
+    public void validateLegalMilestone(ProjectMilestoneAssignment assignment) {
+        validateDocuments(assignment, true); // verification required
+    }
+
+    public void validateFillingMilestone(ProjectMilestoneAssignment assignment) {
 
         if (assignment == null || assignment.getProject() == null) {
             throw new ValidationException(
@@ -41,10 +49,55 @@ public class MilestoneValidator {
 
         Project project = assignment.getProject();
 
-        // 1️⃣ Applicant Type must be selected
+        if (project.getId() == null) {
+            throw new ValidationException(
+                    "Project not found for milestone validation.",
+                    "PROJECT_MISSING"
+            );
+        }
+
+        // Fetch all active (not deleted) portal details
+        List<ProjectPortalDetail> portalDetails =
+                portalDetailRepository
+                        .findByProjectIdAndIsDeletedFalse(project.getId());
+
+        if (portalDetails == null || portalDetails.isEmpty()) {
+            throw new ValidationException(
+                    "Cannot complete Filing milestone. No portal details have been added for this project.",
+                    "PORTAL_DETAILS_MISSING"
+            );
+        }
+
+        // Optional but recommended: require at least one APPROVED entry
+        boolean hasApprovedPortal = portalDetails.stream()
+                .anyMatch(p -> "APPROVED".equalsIgnoreCase(p.getStatus()));
+
+        if (!hasApprovedPortal) {
+            throw new ValidationException(
+                    "Cannot complete Filing milestone. At least one portal detail must be APPROVED.",
+                    "PORTAL_NOT_APPROVED"
+            );
+        }
+
+        // ✅ Filing milestone validation passed
+    }
+
+
+
+    private void validateDocuments(ProjectMilestoneAssignment assignment, boolean requireVerification) {
+
+        if (assignment == null || assignment.getProject() == null) {
+            throw new ValidationException(
+                    "Invalid milestone assignment.",
+                    "INVALID_ASSIGNMENT"
+            );
+        }
+
+        Project project = assignment.getProject();
+
         if (project.getApplicantType() == null) {
             throw new ValidationException(
-                    "Applicant Type must be selected before completing Document milestone.",
+                    "Applicant Type must be selected before completing milestone.",
                     "APPLICANT_TYPE_MISSING"
             );
         }
@@ -59,7 +112,6 @@ public class MilestoneValidator {
             );
         }
 
-        // 2️⃣ Fetch Product + ApplicantType document mappings (source of truth)
         List<ProductDocumentMapping> requiredMappings =
                 productDocumentMappingRepository
                         .findByProductAndApplicantType(product, applicantType);
@@ -71,7 +123,6 @@ public class MilestoneValidator {
             );
         }
 
-        // 3️⃣ Fetch all non-deleted uploads for this project
         List<ProjectDocumentUpload> uploadedDocuments =
                 projectDocumentUploadRepository
                         .findByProjectIdAndIsDeletedFalse(project.getId());
@@ -80,7 +131,6 @@ public class MilestoneValidator {
             uploadedDocuments = List.of();
         }
 
-        // Group uploads by requiredDocumentId
         Map<Long, List<ProjectDocumentUpload>> uploadedMap =
                 uploadedDocuments.stream()
                         .filter(u -> u.getRequiredDocument() != null)
@@ -88,23 +138,21 @@ public class MilestoneValidator {
                                 u -> u.getRequiredDocument().getId()
                         ));
 
-        // 4️⃣ Validate each mandatory & active mapping
         for (ProductDocumentMapping mapping : requiredMappings) {
 
             if (!mapping.isMandatory() || !mapping.isActive()) {
-                continue; // Skip optional or inactive documents
+                continue;
             }
 
             ProductRequiredDocuments requiredDoc = mapping.getRequiredDocument();
 
             if (requiredDoc == null || requiredDoc.isDeleted() || !requiredDoc.isActive()) {
-                continue; // Skip invalid master document definitions
+                continue;
             }
 
             List<ProjectDocumentUpload> uploads =
                     uploadedMap.get(requiredDoc.getId());
 
-            // ❌ No upload found
             if (uploads == null || uploads.isEmpty()) {
                 throw new ValidationException(
                         "Mandatory document missing: " + requiredDoc.getName(),
@@ -116,20 +164,16 @@ public class MilestoneValidator {
 
             for (ProjectDocumentUpload upload : uploads) {
 
-                if (upload == null) continue;
-                if (upload.isDeleted()) continue;
+                if (upload == null || upload.isDeleted()) continue;
 
-                // ------------------------------------------------------------
-                // 🚫 VERIFICATION CHECK DISABLED (AS REQUESTED)
-                // ------------------------------------------------------------
-                // If you want to enforce verification, uncomment below:
-                //
-                // if (!"VERIFIED".equalsIgnoreCase(upload.getStatus().getName())) {
-                //     continue;
-                // }
-                // ------------------------------------------------------------
+                // 🔥 Verification check only when required
+                if (requireVerification) {
+                    if (upload.getStatus() == null ||
+                            !"VERIFIED".equalsIgnoreCase(upload.getStatus().getName())) {
+                        continue;
+                    }
+                }
 
-                // 5️⃣ Expiry validation (only if document requires expiry)
                 if (requiredDoc.getExpiryType() != null &&
                         requiredDoc.getExpiryType() != com.doc.em.DocumentExpiryType.UNKNOWN) {
 
@@ -153,12 +197,10 @@ public class MilestoneValidator {
                     }
                 }
 
-                // If we reach here → document is acceptable
                 validFound = true;
                 break;
             }
 
-            // ❌ No valid upload found
             if (!validFound) {
                 throw new ValidationException(
                         "No valid document found for: " + requiredDoc.getName(),
@@ -166,16 +208,7 @@ public class MilestoneValidator {
                 );
             }
         }
-
-        // ✅ All mandatory documents satisfied
     }
 
-    public void validateLegalMilestone() { }
-
-    public void validateFillingMilestone() { }
-
-    public void validateLiasioningMilestone() { }
-
-    public void validateCertificationMilestone() { }
 
 }

@@ -97,7 +97,24 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         validateMilestoneStatusTransition(assignment, newStatus, updateDto.getStatusReason());
         // 🔒 Business validation before marking COMPLETED
         if ("COMPLETED".equals(newStatus.getName())) {
-            milestoneValidator.validateDocumentMilestone(assignment);
+
+            String milestoneName = assignment
+                    .getProductMilestoneMap()
+                    .getMilestone()
+                    .getName();
+
+            if ("Documentation".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateDocumentMilestone(assignment);
+            }
+
+            if ("Legal Verfication".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateLegalMilestone(assignment);
+            }
+            if ("Filling".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateFillingMilestone(assignment);
+            }
+
+
         }
 
         if ("COMPLETED".equals(newStatus.getName())) {
