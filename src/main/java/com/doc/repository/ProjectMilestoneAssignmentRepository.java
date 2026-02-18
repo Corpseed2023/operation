@@ -76,6 +76,12 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             @Param("statuses") List<MilestoneStatus> statuses,
             Pageable pageable);
 
+    @Query("SELECT COUNT(a) > 0 FROM ProjectMilestoneAssignment a " +
+            "WHERE a.project.id = :projectId " +
+            "AND a.isVisible = true " +
+            "AND a.isDeleted = false")
+    boolean existsVisibleMilestoneByProjectId(@Param("projectId") Long projectId);
+
 
     /**
      * Finds a non-deleted ProjectMilestoneAssignment for a specific project ID and assigned user ID.

@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Objects;
+
 @RestController
 @RequestMapping("/api/projects")
 @Validated
@@ -38,6 +40,8 @@ public class ProjectDocumentUploadController {
     public ResponseEntity<DocumentResponseDto> uploadDocument(
             @Parameter(description = "ID of the project") @PathVariable Long projectId,
             @Valid @RequestBody ProjectDocumentUploadRequestDto requestDto) {
+        if(Objects.equals(requestDto.getExpiryDate(), ""))
+            requestDto.setExpiryDate(null);
         requestDto.setProjectId(projectId);
         DocumentResponseDto response = projectDocumentUploadService.uploadDocument(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);

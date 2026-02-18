@@ -38,6 +38,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final DocumentStatusRepository documentStatusRepository;
     @Autowired
     private CompanyDocumentRepository companyDocumentRepository;
+    @Autowired
+    private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
 
     public ProjectDocumentUploadServiceImpl(
             ProjectDocumentUploadRepository projectDocumentUploadRepository,
@@ -76,6 +78,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         Project project = projectRepository.findActiveUserById(requestDto.getProjectId())
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found", "PROJECT_NOT_FOUND"));
+
+        validateProjectMilestoneVisibility(project.getId());
 
         ProductRequiredDocuments requiredDoc = productRequiredDocumentsRepository
                 .findById(requestDto.getRequiredDocumentId())
@@ -138,6 +142,18 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
 
         return mapToDocumentResponseDto(doc);
+    }
+    private void validateProjectMilestoneVisibility(Long projectId) {
+
+        boolean hasVisibleMilestone = projectMilestoneAssignmentRepository
+                .existsVisibleMilestoneByProjectId(projectId);
+
+        if (!hasVisibleMilestone) {
+            throw new ValidationException(
+                    "Document upload is not allowed. No visible milestone found for this project.",
+                    "MILESTONE_NOT_VISIBLE"
+            );
+        }
     }
 
     @Override
