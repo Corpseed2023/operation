@@ -378,6 +378,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         String current = assignment.getStatus().getName();
         String next = newStatus.getName();
 
+        System.out.println("current: "+current);
+        System.out.println("next: "+next);
+
         if (current.equals(next)) {
             throw new ValidationException("Milestone is already in status: " + next, "SAME_STATUS");
         }
@@ -407,6 +410,11 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             case "REJECTED" -> {
                 if (!"NEW".equals(next)) {
                     throw new ValidationException("From REJECTED → only NEW allowed", "INVALID_TRANSITION");
+                }
+            }
+            case "REWORK" -> {
+                if (!"COMPLETED".equals(next)) {
+                    throw new ValidationException("From REJECTED → only COMPLETED allowed", "INVALID_TRANSITION");
                 }
             }
             case "COMPLETED" -> throw new ValidationException("Cannot change status from COMPLETED", "COMPLETED_FINAL");
