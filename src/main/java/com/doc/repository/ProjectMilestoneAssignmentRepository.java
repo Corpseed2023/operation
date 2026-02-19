@@ -28,6 +28,20 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     @Query("SELECT a FROM ProjectMilestoneAssignment a WHERE a.project.id = :projectId AND a.isDeleted = false")
     List<ProjectMilestoneAssignment> findByProjectIdAndIsDeletedFalse(@Param("projectId") Long projectId);
 
+    @Query("""
+       SELECT p 
+       FROM ProjectMilestoneAssignment p
+       WHERE p.project.id = :projectId
+       AND p.milestone.name = :milestoneName
+       AND p.isDeleted = false
+       """)
+    Optional<ProjectMilestoneAssignment>
+    findByProjectIdAndMilestoneName(
+            @Param("projectId") Long projectId,
+            @Param("milestoneName") String milestoneName
+    );
+
+
     /**
      * Finds a non-deleted ProjectMilestoneAssignment by its ID.
      *

@@ -9,7 +9,9 @@ import com.doc.entity.document.CompanyDocument;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.document.ProjectDocumentUpload;
+import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.project.Project;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -40,6 +43,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private CompanyDocumentRepository companyDocumentRepository;
     @Autowired
     private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+
+    @Autowired
+    private ProjectMilestoneAssignmentRepository milestoneAssignmentRepository;
+
+    @Autowired
+    private MilestoneStatusRepository milestoneStatusRepository;
+
 
     public ProjectDocumentUploadServiceImpl(
             ProjectDocumentUploadRepository projectDocumentUploadRepository,
@@ -174,6 +184,36 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         documentUpload.setUpdatedDate(new Date());
 
         documentUpload = projectDocumentUploadRepository.save(documentUpload);
+
+        // ✅ If document rejected → move milestone to REWORK
+        if ("REJECTED".equalsIgnoreCase(newStatus.getName())) {
+
+            Project project = documentUpload.getProject();
+
+            ProjectMilestoneAssignment documentationMilestone =
+                    milestoneAssignmentRepository
+                            .findByProjectIdAndMilestoneName(project.getId(), "Documentation")
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                    "Documentation milestone not found for project",
+                                    "MILESTONE_NOT_FOUND"));
+
+            MilestoneStatus reworkStatus = milestoneStatusRepository.findByName("REWORK")
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Milestone status REWORK not found",
+                            "MILESTONE_STATUS_NOT_FOUND"));
+
+            // Update only Documentation milestone
+            documentationMilestone.setStatus(reworkStatus);
+            documentationMilestone.setStatusReason("Document rejected. Requires correction.");
+            documentationMilestone.setCompletedDate(null);
+            documentationMilestone.setStartedDate(new Date());
+            documentationMilestone.setUpdatedDate(new Date());
+            documentationMilestone.setReworkAttempts(documentationMilestone.getReworkAttempts() + 1);
+
+            milestoneAssignmentRepository.save(documentationMilestone);
+            System.out.println("Documentation is opened again");
+        }
+
 
         return mapToDocumentResponseDto(documentUpload);
     }

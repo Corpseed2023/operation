@@ -78,3 +78,8 @@ liquibase*
 .project
 .settings/
 bin/
+
+
+
+
+src/main/resources/application.properties
