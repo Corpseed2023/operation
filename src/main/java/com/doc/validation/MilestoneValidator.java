@@ -68,6 +68,9 @@ public class MilestoneValidator {
             );
         }
 
+        System.out.println("portalDetails.portalName: "+ portalDetails.get(0).getPortalName());
+        System.out.println("portalDetails.portalName: "+ portalDetails.get(0).getStatus());
+
         // Optional but recommended: require at least one APPROVED entry
         boolean hasApprovedPortal = portalDetails.stream()
                 .anyMatch(p -> "APPROVED".equalsIgnoreCase(p.getStatus()));

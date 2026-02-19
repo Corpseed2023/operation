@@ -21,6 +21,7 @@ public class ProjectResponseDto {
     private String salesPersonName;          // NEW
 
     private Long productId;
+    private String productName;
     private Long companyId;
     private String companyName;              // NEW
 

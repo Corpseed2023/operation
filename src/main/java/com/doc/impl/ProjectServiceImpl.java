@@ -591,6 +591,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
         dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
+        dto.setProductName(project.getProduct() != null ? project.getProduct().getProductName() : null);
         dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
         dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
         dto.setContactId(project.getContact() != null ? project.getContact().getId() : null);
