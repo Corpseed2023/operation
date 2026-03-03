@@ -51,4 +51,8 @@ public class ProjectResponseDto {
 
     private Long statusId;
     private String statusName;
+
+    private Long totalMilestones;       // ← change to Long
+    private Long completedMilestones;   // ← change to Long
+
 }

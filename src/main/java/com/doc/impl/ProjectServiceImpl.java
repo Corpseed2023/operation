@@ -77,9 +77,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
     @Autowired private ProjectRequestValidator projectRequestValidator;
-
     @Autowired private ProductDocumentMappingRepository productDocumentMappingRepository;
-
     @Autowired
     private ApplicantTypeRepository applicantTypeRepository;
 
@@ -619,6 +617,19 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setStatusId(project.getStatus() != null ? project.getStatus().getId() : null);
         dto.setStatusName(project.getStatus() != null ? project.getStatus().getName() : null);
         dto.setCreatedById(project.getCreatedBy() );
+        Long projectId = project.getId();
+
+        dto.setTotalMilestones(
+                projectMilestoneAssignmentRepository.countByProjectIdAndIsDeletedFalse(projectId)
+        );
+
+        dto.setCompletedMilestones(
+                projectMilestoneAssignmentRepository.countByProjectIdAndStatusIdAndIsDeletedFalse(
+                        projectId, StatusConstants.MILESTONE_COMPLETED_ID
+                )
+        );
+
+
         return dto;
     }
 
