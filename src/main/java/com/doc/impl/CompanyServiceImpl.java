@@ -84,7 +84,7 @@ public class CompanyServiceImpl implements CompanyService {
         company.setCreatedDate(new Date());
         company.setUpdatedDate(new Date());
         company.setDeleted(false);
-        company.setCreatedBy(creator.getId());
+        company.setCreatedById(creator.getId());
         company.setUpdatedBy(creator.getId());
 
         // Save company first (gets ID if auto-generated)
@@ -231,7 +231,7 @@ public class CompanyServiceImpl implements CompanyService {
         contact.setName(dto.getName().trim());
         contact.setDesignation(dto.getDesignation());
         contact.setEmail(dto.getEmail());
-        contact.setContactNo(dto.getMobile());
+        contact.setContactNo(dto.getContactNo());
         contact.setClientDesignation(dto.getDesignation());
         // Add more mappings as per your DTO fields (remarks, department, etc.)
     }

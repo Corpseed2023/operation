@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
+import org.springframework.data.annotation.LastModifiedDate;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Entity
@@ -100,7 +103,8 @@ public class Contact {
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "updated_date")
     @Comment("Last update timestamp")
-    private Date updatedDate = new Date();
+    @LastModifiedDate
+    private Date updatedDate;
 
     @Comment("Created by user ID")
     private Long createdBy;
