@@ -60,9 +60,6 @@ public class ContactServiceImpl implements ContactService {
                 .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Contact contact = new Contact();
-        if(requestDto.getId() != null){
-            contact.setId(requestDto.getId());
-        }
         mapRequestDtoToEntity(contact, requestDto, company);
         contact.setCreatedDate(new Date());
         contact.setUpdatedDate(new Date());

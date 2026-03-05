@@ -46,5 +46,5 @@ public class CompanyRequestDto {
     private String subSubIndustry;
 
     @NotNull(message = "Created by user ID cannot be null")
-    private Long createdById;
+    private Long createdBy;
 }

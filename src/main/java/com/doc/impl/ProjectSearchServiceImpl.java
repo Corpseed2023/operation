@@ -271,11 +271,7 @@ public class ProjectSearchServiceImpl implements ProjectSearchService {
 
         dto.setLeadId(project.getLeadId());
         dto.setDate(project.getDate());
-        dto.setAddress(project.getAddress());
-        dto.setCity(project.getCity());
-        dto.setState(project.getState());
-        dto.setCountry(project.getCountry());
-        dto.setPrimaryPinCode(project.getPrimaryPinCode());
+
 
         dto.setTotalAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getTotalAmount() : 0.0);
         dto.setDueAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getDueAmount() : 0.0);

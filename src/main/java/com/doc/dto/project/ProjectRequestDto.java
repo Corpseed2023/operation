@@ -42,16 +42,6 @@ public class ProjectRequestDto {
 
     private LocalDate date;
 
-    private String address;
-
-    private String city;
-
-    private String state;
-
-    private String country;
-
-    private String primaryPinCode;
-
     @NotNull(message = "Total amount cannot be null")
     private Double totalAmount;
 
@@ -69,4 +59,6 @@ public class ProjectRequestDto {
 
     @NotNull(message = "Updated by user ID cannot be null")
     private Long updatedBy;
+
+    private Long unitId;
 }

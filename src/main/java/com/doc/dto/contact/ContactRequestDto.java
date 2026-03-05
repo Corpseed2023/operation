@@ -10,8 +10,6 @@ import lombok.Setter;
 @Setter
 public class ContactRequestDto {
 
-    private Long id;
-
     private String title;
 
     @NotBlank(message = "Contact name cannot be empty")

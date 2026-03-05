@@ -59,8 +59,8 @@ public class CompanyServiceImpl implements CompanyService {
             throw new ValidationException("Company with GSTIN " + requestDto.getGstNo() + " already exists", "DUPLICATE_GSTIN");
         }
 
-        userRepository.findActiveUserById(requestDto.getCreatedById())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedById() + " not found", "USER_NOT_FOUND"));
+        userRepository.findActiveUserById(requestDto.getCreatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Company company = new Company();
 
@@ -167,7 +167,7 @@ public class CompanyServiceImpl implements CompanyService {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
             throw new ValidationException("Company name cannot be empty", "INVALID_COMPANY_NAME");
         }
-        if (requestDto.getCreatedById() == null) {
+        if (requestDto.getCreatedBy() == null) {
             throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
         }
         if (requestDto.getContacts() != null) {
