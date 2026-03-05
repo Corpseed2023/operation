@@ -176,4 +176,22 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT COUNT(DISTINCT p) FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     long countByAssignedUserIds(@Param("userIds") List<Long> userIds);
 
+
+    // ADD THESE EXACT METHODS TO ProjectRepository.java
+
+    @Query("SELECT p FROM Project p " +
+            "LEFT JOIN FETCH p.applicantType " +
+            "LEFT JOIN FETCH p.product " +
+            "WHERE p.id = :id AND p.isDeleted = false")
+    Optional<Project> findByIdWithApplicantTypeAndProduct(@Param("id") Long id);
+
+    @Query("SELECT p FROM Project p " +
+            "WHERE p.id = :id AND p.isDeleted = false")
+    Optional<Project> findByIdAndIsDeletedFalse(@Param("id") Long id);
+
+    @Query("SELECT p FROM Project p " +
+            "LEFT JOIN FETCH p.applicantType " +
+            "WHERE p.id = :id AND p.isDeleted = false")
+    Optional<Project> findByIdWithApplicantType(@Param("id") Long id);
+
 }

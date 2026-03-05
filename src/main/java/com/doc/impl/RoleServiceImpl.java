@@ -44,8 +44,6 @@ public class RoleServiceImpl implements RoleService {
         Role role = new Role();
         role.setId(requestDto.getId());
         role.setName(requestDto.getName().trim());
-        role.setCreatedBy(requestDto.getCreatedBy());
-        role.setUpdatedBy(requestDto.getUpdatedBy());
         role.setDeleted(false);
         role = roleRepository.save(role);
         logger.info("Role created successfully with ID: {}", role.getId());
@@ -103,7 +101,6 @@ public class RoleServiceImpl implements RoleService {
         }
 
         role.setName(requestDto.getName().trim());
-        role.setUpdatedBy(requestDto.getUpdatedBy());
         role.setUpdatedDate(new Date());
         role = roleRepository.save(role);
         logger.info("Role updated successfully with ID: {}", id);
@@ -121,7 +118,6 @@ public class RoleServiceImpl implements RoleService {
                 });
 
         role.setDeleted(true);
-        role.setUpdatedBy(id);  // Assume updatedBy is passed or set to admin ID
         role.setUpdatedDate(new Date());
         roleRepository.save(role);
         logger.info("Role soft-deleted successfully with ID: {}", id);
@@ -136,22 +132,13 @@ public class RoleServiceImpl implements RoleService {
             logger.warn("Role name is mandatory");
             throw new ValidationException("Role name is mandatory", "ERR_NULL_NAME");
         }
-        if (requestDto.getCreatedBy() == null) {
-            logger.warn("Created by user ID cannot be null");
-            throw new ValidationException("Created by user ID cannot be null", "ERR_NULL_CREATED_BY");
-        }
-        if (requestDto.getUpdatedBy() == null) {
-            logger.warn("Updated by user ID cannot be null");
-            throw new ValidationException("Updated by user ID cannot be null", "ERR_NULL_UPDATED_BY");
-        }
+
     }
 
     private RoleResponseDto mapToResponseDto(Role role) {
         RoleResponseDto dto = new RoleResponseDto();
         dto.setId(role.getId());
         dto.setName(role.getName());
-        dto.setCreatedBy(role.getCreatedBy());
-        dto.setUpdatedBy(role.getUpdatedBy());
         dto.setCreatedDate(role.getCreatedDate());
         dto.setUpdatedDate(role.getUpdatedDate());
         dto.setDeleted(role.isDeleted());

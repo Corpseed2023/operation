@@ -16,13 +16,11 @@ public interface ProductRequiredDocumentRepository extends JpaRepository<Product
 
     Optional<ProductRequiredDocuments> findByIdAndIsDeletedFalse(Long id);
 
-    Page<ProductRequiredDocuments> findAllByIsDeletedFalse(Pageable pageable);
 
     Page<ProductRequiredDocuments> findAllByIsDeletedFalseAndIsActiveTrue(Pageable pageable);
 
     List<ProductRequiredDocuments> findAllByIsDeletedFalseAndIsActiveTrue(Sort sort);
 
-    // Unique constraint checks
     boolean existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(
             String name, String country, String centralName, String stateName);
 

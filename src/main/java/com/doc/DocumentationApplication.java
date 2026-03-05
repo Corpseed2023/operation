@@ -28,7 +28,7 @@ public class DocumentationApplication {
 
 	/**
 	 * Initializes predefined statuses and payment types if the respective tables are empty.
-	 * Uses explicit IDs to match StatusConstants.java — NEVER CHANGE THESE IDs!
+	 * Uses explicit IDs to  match StatusConstants.java — NEVER CHANGE THESE IDs!
 	 */
 	//
 
@@ -76,6 +76,8 @@ public class DocumentationApplication {
 			}
 		};
 	}
+
+
 
 	private void createMilestoneStatus(MilestoneStatusRepository repo, Long id, String name, String description) {
 		MilestoneStatus status = new MilestoneStatus();

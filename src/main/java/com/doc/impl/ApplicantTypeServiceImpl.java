@@ -56,15 +56,6 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
         return mapToResponseDto(entity);
     }
 
-    @Override
-    public void deleteApplicantType(Long id) {
-        ApplicantType entity = applicantTypeRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
-
-        entity.setDeleted(true);
-        entity.setActive(false);
-        applicantTypeRepository.save(entity);
-    }
 
     @Override
     public ApplicantTypeResponseDto getApplicantTypeById(Long id) {
@@ -73,13 +64,6 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
         return mapToResponseDto(entity);
     }
 
-    @Override
-    public List<ApplicantTypeResponseDto> getAllActiveApplicantTypes() {
-        return applicantTypeRepository.findAllByIsDeletedFalseAndIsActiveTrue()
-                .stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-    }
 
     @Override
     public List<ApplicantTypeResponseDto> getApplicantTypesPaginated(int page, int size) {

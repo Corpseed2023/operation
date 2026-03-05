@@ -1,5 +1,6 @@
 package com.doc.controller.project;
 
+import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
@@ -7,6 +8,7 @@ import com.doc.dto.project.ProjectResponseDto;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
+import com.doc.service.ProjectSearchService;
 import com.doc.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -27,6 +30,9 @@ public class ProjectController {
 
     @Autowired
     private ProjectService projectService;
+    @Autowired
+    private ProjectSearchService projectSearchService;
+
 
     @Operation(summary = "Create a new project")
     @ApiResponses({
@@ -58,17 +64,50 @@ public class ProjectController {
     }
 
 
-    // 2. NEW: Separate count endpoint
     @GetMapping("/count")
-    @Operation(summary = "Get total count of projects for user")
+    @Operation(summary = "Get total count of searched projects")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Total count retrieved"),
             @ApiResponse(responseCode = "404", description = "User not found")
     })
-    public ResponseEntity<Long> getProjectCount(@RequestParam Long userId) {
-        long count = projectService.getProjectCount(userId);
-        return ResponseEntity.ok(count);
+    public ResponseEntity<Long> getProjectCount(
+            @RequestParam Long userId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String value) {
+
+        // If no search filter is provided → return total project count
+        if (type == null || value == null) {
+            long totalCount = projectService.getProjectCount(userId);
+            return ResponseEntity.ok(totalCount);
+        }
+
+        // Search-based counting
+        List<ProjectResponseDto> projects;
+
+        switch (type.toLowerCase()) {
+            case "company":
+                projects = projectSearchService.searchProjectsByCompanyName(value, userId);
+                break;
+
+            case "projectnumber":
+                projects = projectSearchService.searchProjectsByProjectNumber(value, userId);
+                break;
+
+            case "contact":
+                projects = projectSearchService.searchProjectsByContactName(value, userId);
+                break;
+
+            case "projectname":
+                projects = projectSearchService.searchProjectsByProjectName(value, userId);
+                break;
+
+            default:
+                return ResponseEntity.badRequest().body(0L);
+        }
+
+        return ResponseEntity.ok((long) projects.size());
     }
+
     @Operation(summary = "Delete a project by ID (soft delete)")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Project deleted successfully"),
@@ -138,8 +177,6 @@ public class ProjectController {
     }
 
 
-    // In ProjectController.java, add the following endpoint
-
     @Operation(summary = "Get project history including creation, milestones, assignments, and status changes",
             description = "Retrieves detailed history for a project, including when it was created, its milestones (starting with the first), assignments (to whom and by whom), and status changes.")
     @ApiResponses({
@@ -152,7 +189,6 @@ public class ProjectController {
         ProjectHistoryResponseDto response = projectService.getProjectHistory(projectId);
         return ResponseEntity.ok(response);
     }
-
 
 
     @Operation(summary = "Get complete history of a specific milestone in a project",
@@ -171,5 +207,30 @@ public class ProjectController {
         MilestoneHistoryResponseDto response = projectService.getMilestoneHistory(projectId, milestoneId, userId);
         return ResponseEntity.ok(response);
     }
+
+
+    @PatchMapping("/{projectId}/applicant-type")
+    @Operation(summary = "CRT selects Applicant Type (Importer, Brand Owner, etc.)")
+    public ResponseEntity<Void> setApplicantType(
+            @PathVariable Long projectId,
+            @RequestParam("applicantTypeId") Long applicantTypeId) {
+
+
+        projectService.setApplicantType(projectId, applicantTypeId);
+        return ResponseEntity.ok().build();
+    }
+
+
+
+    @GetMapping("/{projectId}/document-checklist")
+    @Operation(summary = "Get project document checklist (Applicant Type based) — visible to CRT, Legal, Technical, Admin")
+    public ResponseEntity<List<DocumentChecklistDTO>> getDocumentChecklist(
+            @PathVariable Long projectId,
+            @RequestParam Long userId) {
+
+        List<DocumentChecklistDTO> checklist = projectService.getDocumentChecklist(projectId);
+        return ResponseEntity.ok(checklist);
+    }
+
 
 }

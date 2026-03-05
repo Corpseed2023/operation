@@ -187,12 +187,14 @@ public class UserServiceImpl implements UserService {
                 .stream()
                 .filter(d -> !d.isDeleted())
                 .collect(Collectors.toList());
+
         if (departments.size() != departmentIds.size()) {
             throw new ResourceNotFoundException("One or more departments not found", "DEPARTMENT_NOT_FOUND");
         }
-        if (!departmentIds.contains(designationDepartmentId)) {
-            throw new ValidationException("Designation's department ID " + designationDepartmentId + " must be included in departmentIds", "INVALID_DEPARTMENT_DESIGNATION");
-        }
+
+        // The strict check has been removed:
+        // if (!departmentIds.contains(designationDepartmentId)) { ... }
+
         return departments;
     }
 
@@ -243,6 +245,4 @@ public class UserServiceImpl implements UserService {
         dto.setUpdatedDate(user.getUpdatedDate());
         return dto;
     }
-
-
 }

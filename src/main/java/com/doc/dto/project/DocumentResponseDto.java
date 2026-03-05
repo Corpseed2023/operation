@@ -17,7 +17,7 @@ public class DocumentResponseDto {
     private String fileName;
     private String oldFileUrl;
     private String oldFileName;
-    private DocumentStatus status;
+    private String status;
     private String remarks;
     private Date uploadTime;
     private Date expiryDate;
@@ -28,7 +28,6 @@ public class DocumentResponseDto {
     private boolean validationPassed;
     private String validationIssues;
     private Long requiredDocumentId;
-    private Long milestoneAssignmentId;
     private Long projectId;
     private Long uploadedById;
     private Long createdBy;

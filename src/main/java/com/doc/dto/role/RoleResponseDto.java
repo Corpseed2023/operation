@@ -9,8 +9,6 @@ import java.util.Date;
 public class RoleResponseDto {
     private Long id;
     private String name;
-    private Long createdBy;
-    private Long updatedBy;
     private Date createdDate;
     private Date updatedDate;
     private boolean isDeleted;

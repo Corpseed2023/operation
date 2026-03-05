@@ -19,11 +19,11 @@
     @Transactional
     public class ProductRequiredDocumentServiceImpl implements ProductRequiredDocumentService {
 
-        private final ProductRequiredDocumentRepository repository;
+        private final ProductRequiredDocumentRepository productRequiredDocumentRepository;
 
         @Autowired
-        public ProductRequiredDocumentServiceImpl(ProductRequiredDocumentRepository repository) {
-            this.repository = repository;
+        public ProductRequiredDocumentServiceImpl(ProductRequiredDocumentRepository productRequiredDocumentRepository) {
+            this.productRequiredDocumentRepository = productRequiredDocumentRepository;
         }
 
         @Override
@@ -37,7 +37,7 @@
             entity.setCreatedBy(dto.getCreatedBy());
             entity.setUpdatedBy(dto.getUpdatedBy());
 
-            entity = repository.save(entity);
+            entity = productRequiredDocumentRepository.save(entity);
             return mapToResponseDto(entity);
         }
 
@@ -50,35 +50,11 @@
             mapDtoToEntity(dto, entity);
             entity.setUpdatedBy(dto.getUpdatedBy());
 
-            entity = repository.save(entity);
+            entity = productRequiredDocumentRepository.save(entity);
             return mapToResponseDto(entity);
         }
 
-        @Override
-        public void softDelete(Long id) {
-            ProductRequiredDocuments entity = findActiveById(id);
-            entity.setDeleted(true);
-            entity.setActive(false);
-            repository.save(entity);
-        }
 
-        @Override
-        public ProductRequiredDocumentResponseDto getById(Long id) {
-            return mapToResponseDto(findActiveById(id));
-        }
-
-        @Override
-        public List<ProductRequiredDocumentResponseDto> getAllPaginated(int page, int size) {
-            page = Math.max(page, 1);
-            size = size > 0 ? size : 20;
-
-            Pageable pageable = PageRequest.of(page - 1, size, Sort.by("name").ascending());
-            return repository.findAllByIsDeletedFalse(pageable)  // FIXED
-                    .getContent()
-                    .stream()
-                    .map(this::mapToResponseDto)
-                    .toList();
-        }
 
         @Override
         public List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size) {
@@ -86,25 +62,15 @@
             size = size > 0 ? size : 20;
 
             Pageable pageable = PageRequest.of(page - 1, size, Sort.by("name").ascending());
-            return repository.findAllByIsDeletedFalseAndIsActiveTrue(pageable)  // FIXED
+            return productRequiredDocumentRepository.findAllByIsDeletedFalseAndIsActiveTrue(pageable)  // FIXED
                     .getContent()
                     .stream()
                     .map(this::mapToResponseDto)
                     .toList();
         }
 
-        @Override
-        public List<ProductRequiredDocumentResponseDto> getActiveList() {
-            Sort sort = Sort.by(Sort.Direction.ASC, "name");
-            return repository.findAllByIsDeletedFalseAndIsActiveTrue(sort)  // FIXED
-                    .stream()
-                    .map(this::mapToResponseDto)
-                    .toList();
-        }
-
-        // Helper: Find non-deleted record
         private ProductRequiredDocuments findActiveById(Long id) {
-            return repository.findByIdAndIsDeletedFalse(id)  // FIXED
+            return productRequiredDocumentRepository.findByIdAndIsDeletedFalse(id)  // FIXED
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Required document template not found with ID: " + id,
                             "ERR_REQ_DOC_NOT_FOUND"));
@@ -118,9 +84,9 @@
             String stateName = dto.getStateName() != null ? dto.getStateName().trim() : "";
 
             boolean exists = excludeId == null
-                    ? repository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(
+                    ? productRequiredDocumentRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(
                     name, country, centralName, stateName)
-                    : repository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseAndIdNot(
+                    : productRequiredDocumentRepository.existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalseAndIdNot(
                     name, country, centralName, stateName, excludeId);
 
             if (exists) {

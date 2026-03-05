@@ -30,32 +30,5 @@ public class CompanyController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<CompanyResponseDto> getCompanyById(@PathVariable Long id) {
-        CompanyResponseDto response = companyService.getCompanyById(id);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
 
-    @GetMapping
-    public ResponseEntity<List<CompanyResponseDto>> getAllCompanies(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam Long userId ) {
-        List<CompanyResponseDto> responses = companyService.getAllCompanies(page, size, userId);
-        return new ResponseEntity<>(responses, HttpStatus.OK);
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<CompanyResponseDto> updateCompany(
-            @PathVariable Long id,
-            @Valid @RequestBody CompanyRequestDto requestDto) {
-        CompanyResponseDto response = companyService.updateCompany(id, requestDto);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteCompany(@PathVariable Long id) {
-        companyService.deleteCompany(id);
-        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
-    }
 }

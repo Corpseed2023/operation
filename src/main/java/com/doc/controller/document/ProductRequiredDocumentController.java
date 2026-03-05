@@ -42,27 +42,6 @@ public class ProductRequiredDocumentController {
         return ResponseEntity.ok(productRequiredDocumentService.update(id, dto));
     }
 
-    @Operation(summary = "Soft delete a required document template")
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        productRequiredDocumentService.softDelete(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @Operation(summary = "Get required document by ID")
-    @GetMapping("/{id}")
-    public ResponseEntity<ProductRequiredDocumentResponseDto> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(productRequiredDocumentService.getById(id));
-    }
-
-    @Operation(summary = "Get all required documents (paginated, includes inactive) - Admin Grid")
-    @GetMapping
-    public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getAllPaginated(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(productRequiredDocumentService.getAllPaginated(page, size));
-    }
-
     // Active only, paginated (if needed)
     @Operation(summary = "Get active required documents (paginated)")
     @GetMapping("/active")
@@ -72,12 +51,7 @@ public class ProductRequiredDocumentController {
         return ResponseEntity.ok(productRequiredDocumentService.getActivePaginated(page, size));
     }
 
-    // For dropdowns: all active, no pagination
-    @Operation(summary = "Get all active required documents (no pagination) - For dropdowns")
-    @GetMapping("/active/list")
-    public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getActiveList() {
-        return ResponseEntity.ok(productRequiredDocumentService.getActiveList());
-    }
+
 }
 
 

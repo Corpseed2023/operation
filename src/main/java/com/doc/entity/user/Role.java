@@ -17,7 +17,6 @@ import java.util.List;
 public class Role {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Comment("Primary key: Unique identifier for the role")
 	private Long id;
 
@@ -28,14 +27,6 @@ public class Role {
 	@ManyToMany(mappedBy = "roles", fetch = FetchType.LAZY)
 	@Comment("Users assigned to this role")
 	private List<User> users;
-
-	@Column(name = "created_by", nullable = false)
-	@Comment("User ID who created the role")
-	private Long createdBy;
-
-	@Column(name = "updated_by", nullable = false)
-	@Comment("User ID who last updated the role")
-	private Long updatedBy;
 
 	@Temporal(TemporalType.TIMESTAMP)
 	@Column(name = "created_date", nullable = false, updatable = false)

@@ -130,6 +130,13 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             @Param("userId") Long userId);
 
 
+    @Query("SELECT a FROM ProjectMilestoneAssignment a " +
+            "WHERE a.id = :id " +
+            "AND a.project.id = :projectId " +
+            "AND a.isDeleted = false")
+    Optional<ProjectMilestoneAssignment> findByIdAndProjectIdAndIsDeletedFalse(
+            @Param("id") Long id,
+            @Param("projectId") Long projectId);
 
 
 

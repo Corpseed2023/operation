@@ -40,12 +40,6 @@ public class ApplicantTypeController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Soft delete an applicant type")
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteApplicantType(@PathVariable Long id) {
-        applicantTypeService.deleteApplicantType(id);
-        return ResponseEntity.noContent().build();
-    }
 
     @Operation(summary = "Get applicant type by ID")
     @GetMapping("/{id}")
@@ -53,14 +47,6 @@ public class ApplicantTypeController {
         ApplicantTypeResponseDto response = applicantTypeService.getApplicantTypeById(id);
         return ResponseEntity.ok(response);
     }
-
-    @Operation(summary = "Get all active applicant types (for dropdowns)")
-    @GetMapping("/active")
-    public ResponseEntity<List<ApplicantTypeResponseDto>> getAllActiveApplicantTypes() {
-        List<ApplicantTypeResponseDto> activeTypes = applicantTypeService.getAllActiveApplicantTypes();
-        return ResponseEntity.ok(activeTypes);
-    }
-
     @Operation(summary = "Get applicant types with pagination (page starts from 1)")
     @GetMapping
     public ResponseEntity<List<ApplicantTypeResponseDto>> getApplicantTypesPaginated(
