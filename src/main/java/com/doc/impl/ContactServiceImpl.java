@@ -37,154 +37,31 @@ public class ContactServiceImpl implements ContactService {
     @Autowired
     private UserRepository userRepository;
 
-    @Override
-    public ContactResponseDto createContact(ContactRequestDto requestDto) {
-        logger.info("Creating contact with name: {}, email: {}, companyId: {}",
-                requestDto.getName(), requestDto.getEmails(), requestDto.getCompanyId());
-        validateRequestDto(requestDto);
-
-        // Check for duplicate email within the company (or globally if companyId is null)
-        Long companyId = requestDto.getCompanyId();
-        if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getEmails(), companyId)) {
-            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
-        }
-
-        Company company = null;
-        if (requestDto.getCompanyId() != null) {
-            company = companyRepository.findById(requestDto.getCompanyId())
-                    .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found", "COMPANY_NOT_FOUND"));
-        }
-
-        userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
-
-        Contact contact = new Contact();
-        mapRequestDtoToEntity(contact, requestDto, company);
-        contact.setCreatedDate(new Date());
-        contact.setUpdatedDate(new Date());
-        contact.setUpdatedBy(requestDto.getCreatedBy());
-        contact.setDeleteStatus(false);
-        contact.setActive(true);
-
-        contact = contactRepository.save(contact);
-        return mapToResponseDto(contact);
-    }
-
-    @Override
-    public ContactResponseDto getContactById(Long id) {
-        logger.info("Fetching contact with ID: {}", id);
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
-        return mapToResponseDto(contact);
-    }
 
     @Override
     public List<ContactResponseDto> getAllContacts(int page, int size, Long companyId, Long userId) {
-        logger.info("Fetching contacts, page: {}, size: {}, companyId: {}, userId: {}", page, size, companyId, userId);
-        PageRequest pageable = PageRequest.of(page, size);
-        Page<Contact> contactPage;
-        if (companyId != null && userId != null) {
-            contactPage = contactRepository.findByCompanyIdAndCreatedByAndDeleteStatusFalseAndIsActiveTrue(companyId, userId, pageable);
-        } else if (companyId != null) {
-            contactPage = contactRepository.findByCompanyIdAndDeleteStatusFalseAndIsActiveTrue(companyId, pageable);
-        } else if (userId != null) {
-            contactPage = contactRepository.findByCreatedByAndDeleteStatusFalseAndIsActiveTrue(userId, pageable);
-        } else {
-            contactPage = contactRepository.findByDeleteStatusFalseAndIsActiveTrue(pageable);
-        }
-        return contactPage.getContent()
-                .stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
+
+
+        return List.of();
     }
 
     @Override
     public ContactResponseDto updateContact(Long id, ContactRequestDto requestDto) {
-        logger.info("Updating contact with ID: {}, email: {}, companyId: {}",
-                id, requestDto.getEmails(), requestDto.getCompanyId());
-        validateRequestDto(requestDto);
-
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
-
-        // Check for duplicate email within the company (or globally if companyId is null)
-        Long companyId = requestDto.getCompanyId();
-        if (!contact.getEmails().equals(requestDto.getEmails()) &&
-                contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getEmails(), companyId)) {
-            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
-        }
-
-        Company company = null;
-        if (requestDto.getCompanyId() != null) {
-            company = companyRepository.findById(requestDto.getCompanyId())
-                    .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found", "COMPANY_NOT_FOUND"));
-        }
-
-        userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found", "USER_NOT_FOUND"));
-
-        mapRequestDtoToEntity(contact, requestDto, company);
-        contact.setUpdatedDate(new Date());
-        contact = contactRepository.save(contact);
-        return mapToResponseDto(contact);
+        return null;
     }
 
     @Override
     public void deleteContact(Long id) {
-        logger.info("Deleting contact with ID: {}", id);
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
 
-        contact.setDeleteStatus(true);
-        contact.setActive(false);
-        contact.setUpdatedDate(new Date());
-        contactRepository.save(contact);
     }
 
-    private void validateRequestDto(ContactRequestDto requestDto) {
-        if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Contact name cannot be empty", "INVALID_CONTACT_NAME");
-        }
-        if (requestDto.getEmails() == null || requestDto.getEmails().trim().isEmpty()) {
-            throw new ValidationException("Contact email cannot be empty", "INVALID_CONTACT_EMAIL");
-        }
-        if (requestDto.getCreatedBy() == null) {
-            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
-        }
-        if (requestDto.getUpdatedBy() == null) {
-            throw new ValidationException("Updated by user ID cannot be null", "INVALID_UPDATED_BY");
-        }
-        // Add additional validations as needed (e.g., email format, contact number format)
+    @Override
+    public ContactResponseDto createContact(ContactRequestDto requestDto) {
+        return null;
     }
 
-    private void mapRequestDtoToEntity(Contact contact, ContactRequestDto requestDto, Company company) {
-        contact.setTitle(requestDto.getTitle());
-        contact.setName(requestDto.getName().trim());
-        contact.setEmails(requestDto.getEmails().trim());
-        contact.setContactNo(requestDto.getContactNo());
-        contact.setWhatsappNo(requestDto.getWhatsappNo());
-        contact.setCompany(company);
-        contact.setDesignation(requestDto.getDesignation());
-        contact.setCreatedBy(requestDto.getCreatedBy());
-        contact.setUpdatedBy(requestDto.getUpdatedBy());
-    }
-
-    private ContactResponseDto mapToResponseDto(Contact contact) {
-        ContactResponseDto dto = new ContactResponseDto();
-        dto.setId(contact.getId());
-        dto.setTitle(contact.getTitle());
-        dto.setName(contact.getName());
-        dto.setEmails(contact.getEmails());
-        dto.setContactNo(contact.getContactNo());
-        dto.setWhatsappNo(contact.getWhatsappNo());
-        dto.setCompanyId(contact.getCompany() != null ? contact.getCompany().getId() : null);
-        dto.setDesignation(contact.getDesignation());
-        dto.setCreatedDate(contact.getCreatedDate());
-        dto.setCreatedBy(contact.getCreatedBy());
-        dto.setUpdatedDate(contact.getUpdatedDate());
-        dto.setUpdatedBy(contact.getUpdatedBy());
-        return dto;
+    @Override
+    public ContactResponseDto getContactById(Long id) {
+        return null;
     }
 }

@@ -3,22 +3,12 @@ package com.doc.service;
 
 import com.doc.dto.company.CompanyRequestDto;
 import com.doc.dto.company.CompanyResponseDto;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
 public interface CompanyService {
 
 
-    CompanyResponseDto getCompanyById(Long id);
-
-
-    CompanyResponseDto updateCompany(Long id, CompanyRequestDto requestDto);
-
-    void deleteCompany(Long id);
-
-    List<CompanyResponseDto> getAllCompanies(int page, int size, Long userId);
-
-    CompanyResponseDto createCompany(CompanyRequestDto requestDto, Long companyId);
-
-
+    CompanyResponseDto createCompany(@Valid CompanyRequestDto requestDto, Long companyId);
 }
