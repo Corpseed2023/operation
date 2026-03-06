@@ -1,11 +1,12 @@
 package com.doc.dto.contact;
 
 import jakarta.validation.constraints.*;
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.Comment;
 
-@Getter
-@Setter
+@Data
 public class ContactRequestDto {
 
     private Long contactId;
@@ -14,9 +15,13 @@ public class ContactRequestDto {
     @Size(max = 150, message = "Name cannot exceed 150 characters")
     private String name;
 
+    private String title;
+
     @NotBlank(message = "Designation is required")
     @Size(max = 100, message = "Designation cannot exceed 100 characters")
     private String designation;
+    private Long clientDesignationId;
+
 
     @Email(message = "Invalid email format")
     @Size(max = 120, message = "Email cannot exceed 120 characters")
@@ -24,10 +29,12 @@ public class ContactRequestDto {
 
     @Pattern(regexp = "^\\+?[1-9]\\d{1,14}$", message = "Invalid mobile number format")
     @Size(max = 15, message = "Mobile number cannot exceed 15 characters")
-    private String mobile;
+    private String contactNo;
 
-    @Size(max = 15, message = "Alternate number cannot exceed 15 characters")
-    private String alternateNumber;
+    @Pattern(regexp = "^\\+?[1-9]\\d{1,14}$", message = "Invalid mobile number format")
+    @Size(max = 15, message = "Mobile number cannot exceed 15 characters")
+    private String whatsappNo;
+
 
     // For company-level contact (when attaching directly to company)
     private Long companyId;
@@ -37,5 +44,13 @@ public class ContactRequestDto {
     // Priority / type flags
     private Boolean isPrimary;       // default false — whether this is the main contact
     private Boolean isSecondary;     // default false — secondary/alternate contact
+
+    private boolean makePrimaryForCompany = false;
+    private boolean makeSecondaryForCompany = false;
+    private boolean makePrimaryForUnit = false;
+    private boolean makeSecondaryForUnit = false;
+
+    private Long createdBy;
+    private Long updatedBy;
 
 }

@@ -11,6 +11,7 @@ import com.doc.repository.PaymentTypeRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
 
 import java.time.LocalDate;
@@ -20,6 +21,7 @@ import java.util.Date;
  * Main application class for initializing the application and seeding initial data.
  */
 @SpringBootApplication
+@FeignClient
 public class DocumentationApplication {
 
 	public static void main(String[] args) {

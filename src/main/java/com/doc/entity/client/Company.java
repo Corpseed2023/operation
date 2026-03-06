@@ -1,6 +1,7 @@
 package com.doc.entity.client;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
@@ -60,7 +61,8 @@ public class Company {
     private Date updatedDate = new Date();
 
     @Comment("Created by user ID")
-    private Long createdBy;
+    @NotNull(message = "Created by user ID cannot be null")
+    private Long createdById;
 
     @Comment("Updated by user ID")
     private Long updatedBy;
