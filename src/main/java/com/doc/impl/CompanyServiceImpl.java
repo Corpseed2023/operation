@@ -216,6 +216,7 @@ public class CompanyServiceImpl implements CompanyService {
 
     private void mapUnitRequestToEntity(CompanyUnit unit, CompanyUnitRequestDto dto) {
         unit.setUnitName(dto.getUnitName().trim());
+        unit.setId(dto.getUnitId());
         unit.setAddress(dto.getAddress().trim());
         unit.setCity(dto.getCity());
         unit.setState(dto.getState());
@@ -229,9 +230,12 @@ public class CompanyServiceImpl implements CompanyService {
 
     private void mapContactRequestToEntity(Contact contact, ContactRequestDto dto) {
         contact.setName(dto.getName().trim());
+        contact.setTitle(dto.getTitle());
         contact.setDesignation(dto.getDesignation());
         contact.setEmail(dto.getEmail());
+        contact.setId(dto.getContactId());
         contact.setContactNo(dto.getContactNo());
+        contact.setWhatsappNo(dto.getWhatsappNo());
         contact.setClientDesignation(dto.getDesignation());
         // Add more mappings as per your DTO fields (remarks, department, etc.)
     }
