@@ -11,4 +11,5 @@ public interface CompanyService {
 
 
     CompanyResponseDto createCompany(@Valid CompanyRequestDto requestDto, Long companyId);
+    CompanyResponseDto getCompanyById(Long companyId);
 }

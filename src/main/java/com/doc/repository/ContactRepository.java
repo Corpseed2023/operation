@@ -31,4 +31,13 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
             "AND c.companyUnit IS NULL " +
             "AND c.isDeleted = false AND c.isActive = true")
     List<Contact> findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(@Param("companyId") Long companyId);
+
+    @Query("""
+       SELECT c FROM Contact c
+       WHERE c.companyUnit.id IN :unitIds
+       AND c.isDeleted = false
+       AND c.isActive = true
+       """)
+    List<Contact> findByCompanyUnitIds(@Param("unitIds") List<Long> unitIds);
+
 }

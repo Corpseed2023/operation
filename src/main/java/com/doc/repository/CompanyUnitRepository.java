@@ -16,4 +16,6 @@ public interface CompanyUnitRepository extends JpaRepository<CompanyUnit, Long> 
     Optional<CompanyUnit> findByIdAndCompanyId(Long unitId, Long id);
 
     Optional<CompanyUnit> findByIdAndCompanyIdAndIsDeletedFalse(Long unitId, Long id);
+
+    List<CompanyUnit> findByCompanyIdAndIsDeletedFalse(Long companyId);
 }

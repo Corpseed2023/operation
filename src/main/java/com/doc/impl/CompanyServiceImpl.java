@@ -172,6 +172,45 @@ public class CompanyServiceImpl implements CompanyService {
         return mapToResponseDto(company, createdUnits, createdContacts);
     }
 
+    @Override
+    public CompanyResponseDto getCompanyById(Long companyId) {
+
+        logger.info("Fetching company with ID={}", companyId);
+
+        // 1. Fetch company
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Company not found with id: " + companyId,
+                        "COMPANY_NOT_FOUND"
+                ));
+
+        if (company.isDeleted()) {
+            throw new ResourceNotFoundException(
+                    "Company is deleted with id: " + companyId,
+                    "COMPANY_DELETED"
+            );
+        }
+
+        // 2. Fetch units
+        List<CompanyUnit> units = companyUnitRepository
+                .findByCompanyIdAndIsDeletedFalse(companyId);
+
+        List<Long> unitIds = units.stream()
+                .map(CompanyUnit::getId)
+                .toList();
+
+        // 4. Fetch contacts for those units
+        List<Contact> contacts = new ArrayList<>();
+
+        if (!unitIds.isEmpty()) {
+            contacts.addAll(
+                    contactRepository.findByCompanyUnitIds(unitIds)
+            );
+        }
+
+        // 4. Map response
+        return mapToResponseDto(company, units, contacts);
+    }
     // ──────────────────────────────────────────────
     // Validation Helpers
     // ──────────────────────────────────────────────
