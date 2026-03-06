@@ -30,5 +30,11 @@ public class CompanyController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-
+    @GetMapping("/{companyId}")
+    public ResponseEntity<CompanyResponseDto> getCompanyById(
+            @PathVariable Long companyId
+    ){
+        CompanyResponseDto dto =  companyService.getCompanyById(companyId);
+        return ResponseEntity.ok(dto);
+    }
 }
