@@ -511,7 +511,7 @@ public class ProjectServiceImpl implements ProjectService {
                     isVisible = allPrevCompleted && paidPercentage >= cumulative;
                     reason = !isVisible ? (allPrevCompleted ? "Insufficient payment" : "Previous incomplete") : null;
                 }
-
+                System.out.println("isVisible:  "+isVisible);
                 updateVisibilityAndAutoAssign(assignment, isVisible, reason, map, project, updatedById);
             }
         }
