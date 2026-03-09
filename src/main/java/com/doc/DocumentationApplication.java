@@ -60,6 +60,7 @@ public class DocumentationApplication {
 				createDocumentStatus(documentStatusRepository, 4L, "REJECTED", "Document rejected (requires remarks)");
 			}
 
+
 			// === PROJECT STATUSES ===
 			if (projectStatusRepository.count() == 0) {
 				createProjectStatus(projectStatusRepository, 1L, "OPEN", "Initial state, no milestones started");

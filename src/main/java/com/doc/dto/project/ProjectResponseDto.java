@@ -47,4 +47,7 @@ public class ProjectResponseDto {
     // Assume this class exists – add:
     private Long unitId;
     private String unitName;
+
+    private Integer milestoneCompletionPercentage;
+
 }
