@@ -619,6 +619,23 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setSalesPersonName(project.getSalesPersonName());
         dto.setStatusId(project.getStatus() != null ? project.getStatus().getId() : null);
         dto.setStatusName(project.getStatus() != null ? project.getStatus().getName() : null);
+
+        long totalMilestones =
+                projectMilestoneAssignmentRepository
+                        .countByProject_IdAndIsDeletedFalse(project.getId());
+
+        long completedMilestones =
+                projectMilestoneAssignmentRepository
+                        .countByProject_IdAndStatus_NameAndIsDeletedFalse(project.getId(), "COMPLETED");
+
+        int percentage = 0;
+
+        if (totalMilestones > 0) {
+            percentage = (int) ((completedMilestones * 100) / totalMilestones);
+        }
+
+        dto.setMilestoneCompletionPercentage(percentage);
+
         return dto;
     }
 
