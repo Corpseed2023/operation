@@ -55,10 +55,6 @@ public class ProjectActivity {
     @Column(name = "is_system_generated", nullable = false)
     private boolean systemGenerated = false;
 
-    // For linking this row to actual child table record
-    @Column(name = "detail_id", nullable = false)
-    private Long detailId;
-
     @Column(name = "is_deleted", nullable = false)
     private boolean deleted = false;
 
