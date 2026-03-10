@@ -34,6 +34,7 @@ public class DocumentationApplication {
 	 */
 	//
 
+
 	@Bean
 	public CommandLineRunner initStatuses(MilestoneStatusRepository milestoneStatusRepository,
 										  DocumentStatusRepository documentStatusRepository,
