@@ -13,11 +13,11 @@ import java.util.Date;
 public class CompanyUnitRequestDto {
 
     private Long   unitId;
-    private String unitName;                // Required
-    private String address;                 // Required
+    private String unitName;
+    private String address;
     private String city;
     private String state;
-    private String country = "India";
+    private String country;
     private String pinCode;
     private String gstNo;
     private String gstType;

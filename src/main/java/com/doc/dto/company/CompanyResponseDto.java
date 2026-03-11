@@ -15,8 +15,6 @@ public class CompanyResponseDto {
     private Long id;
     private String name;
     private String panNo;
-    private Date establishDate;
-
     private String industry;
     // private String industries;   // ← removed if duplicate/not needed
 

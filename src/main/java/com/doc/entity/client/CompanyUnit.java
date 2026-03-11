@@ -58,9 +58,6 @@ public class CompanyUnit {
     @Comment("Business constitution under GST for this unit")
     private String gstBusinessType;
 
-    @Temporal(TemporalType.DATE)
-    @Comment("Date when this unit / branch became operational")
-    private Date unitOpeningDate;
 
     @Column(nullable = false, length = 50)
     @Comment("Current status of the unit")
@@ -96,9 +93,4 @@ public class CompanyUnit {
     @Comment("Contacts specific to this unit / branch")
     private List<Contact> unitContacts = new ArrayList<>();
 
-    // Helper
-    public void addContact(Contact contact) {
-        unitContacts.add(contact);
-        contact.setCompanyUnit(this);
-    }
 }

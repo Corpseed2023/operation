@@ -1,4 +1,4 @@
-package com.doc.entity.client;
+ package com.doc.entity.client;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -25,10 +25,6 @@ public class Company {
     @Column(name = "com_pan", length = 15, unique = true)
     @Comment("Company PAN (group level)")
     private String panNo;
-
-    @Temporal(TemporalType.DATE)
-    @Comment("Company establishment / incorporation date")
-    private Date establishDate;
 
     @Column(length = 100)
     @Comment("Top-level industry category")
@@ -71,16 +67,5 @@ public class Company {
     @Comment("All units / branches / outlets belonging to this company")
     private List<CompanyUnit> units = new ArrayList<>();
 
-    // Helpers
-    public void addUnit(CompanyUnit unit) {
-        units.add(unit);
-        unit.setCompany(this);
-    }
 
-    public CompanyUnit getPrimaryUnit() {
-        return units.stream()
-                .filter(u -> !u.isDeleted() && "Active".equals(u.getStatus()))
-                .findFirst()
-                .orElse(null);
-    }
 }

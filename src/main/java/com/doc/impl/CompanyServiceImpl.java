@@ -239,14 +239,9 @@ public class CompanyServiceImpl implements CompanyService {
         }
     }
 
-    // ──────────────────────────────────────────────
-    // Mapping Helpers
-    // ──────────────────────────────────────────────
-
     private void mapCompanyRequestToEntity(Company company, CompanyRequestDto dto) {
         company.setName(dto.getName().trim());
         company.setPanNo(dto.getPanNo() != null ? dto.getPanNo().trim() : null);
-        company.setEstablishDate(dto.getEstablishDate());
         company.setIndustry(dto.getIndustry());
         company.setIndustries(dto.getIndustries());
         company.setSubIndustry(dto.getSubIndustry());
@@ -264,7 +259,6 @@ public class CompanyServiceImpl implements CompanyService {
         unit.setGstNo(dto.getGstNo() != null ? dto.getGstNo().trim() : null);
         unit.setGstType(dto.getGstType());
         unit.setGstBusinessType(dto.getGstBusinessType());
-        unit.setUnitOpeningDate(dto.getUnitOpeningDate());
     }
 
     private void mapContactRequestToEntity(Contact contact, ContactRequestDto dto) {
@@ -289,7 +283,6 @@ public class CompanyServiceImpl implements CompanyService {
         dto.setId(company.getId());
         dto.setName(company.getName());
         dto.setPanNo(company.getPanNo());
-        dto.setEstablishDate(company.getEstablishDate());
         dto.setIndustry(company.getIndustry());
         dto.setSubIndustry(company.getSubIndustry());
         dto.setSubSubIndustry(company.getSubSubIndustry());
