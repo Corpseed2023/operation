@@ -1,8 +1,10 @@
 package com.doc.impl;
 
+import com.doc.dto.project.ProjectCountResponseDto;
 import com.doc.dto.project.ProjectResponseDto;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
+import com.doc.entity.user.Role;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.repository.ProjectRepository;
@@ -294,5 +296,53 @@ public class ProjectSearchServiceImpl implements ProjectSearchService {
         dto.setActive(project.isActive());
 
         return dto;
+    }
+
+    @Override
+    public List<ProjectCountResponseDto> countOfProject(Long userId) {
+
+        // 1️⃣ Fetch user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found with id: " + userId));
+
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> role.getName().equals("ADMIN"));
+
+        long total;
+        long open;
+        long inProgress;
+        long completed;
+
+        if (isAdmin) {
+
+            // ADMIN → count all projects
+            total = projectRepository.countByIsDeletedFalse();
+
+            open = projectRepository.countByStatus_NameAndIsDeletedFalse("OPEN");
+
+            inProgress = projectRepository.countByStatus_NameAndIsDeletedFalse("IN_PROGRESS");
+
+            completed = projectRepository.countByStatus_NameAndIsDeletedFalse("COMPLETED");
+
+        } else {
+
+            // NON ADMIN → count only salesperson projects
+            total = projectRepository.countBySalesPersonIdAndIsDeletedFalse(userId);
+
+            open = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(userId, "OPEN");
+
+            inProgress = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(userId, "IN_PROGRESS");
+
+            completed = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(userId, "COMPLETED");
+        }
+
+        ProjectCountResponseDto dto = new ProjectCountResponseDto();
+        dto.setTotalProject(String.valueOf(total));
+        dto.setOpenProject(String.valueOf(open));
+        dto.setInProgressProject(String.valueOf(inProgress));
+        dto.setCompletedProject(String.valueOf(completed));
+
+        return List.of(dto);
     }
 }
