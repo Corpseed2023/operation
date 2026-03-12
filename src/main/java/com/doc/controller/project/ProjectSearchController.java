@@ -1,5 +1,6 @@
 package com.doc.controller.project;
 
+import com.doc.dto.project.ProjectCountResponseDto;
 import com.doc.dto.project.ProjectResponseDto;
 import com.doc.service.ProjectSearchService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -86,6 +87,14 @@ public class ProjectSearchController {
 
         List<ProjectResponseDto> projects =
                 projectSearchService.searchProjects(type, value, userId,statusName, fromDate, toDate);
+
+        return ResponseEntity.ok(projects);
+    }
+
+    @GetMapping("/counts")
+    public ResponseEntity<List<ProjectCountResponseDto>> countOfProject(@RequestParam Long userId){
+        List<ProjectCountResponseDto> projects =
+                projectSearchService.countOfProject(userId);
 
         return ResponseEntity.ok(projects);
     }

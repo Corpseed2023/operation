@@ -1,5 +1,6 @@
 package com.doc.service;
 
+import com.doc.dto.project.ProjectCountResponseDto;
 import com.doc.dto.project.ProjectResponseDto;
 
 import java.time.LocalDate;
@@ -17,4 +18,5 @@ public interface ProjectSearchService {
 
     List<ProjectResponseDto> searchProjects(String type, String value, Long userId, String statusName,LocalDate fromDate,LocalDate toDate);
 
+    List<ProjectCountResponseDto> countOfProject(Long userId);
 }
