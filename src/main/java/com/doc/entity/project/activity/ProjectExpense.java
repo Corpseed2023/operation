@@ -53,6 +53,8 @@ public class ProjectExpense {
     @Column(name = "created_by_user_id")
     private Long createdByUserId;
 
+    private String createdByUserName;
+
     @Column(name = "approval_status", length = 20)
     private String approvalStatus;
 

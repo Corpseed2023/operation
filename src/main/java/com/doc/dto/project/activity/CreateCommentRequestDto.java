@@ -11,5 +11,4 @@ public class CreateCommentRequestDto {
 
     private Long createdByUserId;
 
-    private String createdByUserName;
 }

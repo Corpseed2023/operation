@@ -9,5 +9,4 @@ public class CreateNoteRequestDto {
 
     private Long createdByUserId;
 
-    private String createdByUserName;
 }

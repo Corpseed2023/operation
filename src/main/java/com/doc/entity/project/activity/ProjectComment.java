@@ -39,4 +39,7 @@ public class ProjectComment {
 
     @Column(name = "created_date", nullable = false)
     private LocalDateTime createdDate;
+
+    private Long createdByUserId;
+    private String createdByUserName;
 }
