@@ -353,7 +353,7 @@
                     dto.setExpiryType(DocumentExpiryType.valueOf(expiryStr.trim().toUpperCase()));
                 } catch (IllegalArgumentException e) {
                     log.warn("Invalid expiryType value: '{}'", expiryStr);
-                    dto.setExpiryType(DocumentExpiryType.UNKNOWN); // fallback
+                    dto.setExpiryType(DocumentExpiryType.UNKNOWN);
                 }
             } else {
                 dto.setExpiryType(DocumentExpiryType.UNKNOWN);
