@@ -62,4 +62,6 @@ public class ProductController {
         logger.info("Product deleted successfully with ID: {}", id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+
 }

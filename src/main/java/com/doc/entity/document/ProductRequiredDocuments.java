@@ -79,14 +79,7 @@ public class ProductRequiredDocuments {
     @OneToMany(mappedBy = "requiredDocument", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProductDocumentMapping> productMappings = new ArrayList<>();
 
-    @PrePersist
-    protected void onCreate() {
-        this.createdDate = new Date();
-        this.updatedDate = new Date();
-    }
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedDate = new Date();
-    }
+
+
 }
