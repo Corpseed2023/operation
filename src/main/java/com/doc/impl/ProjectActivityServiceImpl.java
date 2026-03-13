@@ -1,16 +1,15 @@
 package com.doc.impl;
 
-import com.doc.dto.project.activity.CreateCommentRequestDto;
-import com.doc.dto.project.activity.CreateExpenseRequestDto;
-import com.doc.dto.project.activity.CreateNoteRequestDto;
-import com.doc.dto.project.activity.ProjectActivityResponseDto;
+import com.doc.dto.project.activity.*;
 import com.doc.em.ActivityType;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
 import com.doc.entity.project.activity.ProjectComment;
 import com.doc.entity.project.activity.ProjectExpense;
 import com.doc.entity.project.activity.ProjectNote;
+import com.doc.entity.user.User;
 import com.doc.repository.ProjectRepository;
+import com.doc.repository.UserRepository;
 import com.doc.repository.projectRepo.activity.ProjectActivityRepository;
 import com.doc.repository.projectRepo.activity.ProjectCommentRepository;
 import com.doc.repository.projectRepo.activity.ProjectExpenseRepository;
@@ -23,19 +22,28 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class ProjectActivityServiceImpl implements ProjectActivityService {
 
     private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
     private final ProjectActivityRepository activityRepository;
     private final ProjectNoteRepository noteRepository;
     private final ProjectCommentRepository commentRepository;
     private final ProjectExpenseRepository expenseRepository;
 
+    // ---------------------------------------------------
+    // CREATE NOTE
+    // ---------------------------------------------------
+
     @Override
     public ProjectActivityResponseDto addNote(Long projectId, CreateNoteRequestDto request) {
+
+        User user = validateUser(request.getCreatedByUserId());
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
@@ -45,8 +53,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 ActivityType.NOTE,
                 "Note Added",
                 request.getNoteText(),
-                request.getCreatedByUserId(),
-                request.getCreatedByUserName()
+                user
         );
 
         activity = activityRepository.save(activity);
@@ -56,14 +63,22 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         note.setActivity(activity);
         note.setNoteText(request.getNoteText());
         note.setCreatedDate(LocalDateTime.now());
+        note.setCreatedByUserId(user.getId());
+        note.setCreatedByUserName(user.getFullName());
 
         noteRepository.save(note);
 
         return mapResponse(activity, note);
     }
 
+    // ---------------------------------------------------
+    // CREATE COMMENT
+    // ---------------------------------------------------
+
     @Override
     public ProjectActivityResponseDto addComment(Long projectId, CreateCommentRequestDto request) {
+
+        User user = validateUser(request.getCreatedByUserId());
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
@@ -73,8 +88,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 ActivityType.COMMENT,
                 "Comment Added",
                 request.getCommentText(),
-                request.getCreatedByUserId(),
-                request.getCreatedByUserName()
+                user
         );
 
         activity = activityRepository.save(activity);
@@ -85,14 +99,22 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         comment.setCommentText(request.getCommentText());
         comment.setParentCommentId(request.getParentCommentId());
         comment.setCreatedDate(LocalDateTime.now());
+        comment.setCreatedByUserId(user.getId());
+        comment.setCreatedByUserName(user.getFullName());
 
         commentRepository.save(comment);
 
         return mapResponse(activity, comment);
     }
 
+    // ---------------------------------------------------
+    // CREATE EXPENSE
+    // ---------------------------------------------------
+
     @Override
     public ProjectActivityResponseDto addExpense(Long projectId, CreateExpenseRequestDto request) {
+
+        User user = validateUser(request.getCreatedByUserId());
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
@@ -104,8 +126,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 ActivityType.EXPENSE,
                 "Expense Added",
                 summary,
-                request.getCreatedByUserId(),
-                null
+                user
         );
 
         activity = activityRepository.save(activity);
@@ -118,28 +139,76 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setCurrency(request.getCurrency());
         expense.setDescription(request.getDescription());
         expense.setExpenseDate(request.getExpenseDate());
-        expense.setCreatedByUserId(request.getCreatedByUserId());
+        expense.setCreatedByUserId(user.getId());
+        expense.setCreatedByUserName(user.getFullName());
 
         expenseRepository.save(expense);
 
         return mapResponse(activity, expense);
     }
 
+    // ---------------------------------------------------
+    // FETCH ALL ACTIVITIES
+    // ---------------------------------------------------
+
     @Override
     public Page<ProjectActivityResponseDto> getAllActivities(Long projectId, Pageable pageable) {
 
-        return activityRepository
-                .findByProjectIdAndDeletedFalseOrderByActivityDateDesc(projectId, pageable)
-                .map(this::mapTimeline);
+        pageable = normalizePageable(pageable);
+
+        Page<ProjectActivity> page = activityRepository
+                .findByProjectIdAndDeletedFalseOrderByActivityDateDesc(projectId, pageable);
+
+        List<ProjectActivityResponseDto> content = page.getContent()
+                .stream()
+                .map(activity -> {
+
+                    if (activity.getActivityType() == ActivityType.COMMENT) {
+
+                        ProjectComment comment =
+                                commentRepository.findByActivityId(activity.getId()).orElse(null);
+
+                        if (comment != null && comment.getParentCommentId() != null) {
+                            return null; // hide child comments
+                        }
+                    }
+
+                    return mapTimeline(activity);
+
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        return new org.springframework.data.domain.PageImpl<>(
+                content,
+                pageable,
+                page.getTotalElements()
+        );
     }
+
+    // ---------------------------------------------------
+    // FETCH BY TYPE
+    // ---------------------------------------------------
 
     @Override
     public Page<ProjectActivityResponseDto> getActivitiesByType(Long projectId, ActivityType type, Pageable pageable) {
+
+        pageable = normalizePageable(pageable);
+
+        if (type == ActivityType.COMMENT) {
+            return activityRepository
+                    .findParentCommentActivities(projectId, type, pageable)
+                    .map(this::mapTimeline);
+        }
 
         return activityRepository
                 .findByProjectIdAndActivityTypeAndDeletedFalseOrderByActivityDateDesc(projectId, type, pageable)
                 .map(this::mapTimeline);
     }
+
+    // ---------------------------------------------------
+    // FETCH BY DATE RANGE
+    // ---------------------------------------------------
 
     @Override
     public Page<ProjectActivityResponseDto> getActivitiesByDateRange(
@@ -148,23 +217,63 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             LocalDate end,
             Pageable pageable) {
 
-        return activityRepository
+        pageable = normalizePageable(pageable);
+
+        Page<ProjectActivity> page = activityRepository
                 .findByProjectIdAndActivityDateBetweenAndDeletedFalseOrderByActivityDateDesc(
                         projectId,
                         start.atStartOfDay(),
                         end.atTime(23, 59, 59),
                         pageable
-                )
-                .map(this::mapTimeline);
+                );
+
+        List<ProjectActivityResponseDto> content = page.getContent()
+                .stream()
+                .map(activity -> {
+
+                    if (activity.getActivityType() == ActivityType.COMMENT) {
+
+                        ProjectComment comment =
+                                commentRepository.findByActivityId(activity.getId()).orElse(null);
+
+                        if (comment != null && comment.getParentCommentId() != null) {
+                            return null;
+                        }
+                    }
+
+                    return mapTimeline(activity);
+
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        return new org.springframework.data.domain.PageImpl<>(
+                content,
+                pageable,
+                page.getTotalElements()
+        );
     }
+
+    // ---------------------------------------------------
+    // VALIDATE USER
+    // ---------------------------------------------------
+
+    private User validateUser(Long userId) {
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+    }
+
+    // ---------------------------------------------------
+    // CREATE ACTIVITY
+    // ---------------------------------------------------
 
     private ProjectActivity createActivity(
             Project project,
             ActivityType type,
             String title,
             String summary,
-            Long userId,
-            String userName
+            User user
     ) {
 
         ProjectActivity activity = new ProjectActivity();
@@ -173,13 +282,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         activity.setTitle(title);
         activity.setSummary(summary);
         activity.setActivityDate(LocalDateTime.now());
-        activity.setCreatedByUserId(userId);
-        activity.setCreatedByUserName(userName);
+        activity.setCreatedByUserId(user.getId());
+        activity.setCreatedByUserName(user.getFullName());
         activity.setCreatedDate(LocalDateTime.now());
         activity.setDeleted(false);
 
         return activity;
     }
+
+    // ---------------------------------------------------
+    // MAP RESPONSE
+    // ---------------------------------------------------
 
     private ProjectActivityResponseDto mapResponse(ProjectActivity activity, Object details) {
 
@@ -196,6 +309,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return dto;
     }
 
+    // ---------------------------------------------------
+    // TIMELINE MAPPER
+    // ---------------------------------------------------
+
     private ProjectActivityResponseDto mapTimeline(ProjectActivity activity) {
 
         Object details = null;
@@ -207,7 +324,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 break;
 
             case COMMENT:
-                details = commentRepository.findByActivityId(activity.getId()).orElse(null);
+
+                ProjectComment rootComment =
+                        commentRepository.findByActivityId(activity.getId()).orElse(null);
+
+                if (rootComment != null) {
+
+                    List<ProjectComment> allComments =
+                            commentRepository.findByProjectId(activity.getProject().getId());
+
+                    details = buildCommentTree(rootComment, allComments);
+                }
+
                 break;
 
             case EXPENSE:
@@ -216,5 +344,44 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         return mapResponse(activity, details);
+    }
+
+    // ---------------------------------------------------
+    // BUILD COMMENT TREE
+    // ---------------------------------------------------
+
+    private ProjectCommentResponseDto buildCommentTree(ProjectComment root, List<ProjectComment> allComments) {
+
+        ProjectCommentResponseDto dto = new ProjectCommentResponseDto();
+        dto.setId(root.getId());
+        dto.setCommentText(root.getCommentText());
+        dto.setParentCommentId(root.getParentCommentId());
+        dto.setCreatedDate(root.getCreatedDate());
+        dto.setCreatedByUserId(root.getCreatedByUserId());
+        dto.setCreatedByUserName(root.getCreatedByUserName());
+
+        List<ProjectCommentResponseDto> children = allComments.stream()
+                .filter(c -> Objects.equals(root.getId(), c.getParentCommentId()))
+                .map(child -> buildCommentTree(child, allComments))
+                .toList();
+
+        dto.setChildren(children);
+
+        return dto;
+    }
+
+    private Pageable normalizePageable(Pageable pageable) {
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+
+        if (page > 0) {
+            page = page - 1;
+        }
+
+        return org.springframework.data.domain.PageRequest.of(
+                page,
+                size,
+                pageable.getSort()
+        );
     }
 }

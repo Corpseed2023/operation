@@ -8,6 +8,7 @@ public class ResourceNotFoundException extends RuntimeException {
         this.errorCode = errorCode;
     }
 
+
     public String getErrorCode() {
         return errorCode;
     }
