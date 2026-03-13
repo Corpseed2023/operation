@@ -76,6 +76,8 @@
             entity.setDeleted(false);
             entity.setCreatedBy(dto.getCreatedBy());
             entity.setUpdatedBy(dto.getUpdatedBy());
+            entity.setCreatedDate(new Date());
+            entity.setUpdatedDate(new Date());
 
             entity = productRequiredDocumentRepository.save(entity);
             return mapToResponseDto(entity);
@@ -179,6 +181,8 @@
                         mapDtoToEntity(dto, entity);
                         entity.setActive(true);
                         entity.setDeleted(false);
+                        entity.setCreatedDate(new Date());
+                        entity.setUpdatedDate(new Date());
 
                         entity.setCreatedBy(user.getId());
                         entity.setUpdatedBy(user.getId());
@@ -310,6 +314,7 @@
                         mapDtoToEntity(dto, entity);
                         entity.setActive(true);
                         entity.setDeleted(false);
+                        entity.setCreatedDate(new Date());
                         entity.setUpdatedDate(new Date());
 
                         entity.setCreatedBy(user.getId());
