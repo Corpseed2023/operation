@@ -154,9 +154,36 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     @Override
     public Page<ProjectActivityResponseDto> getAllActivities(Long projectId, Pageable pageable) {
 
-        return activityRepository
-                .findByProjectIdAndDeletedFalseOrderByActivityDateDesc(projectId, pageable)
-                .map(this::mapTimeline);
+        pageable = normalizePageable(pageable);
+
+        Page<ProjectActivity> page = activityRepository
+                .findByProjectIdAndDeletedFalseOrderByActivityDateDesc(projectId, pageable);
+
+        List<ProjectActivityResponseDto> content = page.getContent()
+                .stream()
+                .map(activity -> {
+
+                    if (activity.getActivityType() == ActivityType.COMMENT) {
+
+                        ProjectComment comment =
+                                commentRepository.findByActivityId(activity.getId()).orElse(null);
+
+                        if (comment != null && comment.getParentCommentId() != null) {
+                            return null; // hide child comments
+                        }
+                    }
+
+                    return mapTimeline(activity);
+
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        return new org.springframework.data.domain.PageImpl<>(
+                content,
+                pageable,
+                page.getTotalElements()
+        );
     }
 
     // ---------------------------------------------------
@@ -165,6 +192,8 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
     @Override
     public Page<ProjectActivityResponseDto> getActivitiesByType(Long projectId, ActivityType type, Pageable pageable) {
+
+        pageable = normalizePageable(pageable);
 
         if (type == ActivityType.COMMENT) {
             return activityRepository
@@ -188,14 +217,41 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             LocalDate end,
             Pageable pageable) {
 
-        return activityRepository
+        pageable = normalizePageable(pageable);
+
+        Page<ProjectActivity> page = activityRepository
                 .findByProjectIdAndActivityDateBetweenAndDeletedFalseOrderByActivityDateDesc(
                         projectId,
                         start.atStartOfDay(),
                         end.atTime(23, 59, 59),
                         pageable
-                )
-                .map(this::mapTimeline);
+                );
+
+        List<ProjectActivityResponseDto> content = page.getContent()
+                .stream()
+                .map(activity -> {
+
+                    if (activity.getActivityType() == ActivityType.COMMENT) {
+
+                        ProjectComment comment =
+                                commentRepository.findByActivityId(activity.getId()).orElse(null);
+
+                        if (comment != null && comment.getParentCommentId() != null) {
+                            return null;
+                        }
+                    }
+
+                    return mapTimeline(activity);
+
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        return new org.springframework.data.domain.PageImpl<>(
+                content,
+                pageable,
+                page.getTotalElements()
+        );
     }
 
     // ---------------------------------------------------
@@ -312,5 +368,20 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         dto.setChildren(children);
 
         return dto;
+    }
+
+    private Pageable normalizePageable(Pageable pageable) {
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+
+        if (page > 0) {
+            page = page - 1;
+        }
+
+        return org.springframework.data.domain.PageRequest.of(
+                page,
+                size,
+                pageable.getSort()
+        );
     }
 }
