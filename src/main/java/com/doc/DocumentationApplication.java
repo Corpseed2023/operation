@@ -24,6 +24,7 @@ import java.util.Date;
 @FeignClient
 public class DocumentationApplication {
 
+
 	public static void main(String[] args) {
 		SpringApplication.run(DocumentationApplication.class, args);
 	}
