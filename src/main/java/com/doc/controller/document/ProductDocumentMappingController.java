@@ -1,9 +1,7 @@
 package com.doc.controller.document;
 
-import com.doc.dto.document.ProductDocumentMappingGroupedDto;
 import com.doc.dto.document.ProductDocumentMappingRequestDto;
 import com.doc.dto.document.ProductDocumentMappingResponseDto;
-import com.doc.dto.document.ProductDocumentRequirementResponseDto;
 import com.doc.service.ProductDocumentMappingService;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/operationService/api/products")
 @RequiredArgsConstructor
 @Tag(name = "Product Document Mapping", description = "Manage required documents per product and applicant type")
 public class ProductDocumentMappingController {

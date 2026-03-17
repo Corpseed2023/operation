@@ -175,11 +175,11 @@ public class DesignationServiceImpl implements DesignationService {
             throw new ValidationException("Designation with ID " + requestDto.getId() + " already exists", "ERR_DUPLICATE_DESIGNATION_ID");
         }
 
-        // Check for duplicate name in department
-        if (designationRepository.existsByNameAndDepartmentIdAndIsDeletedFalse(requestDto.getName().trim(), requestDto.getDepartmentId())) {
-            logger.warn("Designation with name '{}' already exists in department ID {}", requestDto.getName(), requestDto.getDepartmentId());
-            throw new ValidationException("Designation with name '" + requestDto.getName() + "' already exists in the department", "ERR_DUPLICATE_DESIGNATION_NAME");
-        }
+//        // Check for duplicate name in department
+//        if (designationRepository.existsByNameAndDepartmentIdAndIsDeletedFalse(requestDto.getName().trim(), requestDto.getDepartmentId())) {
+//            logger.warn("Designation with name '{}' already exists in department ID {}", requestDto.getName(), requestDto.getDepartmentId());
+//            throw new ValidationException("Designation with name '" + requestDto.getName() + "' already exists in the department", "ERR_DUPLICATE_DESIGNATION_NAME");
+//        }
 
         // Validate department
         Department department = departmentRepository.findById(requestDto.getDepartmentId())

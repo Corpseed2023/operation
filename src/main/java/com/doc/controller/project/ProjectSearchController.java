@@ -14,7 +14,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/projects/search")
+@RequestMapping("/operationService/api/projects/search")
 public class ProjectSearchController {
 
     @Autowired

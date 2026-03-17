@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/applicant-types")
+@RequestMapping("/operationService/api/applicant-types")
 @RequiredArgsConstructor
 @Tag(name = "Applicant Types", description = "Manage applicant type master data")
 public class ApplicantTypeController {

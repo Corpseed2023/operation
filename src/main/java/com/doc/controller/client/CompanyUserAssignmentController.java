@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/company-user-assignments")
+@RequestMapping("/operationService/api/company-user-assignments")
 public class CompanyUserAssignmentController {
 
     @Autowired

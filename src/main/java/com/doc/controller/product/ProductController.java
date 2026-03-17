@@ -16,13 +16,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/operationService/api/products")
 @Validated
 public class ProductController {
 
     private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
-
-
 
     @Autowired
     private ProductService productService;

@@ -16,7 +16,7 @@ import java.util.List;
  * REST controller for managing user-product mappings.
  */
 @RestController
-@RequestMapping("/api/user-product-mappings")
+@RequestMapping("/operationService/api/user-product-mappings")
 public class UserProductMapController {
 
     private static final Logger logger = LoggerFactory.getLogger(UserProductMapController.class);

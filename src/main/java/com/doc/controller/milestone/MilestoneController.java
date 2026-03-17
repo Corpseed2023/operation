@@ -18,7 +18,7 @@ import java.util.List;
  * REST Controller for managing Milestone entities.
  */
 @RestController
-@RequestMapping("/api/milestones")
+@RequestMapping("/operationService/api/milestones")
 public class MilestoneController {
 
     @Autowired

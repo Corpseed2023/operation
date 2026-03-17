@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/milestone-statuses")
+@RequestMapping("/operationService/api/milestone-statuses")
 public class MilestoneStatusController {
 
     @Autowired

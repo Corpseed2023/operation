@@ -17,7 +17,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/projects")
+@RequestMapping("/operationService/api/projects")
 @Validated
 @SecurityRequirement(name = "Bearer Authentication")
 public class ProjectDocumentUploadController {

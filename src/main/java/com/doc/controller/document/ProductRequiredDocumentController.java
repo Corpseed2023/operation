@@ -20,7 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/product-required-documents")
+@RequestMapping("/operationService/api/product-required-documents")
 public class ProductRequiredDocumentController {
 
     @Autowired

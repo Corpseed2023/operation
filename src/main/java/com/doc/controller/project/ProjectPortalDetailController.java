@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/projects")
+@RequestMapping("/operationService/api/projects")
 @Tag(name = "Project Portal Details", description = "Manage client portal login credentials (EPR, FoSCoS, BIS, CTO, etc.)")
 public class ProjectPortalDetailController {
 

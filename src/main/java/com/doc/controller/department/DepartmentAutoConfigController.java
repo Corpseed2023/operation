@@ -1,4 +1,3 @@
-// src/main/java/com/doc/controller/department/DepartmentAutoConfigController.java
 package com.doc.controller.department;
 
 import com.doc.dto.auto.DepartmentAutoConfigDto;
@@ -14,7 +13,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/department-auto-config")
+@RequestMapping("/operationService/api/department-auto-config")
 @Validated
 public class DepartmentAutoConfigController {
 
