@@ -49,11 +49,12 @@ public class ProductRequiredDocumentController {
 
     // Active only, paginated (if needed)
     @Operation(summary = "Get active required documents (paginated)")
-    @GetMapping("/active")
+    @GetMapping("/active/{userId}")
     public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getActivePaginated(
+            @PathVariable Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(productRequiredDocumentService.getActivePaginated(page, size));
+        return ResponseEntity.ok(productRequiredDocumentService.getActivePaginated(userId,page, size));
     }
 
     @PostMapping("/import-required-document")

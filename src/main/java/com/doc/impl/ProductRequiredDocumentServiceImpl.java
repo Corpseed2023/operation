@@ -413,9 +413,14 @@
 
 
         @Override
-        public List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size) {
+        public List<ProductRequiredDocumentResponseDto> getActivePaginated(Long userId, int page, int size) {
             page = Math.max(page, 1);
             size = size > 0 ? size : 20;
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException("User not found", "USER_NOT_FOUND"));
+
 
             Pageable pageable = PageRequest.of(page - 1, size, Sort.by("name").ascending());
             return productRequiredDocumentRepository.findAllByIsDeletedFalseAndIsActiveTrue(pageable)  // FIXED

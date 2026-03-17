@@ -9,6 +9,6 @@ public interface ProductRequiredDocumentService {
     ProductRequiredDocumentResponseDto create(ProductRequiredDocumentRequestDto dto);
     ProductRequiredDocumentResponseDto update(Long id, ProductRequiredDocumentRequestDto dto);
 
-    List<ProductRequiredDocumentResponseDto> getActivePaginated(int page, int size);
+    List<ProductRequiredDocumentResponseDto> getActivePaginated(Long userId, int page, int size);
     List<ProductRequiredDocumentResponseDto> importFromS3(String s3Url, Long createdBy);
 }
