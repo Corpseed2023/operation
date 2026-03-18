@@ -131,6 +131,7 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         portalDetailRepo.save(entity);
     }
 
+
     @Override
     public ProjectPortalDetailResponseDto approveOrRejectPortalDetail(
             Long projectId, Long detailId, Long userId, ProjectPortalDetailApprovalDto approvalDto) {
