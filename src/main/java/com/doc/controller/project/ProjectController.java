@@ -233,4 +233,13 @@ public class ProjectController {
     }
 
 
+    @GetMapping("/{unbilledNumber}")
+    public ResponseEntity<ProjectResponseDto> getProjectByUnbilledNumber(
+            @PathVariable String unbilledNumber) {
+
+        ProjectResponseDto response = projectService.getProjectByUnbilledNumber(unbilledNumber);
+        return ResponseEntity.ok(response);
+    }
+
+
 }

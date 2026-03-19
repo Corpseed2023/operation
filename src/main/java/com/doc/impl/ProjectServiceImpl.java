@@ -1136,4 +1136,18 @@ public class ProjectServiceImpl implements ProjectService {
         return dto;
     }
 
+    @Override
+    @Transactional
+    public ProjectResponseDto getProjectByUnbilledNumber(String unbilledNumber){
+
+        Project project = projectRepository
+                .findByUnbilledNumberAndIsDeletedFalse(unbilledNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
+
+        return mapToResponseDto(project);
+
+    }
 }
