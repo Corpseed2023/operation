@@ -42,4 +42,7 @@ public interface ProjectService {
 
 
     List<DocumentChecklistDTO> getDocumentChecklist(Long projectId);
+
+    ProjectResponseDto getProjectByUnbilledNumber(String unbilledNumber);
+
 }
