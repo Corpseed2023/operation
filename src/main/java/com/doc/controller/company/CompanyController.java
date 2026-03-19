@@ -14,7 +14,7 @@ import java.util.List;
 
 
 @RestController
-@RequestMapping("/operationService/operationService/api/companies")
+@RequestMapping("/operationService/api/companies")
 @Validated
 public class CompanyController {
 
