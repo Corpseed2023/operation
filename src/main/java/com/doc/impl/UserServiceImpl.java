@@ -72,6 +72,7 @@ public class UserServiceImpl implements UserService {
         user.setUserDesignation(designation);
         user.setDepartments(departments);
         user.setRoles(roles);
+
         user.setManager(manager);
         user.setDate(LocalDate.now());
 

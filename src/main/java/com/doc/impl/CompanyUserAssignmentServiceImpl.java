@@ -46,7 +46,7 @@ public class CompanyUserAssignmentServiceImpl implements CompanyUserAssignmentSe
             throw new ValidationException("Assignment for company ID " + requestDto.getCompanyId() + " and department ID " + requestDto.getDepartmentId() + " already exists", "DUPLICATE_ASSIGNMENT");
         }
 
-        Company company = companyRepository.findActiveUserById(requestDto.getCompanyId())
+        Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found or is deleted", "COMPANY_NOT_FOUND"));
 
         Department department = departmentRepository.findByIdAndIsDeletedFalse(requestDto.getDepartmentId())
@@ -107,7 +107,7 @@ public class CompanyUserAssignmentServiceImpl implements CompanyUserAssignmentSe
                 .filter(a -> !a.isDeleted() && a.isActive())
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment with ID " + id + " not found or is deleted/inactive", "ASSIGNMENT_NOT_FOUND"));
 
-        Company company = companyRepository.findActiveUserById(requestDto.getCompanyId())
+        Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found or is deleted", "COMPANY_NOT_FOUND"));
 
         Department department = departmentRepository.findByIdAndIsDeletedFalse(requestDto.getDepartmentId())

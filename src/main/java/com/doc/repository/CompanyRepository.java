@@ -14,15 +14,12 @@ import java.util.Optional;
 @Repository
 public interface CompanyRepository extends JpaRepository<Company, Long> {
 
-    boolean existsByNameAndIsDeletedFalse(String name);
 
-    boolean existsByGstNoAndIsDeletedFalse(String gstNo);
-
-    Page<Company> findByIsDeletedFalse(Pageable pageable);
+    boolean existsByPanNo(String panNo);
 
     @Query("SELECT c FROM Company c WHERE c.id = :id AND c.isDeleted = false")
-    Optional<Company> findActiveUserById(@Param("id") Long id);
+    Optional<Company> findByIdAndIsDeletedFalse(@Param("id") Long id);
 
-
-
+    boolean existsByNameAndIsDeletedFalse(String name);
+    boolean existsByPanNoAndIsDeletedFalse(String panNo);
 }

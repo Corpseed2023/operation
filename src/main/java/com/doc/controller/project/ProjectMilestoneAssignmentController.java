@@ -13,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/milestone-assignments")
+@RequestMapping("/operationService/api/milestone-assignments")
 public class ProjectMilestoneAssignmentController {
 
     @Autowired

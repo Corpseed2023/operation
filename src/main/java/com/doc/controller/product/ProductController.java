@@ -2,6 +2,7 @@ package com.doc.controller.product;
 
 import com.doc.dto.product.ProductRequestDto;
 import com.doc.dto.product.ProductResponseDto;
+import com.doc.dto.product.request.ProductUpdateDto;
 import com.doc.service.ProductService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -15,13 +16,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/operationService/api/products")
 @Validated
 public class ProductController {
 
     private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
-
-
 
     @Autowired
     private ProductService productService;
@@ -62,4 +61,21 @@ public class ProductController {
         logger.info("Product deleted successfully with ID: {}", id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+    // com.doc.controller.product.ProductController
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ProductResponseDto> updateProduct(
+            @PathVariable Long id,
+            @Valid @RequestBody ProductUpdateDto updateDto,
+            @RequestParam Long userId) {   // ← same pattern as getAllProducts
+
+        logger.info("Received update request for product ID: {} by user: {}", id, userId);
+
+        ProductResponseDto updated = productService.updateProduct(id, updateDto, userId);
+
+        return ResponseEntity.ok(updated);
+    }
+
+
 }

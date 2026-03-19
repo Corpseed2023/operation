@@ -11,6 +11,7 @@ import com.doc.repository.PaymentTypeRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Bean;
 
 import java.time.LocalDate;
@@ -20,7 +21,9 @@ import java.util.Date;
  * Main application class for initializing the application and seeding initial data.
  */
 @SpringBootApplication
+@FeignClient
 public class DocumentationApplication {
+
 
 	public static void main(String[] args) {
 		SpringApplication.run(DocumentationApplication.class, args);
@@ -57,6 +60,7 @@ public class DocumentationApplication {
 				createDocumentStatus(documentStatusRepository, 3L, "VERIFIED", "Document verified and approved");
 				createDocumentStatus(documentStatusRepository, 4L, "REJECTED", "Document rejected (requires remarks)");
 			}
+
 
 			// === PROJECT STATUSES ===
 			if (projectStatusRepository.count() == 0) {

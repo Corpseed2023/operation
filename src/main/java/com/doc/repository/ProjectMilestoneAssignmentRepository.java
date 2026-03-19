@@ -163,6 +163,12 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     long countByProjectIdAndIsDeletedFalse(Long projectId);
 
     long countByProjectIdAndStatusIdAndIsDeletedFalse(Long projectId, Long statusId);
+    // Total milestones of a project
+    long countByProject_IdAndIsDeletedFalse(Long projectId);
+
+    // Completed milestones of a project
+    long countByProject_IdAndStatus_NameAndIsDeletedFalse(Long projectId, String statusName);
+
 
 
 

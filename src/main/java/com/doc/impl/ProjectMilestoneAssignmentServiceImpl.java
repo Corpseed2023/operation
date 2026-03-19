@@ -420,7 +420,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             case "COMPLETED" -> throw new ValidationException("Cannot change status from COMPLETED", "COMPLETED_FINAL");
             default -> throw new ValidationException("Invalid current status: " + current, "INVALID_CURRENT_STATUS");
         }
-
+        System.out.println("assignment.isVisible(): "+assignment.isVisible());
         if (!assignment.isVisible() && !"NEW".equals(next)) {
             throw new ValidationException("Milestone must be visible to change status", "MILESTONE_NOT_VISIBLE");
         }

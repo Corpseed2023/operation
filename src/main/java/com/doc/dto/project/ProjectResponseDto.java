@@ -30,12 +30,6 @@ public class ProjectResponseDto {
 
     private Long leadId;
     private LocalDate date;
-    private String address;
-    private String city;
-    private String state;
-    private String country;
-    private String primaryPinCode;
-
     private Double totalAmount;
     private Double dueAmount;
     private String paymentStatus;
@@ -52,7 +46,13 @@ public class ProjectResponseDto {
     private Long statusId;
     private String statusName;
 
+
     private Long totalMilestones;       // ← change to Long
     private Long completedMilestones;   // ← change to Long
+    // Assume this class exists – add:
+    private Long unitId;
+    private String unitName;
+
+    private Integer milestoneCompletionPercentage;
 
 }

@@ -8,6 +8,7 @@ import com.doc.dto.project.projectHistory.*;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.client.Company;
+import com.doc.entity.client.CompanyUnit;
 import com.doc.entity.client.Contact;
 import com.doc.entity.client.PaymentType;
 import com.doc.entity.department.Department;
@@ -77,6 +78,10 @@ public class ProjectServiceImpl implements ProjectService {
     @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
     @Autowired private ProjectRequestValidator projectRequestValidator;
+
+
+    @Autowired private CompanyUnitRepository companyUnitRepository;
+
     @Autowired private ProductDocumentMappingRepository productDocumentMappingRepository;
     @Autowired
     private ApplicantTypeRepository applicantTypeRepository;
@@ -103,10 +108,17 @@ public class ProjectServiceImpl implements ProjectService {
         // Fetch entities
         Product product = productRepository.findActiveUserById(requestDto.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found", "ERR_PRODUCT_NOT_FOUND"));
-        Company company = companyRepository.findActiveUserById(requestDto.getCompanyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Company not found", "ERR_COMPANY_NOT_FOUND"));
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getContactId())
-                .orElseThrow(() -> new ResourceNotFoundException("Contact not found", "ERR_CONTACT_NOT_FOUND"));
+// Fetch active company (not deleted)
+        Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found or deleted", "ERR_COMPANY_NOT_FOUND"));
+
+        CompanyUnit unit = null;
+        if (requestDto.getUnitId() != null) {  // Optional, but required in multi-unit flow
+            unit = companyUnitRepository.findByIdAndCompanyIdAndIsDeletedFalse(requestDto.getUnitId(), requestDto.getCompanyId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Unit not found or doesn't belong to company", "ERR_UNIT_NOT_FOUND"));
+        }
+        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrueAndIsDeletedFalse(requestDto.getContactId())
+                .orElseThrow(() -> new ResourceNotFoundException("Contact not found, inactive or deleted", "ERR_CONTACT_NOT_FOUND"));
         User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
         User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
@@ -141,6 +153,7 @@ public class ProjectServiceImpl implements ProjectService {
         project.setSalesPersonId(requestDto.getSalesPersonId());
         project.setSalesPersonName(requestDto.getSalesPersonName());
         project.setActive(true);
+        project.setUnit(unit);
 
 
         ProjectStatus openStatus = projectStatusRepository.findById(StatusConstants.PROJECT_OPEN_ID)
@@ -498,7 +511,7 @@ public class ProjectServiceImpl implements ProjectService {
                     isVisible = allPrevCompleted && paidPercentage >= cumulative;
                     reason = !isVisible ? (allPrevCompleted ? "Insufficient payment" : "Previous incomplete") : null;
                 }
-
+                System.out.println("isVisible:  "+isVisible);
                 updateVisibilityAndAutoAssign(assignment, isVisible, reason, map, project, updatedById);
             }
         }
@@ -574,11 +587,6 @@ public class ProjectServiceImpl implements ProjectService {
         project.setProjectNo(dto.getProjectNo().trim());
         project.setLeadId(dto.getLeadId());
         project.setDate(dto.getDate());
-        project.setAddress(dto.getAddress());
-        project.setCity(dto.getCity());
-        project.setState(dto.getState());
-        project.setCountry(dto.getCountry());
-        project.setPrimaryPinCode(dto.getPrimaryPinCode());
         project.setUnbilledNumber(dto.getUnbilledNumber());
         project.setEstimateNumber(dto.getEstimateNumber());
     }
@@ -595,11 +603,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setContactId(project.getContact() != null ? project.getContact().getId() : null);
         dto.setLeadId(project.getLeadId());
         dto.setDate(project.getDate());
-        dto.setAddress(project.getAddress());
-        dto.setCity(project.getCity());
-        dto.setState(project.getState());
-        dto.setCountry(project.getCountry());
-        dto.setPrimaryPinCode(project.getPrimaryPinCode());
+
         dto.setTotalAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getTotalAmount() : 0.0);
         dto.setDueAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getDueAmount() : 0.0);
         dto.setPaymentTypeId(project.getPaymentDetail() != null && project.getPaymentDetail().getPaymentType() != null
@@ -629,6 +633,22 @@ public class ProjectServiceImpl implements ProjectService {
                 )
         );
 
+
+        long totalMilestones =
+                projectMilestoneAssignmentRepository
+                        .countByProject_IdAndIsDeletedFalse(project.getId());
+
+        long completedMilestones =
+                projectMilestoneAssignmentRepository
+                        .countByProject_IdAndStatus_NameAndIsDeletedFalse(project.getId(), "COMPLETED");
+
+        int percentage = 0;
+
+        if (totalMilestones > 0) {
+            percentage = (int) ((completedMilestones * 100) / totalMilestones);
+        }
+
+        dto.setMilestoneCompletionPercentage(percentage);
 
         return dto;
     }
@@ -786,59 +806,95 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
         dto.setDate(project.getDate());
-        dto.setAddress(project.getAddress());
-        dto.setCity(project.getCity());
-        dto.setState(project.getState());
-        dto.setCountry(project.getCountry());
+
         dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
         dto.setProductName(project.getProduct() != null ? project.getProduct().getProductName() : null);
+
         dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
         dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
+
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
-        dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
 
         if (project.getApplicantType() != null) {
             dto.setApplicantId(project.getApplicantType().getId());
             dto.setApplicantName(project.getApplicantType().getName());
         }
 
-
-        User user = userRepository.findActiveUserById(userId)
+        // ──────────────────────────────────────────────
+        // Determine visibility rules
+        // ──────────────────────────────────────────────
+        User requestingUser = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
-        boolean isAdmin = user.getRoles().stream().anyMatch(role -> role.getName().equals("ADMIN"));
-        boolean isOperationHead = user.getRoles().stream().anyMatch(role -> role.getName().equals("OPERATION_HEAD"));
 
+        boolean isAdmin = requestingUser.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getName()));
+        boolean isOperationHead = requestingUser.getRoles().stream().anyMatch(role -> "OPERATION_HEAD".equals(role.getName()));
+        boolean canSeeFullContactInfo = isAdmin || isOperationHead;
 
         List<ContactDetailsDto> contactDtos = new ArrayList<>();
-        if (project.getCompany() != null) {
-            List<Contact> contacts = project.getCompany().getContacts().stream()
-                    .filter(contact -> !contact.isDeleteStatus())
-                    .collect(Collectors.toList());
-            for (Contact contact : contacts) {
-                ContactDetailsDto contactDto = new ContactDetailsDto();
-                contactDto.setId(contact.getId());
-                contactDto.setName(contact.getName());
-                contactDto.setDesignation(contact.getDesignation());
 
-                if (isAdmin || isOperationHead ) {
-                    contactDto.setEmails(contact.getEmails());
-                    contactDto.setContactNo(contact.getContactNo());
-                    contactDto.setWhatsappNo(contact.getWhatsappNo());
-                } else {
-                    contactDto.setEmails(maskEmail(contact.getEmails()));
-                    contactDto.setContactNo(maskPhoneNumber(contact.getContactNo()));
-                    contactDto.setWhatsappNo(maskPhoneNumber(contact.getWhatsappNo()));
-                }
-                contactDtos.add(contactDto);
+        // 1. Unit-level contacts (priority – most relevant for this project/branch)
+        if (project.getUnit() != null) {
+            // Fetch unit contacts
+            List<Contact> unitContacts = contactRepository.findByCompanyUnitIdAndIsDeletedFalseAndIsActiveTrue(
+                    project.getUnit().getId());
+
+
+            for (Contact contact : unitContacts) {
+                contactDtos.add(buildContactDetailsDto(contact, canSeeFullContactInfo, "Unit", project.getUnit().getUnitName()));
             }
         }
-        dto.setContacts(contactDtos);
 
+        // 2. Company-level contacts (fallback / group / HO contacts)
+        if (project.getCompany() != null) {
+            // Fetch only company-level contacts (no unit assigned or flagged as company-level)
+            List<Contact> companyContacts = contactRepository.findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(
+                    project.getCompany().getId());
+
+
+            for (Contact contact : companyContacts) {
+                boolean alreadyAdded = contactDtos.stream()
+                        .anyMatch(d -> d.getId().equals(contact.getId()));
+
+                if (!alreadyAdded) {
+                    contactDtos.add(buildContactDetailsDto(contact, canSeeFullContactInfo, "Company", null));
+                }
+            }
+        }
+
+        dto.setContacts(contactDtos);
         return dto;
     }
 
-    private String maskPhoneNumber(String phoneNumber) {
+    private ContactDetailsDto buildContactDetailsDto(Contact contact, boolean canSeeFullInfo, String level, String unitName) {
+        ContactDetailsDto dto = new ContactDetailsDto();
+
+        dto.setId(contact.getId());
+        dto.setTitle(contact.getTitle());
+        dto.setName(contact.getName());
+
+        // designation logic (same as before)
+        dto.setDesignation(contact.getDesignation() != null
+                ? contact.getDesignation()
+                : contact.getClientDesignation());
+
+        dto.setLevel(level);
+        dto.setUnitName(unitName);
+        dto.setLevelDescription(contact.getLevelDescription());
+        dto.setActive(contact.isActive());
+
+        if (canSeeFullInfo) {
+            dto.setEmails(contact.getEmail());
+            dto.setContactNo(contact.getContactNo());
+            dto.setWhatsappNo(contact.getWhatsappNo());
+        } else {
+            dto.setEmails(maskEmail(contact.getEmail()));
+            dto.setContactNo(maskPhoneNumber(contact.getContactNo()));
+            dto.setWhatsappNo(maskPhoneNumber(contact.getWhatsappNo()));
+        }
+
+        return dto;
+    }    private String maskPhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.length() < 7) {
             return phoneNumber;
         }
@@ -878,9 +934,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setVisibleDate(assignment.getVisibleDate());
         dto.setStartedDate(assignment.getStartedDate());
         dto.setCompletedDate(assignment.getCompletedDate());
-//        dto.setDocuments(assignment.getDocuments().stream()
-//                .map(this::mapToDocumentResponseDto)
-//                .collect(Collectors.toList()));
+
         dto.setAssignedUser(mapToUserResponseDto(assignment.getAssignedUser()));
 
         Milestone milestone = assignment.getMilestone();

@@ -1,88 +1,45 @@
-package com.doc.entity.client;
+ package com.doc.entity.client;
 
-import com.doc.entity.document.CompanyDocument;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
-
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-
 @Entity
+@Table(name = "company")
 @Getter
 @Setter
-@NoArgsConstructor
 public class Company {
 
     @Id
-    @Comment("Primary key: Company ID")
+    @Comment("Primary key: Company ID (shared / synced from account-service)")
     private Long id;
 
     @Column(nullable = false, length = 255)
-    @Comment("Company Name")
+    @Comment("Company / Group / Brand Name (e.g. Happy Bites Foods Pvt Ltd)")
     private String name;
 
-    @Column(name = "gst_type", length = 30)
-    @Comment("Company GST Registration Type")
-    private String companyGstType;
-
-    @Column(name = "gst_btype", length = 30)
-    @Comment("Business Type under GST")
-    private String gstBusinessType;
-
-    @Column(name = "gstin", length = 15)
-    @Comment("Company GSTIN")
-    private String gstNo;
-
-    @Column(name = "com_pan", length = 15)
-    @Comment("Company PAN Card")
+    @Column(name = "com_pan", length = 15, unique = true)
+    @Comment("Company PAN (group level)")
     private String panNo;
 
-    @Temporal(TemporalType.DATE)
-    @Comment("Establishment Date")
-    private Date establishDate;
-
     @Column(length = 100)
-    @Comment("Top-level Industry Name")
+    @Comment("Top-level industry category")
     private String industry;
 
-    @Column(length = 1000)
-    @Comment("Primary Address")
-    private String address;
-
-    @Column(name = "cty", length = 100)
-    @Comment("City")
-    private String city;
-
     @Column(length = 100)
-    @Comment("State")
-    private String state;
-
-    @Column(length = 100)
-    @Comment("Country")
-    private String country;
-
-    @Column(length = 10)
-    @Comment("Primary Pincode")
-    private String primaryPinCode;
-
-    @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
-    @Comment("List of contacts associated with the company")
-    private List<Contact> contacts = new ArrayList<>();
-
-    @Column(length = 100)
-    @Comment("Mapped Industry Name or Code")
+    @Comment("Detailed / mapped industry code or name")
     private String industries;
 
     @Column(length = 100)
-    @Comment("Sub-Industry Name or Code")
+    @Comment("Sub-industry")
     private String subIndustry;
 
     @Column(length = 100)
-    @Comment("Sub-Sub Industry Name or Code")
+    @Comment("Sub-sub-industry / detailed classification")
     private String subSubIndustry;
 
     @Column(name = "is_deleted", nullable = false)
@@ -90,16 +47,25 @@ public class Company {
     private boolean isDeleted = false;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "created_date")
-    @Comment("Creation Date")
-    private Date createdDate;
+    @Column(name = "created_date", updatable = false)
+    @Comment("Creation timestamp")
+    private Date createdDate = new Date();
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "updated_date")
-    @Comment("Update Date")
-    private Date updatedDate;
+    @Comment("Last update timestamp")
+    private Date updatedDate = new Date();
+
+    @Comment("Created by user ID")
+    @NotNull(message = "Created by user ID cannot be null")
+    private Long createdById;
+
+    @Comment("Updated by user ID")
+    private Long updatedBy;
 
     @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
-    @Comment("List of verified reusable documents for this company")
-    private List<CompanyDocument> companyDocuments = new ArrayList<>();
+    @Comment("All units / branches / outlets belonging to this company")
+    private List<CompanyUnit> units = new ArrayList<>();
+
+
 }

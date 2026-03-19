@@ -194,4 +194,12 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             "WHERE p.id = :id AND p.isDeleted = false")
     Optional<Project> findByIdWithApplicantType(@Param("id") Long id);
 
+
+
+    long countByStatus_NameAndIsDeletedFalse(String statusName);
+
+    long countBySalesPersonIdAndIsDeletedFalse(Long salesPersonId);
+
+    long countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(Long salesPersonId, String statusName);
+
 }

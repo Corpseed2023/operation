@@ -21,8 +21,6 @@ public interface ProductRequiredDocumentRepository extends JpaRepository<Product
 
     Page<ProductRequiredDocuments> findAllByIsDeletedFalseAndIsActiveTrue(Pageable pageable);
 
-    List<ProductRequiredDocuments> findAllByIsDeletedFalseAndIsActiveTrue(Sort sort);
-
     boolean existsByNameAndCountryAndCentralNameAndStateNameAndIsDeletedFalse(
             String name, String country, String centralName, String stateName);
 

@@ -2,6 +2,7 @@ package com.doc.impl;
 
 import com.doc.dto.product.ProductRequestDto;
 import com.doc.dto.product.ProductResponseDto;
+import com.doc.dto.product.request.ProductUpdateDto;
 import com.doc.entity.product.Product;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
@@ -118,6 +119,66 @@ public class ProductServiceImpl implements ProductService {
         return responses;
     }
 
+
+    @Override
+    public ProductResponseDto updateProduct(Long productId, ProductUpdateDto updateDto, Long currentUserId) {
+        logger.info("Updating product ID: {} by user: {}", productId, currentUserId);
+
+        // 1. Find existing product
+        Product product = productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(productId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active product with ID " + productId + " not found", "PRODUCT_NOT_FOUND"));
+
+        // 2. Find current user (who is performing the update)
+        User updatedBy = userRepository.findActiveUserById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user with ID " + currentUserId + " not found", "USER_NOT_FOUND"));
+
+        // 3. Apply updates (only non-null fields)
+        if (updateDto.getProductName() != null) {
+            String trimmedName = updateDto.getProductName().trim();
+
+            // Check for name conflict (exclude self)
+            if (!product.getProductName().equalsIgnoreCase(trimmedName) &&
+                    productRepository.existsByProductNameAndIsDeletedFalse(trimmedName)) {
+                throw new ValidationException(
+                        "Product with name '" + trimmedName + "' already exists",
+                        "DUPLICATE_PRODUCT_NAME");
+            }
+
+            product.setProductName(trimmedName);
+        }
+
+        if (updateDto.getDescription() != null) {
+            product.setDescription(updateDto.getDescription());
+        }
+
+        if (updateDto.getActive() != null) {
+            product.setActive(updateDto.getActive());
+        }
+
+        if (updateDto.getRequiresClientPortal() != null) {
+            product.setRequiresClientPortal(updateDto.getRequiresClientPortal());
+        }
+
+        if (updateDto.getExpectedPortalName() != null) {
+            product.setExpectedPortalName(updateDto.getExpectedPortalName());
+        }
+
+        if (updateDto.getDefaultPortalUrl() != null) {
+            product.setDefaultPortalUrl(updateDto.getDefaultPortalUrl());
+        }
+
+        // Always update these
+        product.setUpdatedBy(updatedBy);
+        product.setUpdatedDate(new Date());
+
+        // Save
+        product = productRepository.save(product);
+        logger.info("Product updated successfully - ID: {}", product.getId());
+
+        return mapToResponseDto(product);
+    }
 
 
     @Override

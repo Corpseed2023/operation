@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Objects;
 
 @RestController
-@RequestMapping("/api/projects")
+@RequestMapping("/operationService/api/projects")
 @Validated
 @SecurityRequirement(name = "Bearer Authentication")
 public class ProjectDocumentUploadController {

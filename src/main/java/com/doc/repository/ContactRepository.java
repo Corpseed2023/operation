@@ -1,29 +1,43 @@
 package com.doc.repository;
 
 import com.doc.entity.client.Contact;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface ContactRepository extends JpaRepository<Contact, Long> {
 
-    boolean existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(String emails, Long companyId);
+    // Correct method used in createProject
+    @Query("SELECT c FROM Contact c " +
+            "WHERE c.id = :id " +
+            "AND c.deleteStatus = false " +
+            "AND c.isActive = true " +
+            "AND c.isDeleted = false")
+    Optional<Contact> findByIdAndDeleteStatusFalseAndIsActiveTrueAndIsDeletedFalse(@Param("id") Long id);
 
-    Page<Contact> findByDeleteStatusFalseAndIsActiveTrue(Pageable pageable);
+    // Other useful methods (recommended)
+    @Query("SELECT c FROM Contact c " +
+            "WHERE c.companyUnit.id = :unitId " +
+            "AND c.isDeleted = false AND c.isActive = true")
+    List<Contact> findByCompanyUnitIdAndIsDeletedFalseAndIsActiveTrue(@Param("unitId") Long unitId);
 
-    @Query("SELECT c FROM Contact c WHERE c.id = :id AND c.deleteStatus = false AND c.isActive = true")
-    Optional<Contact> findByIdAndDeleteStatusFalseAndIsActiveTrue(@Param("id") Long id);
+    @Query("SELECT c FROM Contact c " +
+            "WHERE c.company.id = :companyId " +
+            "AND c.companyUnit IS NULL " +
+            "AND c.isDeleted = false AND c.isActive = true")
+    List<Contact> findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(@Param("companyId") Long companyId);
 
-    Page<Contact> findByCompanyIdAndDeleteStatusFalseAndIsActiveTrue(Long companyId, Pageable pageable);
-
-    Page<Contact> findByCompanyIdAndCreatedByAndDeleteStatusFalseAndIsActiveTrue(Long companyId, Long createdBy, Pageable pageable);
-
-    Page<Contact> findByCreatedByAndDeleteStatusFalseAndIsActiveTrue(Long createdBy, Pageable pageable);
+    @Query("""
+       SELECT c FROM Contact c
+       WHERE c.companyUnit.id IN :unitIds
+       AND c.isDeleted = false
+       AND c.isActive = true
+       """)
+    List<Contact> findByCompanyUnitIds(@Param("unitIds") List<Long> unitIds);
 
 }

@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/project-statuses")
+@RequestMapping("/operationService/api/project-statuses")
 public class ProjectStatusController {
 
     @Autowired

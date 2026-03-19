@@ -18,7 +18,7 @@ import java.util.List;
  * REST controller for managing teams.
  */
 @RestController
-@RequestMapping("/api/teams")
+@RequestMapping("/operationService/api/teams")
 public class TeamController {
 
     private static final Logger logger = LoggerFactory.getLogger(TeamController.class);

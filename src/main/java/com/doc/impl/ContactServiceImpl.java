@@ -3,10 +3,12 @@ package com.doc.impl;
 import com.doc.dto.contact.ContactRequestDto;
 import com.doc.dto.contact.ContactResponseDto;
 import com.doc.entity.client.Company;
+import com.doc.entity.client.CompanyUnit;
 import com.doc.entity.client.Contact;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.CompanyRepository;
+import com.doc.repository.CompanyUnitRepository;
 import com.doc.repository.ContactRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.ContactService;
@@ -18,6 +20,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,117 +41,104 @@ public class ContactServiceImpl implements ContactService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private CompanyUnitRepository companyUnitRepository;
+
+
     @Override
-    public ContactResponseDto createContact(ContactRequestDto requestDto) {
-        logger.info("Creating contact with name: {}, email: {}, companyId: {}",
-                requestDto.getName(), requestDto.getEmails(), requestDto.getCompanyId());
-        validateRequestDto(requestDto);
+    public List<ContactResponseDto> getAllContacts(int page, int size, Long companyId, Long userId) {
 
-        // Check for duplicate email within the company (or globally if companyId is null)
-        Long companyId = requestDto.getCompanyId();
-        if (contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getEmails(), companyId)) {
-            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
+
+        return List.of();
+    }
+
+    @Override
+    public ContactResponseDto updateContact(Long id, ContactRequestDto requestDto) {
+        return null;
+    }
+
+    @Override
+    public void deleteContact(Long id) {
+
+    }
+
+
+
+    @Override
+    @jakarta.transaction.Transactional
+    public ContactResponseDto createContact(ContactRequestDto dto) {
+
+        // Validation
+        if (dto.getCompanyId() == null && dto.getUnitId() == null) {
+            throw new IllegalArgumentException("Contact must be linked to a Company or CompanyUnit");
         }
-
-        Company company = null;
-        if (requestDto.getCompanyId() != null) {
-            company = companyRepository.findById(requestDto.getCompanyId())
-                    .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found", "COMPANY_NOT_FOUND"));
+        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Contact name is required");
         }
-
-        userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Contact contact = new Contact();
-        mapRequestDtoToEntity(contact, requestDto, company);
-        contact.setCreatedDate(new Date());
+        contact.setName(dto.getName().trim());
+        contact.setTitle(dto.getTitle());
+        contact.setEmail(dto.getEmail() != null ? dto.getEmail().trim() : null);
+        contact.setContactNo(dto.getContactNo());
+        contact.setWhatsappNo(dto.getWhatsappNo());
+        contact.setDesignation(dto.getDesignation());
         contact.setUpdatedDate(new Date());
-        contact.setUpdatedBy(requestDto.getCreatedBy());
-        contact.setDeleteStatus(false);
-        contact.setActive(true);
+        contact.setDeleted(false);
 
+        Company company = null;
+        CompanyUnit unit = null;
+
+        // Load Company
+        if (dto.getCompanyId() != null) {
+            company = companyRepository.findById(dto.getCompanyId())
+                    .orElseThrow(() -> new IllegalArgumentException("Company not found: " + dto.getCompanyId()));
+            contact.setCompany(company);
+        }
+
+        // Load Unit & inherit company if missing
+        if (dto.getUnitId() != null) {
+            unit = companyUnitRepository.findById(dto.getUnitId())
+                    .orElseThrow(() -> new IllegalArgumentException("Unit not found: " + dto.getUnitId()));
+            contact.setCompanyUnit(unit);
+            unit.getUnitContacts().add(contact);
+
+            if (company == null) {
+                company = unit.getCompany();
+                if (company == null) {
+                    throw new IllegalStateException("Unit has no parent Company");
+                }
+                contact.setCompany(company);
+            }
+        }
+
+        // Save contact first (to get ID)
         contact = contactRepository.save(contact);
+
+        // Save updated company/unit if roles changed
+        if (company != null) {
+            companyRepository.save(company);
+        }
+        if (unit != null) {
+            companyUnitRepository.save(unit);
+        }
+
+        System.out.println("account service api called! ");
+
+
         return mapToResponseDto(contact);
     }
 
     @Override
     public ContactResponseDto getContactById(Long id) {
-        logger.info("Fetching contact with ID: {}", id);
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
-        return mapToResponseDto(contact);
-    }
-
-    @Override
-    public List<ContactResponseDto> getAllContacts(int page, int size, Long companyId, Long userId) {
-        logger.info("Fetching contacts, page: {}, size: {}, companyId: {}, userId: {}", page, size, companyId, userId);
-        PageRequest pageable = PageRequest.of(page, size);
-        Page<Contact> contactPage;
-        if (companyId != null && userId != null) {
-            contactPage = contactRepository.findByCompanyIdAndCreatedByAndDeleteStatusFalseAndIsActiveTrue(companyId, userId, pageable);
-        } else if (companyId != null) {
-            contactPage = contactRepository.findByCompanyIdAndDeleteStatusFalseAndIsActiveTrue(companyId, pageable);
-        } else if (userId != null) {
-            contactPage = contactRepository.findByCreatedByAndDeleteStatusFalseAndIsActiveTrue(userId, pageable);
-        } else {
-            contactPage = contactRepository.findByDeleteStatusFalseAndIsActiveTrue(pageable);
-        }
-        return contactPage.getContent()
-                .stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public ContactResponseDto updateContact(Long id, ContactRequestDto requestDto) {
-        logger.info("Updating contact with ID: {}, email: {}, companyId: {}",
-                id, requestDto.getEmails(), requestDto.getCompanyId());
-        validateRequestDto(requestDto);
-
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
-
-        // Check for duplicate email within the company (or globally if companyId is null)
-        Long companyId = requestDto.getCompanyId();
-        if (!contact.getEmails().equals(requestDto.getEmails()) &&
-                contactRepository.existsByEmailsAndCompanyIdAndDeleteStatusFalseAndIsActiveTrue(requestDto.getEmails(), companyId)) {
-            throw new ValidationException("Contact with email " + requestDto.getEmails() + " already exists for the company", "DUPLICATE_CONTACT_EMAIL");
-        }
-
-        Company company = null;
-        if (requestDto.getCompanyId() != null) {
-            company = companyRepository.findById(requestDto.getCompanyId())
-                    .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourceNotFoundException("Company with ID " + requestDto.getCompanyId() + " not found", "COMPANY_NOT_FOUND"));
-        }
-
-        userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getUpdatedBy() + " not found", "USER_NOT_FOUND"));
-
-        mapRequestDtoToEntity(contact, requestDto, company);
-        contact.setUpdatedDate(new Date());
-        contact = contactRepository.save(contact);
-        return mapToResponseDto(contact);
-    }
-
-    @Override
-    public void deleteContact(Long id) {
-        logger.info("Deleting contact with ID: {}", id);
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Contact with ID " + id + " not found", "CONTACT_NOT_FOUND"));
-
-        contact.setDeleteStatus(true);
-        contact.setActive(false);
-        contact.setUpdatedDate(new Date());
-        contactRepository.save(contact);
+        return null;
     }
 
     private void validateRequestDto(ContactRequestDto requestDto) {
         if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
             throw new ValidationException("Contact name cannot be empty", "INVALID_CONTACT_NAME");
         }
-        if (requestDto.getEmails() == null || requestDto.getEmails().trim().isEmpty()) {
+        if (requestDto.getEmail() == null || requestDto.getEmail().trim().isEmpty()) {
             throw new ValidationException("Contact email cannot be empty", "INVALID_CONTACT_EMAIL");
         }
         if (requestDto.getCreatedBy() == null) {
@@ -162,10 +153,11 @@ public class ContactServiceImpl implements ContactService {
     private void mapRequestDtoToEntity(Contact contact, ContactRequestDto requestDto, Company company) {
         contact.setTitle(requestDto.getTitle());
         contact.setName(requestDto.getName().trim());
-        contact.setEmails(requestDto.getEmails().trim());
+        contact.setEmail(requestDto.getEmail().trim());
         contact.setContactNo(requestDto.getContactNo());
         contact.setWhatsappNo(requestDto.getWhatsappNo());
         contact.setCompany(company);
+        // unit is need to be saved
         contact.setDesignation(requestDto.getDesignation());
         contact.setCreatedBy(requestDto.getCreatedBy());
         contact.setUpdatedBy(requestDto.getUpdatedBy());
@@ -176,7 +168,7 @@ public class ContactServiceImpl implements ContactService {
         dto.setId(contact.getId());
         dto.setTitle(contact.getTitle());
         dto.setName(contact.getName());
-        dto.setEmails(contact.getEmails());
+        dto.setEmails(contact.getEmail());
         dto.setContactNo(contact.getContactNo());
         dto.setWhatsappNo(contact.getWhatsappNo());
         dto.setCompanyId(contact.getCompany() != null ? contact.getCompany().getId() : null);
