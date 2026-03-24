@@ -1133,4 +1133,37 @@ public class ProjectServiceImpl implements ProjectService {
         return mapToResponseDto(project);
 
     }
+
+    @Override
+    @Transactional
+    public ProjectResponseDto cancelProjectByUnbilledNumber(String unbilledNumber){
+
+        Project project = projectRepository
+                .findByUnbilledNumberAndIsDeletedFalse(unbilledNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
+
+        if (project.isCancelled()) {
+            throw new IllegalStateException("Project is already cancelled");
+        }
+
+        // 🔥 Find or create CANCELLED status
+        ProjectStatus cancelledStatus = projectStatusRepository
+                .findByName("CANCELLED")
+                .orElseGet(() -> {
+                    ProjectStatus newStatus = new ProjectStatus();
+                    newStatus.setName("CANCELLED");
+                    newStatus.setDescription("Project has been cancelled");
+                    return projectStatusRepository.save(newStatus);
+                });
+
+        project.setCancelled(true);
+        project.setStatus(cancelledStatus);
+
+        projectRepository.save(project);
+
+        return mapToResponseDto(project);
+    }
 }

@@ -4,7 +4,6 @@ import com.doc.dto.project.ProjectCountResponseDto;
 import com.doc.dto.project.ProjectResponseDto;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
-import com.doc.entity.user.Role;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.repository.ProjectRepository;
@@ -319,22 +318,22 @@ public class ProjectSearchServiceImpl implements ProjectSearchService {
             // ADMIN → count all projects
             total = projectRepository.countByIsDeletedFalse();
 
-            open = projectRepository.countByStatus_NameAndIsDeletedFalse("OPEN");
+            open = projectRepository.countByStatus_NameAndIsDeletedFalseAndIsCancelledFalse("OPEN");
 
-            inProgress = projectRepository.countByStatus_NameAndIsDeletedFalse("IN_PROGRESS");
+            inProgress = projectRepository.countByStatus_NameAndIsDeletedFalseAndIsCancelledFalse("IN_PROGRESS");
 
-            completed = projectRepository.countByStatus_NameAndIsDeletedFalse("COMPLETED");
+            completed = projectRepository.countByStatus_NameAndIsDeletedFalseAndIsCancelledFalse("COMPLETED");
 
         } else {
 
             // NON ADMIN → count only salesperson projects
-            total = projectRepository.countBySalesPersonIdAndIsDeletedFalse(userId);
+            total = projectRepository.countBySalesPersonIdAndIsDeletedFalseAndIsCancelledFalse(userId);
 
-            open = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(userId, "OPEN");
+            open = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalseAndIsCancelledFalse(userId, "OPEN");
 
-            inProgress = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(userId, "IN_PROGRESS");
+            inProgress = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalseAndIsCancelledFalse(userId, "IN_PROGRESS");
 
-            completed = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(userId, "COMPLETED");
+            completed = projectRepository.countBySalesPersonIdAndStatus_NameAndIsDeletedFalseAndIsCancelledFalse(userId, "COMPLETED");
         }
 
         ProjectCountResponseDto dto = new ProjectCountResponseDto();

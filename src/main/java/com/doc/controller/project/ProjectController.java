@@ -242,4 +242,12 @@ public class ProjectController {
     }
 
 
+    @PutMapping("/cancel/{unbilledNumber}")
+    public ResponseEntity<ProjectResponseDto> cancelProjectByUnbilledNumber(
+            @PathVariable String unbilledNumber) {
+
+        ProjectResponseDto response = projectService.cancelProjectByUnbilledNumber(unbilledNumber);
+        return ResponseEntity.ok(response);
+    }
+
 }

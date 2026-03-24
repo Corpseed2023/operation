@@ -25,10 +25,10 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param projectNo the project number to check
      * @return true if a project with the given project number exists and is not deleted, false otherwise
      */
-    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE p.projectNo = :projectNo AND p.isDeleted = false")
+    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE p.isCancelled=false AND p.projectNo = :projectNo AND p.isDeleted = false")
     boolean existsByProjectNoAndIsDeletedFalse(@Param("projectNo") String projectNo);
 
-    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
+    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE  p.isCancelled=false AND p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
     boolean existsByUnbilledNumberAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
 
     /**
@@ -37,7 +37,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param estimateNumber the estimate number to check
      * @return true if a project with the given estimate number exists and is not deleted, false otherwise
      */
-    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE p.estimateNumber = :estimateNumber AND p.isDeleted = false")
+    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Project p WHERE  p.isCancelled=false AND p.estimateNumber = :estimateNumber AND p.isDeleted = false")
     boolean existsByEstimateNumberAndIsDeletedFalse(@Param("estimateNumber") String estimateNumber);
 
     /**
@@ -46,7 +46,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param id the project ID
      * @return an {@link Optional} containing the project if found and not deleted, empty otherwise
      */
-    @Query("SELECT p FROM Project p WHERE p.id = :id AND p.isDeleted = false")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND p.id = :id AND p.isDeleted = false")
     Optional<Project> findActiveUserById(@Param("id") Long id);
 
     /**
@@ -55,7 +55,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param pageable pagination information
      * @return a {@link Page} of non-deleted projects
      */
-    @Query("SELECT p FROM Project p WHERE p.isDeleted = false")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND  p.isDeleted = false")
     Page<Project> findByIsDeletedFalse(Pageable pageable);
 
     /**
@@ -65,7 +65,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param pageable pagination information
      * @return a {@link Page} of non-deleted projects assigned to the given users
      */
-    @Query("SELECT DISTINCT p FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND  p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     Page<Project> findByAssignedUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
 
     /**
@@ -75,7 +75,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param milestoneId the milestone ID
      * @return an {@link Optional} containing the project if found, empty otherwise
      */
-    @Query("SELECT p FROM Project p WHERE p.product.id = :productId AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project.id = p.id AND a.milestone.id = :milestoneId)")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND  p.product.id = :productId AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project.id = p.id AND a.milestone.id = :milestoneId)")
     Optional<Project> findByProductIdAndMilestoneId(@Param("productId") Long productId, @Param("milestoneId") Long milestoneId);
 
     /**
@@ -84,7 +84,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param companyName the company name to search
      * @return a list of matching projects
      */
-    @Query("SELECT p FROM Project p WHERE LOWER(p.company.name) LIKE LOWER(CONCAT('%', :companyName, '%')) AND p.isDeleted = false")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.company.name) LIKE LOWER(CONCAT('%', :companyName, '%')) AND p.isDeleted = false")
     List<Project> findByCompanyNameContainingAndIsDeletedFalse(@Param("companyName") String companyName);
 
     /**
@@ -94,7 +94,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param userIds the list of user IDs
      * @return a list of matching projects
      */
-    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.company.name) LIKE LOWER(CONCAT('%', :companyName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.company.name) LIKE LOWER(CONCAT('%', :companyName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByCompanyNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("companyName") String companyName, @Param("userIds") List<Long> userIds);
 
     /**
@@ -103,7 +103,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param projectNo the project number to search
      * @return a list of matching projects
      */
-    @Query("SELECT p FROM Project p WHERE LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND  LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false")
     List<Project> findByProjectNoContainingAndIsDeletedFalse(@Param("projectNo") String projectNo);
 
     /**
@@ -113,7 +113,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param userIds the list of user IDs
      * @return a list of matching projects
      */
-    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND  LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByProjectNoContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("projectNo") String projectNo, @Param("userIds") List<Long> userIds);
 
 
@@ -123,7 +123,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param contactName the contact name to search
      * @return a list of matching projects
      */
-    @Query("SELECT p FROM Project p WHERE LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND  LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false")
     List<Project> findByContactNameContainingAndIsDeletedFalse(@Param("contactName") String contactName);
 
     /**
@@ -133,7 +133,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param userIds the list of user IDs
      * @return a list of matching projects
      */
-    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByContactNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("contactName") String contactName, @Param("userIds") List<Long> userIds);
 
     /**
@@ -142,7 +142,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param name the project name to search
      * @return a list of matching projects
      */
-    @Query("SELECT p FROM Project p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false")
     List<Project> findByNameContainingAndIsDeletedFalse(@Param("name") String name);
 
     /**
@@ -152,10 +152,10 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param userIds the list of user IDs
      * @return a list of matching projects
      */
-    @Query("SELECT DISTINCT p FROM Project p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND  LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("name") String name, @Param("userIds") List<Long> userIds);
 
-    @Query("SELECT p FROM Project p WHERE p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
+    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
     Optional<Project> findByUnbilledNumberAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
 
     /**
@@ -163,7 +163,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      *
      * @return total number of active projects
      */
-    @Query("SELECT COUNT(p) FROM Project p WHERE p.isDeleted = false")
+    @Query("SELECT COUNT(p) FROM Project p WHERE  p.isCancelled=false AND  p.isDeleted = false")
     long countByIsDeletedFalse();
 
     /**
@@ -173,7 +173,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * @param userIds the list of user IDs (including subordinates if manager)
      * @return total number of accessible projects
      */
-    @Query("SELECT COUNT(DISTINCT p) FROM Project p WHERE p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    @Query("SELECT COUNT(DISTINCT p) FROM Project p WHERE  p.isCancelled=false AND  p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     long countByAssignedUserIds(@Param("userIds") List<Long> userIds);
 
 
@@ -182,24 +182,24 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT p FROM Project p " +
             "LEFT JOIN FETCH p.applicantType " +
             "LEFT JOIN FETCH p.product " +
-            "WHERE p.id = :id AND p.isDeleted = false")
+            "WHERE  p.isCancelled=false AND p.id = :id AND p.isDeleted = false")
     Optional<Project> findByIdWithApplicantTypeAndProduct(@Param("id") Long id);
 
     @Query("SELECT p FROM Project p " +
-            "WHERE p.id = :id AND p.isDeleted = false")
+            "WHERE  p.isCancelled=false AND  p.id = :id AND p.isDeleted = false")
     Optional<Project> findByIdAndIsDeletedFalse(@Param("id") Long id);
 
     @Query("SELECT p FROM Project p " +
             "LEFT JOIN FETCH p.applicantType " +
-            "WHERE p.id = :id AND p.isDeleted = false")
+            "WHERE  p.isCancelled=false AND p.id = :id AND p.isDeleted = false")
     Optional<Project> findByIdWithApplicantType(@Param("id") Long id);
 
 
 
-    long countByStatus_NameAndIsDeletedFalse(String statusName);
+    long countByStatus_NameAndIsDeletedFalseAndIsCancelledFalse(String statusName);
 
-    long countBySalesPersonIdAndIsDeletedFalse(Long salesPersonId);
+    long countBySalesPersonIdAndIsDeletedFalseAndIsCancelledFalse(Long salesPersonId);
 
-    long countBySalesPersonIdAndStatus_NameAndIsDeletedFalse(Long salesPersonId, String statusName);
+    long countBySalesPersonIdAndStatus_NameAndIsDeletedFalseAndIsCancelledFalse(Long salesPersonId, String statusName);
 
 }
