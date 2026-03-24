@@ -127,6 +127,8 @@ public class Project {
     @Comment("Applicant type (individual / company / branch etc.)")
     private ApplicantType applicantType;
 
+    private boolean isCancelled = false;
+
 
 
 }
