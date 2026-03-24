@@ -213,8 +213,10 @@
             dto.setCentralName(getCsvString(record, colMap, "centralname", "central_name"));
             dto.setStateName(getCsvString(record, colMap, "statename", "state_name"));
             dto.setAllowedFormats(getCsvString(record, colMap, "allowedformats", "allowed_formats"));
+            dto.setApplicability(getCsvString(record, colMap, "applicability", "applicable_to", "applies_to"));
+            dto.setRemarks(getCsvString(record, colMap, "remarks", "notes", "remark", "note"));
 
-            // expiryType handling (same logic as Excel)
+
             String expiryStr = getCsvString(record, colMap, "expirytype", "expiry_type", "expiry");
             DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
 
@@ -469,6 +471,10 @@
             entity.setMaxValidityYears(dto.getMaxValidityYears());
             entity.setMinFileSizeKb(dto.getMinFileSizeKb());
             entity.setAllowedFormats(dto.getAllowedFormats());
+
+            // NEW FIELDS
+            entity.setApplicability(dto.getApplicability());
+            entity.setRemarks(dto.getRemarks());
         }
 
         private ProductRequiredDocumentResponseDto mapToResponseDto(ProductRequiredDocuments entity) {
@@ -486,6 +492,11 @@
             dto.setMaxValidityYears(entity.getMaxValidityYears());
             dto.setMinFileSizeKb(entity.getMinFileSizeKb());
             dto.setAllowedFormats(entity.getAllowedFormats());
+
+            // NEW FIELDS
+            dto.setApplicability(entity.getApplicability());
+            dto.setRemarks(entity.getRemarks());
+
             dto.setCreatedBy(entity.getCreatedBy());
             dto.setUpdatedBy(entity.getUpdatedBy());
             dto.setCreatedDate(entity.getCreatedDate());

@@ -1,7 +1,10 @@
 package com.doc.dto.document;
 
 import com.doc.em.DocumentExpiryType;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -40,6 +43,14 @@ public class ProductRequiredDocumentRequestDto {
 
     @Size(max = 100)
     private String allowedFormats = "pdf,jpg,png";
+
+    // ==================== NEW FIELDS ====================
+    @Size(max = 500, message = "Applicability cannot exceed 500 characters")
+    private String applicability;
+
+    @Size(max = 1000, message = "Remarks cannot exceed 1000 characters")
+    private String remarks;
+    // ===================================================
 
     @NotNull(message = "Created by user ID is required")
     private Long createdBy;

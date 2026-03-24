@@ -7,6 +7,7 @@ import java.util.Date;
 
 @Data
 public class ProductRequiredDocumentResponseDto {
+
     private Long id;
     private String name;
     private String description;
@@ -19,6 +20,12 @@ public class ProductRequiredDocumentResponseDto {
     private Integer maxValidityYears;
     private Integer minFileSizeKb;
     private String allowedFormats;
+
+    // ==================== NEW FIELDS ====================
+    private String applicability;
+    private String remarks;
+    // ===================================================
+
     private Long createdBy;
     private Long updatedBy;
     private Date createdDate;

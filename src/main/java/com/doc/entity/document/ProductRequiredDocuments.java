@@ -11,10 +11,17 @@ import java.util.List;
 
 @Entity
 @Table(name = "product_required_documents",
-        indexes = {@Index(name = "idx_name", columnList = "name")},
-        uniqueConstraints = {@UniqueConstraint(columnNames = {"name", "country", "centralName", "stateName"})}
+        indexes = {
+                @Index(name = "idx_name", columnList = "name")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"name", "country", "centralName", "stateName"})
+        }
 )
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class ProductRequiredDocuments {
 
     @Id
@@ -55,6 +62,18 @@ public class ProductRequiredDocuments {
     @Column(name = "allowed_formats", length = 100)
     private String allowedFormats = "pdf,jpg,png";
 
+    // ==================== NEW FIELDS ====================
+
+    @Column(name = "applicability", length = 500)
+    @Comment("Defines where this document is applicable (e.g., Individual, Company, Both, Specific Product, etc.)")
+    private String applicability;
+
+    @Column(name = "remarks", length = 1000)
+    @Comment("Additional remarks or notes about this required document")
+    private String remarks;
+
+    // ===================================================
+
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
 
@@ -78,8 +97,4 @@ public class ProductRequiredDocuments {
     // Reverse mapping
     @OneToMany(mappedBy = "requiredDocument", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProductDocumentMapping> productMappings = new ArrayList<>();
-
-
-
-
 }
