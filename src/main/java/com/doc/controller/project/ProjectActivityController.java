@@ -156,9 +156,10 @@ public class ProjectActivityController {
     public ResponseEntity<?> approveExpense(
             @PathVariable("projectId") Long projectId,
             @PathVariable("userId") Long userId,
-            @PathVariable("expenseId") Long expenseId
+            @PathVariable("expenseId") Long expenseId,
+            @RequestParam String status
     ){
-        activityService.approveExpense(projectId, userId, expenseId);
+        activityService.approveExpense(projectId, userId, expenseId, status);
 
         return new ResponseEntity<>("Expense approved successfully", HttpStatus.OK);
     }

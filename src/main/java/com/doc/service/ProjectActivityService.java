@@ -29,5 +29,5 @@ public interface ProjectActivityService {
             Pageable pageable
     );
 
-    void approveExpense(Long projectId, Long userId, Long expenseId);
+    void approveExpense(Long projectId, Long userId, Long expenseId,  String status);
 }
