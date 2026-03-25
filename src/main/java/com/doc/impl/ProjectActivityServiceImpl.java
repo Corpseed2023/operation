@@ -259,62 +259,91 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
     @Override
     @Transactional
-    public void approveExpense(Long projectId, Long userId, Long expenseId) {
+    public void approveExpense(Long projectId, Long userId, Long expenseId, String status) {
 
-        // Validate user
+        // ===============================
+        // VALIDATE STATUS
+        // ===============================
+        if (!"APPROVED".equalsIgnoreCase(status) && !"REJECTED".equalsIgnoreCase(status)) {
+            throw new IllegalArgumentException("Invalid status. Allowed values: APPROVED, REJECTED");
+        }
+
+        // ===============================
+        // VALIDATE USER
+        // ===============================
         User user = validateUser(userId);
 
-        // Fetch project
+        // ===============================
+        // FETCH PROJECT
+        // ===============================
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
-        // Fetch expense
+        // ===============================
+        // FETCH EXPENSE
+        // ===============================
         ProjectExpense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new RuntimeException("Expense not found"));
 
-        // Validate expense belongs to project
+        // ===============================
+        // VALIDATE MAPPING
+        // ===============================
         if (!expense.getProject().getId().equals(project.getId())) {
             throw new RuntimeException("Expense does not belong to the given project");
         }
 
-        // Check if already approved
-        if (expense.isApproved()) {
-            throw new RuntimeException("Expense is already approved");
+        // ===============================
+        // PREVENT RE-PROCESSING
+        // ===============================
+        if (expense.getApprovalStatus() != null &&
+                ("APPROVED".equalsIgnoreCase(expense.getApprovalStatus())
+                        || "REJECTED".equalsIgnoreCase(expense.getApprovalStatus()))) {
+
+            throw new RuntimeException("Expense already " + expense.getApprovalStatus());
         }
 
-        // ✅ Approve expense
-        expense.setApproved(true);
+        // ===============================
+        // APPLY STATUS
+        // ===============================
+        boolean isApproved = "APPROVED".equalsIgnoreCase(status);
+
+        expense.setApproved(isApproved); // true for approved, false for rejected
         expense.setApprovedByUserId(user.getId());
-        expense.setApprovalStatus("APPROVED");
+        expense.setApprovalStatus(status.toUpperCase());
 
         expenseRepository.save(expense);
 
-        // ✅ Create Project Activity
+        // ===============================
+        // CREATE ACTIVITY
+        // ===============================
         ProjectActivity activity = new ProjectActivity();
         activity.setProject(project);
         activity.setActivityType(ActivityType.EXPENSE);
 
-        activity.setTitle("Expense Approved");
-
-        activity.setSummary(
-                "Expense of " + expense.getAmount() + " " + expense.getCurrency() +
-                        " approved by " + user.getFullName()
-        );
+        if (isApproved) {
+            activity.setTitle("Expense Approved");
+            activity.setSummary(
+                    "Expense of " + expense.getAmount() + " " + expense.getCurrency() +
+                            " approved by " + user.getFullName()
+            );
+        } else {
+            activity.setTitle("Expense Rejected");
+            activity.setSummary(
+                    "Expense of " + expense.getAmount() + " " + expense.getCurrency() +
+                            " rejected by " + user.getFullName()
+            );
+        }
 
         activity.setActivityDate(LocalDateTime.now());
-
         activity.setCreatedByUserId(user.getId());
         activity.setCreatedByUserName(user.getFullName());
-
         activity.setSystemGenerated(true);
         activity.setDeleted(false);
-
         activity.setCreatedDate(LocalDateTime.now());
         activity.setUpdatedDate(LocalDateTime.now());
 
         activityRepository.save(activity);
     }
-
     // ---------------------------------------------------
     // VALIDATE USER
     // ---------------------------------------------------
