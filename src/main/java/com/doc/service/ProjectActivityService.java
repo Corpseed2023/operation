@@ -28,4 +28,6 @@ public interface ProjectActivityService {
             LocalDate endDate,
             Pageable pageable
     );
+
+    void approveExpense(Long projectId, Long userId, Long expenseId);
 }

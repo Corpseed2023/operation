@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -252,6 +253,66 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 pageable,
                 page.getTotalElements()
         );
+    }
+
+
+
+    @Override
+    @Transactional
+    public void approveExpense(Long projectId, Long userId, Long expenseId) {
+
+        // Validate user
+        User user = validateUser(userId);
+
+        // Fetch project
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+
+        // Fetch expense
+        ProjectExpense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new RuntimeException("Expense not found"));
+
+        // Validate expense belongs to project
+        if (!expense.getProject().getId().equals(project.getId())) {
+            throw new RuntimeException("Expense does not belong to the given project");
+        }
+
+        // Check if already approved
+        if (expense.isApproved()) {
+            throw new RuntimeException("Expense is already approved");
+        }
+
+        // ✅ Approve expense
+        expense.setApproved(true);
+        expense.setApprovedByUserId(user.getId());
+        expense.setApprovalStatus("APPROVED");
+
+        expenseRepository.save(expense);
+
+        // ✅ Create Project Activity
+        ProjectActivity activity = new ProjectActivity();
+        activity.setProject(project);
+        activity.setActivityType(ActivityType.EXPENSE);
+
+        activity.setTitle("Expense Approved");
+
+        activity.setSummary(
+                "Expense of " + expense.getAmount() + " " + expense.getCurrency() +
+                        " approved by " + user.getFullName()
+        );
+
+        activity.setActivityDate(LocalDateTime.now());
+
+        activity.setCreatedByUserId(user.getId());
+        activity.setCreatedByUserName(user.getFullName());
+
+        activity.setSystemGenerated(true);
+        activity.setDeleted(false);
+
+        activity.setCreatedDate(LocalDateTime.now());
+        activity.setUpdatedDate(LocalDateTime.now());
+
+        activityRepository.save(activity);
     }
 
     // ---------------------------------------------------

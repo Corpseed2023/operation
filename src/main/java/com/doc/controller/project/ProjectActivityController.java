@@ -151,4 +151,16 @@ public class ProjectActivityController {
         }
     }
 
+
+    @PutMapping("/approveExpense/{userId}/{expenseId}")
+    public ResponseEntity<?> approveExpense(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("userId") Long userId,
+            @PathVariable("expenseId") Long expenseId
+    ){
+        activityService.approveExpense(projectId, userId, expenseId);
+
+        return new ResponseEntity<>("Expense approved successfully", HttpStatus.OK);
+    }
+
 }
