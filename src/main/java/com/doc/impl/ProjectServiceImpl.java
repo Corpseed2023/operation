@@ -1136,7 +1136,13 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectResponseDto cancelProjectByUnbilledNumber(String unbilledNumber){
+    public ProjectResponseDto cancelProjectByUnbilledNumber(Long userId, String unbilledNumber){
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Approver not found.." ,
+                        "USER_NOT_FOUND"
+                ));
 
         Project project = projectRepository
                 .findByUnbilledNumberAndIsDeletedFalse(unbilledNumber)
@@ -1161,6 +1167,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         project.setCancelled(true);
         project.setStatus(cancelledStatus);
+        project.setCancellerId(user.getId());
 
         projectRepository.save(project);
 
