@@ -44,6 +44,6 @@ public interface ProjectService {
     List<DocumentChecklistDTO> getDocumentChecklist(Long projectId);
 
     ProjectResponseDto getProjectByUnbilledNumber(String unbilledNumber);
-    ProjectResponseDto cancelProjectByUnbilledNumber(String unbilledNumber);
+    ProjectResponseDto cancelProjectByUnbilledNumber(Long userId, String unbilledNumber);
 
 }

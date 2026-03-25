@@ -128,6 +128,7 @@ public class Project {
     private ApplicantType applicantType;
 
     private boolean isCancelled = false;
+    private Long cancellerId;
 
 
 
