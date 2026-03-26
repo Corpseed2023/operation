@@ -3,6 +3,9 @@ package com.doc.impl;
 import com.doc.dto.project.DocumentResponseDto;
 import com.doc.dto.project.ProjectDocumentStatusUpdateDto;
 import com.doc.dto.project.ProjectDocumentUploadRequestDto;
+import com.doc.entity.client.Company;
+import com.doc.entity.client.CompanyUnit;
+import com.doc.entity.document.CompanyDocument;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.document.ProjectDocumentUpload;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -31,19 +35,21 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final ProductRequiredDocumentsRepository productRequiredDocumentsRepository;
     private final UserRepository userRepository;
     private final DocumentStatusRepository documentStatusRepository;
+    private final CompanyDocumentRepository companyDocumentRepository;
 
     public ProjectDocumentUploadServiceImpl(
             ProjectDocumentUploadRepository projectDocumentUploadRepository,
             ProjectRepository projectRepository,
             ProductRequiredDocumentsRepository productRequiredDocumentsRepository,
             UserRepository userRepository,
-            DocumentStatusRepository documentStatusRepository) {
+            DocumentStatusRepository documentStatusRepository, CompanyDocumentRepository companyDocumentRepository) {
 
         this.projectDocumentUploadRepository = projectDocumentUploadRepository;
         this.projectRepository = projectRepository;
         this.productRequiredDocumentsRepository = productRequiredDocumentsRepository;
         this.userRepository = userRepository;
         this.documentStatusRepository = documentStatusRepository;
+        this.companyDocumentRepository = companyDocumentRepository;
     }
 
     @Override
@@ -130,6 +136,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     }
 
     @Override
+    @Transactional
     public DocumentResponseDto updateDocumentStatus(Long documentId, ProjectDocumentStatusUpdateDto updateDto) {
 
         ProjectDocumentUpload documentUpload = projectDocumentUploadRepository
@@ -145,8 +152,91 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         documentUpload.setRemarks(updateDto.getRemarks());
         documentUpload.setUpdatedBy(updateDto.getChangedById());
         documentUpload.setUpdatedDate(new Date());
-
         documentUpload = projectDocumentUploadRepository.save(documentUpload);
+        if ("VERIFIED".equalsIgnoreCase(newStatus.getName())) {
+
+            Project project = documentUpload.getProject();
+
+            if (project == null) {
+                throw new RuntimeException("Project not found for document");
+            }
+
+            Company company = project.getCompany();
+            CompanyUnit unit = project.getUnit();
+
+            if (company == null || unit == null) {
+                throw new RuntimeException("Company or Unit missing for project");
+            }
+
+            ProductRequiredDocuments requiredDoc = documentUpload.getRequiredDocument();
+
+            // ===============================
+            // CHECK EXISTING COMPANY DOCUMENT
+            // ===============================
+            Optional<CompanyDocument> existingOpt =
+                    companyDocumentRepository
+                            .findByCompanyIdAndRequiredDocumentIdAndIsDeletedFalse(
+                                    company.getId(),
+                                    requiredDoc.getId()
+                            );
+
+            CompanyDocument companyDoc;
+
+            if (existingOpt.isPresent()) {
+
+                // ===============================
+                // UPDATE (REPLACEMENT FLOW)
+                // ===============================
+                companyDoc = existingOpt.get();
+
+                companyDoc.setOldFileUrl(companyDoc.getFileUrl());
+                companyDoc.setOldFileName(companyDoc.getFileName());
+
+                companyDoc.setFileUrl(documentUpload.getFileUrl());
+                companyDoc.setFileName(documentUpload.getFileName());
+
+                companyDoc.setReplacementCount(companyDoc.getReplacementCount() + 1);
+
+            } else {
+
+                // ===============================
+                // CREATE NEW
+                // ===============================
+                companyDoc = new CompanyDocument();
+
+                companyDoc.setCompany(company);
+                companyDoc.setCompanyUnit(unit);
+                companyDoc.setRequiredDocument(requiredDoc);
+
+                companyDoc.setFileUrl(documentUpload.getFileUrl());
+                companyDoc.setFileName(documentUpload.getFileName());
+
+                companyDoc.setReplacementCount(0);
+            }
+
+            // ===============================
+            // COMMON FIELDS
+            // ===============================
+            companyDoc.setStatus(newStatus);
+            companyDoc.setRemarks(documentUpload.getRemarks());
+
+            companyDoc.setUploadedBy(documentUpload.getUploadedBy());
+            companyDoc.setCreatedBy(documentUpload.getCreatedBy());
+            companyDoc.setUpdatedBy(documentUpload.getUpdatedBy());
+
+            companyDoc.setFileSizeKb(documentUpload.getFileSizeKb());
+            companyDoc.setFileFormat(documentUpload.getFileFormat());
+
+            companyDoc.setValidationPassed(documentUpload.isValidationPassed());
+            companyDoc.setValidationIssues(documentUpload.getValidationIssues());
+
+            // VERIFIED INFO
+            companyDoc.setVerifiedBy(documentUpload.getUploadedBy());
+            companyDoc.setVerifiedDate(new Date());
+
+            companyDocumentRepository.save(companyDoc);
+        }
+
 
         return mapToDocumentResponseDto(documentUpload);
     }
@@ -226,4 +316,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         return dto;
     }
+
+
+
 }
