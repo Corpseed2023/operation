@@ -131,7 +131,7 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
                 doc.getExpiryType(),
                 doc.getMaxValidityYears(),
 
-                // ✅ new fields
+                //   new fields
                 applicantType != null ? applicantType.getId() : null,
                 applicantType != null ? applicantType.getName() : null
         );

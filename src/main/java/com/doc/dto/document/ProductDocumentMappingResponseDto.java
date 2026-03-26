@@ -22,7 +22,7 @@ public class ProductDocumentMappingResponseDto {
     private DocumentExpiryType expiryType;
     private Integer maxValidityYears;
 
-    // ✅ NEW FIELDS
+    //   NEW FIELDS
     private Long applicantTypeId;
     private String applicantTypeName;
 

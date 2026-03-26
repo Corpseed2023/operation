@@ -31,4 +31,6 @@ public class ProductRequiredDocumentResponseDto {
     private Date createdDate;
     private Date updatedDate;
     private boolean isActive;
+
+    private Integer maxFileSizeKb;
 }

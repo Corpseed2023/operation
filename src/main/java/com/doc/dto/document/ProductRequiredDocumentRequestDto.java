@@ -41,6 +41,9 @@ public class ProductRequiredDocumentRequestDto {
     @PositiveOrZero
     private Integer minFileSizeKb;
 
+    @PositiveOrZero
+    private Integer maxFileSizeKb;
+
     @Size(max = 100)
     private String allowedFormats = "pdf,jpg,png";
 
@@ -57,4 +60,6 @@ public class ProductRequiredDocumentRequestDto {
 
     @NotNull(message = "Updated by user ID is required")
     private Long updatedBy;
+
+
 }

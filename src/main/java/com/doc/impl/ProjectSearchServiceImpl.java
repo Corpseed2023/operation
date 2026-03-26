@@ -282,7 +282,7 @@ public class ProjectSearchServiceImpl implements ProjectSearchService {
                 ? project.getPaymentDetail().getApprovedBy().getId() : null);
 
 
-        // ✅ ADD THIS BLOCK
+        //   ADD THIS BLOCK
         if (project.getStatus() != null) {
             dto.setStatusId(project.getStatus().getId());
             dto.setStatusName(project.getStatus().getName());

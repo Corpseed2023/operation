@@ -469,14 +469,17 @@
             entity.setExpiryType(dto.getExpiryType());
             entity.setMandatory(dto.isMandatory());
             entity.setMaxValidityYears(dto.getMaxValidityYears());
+
+            // File size fields
             entity.setMinFileSizeKb(dto.getMinFileSizeKb());
+            entity.setMaxFileSizeKb(dto.getMaxFileSizeKb());   // ← NEW
+
             entity.setAllowedFormats(dto.getAllowedFormats());
 
             // NEW FIELDS
             entity.setApplicability(dto.getApplicability());
             entity.setRemarks(dto.getRemarks());
         }
-
         private ProductRequiredDocumentResponseDto mapToResponseDto(ProductRequiredDocuments entity) {
             ProductRequiredDocumentResponseDto dto = new ProductRequiredDocumentResponseDto();
 
@@ -490,7 +493,10 @@
             dto.setExpiryType(entity.getExpiryType());
             dto.setMandatory(entity.isMandatory());
             dto.setMaxValidityYears(entity.getMaxValidityYears());
+
             dto.setMinFileSizeKb(entity.getMinFileSizeKb());
+            dto.setMaxFileSizeKb(entity.getMaxFileSizeKb());   // ← NEW
+
             dto.setAllowedFormats(entity.getAllowedFormats());
 
             // NEW FIELDS

@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.Date;
 import java.util.Optional;
@@ -42,7 +43,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             ProjectRepository projectRepository,
             ProductRequiredDocumentsRepository productRequiredDocumentsRepository,
             UserRepository userRepository,
-            DocumentStatusRepository documentStatusRepository, CompanyDocumentRepository companyDocumentRepository) {
+            DocumentStatusRepository documentStatusRepository,
+            CompanyDocumentRepository companyDocumentRepository) {
 
         this.projectDocumentUploadRepository = projectDocumentUploadRepository;
         this.projectRepository = projectRepository;
@@ -57,13 +59,15 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         validateUploadRequest(requestDto);
 
-        String fileUrl = requestDto.getFileName(); // full S3 URL
+        validateFileSizeAgainstRequirement(requestDto.getRequiredDocumentId(), requestDto.getFileSizeKb());
 
-        if (fileUrl == null || fileUrl.trim().isEmpty()) {
+        String fileUrl = requestDto.getFileName(); // full S3 URL (note: field name might be misleading)
+
+        if (!StringUtils.hasText(fileUrl)) {
             throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
         }
 
-        // ✅ Extract filename from URL
+        // Extract filename from URL
         String extractedFileName;
         try {
             extractedFileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
@@ -132,7 +136,44 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         doc = projectDocumentUploadRepository.save(doc);
 
+        logger.info("Document uploaded successfully. ID: {}, RequiredDoc: {}, Size: {} KB",
+                doc.getId(), requiredDoc.getName(), requestDto.getFileSizeKb());
+
         return mapToDocumentResponseDto(doc);
+    }
+
+    /**
+     * Validates that the uploaded file size does not exceed the maximum allowed size
+     * defined in ProductRequiredDocuments.
+     */
+    private void validateFileSizeAgainstRequirement(Long requiredDocumentId, Integer uploadedFileSizeKb) {
+        if (uploadedFileSizeKb == null || uploadedFileSizeKb <= 0) {
+            throw new ValidationException("File size is required and must be positive", "INVALID_FILE_SIZE");
+        }
+
+        ProductRequiredDocuments requiredDoc = productRequiredDocumentsRepository
+                .findById(requiredDocumentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Required document not found", "DOCUMENT_NOT_FOUND"));
+
+        Integer maxAllowedKb = requiredDoc.getMaxFileSizeKb();
+
+        if (maxAllowedKb != null && uploadedFileSizeKb > maxAllowedKb) {
+            throw new ValidationException(
+                    String.format("File size exceeds maximum limit for this document. " +
+                                    "Maximum allowed: %d KB, Uploaded: %d KB",
+                            maxAllowedKb, uploadedFileSizeKb),
+                    "ERR_MAX_FILE_SIZE_EXCEEDED"
+            );
+        }
+
+        // Optional: You can also enforce minimum size if needed in future
+        if (requiredDoc.getMinFileSizeKb() != null && uploadedFileSizeKb < requiredDoc.getMinFileSizeKb()) {
+            throw new ValidationException(
+                    String.format("File size is below minimum required. Minimum: %d KB, Uploaded: %d KB",
+                            requiredDoc.getMinFileSizeKb(), uploadedFileSizeKb),
+                    "ERR_MIN_FILE_SIZE_NOT_MET"
+            );
+        }
     }
 
     @Override
@@ -153,10 +194,10 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         documentUpload.setUpdatedBy(updateDto.getChangedById());
         documentUpload.setUpdatedDate(new Date());
         documentUpload = projectDocumentUploadRepository.save(documentUpload);
+
         if ("VERIFIED".equalsIgnoreCase(newStatus.getName())) {
 
             Project project = documentUpload.getProject();
-
             if (project == null) {
                 throw new RuntimeException("Project not found for document");
             }
@@ -170,9 +211,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
             ProductRequiredDocuments requiredDoc = documentUpload.getRequiredDocument();
 
-            // ===============================
-            // CHECK EXISTING COMPANY DOCUMENT
-            // ===============================
+            // Check existing company document
             Optional<CompanyDocument> existingOpt =
                     companyDocumentRepository
                             .findByCompanyIdAndRequiredDocumentIdAndIsDeletedFalse(
@@ -183,10 +222,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             CompanyDocument companyDoc;
 
             if (existingOpt.isPresent()) {
-
-                // ===============================
-                // UPDATE (REPLACEMENT FLOW)
-                // ===============================
+                // Update (Replacement)
                 companyDoc = existingOpt.get();
 
                 companyDoc.setOldFileUrl(companyDoc.getFileUrl());
@@ -198,10 +234,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 companyDoc.setReplacementCount(companyDoc.getReplacementCount() + 1);
 
             } else {
-
-                // ===============================
-                // CREATE NEW
-                // ===============================
+                // Create new
                 companyDoc = new CompanyDocument();
 
                 companyDoc.setCompany(company);
@@ -214,9 +247,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 companyDoc.setReplacementCount(0);
             }
 
-            // ===============================
-            // COMMON FIELDS
-            // ===============================
+            // Common fields
             companyDoc.setStatus(newStatus);
             companyDoc.setRemarks(documentUpload.getRemarks());
 
@@ -237,11 +268,10 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             companyDocumentRepository.save(companyDoc);
         }
 
-
         return mapToDocumentResponseDto(documentUpload);
     }
 
-    private void    validateUploadRequest(ProjectDocumentUploadRequestDto requestDto) {
+    private void validateUploadRequest(ProjectDocumentUploadRequestDto requestDto) {
 
         if (requestDto.getProjectId() == null)
             throw new ValidationException("Project ID required", "INVALID_PROJECT_ID");
@@ -251,6 +281,9 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         if (requestDto.getUploadedById() == null)
             throw new ValidationException("UploadedBy ID required", "INVALID_UPLOADED_BY");
+
+        if (requestDto.getFileSizeKb() == null || requestDto.getFileSizeKb() <= 0)
+            throw new ValidationException("Valid file size is required", "INVALID_FILE_SIZE");
     }
 
     private void validateDocumentStatusTransition(DocumentStatus currentStatus, DocumentStatus newStatus) {
@@ -262,13 +295,19 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
     private String sanitizeFileName(String fileName) {
 
-        String sanitized = fileName.trim().replaceAll("[^a-zA-Z0-9\\.\\-_]", "");
+        if (!StringUtils.hasText(fileName)) {
+            throw new ValidationException("File name cannot be empty", "INVALID_FILE_NAME");
+        }
 
-        if (sanitized.length() > 255)
-            throw new ValidationException("File name too long", "INVALID_FILE_NAME_LENGTH");
+        String sanitized = fileName.trim().replaceAll("[^a-zA-Z0-9\\.\\-_() ]", "");
 
-        if (sanitized.isEmpty())
-            throw new ValidationException("Invalid file name", "INVALID_FILE_NAME_FORMAT");
+        if (sanitized.length() > 255) {
+            throw new ValidationException("File name too long (max 255 characters)", "INVALID_FILE_NAME_LENGTH");
+        }
+
+        if (sanitized.isEmpty()) {
+            throw new ValidationException("Invalid file name format", "INVALID_FILE_NAME_FORMAT");
+        }
 
         return sanitized;
     }
@@ -316,7 +355,4 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         return dto;
     }
-
-
-
 }
