@@ -69,16 +69,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Page<Project> findByAssignedUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
 
     /**
-     * Finds projects by product ID and milestone ID.
-     *
-     * @param productId the product ID
-     * @param milestoneId the milestone ID
-     * @return an {@link Optional} containing the project if found, empty otherwise
-     */
-    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND  p.product.id = :productId AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project.id = p.id AND a.milestone.id = :milestoneId)")
-    Optional<Project> findByProductIdAndMilestoneId(@Param("productId") Long productId, @Param("milestoneId") Long milestoneId);
-
-    /**
      * Finds projects by company name (case-insensitive partial match) and not deleted.
      *
      * @param companyName the company name to search
@@ -188,12 +178,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT p FROM Project p " +
             "WHERE  p.isCancelled=false AND  p.id = :id AND p.isDeleted = false")
     Optional<Project> findByIdAndIsDeletedFalse(@Param("id") Long id);
-
-    @Query("SELECT p FROM Project p " +
-            "LEFT JOIN FETCH p.applicantType " +
-            "WHERE  p.isCancelled=false AND p.id = :id AND p.isDeleted = false")
-    Optional<Project> findByIdWithApplicantType(@Param("id") Long id);
-
 
 
     long countByStatus_NameAndIsDeletedFalseAndIsCancelledFalse(String statusName);

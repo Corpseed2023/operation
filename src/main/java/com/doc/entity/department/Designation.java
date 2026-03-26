@@ -1,6 +1,5 @@
 package com.doc.entity.department;
 
-import com.doc.entity.department.Department;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,7 +14,6 @@ import java.util.Date;
 public class Designation {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Long id;
 

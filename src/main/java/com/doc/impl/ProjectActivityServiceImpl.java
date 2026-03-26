@@ -1,13 +1,19 @@
 package com.doc.impl;
 
 import com.doc.dto.project.activity.*;
+import com.doc.dto.project.activity.expense.ApproveExpenseRequestDto;
+import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
+import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
+import com.doc.em.ApprovalStatus;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
 import com.doc.entity.project.activity.ProjectComment;
 import com.doc.entity.project.activity.ProjectExpense;
 import com.doc.entity.project.activity.ProjectNote;
 import com.doc.entity.user.User;
+import com.doc.exception.ResourceNotFoundException;
+import com.doc.exception.ValidationException;
 import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.projectRepo.activity.ProjectActivityRepository;
@@ -21,6 +27,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -108,49 +115,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return mapResponse(activity, comment);
     }
 
-    // ---------------------------------------------------
-    // CREATE EXPENSE
-    // ---------------------------------------------------
 
-    @Override
-    public ProjectActivityResponseDto addExpense(Long projectId, CreateExpenseRequestDto request) {
-
-        User user = validateUser(request.getCreatedByUserId());
-
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
-
-        String summary = request.getExpenseType() + " ₹" + request.getAmount();
-
-        ProjectActivity activity = createActivity(
-                project,
-                ActivityType.EXPENSE,
-                "Expense Added",
-                summary,
-                user
-        );
-
-        activity = activityRepository.save(activity);
-
-        ProjectExpense expense = new ProjectExpense();
-        expense.setProject(project);
-        expense.setActivity(activity);
-        expense.setExpenseType(request.getExpenseType());
-        expense.setAmount(request.getAmount());
-        expense.setCurrency(request.getCurrency());
-        expense.setDescription(request.getDescription());
-        expense.setExpenseDate(request.getExpenseDate());
-        expense.setCreatedByUserId(user.getId());
-        expense.setCreatedByUserName(user.getFullName());
-
-        expenseRepository.save(expense);
-
-        return mapResponse(activity, expense);
-    }
-
-    // ---------------------------------------------------
-    // FETCH ALL ACTIVITIES
-    // ---------------------------------------------------
 
     @Override
     public Page<ProjectActivityResponseDto> getAllActivities(Long projectId, Pageable pageable) {
@@ -256,97 +221,140 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     }
 
 
-
     @Override
-    @Transactional
-    public void approveExpense(Long projectId, Long userId, Long expenseId, String status) {
+    public ProjectActivityResponseDto addExpense(Long projectId, CreateExpenseRequestDto request) {
 
-        // ===============================
-        // VALIDATE STATUS
-        // ===============================
-        if (!"APPROVED".equalsIgnoreCase(status) && !"REJECTED".equalsIgnoreCase(status)) {
-            throw new IllegalArgumentException("Invalid status. Allowed values: APPROVED, REJECTED");
-        }
+        // Validate User
+        User user = validateUser(request.getCreatedByUserId());
 
-        // ===============================
-        // VALIDATE USER
-        // ===============================
-        User user = validateUser(userId);
-
-        // ===============================
-        // FETCH PROJECT
-        // ===============================
+        // Validate Project
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found with id: " + projectId, "ERR_PROJECT_NOT_FOUND"));
 
-        // ===============================
-        // FETCH EXPENSE
-        // ===============================
-        ProjectExpense expense = expenseRepository.findById(expenseId)
-                .orElseThrow(() -> new RuntimeException("Expense not found"));
-
-        // ===============================
-        // VALIDATE MAPPING
-        // ===============================
-        if (!expense.getProject().getId().equals(project.getId())) {
-            throw new RuntimeException("Expense does not belong to the given project");
+        // Basic validations
+        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Expense amount must be greater than zero", "ERR_INVALID_AMOUNT");
         }
 
-        // ===============================
-        // PREVENT RE-PROCESSING
-        // ===============================
-        if (expense.getApprovalStatus() != null &&
-                ("APPROVED".equalsIgnoreCase(expense.getApprovalStatus())
-                        || "REJECTED".equalsIgnoreCase(expense.getApprovalStatus()))) {
-
-            throw new RuntimeException("Expense already " + expense.getApprovalStatus());
+        if (request.getExpenseType() == null || request.getExpenseType().trim().isEmpty()) {
+            throw new ValidationException("Expense type is required", "ERR_EXPENSE_TYPE_REQUIRED");
         }
 
-        // ===============================
-        // APPLY STATUS
-        // ===============================
-        boolean isApproved = "APPROVED".equalsIgnoreCase(status);
+        String summary = request.getExpenseType().trim() + " - ₹" + request.getAmount();
 
-        expense.setApproved(isApproved); // true for approved, false for rejected
-        expense.setApprovedByUserId(user.getId());
-        expense.setApprovalStatus(status.toUpperCase());
+        // Create Activity
+        ProjectActivity activity = createActivity(
+                project,
+                ActivityType.EXPENSE,
+                "Expense Added",
+                summary,
+                user
+        );
+
+        activity = activityRepository.save(activity);
+
+        // Create Expense
+        ProjectExpense expense = new ProjectExpense();
+        expense.setProject(project);
+        expense.setActivity(activity);
+        expense.setExpenseType(request.getExpenseType().trim());
+        expense.setAmount(request.getAmount());
+        expense.setRemark(request.getRemark());
+        expense.setExpenseDate(request.getExpenseDate() != null ? request.getExpenseDate() : LocalDateTime.now());
+        expense.setPaymentMedium(request.getPaymentMedium());
+        expense.setCreatedByUserId(user.getId());
+        expense.setCreatedByUserName(user.getFullName());
+        expense.setApprovalStatus(ApprovalStatus.PENDING);   // Default status
 
         expenseRepository.save(expense);
 
-        // ===============================
-        // CREATE ACTIVITY
-        // ===============================
+        // Use clean DTO instead of raw entity to avoid circular reference
+        ProjectExpenseResponseDto expenseDto = mapToExpenseDto(expense);
+
+        return mapResponse(activity, expenseDto);
+    }
+
+
+    @Override
+    @Transactional
+    public void approveExpense(Long projectId, Long userId, Long expenseId, ApproveExpenseRequestDto request) {
+
+        User user = validateUser(userId);
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        ProjectExpense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Expense not found", "ERR_EXPENSE_NOT_FOUND"));
+
+        if (!expense.getProject().getId().equals(project.getId())) {
+            throw new ValidationException("Expense does not belong to this project", "ERR_INVALID_PROJECT");
+        }
+
+        ApprovalStatus newStatus;
+        try {
+            newStatus = ApprovalStatus.valueOf(request.getStatus().toUpperCase().trim());
+        } catch (IllegalArgumentException e) {
+            throw new ValidationException("Invalid status. Allowed: APPROVED, REJECTED, ON_HOLD", "ERR_INVALID_STATUS");
+        }
+
+        if (newStatus == ApprovalStatus.PENDING) {
+            throw new ValidationException("Cannot manually set status to PENDING", "ERR_INVALID_STATUS");
+        }
+
+        // Prevent re-processing final states
+        if (expense.getApprovalStatus() == ApprovalStatus.APPROVED ||
+                expense.getApprovalStatus() == ApprovalStatus.REJECTED) {
+            throw new ValidationException("Expense is already " + expense.getApprovalStatus(), "ERR_ALREADY_PROCESSED");
+        }
+
+        // ==================== REJECTION REMARK VALIDATION ====================
+        if (newStatus == ApprovalStatus.REJECTED) {
+            if (request.getRejectionRemark() == null || request.getRejectionRemark().trim().isEmpty()) {
+                throw new ValidationException("Rejection remark is required when rejecting an expense", "ERR_REJECTION_REMARK_REQUIRED");
+            }
+            expense.setRejectionRemark(request.getRejectionRemark().trim());
+        } else {
+            expense.setRejectionRemark(null);
+        }
+
+        expense.setApprovalStatus(newStatus);
+        expense.setApproved(newStatus == ApprovalStatus.APPROVED);
+        expense.setApprovedByUserId(user.getId());
+        expense.setApprovedDate(LocalDateTime.now());
+
+        expenseRepository.save(expense);
+
+        createExpenseApprovalActivity(project, expense, user, newStatus);
+    }
+
+    private void createExpenseApprovalActivity(Project project, ProjectExpense expense, User user, ApprovalStatus status) {
         ProjectActivity activity = new ProjectActivity();
         activity.setProject(project);
         activity.setActivityType(ActivityType.EXPENSE);
-
-        if (isApproved) {
-            activity.setTitle("Expense Approved");
-            activity.setSummary(
-                    "Expense of " + expense.getAmount() + " " + expense.getCurrency() +
-                            " approved by " + user.getFullName()
-            );
-        } else {
-            activity.setTitle("Expense Rejected");
-            activity.setSummary(
-                    "Expense of " + expense.getAmount() + " " + expense.getCurrency() +
-                            " rejected by " + user.getFullName()
-            );
-        }
-
-        activity.setActivityDate(LocalDateTime.now());
+        activity.setSystemGenerated(true);
         activity.setCreatedByUserId(user.getId());
         activity.setCreatedByUserName(user.getFullName());
-        activity.setSystemGenerated(true);
-        activity.setDeleted(false);
+        activity.setActivityDate(LocalDateTime.now());
         activity.setCreatedDate(LocalDateTime.now());
-        activity.setUpdatedDate(LocalDateTime.now());
+        activity.setDeleted(false);
+
+        if (status == ApprovalStatus.APPROVED) {
+            activity.setTitle("Expense Approved");
+            activity.setSummary("Expense of ₹" + expense.getAmount() + " approved by " + user.getFullName());
+        } else if (status == ApprovalStatus.REJECTED) {
+            activity.setTitle("Expense Rejected");
+            activity.setSummary("Expense of ₹" + expense.getAmount() + " rejected by " + user.getFullName());
+        } else if (status == ApprovalStatus.ON_HOLD) {
+            activity.setTitle("Expense On Hold");
+            activity.setSummary("Expense of ₹" + expense.getAmount() + " kept on hold by " + user.getFullName());
+        }
 
         activityRepository.save(activity);
     }
-    // ---------------------------------------------------
-    // VALIDATE USER
-    // ---------------------------------------------------
+
+
 
     private User validateUser(Long userId) {
 
@@ -354,9 +362,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
     }
 
-    // ---------------------------------------------------
-    // CREATE ACTIVITY
-    // ---------------------------------------------------
 
     private ProjectActivity createActivity(
             Project project,
@@ -380,10 +385,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return activity;
     }
 
-    // ---------------------------------------------------
-    // MAP RESPONSE
-    // ---------------------------------------------------
-
     private ProjectActivityResponseDto mapResponse(ProjectActivity activity, Object details) {
 
         ProjectActivityResponseDto dto = new ProjectActivityResponseDto();
@@ -399,9 +400,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return dto;
     }
 
-    // ---------------------------------------------------
-    // TIMELINE MAPPER
-    // ---------------------------------------------------
 
     private ProjectActivityResponseDto mapTimeline(ProjectActivity activity) {
 
@@ -436,9 +434,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return mapResponse(activity, details);
     }
 
-    // ---------------------------------------------------
-    // BUILD COMMENT TREE
-    // ---------------------------------------------------
 
     private ProjectCommentResponseDto buildCommentTree(ProjectComment root, List<ProjectComment> allComments) {
 
@@ -474,4 +469,83 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 pageable.getSort()
         );
     }
+
+
+
+    @Override
+    public List<ProjectExpenseResponseDto> getExpensesByProject(Long projectId, Long userId) {
+
+        // ==================== VALIDATE USER ====================
+        validateUser(userId);
+
+        // ==================== VALIDATE PROJECT ====================
+        projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found with id: " + projectId,
+                        "ERR_PROJECT_NOT_FOUND"));
+
+        // Fetch all expenses for this project, ordered by expense date descending
+        List<ProjectExpense> expenses = expenseRepository
+                .findByProjectIdOrderByExpenseDateDesc(projectId);
+
+        // Convert to DTO list
+        return expenses.stream()
+                .map(this::mapToExpenseDto)
+                .toList();
+    }
+
+    private ProjectExpenseResponseDto mapToExpenseDto(ProjectExpense expense) {
+        ProjectExpenseResponseDto dto = new ProjectExpenseResponseDto();
+
+        // Expense fields
+        dto.setExpenseId(expense.getId());
+        dto.setActivityId(expense.getActivity() != null ? expense.getActivity().getId() : null);
+        dto.setExpenseType(expense.getExpenseType());
+        dto.setAmount(expense.getAmount());
+        dto.setRemark(expense.getRemark());
+        dto.setExpenseDate(expense.getExpenseDate());
+        dto.setPaymentMedium(expense.getPaymentMedium());
+        dto.setApprovalStatus(expense.getApprovalStatus());
+        dto.setApproved(expense.isApproved());
+        dto.setApprovedByUserId(expense.getApprovedByUserId());
+        dto.setCreatedByUserId(expense.getCreatedByUserId());
+        dto.setCreatedByUserName(expense.getCreatedByUserName());
+
+        if (expense.getProject() != null) {
+            Project project = expense.getProject();
+            dto.setProjectId(project.getId());
+            dto.setProjectNo(project.getProjectNo());
+            dto.setProjectName(project.getName());
+            dto.setUnbilledNumber(project.getUnbilledNumber());
+            dto.setProductName(project.getProduct().getProductName());
+        }
+
+        return dto;
+    }
+
+    @Override
+    public List<ProjectExpenseResponseDto> getExpenseList(Long userId, ApprovalStatus approvalStatus) {
+
+        // Validate user exists and is active
+        validateUser(userId);
+
+        List<ProjectExpense> expenses;
+
+        if (approvalStatus == null || approvalStatus == ApprovalStatus.ALL) {
+            // Fetch ALL expenses ordered by expense date descending
+            expenses = expenseRepository.findAllExpensesOrderByExpenseDateDesc();
+        } else {
+            // Fetch expenses by specific approval status
+            expenses = expenseRepository.findByApprovalStatusOrderByExpenseDateDesc(approvalStatus);
+        }
+
+        // Convert entity list to DTO list
+        return expenses.stream()
+                .map(this::mapToExpenseDto)
+                .toList();
+    }
+
+
+
+
 }

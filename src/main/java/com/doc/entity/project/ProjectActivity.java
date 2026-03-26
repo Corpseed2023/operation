@@ -55,6 +55,7 @@ public class ProjectActivity {
     @Column(name = "is_system_generated", nullable = false)
     private boolean systemGenerated = false;
 
+
     @Column(name = "is_deleted", nullable = false)
     private boolean deleted = false;
 

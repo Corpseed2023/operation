@@ -24,7 +24,7 @@ import java.util.List;
         @Index(name = "idx_unbilled_no", columnList = "unbilled_number"),
         @Index(name = "idx_estimate_no", columnList = "estimate_number"),
         @Index(name = "idx_company_id", columnList = "company_id"),
-        @Index(name = "idx_unit_id", columnList = "unit_id")   // ← new index for performance
+        @Index(name = "idx_unit_id", columnList = "unit_id")
 })
 @Getter
 @Setter

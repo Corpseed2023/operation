@@ -1,4 +1,4 @@
-package com.doc.dto.project.activity;
+package com.doc.dto.project.activity.expense;
 
 import lombok.Data;
 
@@ -12,11 +12,12 @@ public class CreateExpenseRequestDto {
 
     private BigDecimal amount;
 
-    private String currency;
-
-    private String description;
+    private String remark;
 
     private LocalDateTime expenseDate;
 
     private Long createdByUserId;
+
+    private String paymentMedium;        // e.g., "CASH", "ONLINE", "UPI", "CARD", etc.
+
 }
