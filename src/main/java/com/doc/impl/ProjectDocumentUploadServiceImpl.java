@@ -166,14 +166,14 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             );
         }
 
-        // Optional: You can also enforce minimum size if needed in future
-        if (requiredDoc.getMinFileSizeKb() != null && uploadedFileSizeKb < requiredDoc.getMinFileSizeKb()) {
-            throw new ValidationException(
-                    String.format("File size is below minimum required. Minimum: %d KB, Uploaded: %d KB",
-                            requiredDoc.getMinFileSizeKb(), uploadedFileSizeKb),
-                    "ERR_MIN_FILE_SIZE_NOT_MET"
-            );
-        }
+//        // Optional: You can also enforce minimum size if needed in future
+//        if (requiredDoc.getMinFileSizeKb() != null && uploadedFileSizeKb < requiredDoc.getMinFileSizeKb()) {
+//            throw new ValidationException(
+//                    String.format("File size is below minimum required. Minimum: %d KB, Uploaded: %d KB",
+//                            requiredDoc.getMinFileSizeKb(), uploadedFileSizeKb),
+//                    "ERR_MIN_FILE_SIZE_NOT_MET"
+//            );
+//        }
     }
 
     @Override
