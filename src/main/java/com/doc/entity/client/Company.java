@@ -12,7 +12,7 @@ import java.util.List;
 @Table(name = "company")
 @Getter
 @Setter
-public class Company {
+public class    Company {
 
     @Id
     @Comment("Primary key: Company ID (shared / synced from account-service)")

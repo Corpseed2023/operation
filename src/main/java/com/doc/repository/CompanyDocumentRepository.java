@@ -13,4 +13,8 @@ import java.util.Optional;
 public interface CompanyDocumentRepository extends JpaRepository<CompanyDocument, Long> {
 
 
+    Optional<CompanyDocument> findByCompanyIdAndRequiredDocumentIdAndIsDeletedFalse(
+            Long companyId,
+            Long requiredDocumentId
+    );
 }

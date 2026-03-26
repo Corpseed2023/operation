@@ -1,6 +1,7 @@
 package com.doc.entity.document;
 
 import com.doc.entity.client.Company;
+import com.doc.entity.client.CompanyUnit;
 import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -38,6 +39,10 @@ public class CompanyDocument {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_unit_id", nullable = false)
+    private CompanyUnit companyUnit;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "required_document_id", nullable = false)
