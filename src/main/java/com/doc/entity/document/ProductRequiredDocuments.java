@@ -56,11 +56,6 @@ public class ProductRequiredDocuments {
     @Column(name = "max_validity_years")
     private Integer maxValidityYears;
 
-    // ==================== NEW FIELDS ADDED ====================
-
-    @Column(name = "min_file_size_kb")
-    private Integer minFileSizeKb;
-
     @Column(name = "max_file_size_kb")
     @Comment("Maximum allowed file size in KB. If null = no limit")
     private Integer maxFileSizeKb;

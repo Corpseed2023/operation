@@ -37,10 +37,6 @@ public class ProductRequiredDocumentRequestDto {
 
     @PositiveOrZero
     private Integer maxValidityYears;
-
-    @PositiveOrZero
-    private Integer minFileSizeKb;
-
     @PositiveOrZero
     private Integer maxFileSizeKb;
 

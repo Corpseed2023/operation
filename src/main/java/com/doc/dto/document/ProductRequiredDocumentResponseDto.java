@@ -18,7 +18,6 @@ public class ProductRequiredDocumentResponseDto {
     private DocumentExpiryType expiryType;
     private boolean isMandatory;
     private Integer maxValidityYears;
-    private Integer minFileSizeKb;
     private String allowedFormats;
 
     // ==================== NEW FIELDS ====================

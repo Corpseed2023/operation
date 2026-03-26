@@ -232,7 +232,7 @@
 
             dto.setMandatory(getCsvBoolean(record, colMap, "mandatory", "required", "is_mandatory"));
             dto.setMaxValidityYears(getCsvInteger(record, colMap, "maxvalidityyears", "max_validity_years"));
-            dto.setMinFileSizeKb(getCsvInteger(record, colMap, "minfilesizekb", "min_file_size_kb"));
+            dto.setMaxFileSizeKb(getCsvInteger(record, colMap, "maxfilesizekb", "max_file_size_kb"));
 
             dto.setCreatedBy(createdBy);
             dto.setUpdatedBy(createdBy);
@@ -363,7 +363,7 @@
 
             dto.setMandatory(getCellBoolean(row, colMap, "mandatory", "required", "is_mandatory"));
             dto.setMaxValidityYears(getCellInteger(row, colMap, "maxvalidityyears", "max_validity_years"));
-            dto.setMinFileSizeKb(getCellInteger(row, colMap, "minfilesizekb", "min_file_size_kb"));
+            dto.setMaxFileSizeKb(getCellInteger(row, colMap, "maxfilesizekb", "max_file_size_kb"));
 
             dto.setCreatedBy(createdBy);
             dto.setUpdatedBy(createdBy);
@@ -470,13 +470,10 @@
             entity.setMandatory(dto.isMandatory());
             entity.setMaxValidityYears(dto.getMaxValidityYears());
 
-            // File size fields
-            entity.setMinFileSizeKb(dto.getMinFileSizeKb());
-            entity.setMaxFileSizeKb(dto.getMaxFileSizeKb());   // ← NEW
+            entity.setMaxFileSizeKb(dto.getMaxFileSizeKb());
 
             entity.setAllowedFormats(dto.getAllowedFormats());
 
-            // NEW FIELDS
             entity.setApplicability(dto.getApplicability());
             entity.setRemarks(dto.getRemarks());
         }
@@ -493,8 +490,6 @@
             dto.setExpiryType(entity.getExpiryType());
             dto.setMandatory(entity.isMandatory());
             dto.setMaxValidityYears(entity.getMaxValidityYears());
-
-            dto.setMinFileSizeKb(entity.getMinFileSizeKb());
             dto.setMaxFileSizeKb(entity.getMaxFileSizeKb());   // ← NEW
 
             dto.setAllowedFormats(entity.getAllowedFormats());
