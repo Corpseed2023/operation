@@ -293,6 +293,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             throw new ValidationException("Expense does not belong to this project", "ERR_INVALID_PROJECT");
         }
 
+
         ApprovalStatus newStatus;
         try {
             newStatus = ApprovalStatus.valueOf(request.getStatus().toUpperCase().trim());
@@ -545,6 +546,8 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 .map(this::mapToExpenseDto)
                 .toList();
     }
+
+
 
 
 
