@@ -23,13 +23,16 @@ public class ProjectDetailsDto {
 
     // Sales Person
     private Long salesPersonId;
-    private String salesPersonName;          // NEW
+    private String salesPersonName;
 
     private Long companyId;
-    private String companyName;              // NEW
+    private String companyName;
+
+    private Long companyUnitId;
+    private String companyUnitName;
 
     private Long contactId;
-    private String contactName;              // NEW
+    private String contactName;
 
     private List<ContactDetailsDto> contacts;
 

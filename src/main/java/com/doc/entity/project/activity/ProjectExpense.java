@@ -3,6 +3,7 @@ package com.doc.entity.project.activity;
 import com.doc.em.ApprovalStatus;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -21,6 +22,7 @@ public class ProjectExpense {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "activity_id", nullable = false, unique = true)
     private ProjectActivity activity;
