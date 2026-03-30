@@ -39,20 +39,17 @@ public class ProductRequiredDocumentRequestDto {
 
     private String expiryTypeDescription;
 
-
     @PositiveOrZero
     private Integer maxFileSizeKb;
 
     @Size(max = 100)
     private String allowedFormats = "pdf,jpg,png";
 
-    // ==================== NEW FIELDS ====================
     @Size(max = 500, message = "Applicability cannot exceed 500 characters")
     private String applicability;
 
     @Size(max = 1000, message = "Remarks cannot exceed 1000 characters")
     private String remarks;
-    // ===================================================
 
     @NotNull(message = "Created by user ID is required")
     private Long createdBy;

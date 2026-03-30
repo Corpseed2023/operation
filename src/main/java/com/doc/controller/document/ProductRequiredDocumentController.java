@@ -47,7 +47,6 @@ public class ProductRequiredDocumentController {
         return ResponseEntity.ok(productRequiredDocumentService.update(id, dto));
     }
 
-    // Active only, paginated (if needed)
     @Operation(summary = "Get active required documents (paginated)")
     @GetMapping("/active/{userId}")
     public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getActivePaginated(

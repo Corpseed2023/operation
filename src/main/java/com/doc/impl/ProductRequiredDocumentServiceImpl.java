@@ -288,7 +288,12 @@
         private Boolean getCsvBoolean(CSVRecord record, Map<String, Integer> map, String... keys) {
             String val = getCsvString(record, map, keys);
             if (val == null) return false;
-            return "true".equalsIgnoreCase(val) || "yes".equalsIgnoreCase(val) || "1".equals(val);
+            return val != null && (
+                    val.equalsIgnoreCase("true") ||
+                            val.equalsIgnoreCase("yes") ||
+                            val.equalsIgnoreCase("1") ||
+                            val.equalsIgnoreCase("y")
+            );
         }
 
 
@@ -442,8 +447,20 @@
                     if (cell != null) {
                         return switch (cell.getCellType()) {
                             case STRING -> cell.getStringCellValue().trim();
+
                             case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
-                            default -> "";
+
+                            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+
+                            case FORMULA -> {
+                                try {
+                                    yield String.valueOf(cell.getBooleanCellValue()); // try boolean
+                                } catch (Exception e) {
+                                    yield cell.getStringCellValue();
+                                }
+                            }
+
+                            default -> null;
                         };
                     }
                 }
