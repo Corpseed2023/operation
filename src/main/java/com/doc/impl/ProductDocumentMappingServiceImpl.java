@@ -117,7 +117,7 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
     private ProductDocumentMappingResponseDto mapToResponseDtoInDocs(ProductDocumentMapping mapping) {
 
         ProductRequiredDocuments doc = mapping.getRequiredDocument();
-        ApplicantType applicantType = mapping.getApplicantType(); // get it from mapping
+        ApplicantType applicantType = mapping.getApplicantType();
 
         return new ProductDocumentMappingResponseDto(
                 mapping.getId(),
@@ -129,31 +129,13 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
                 mapping.getDisplayOrder(),
                 doc.getAllowedFormats(),
                 doc.getExpiryType(),
+                doc.getExpiryTypeDescription(),
                 doc.getMaxValidityYears(),
-
-                //   new fields
                 applicantType != null ? applicantType.getId() : null,
                 applicantType != null ? applicantType.getName() : null
         );
     }
 
-
-
-
-//    private ProductDocumentMappingResponseDto mapToResponseDto(ProductDocumentMapping mapping) {
-//        ProductRequiredDocuments doc = mapping.getRequiredDocument();
-//        return new ProductDocumentMappingResponseDto(
-//                mapping.getId(),
-//                doc.getId(),
-//                doc.getName(),
-//                doc.getType(),
-//                doc.getDescription(),
-//                mapping.isMandatory(),
-//                mapping.getDisplayOrder(),
-//                doc.getAllowedFormats(),
-//                doc.getExpiryType(),
-//                doc.getMaxValidityYears());
-//    }
 
     private void validateAssignRequest(ProductDocumentMappingRequestDto request) {
         if (request.getProductId() == null) {

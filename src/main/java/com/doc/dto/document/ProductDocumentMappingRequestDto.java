@@ -1,4 +1,3 @@
-// src/main/java/com/doc/dto/document/ProductDocumentMappingRequestDto.java
 package com.doc.dto.document;
 
 import lombok.AllArgsConstructor;

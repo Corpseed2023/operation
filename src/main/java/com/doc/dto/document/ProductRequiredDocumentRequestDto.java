@@ -35,8 +35,11 @@ public class ProductRequiredDocumentRequestDto {
 
     private boolean isMandatory = true;
 
-    @PositiveOrZero
-    private Integer maxValidityYears;
+    private String maxValidityYears;
+
+    private String expiryTypeDescription;
+
+
     @PositiveOrZero
     private Integer maxFileSizeKb;
 

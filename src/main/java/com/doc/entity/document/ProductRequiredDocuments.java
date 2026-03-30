@@ -50,11 +50,14 @@ public class ProductRequiredDocuments {
     @Column(nullable = false, length = 20)
     private DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
 
-    @Column(name = "is_mandatory", nullable = false)
-    private boolean isMandatory = true;
+    @Column(length = 1000)
+    private String expiryTypeDescription;
+
+    @Column(name = "is_mandatory")
+    private boolean mandatory;
 
     @Column(name = "max_validity_years")
-    private Integer maxValidityYears;
+    private String maxValidityYears;
 
     @Column(name = "max_file_size_kb")
     @Comment("Maximum allowed file size in KB. If null = no limit")
@@ -70,8 +73,6 @@ public class ProductRequiredDocuments {
     @Column(name = "remarks", length = 1000)
     @Comment("Additional remarks or notes about this required document")
     private String remarks;
-
-    // ===================================================
 
     @Column(name = "created_by", nullable = false)
     private Long createdBy;

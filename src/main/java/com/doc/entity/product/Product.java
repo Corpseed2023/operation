@@ -53,8 +53,6 @@ public class Product {
     @Column(nullable = false)
     private boolean isActive = true;
 
-    // ========== NEW FIELDS – PORTAL REQUIREMENT (PRODUCT LEVEL ) ==========
-
     /**
      * Does this product require client portal login at any stage?
      * Examples:

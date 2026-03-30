@@ -754,9 +754,6 @@ public class ProjectServiceImpl implements ProjectService {
                     .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(projectId, userId);
         }
 
-        // Load documents
-//        assignments.forEach(a -> a.setDocuments(
-//                projectDocumentUploadRepository.findByMilestoneAssignmentIdAndIsDeletedFalse(a.getId())));
 
         System.out.println("=== DEBUG VISIBILITY ===");
         System.out.println("User ID: " + userId);

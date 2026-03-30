@@ -201,10 +201,13 @@
             }
         }
 
-        private ProductRequiredDocumentRequestDto mapCsvRecordToDto(CSVRecord record,
-                                                                    Map<String, Integer> colMap,
-                                                                    Long createdBy) {
+        private ProductRequiredDocumentRequestDto mapCsvRecordToDto(
+                CSVRecord record,
+                Map<String, Integer> colMap,
+                Long createdBy) {
+
             ProductRequiredDocumentRequestDto dto = new ProductRequiredDocumentRequestDto();
+            log.info("DTO mandatory after parsing: {}", dto.isMandatory());
 
             dto.setName(getCsvString(record, colMap, "name", "document_name", "documentname", "doc_name"));
             dto.setDescription(getCsvString(record, colMap, "description", "document_description", "document_descition", "desc"));
@@ -216,8 +219,11 @@
             dto.setApplicability(getCsvString(record, colMap, "applicability", "applicable_to", "applies_to"));
             dto.setRemarks(getCsvString(record, colMap, "remarks", "notes", "remark", "note"));
 
+            String expiryDesc = getCsvString(record, colMap, "expiry_type_description", "expirytypedescription");
+            dto.setExpiryTypeDescription(expiryDesc);
 
             String expiryStr = getCsvString(record, colMap, "expirytype", "expiry_type", "expiry");
+
             DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
 
             if (StringUtils.hasText(expiryStr)) {
@@ -225,13 +231,21 @@
                     expiryType = DocumentExpiryType.valueOf(expiryStr.trim().toUpperCase());
                 } catch (IllegalArgumentException e) {
                     log.warn("Invalid expiryType in CSV: '{}'", expiryStr);
-                    expiryType = DocumentExpiryType.UNKNOWN;
+                }
+            } else if (StringUtils.hasText(expiryDesc)) {
+                String lower = expiryDesc.toLowerCase();
+
+                if (lower.contains("no expiry") || lower.contains("no independent expiry")) {
+                    expiryType = DocumentExpiryType.FIXED;
+                } else if (lower.contains("valid") || lower.contains("year") || lower.contains("period")) {
+                    expiryType = DocumentExpiryType.EXPIRING;
                 }
             }
+
             dto.setExpiryType(expiryType);
 
             dto.setMandatory(getCsvBoolean(record, colMap, "mandatory", "required", "is_mandatory"));
-            dto.setMaxValidityYears(getCsvInteger(record, colMap, "maxvalidityyears", "max_validity_years"));
+            dto.setMaxValidityYears(getCsvString(record, colMap, "maxvalidityyears", "max_validity_years"));
             dto.setMaxFileSizeKb(getCsvInteger(record, colMap, "maxfilesizekb", "max_file_size_kb"));
 
             dto.setCreatedBy(createdBy);
@@ -241,24 +255,35 @@
                 throw new ValidationException("Name / Document_Name is required", "ERR_NAME_REQUIRED");
             }
 
-            if (dto.getExpiryType() == null || dto.getExpiryType() == DocumentExpiryType.UNKNOWN) {
-                throw new ValidationException("Valid expiryType is required", "ERR_EXPIRY_TYPE_REQUIRED");
+            if (!StringUtils.hasText(dto.getExpiryTypeDescription())) {
+                throw new ValidationException("expiry_type_description is required", "ERR_EXPIRY_DESC_REQUIRED");
             }
 
             return dto;
         }
 
-        // CSV-specific helper methods
         private String getCsvString(CSVRecord record, Map<String, Integer> map, String... possibleKeys) {
+
             for (String key : possibleKeys) {
-                Integer idx = map.get(key.toLowerCase());
-                if (idx != null && idx < record.size()) {
-                    String val = record.get(idx).trim();
-                    return val.isEmpty() ? null : val;
+
+                for (Map.Entry<String, Integer> entry : map.entrySet()) {
+
+                    String header = entry.getKey();
+
+                    if (header != null && header.trim().equalsIgnoreCase(key.trim())) {
+
+                        Integer idx = entry.getValue();
+
+                        if (idx != null && idx < record.size()) {
+                            String val = record.get(idx);
+                            return val != null && !val.trim().isEmpty() ? val.trim() : null;
+                        }
+                    }
                 }
             }
             return null;
         }
+
 
         private Boolean getCsvBoolean(CSVRecord record, Map<String, Integer> map, String... keys) {
             String val = getCsvString(record, map, keys);
@@ -266,12 +291,21 @@
             return "true".equalsIgnoreCase(val) || "yes".equalsIgnoreCase(val) || "1".equals(val);
         }
 
+
         private Integer getCsvInteger(CSVRecord record, Map<String, Integer> map, String... keys) {
             String val = getCsvString(record, map, keys);
+
             if (!StringUtils.hasText(val)) return null;
+
             try {
-                return Integer.parseInt(val.trim());
-            } catch (NumberFormatException e) {
+                //  extract only numbers (handles "5000 KB", "5,000", etc.)
+                String numeric = val.replaceAll("[^0-9]", "");
+
+                if (!StringUtils.hasText(numeric)) return null;
+
+                return Integer.parseInt(numeric);
+            } catch (Exception e) {
+                log.warn("Invalid numeric value: '{}'", val);
                 return null;
             }
         }
@@ -337,7 +371,11 @@
             }
         }
 
-        private ProductRequiredDocumentRequestDto mapRowToDto(Row row, Map<String, Integer> colMap, Long createdBy) {
+        private ProductRequiredDocumentRequestDto mapRowToDto(
+                Row row,
+                Map<String, Integer> colMap,
+                Long createdBy) {
+
             ProductRequiredDocumentRequestDto dto = new ProductRequiredDocumentRequestDto();
 
             dto.setName(getCellString(row, colMap, "name", "document_name", "documentname", "doc_name"));
@@ -348,38 +386,54 @@
             dto.setStateName(getCellString(row, colMap, "statename", "state_name"));
             dto.setAllowedFormats(getCellString(row, colMap, "allowedformats", "allowed_formats"));
 
-            // ─── Special handling for enum ──────────────────────────────────────
+            dto.setApplicability(getCellString(row, colMap, "applicability", "applicable_to", "applies_to"));
+            dto.setRemarks(getCellString(row, colMap, "remarks", "notes", "remark", "note"));
+
+            //   NEW FIELD
+            String expiryDesc = getCellString(row, colMap, "expiry_type_description", "expirytypedescription");
+            dto.setExpiryTypeDescription(expiryDesc);
+
+            //   ENUM HANDLING
             String expiryStr = getCellString(row, colMap, "expirytype", "expiry_type", "expiry");
+
+            DocumentExpiryType expiryType = DocumentExpiryType.UNKNOWN;
+
             if (StringUtils.hasText(expiryStr)) {
                 try {
-                    dto.setExpiryType(DocumentExpiryType.valueOf(expiryStr.trim().toUpperCase()));
+                    expiryType = DocumentExpiryType.valueOf(expiryStr.trim().toUpperCase());
                 } catch (IllegalArgumentException e) {
                     log.warn("Invalid expiryType value: '{}'", expiryStr);
-                    dto.setExpiryType(DocumentExpiryType.UNKNOWN);
                 }
-            } else {
-                dto.setExpiryType(DocumentExpiryType.UNKNOWN);
+            } else if (StringUtils.hasText(expiryDesc)) {
+                String lower = expiryDesc.toLowerCase();
+
+                if (lower.contains("no expiry") || lower.contains("no independent expiry")) {
+                    expiryType = DocumentExpiryType.FIXED;
+                } else if (lower.contains("valid") || lower.contains("year") || lower.contains("period")) {
+                    expiryType = DocumentExpiryType.EXPIRING;
+                }
             }
 
+            dto.setExpiryType(expiryType);
+
             dto.setMandatory(getCellBoolean(row, colMap, "mandatory", "required", "is_mandatory"));
-            dto.setMaxValidityYears(getCellInteger(row, colMap, "maxvalidityyears", "max_validity_years"));
+            dto.setMaxValidityYears(getCellString(row, colMap, "maxvalidityyears", "max_validity_years"));
             dto.setMaxFileSizeKb(getCellInteger(row, colMap, "maxfilesizekb", "max_file_size_kb"));
 
             dto.setCreatedBy(createdBy);
             dto.setUpdatedBy(createdBy);
 
+            //   VALIDATIONS
             if (!StringUtils.hasText(dto.getName())) {
                 throw new ValidationException("Name / Document_Name is required", "ERR_NAME_REQUIRED");
             }
 
-            // Optional: add check for mandatory fields like type, expiryType
-            if (dto.getExpiryType() == null || dto.getExpiryType() == DocumentExpiryType.UNKNOWN) {
-                throw new ValidationException("Valid expiryType is required", "ERR_EXPIRY_TYPE_REQUIRED");
+            if (!StringUtils.hasText(dto.getExpiryTypeDescription())) {
+                throw new ValidationException("expiry_type_description is required", "ERR_EXPIRY_DESC_REQUIRED");
             }
 
             return dto;
         }
-
         private String getCellString(Row row, Map<String, Integer> map, String... possibleKeys) {
             for (String key : possibleKeys) {
                 Integer idx = map.get(key.toLowerCase());
@@ -405,14 +459,19 @@
 
         private Integer getCellInteger(Row row, Map<String, Integer> map, String... keys) {
             String val = getCellString(row, map, keys);
+
             if (!StringUtils.hasText(val)) return null;
+
             try {
-                return Integer.parseInt(val.trim());
-            } catch (NumberFormatException e) {
+                String numeric = val.replaceAll("[^0-9]", "");
+                if (!StringUtils.hasText(numeric)) return null;
+
+                return Integer.parseInt(numeric);
+            } catch (Exception e) {
+                log.warn("Invalid numeric value: '{}'", val);
                 return null;
             }
         }
-
 
         @Override
         public List<ProductRequiredDocumentResponseDto> getActivePaginated(Long userId, int page, int size) {
@@ -460,23 +519,33 @@
         }
 
         private void mapDtoToEntity(ProductRequiredDocumentRequestDto dto, ProductRequiredDocuments entity) {
+
+            log.info("DTO mandatory before mapping: {}", dto.isMandatory());
+
+            entity.setMandatory(dto.isMandatory());
+
+            log.info("Entity mandatory after mapping: {}", entity.isMandatory());
+
             entity.setName(dto.getName().trim());
             entity.setDescription(dto.getDescription());
             entity.setType(dto.getType());
             entity.setCountry(dto.getCountry() != null ? dto.getCountry().trim() : "");
             entity.setCentralName(dto.getCentralName() != null ? dto.getCentralName().trim() : "");
             entity.setStateName(dto.getStateName() != null ? dto.getStateName().trim() : "");
+
             entity.setExpiryType(dto.getExpiryType());
+
+            entity.setExpiryTypeDescription(dto.getExpiryTypeDescription());
+
             entity.setMandatory(dto.isMandatory());
             entity.setMaxValidityYears(dto.getMaxValidityYears());
-
             entity.setMaxFileSizeKb(dto.getMaxFileSizeKb());
-
             entity.setAllowedFormats(dto.getAllowedFormats());
-
             entity.setApplicability(dto.getApplicability());
             entity.setRemarks(dto.getRemarks());
         }
+
+
         private ProductRequiredDocumentResponseDto mapToResponseDto(ProductRequiredDocuments entity) {
             ProductRequiredDocumentResponseDto dto = new ProductRequiredDocumentResponseDto();
 
@@ -490,13 +559,12 @@
             dto.setExpiryType(entity.getExpiryType());
             dto.setMandatory(entity.isMandatory());
             dto.setMaxValidityYears(entity.getMaxValidityYears());
-            dto.setMaxFileSizeKb(entity.getMaxFileSizeKb());   // ← NEW
-
+            dto.setMaxFileSizeKb(entity.getMaxFileSizeKb());
             dto.setAllowedFormats(entity.getAllowedFormats());
 
-            // NEW FIELDS
             dto.setApplicability(entity.getApplicability());
             dto.setRemarks(entity.getRemarks());
+            dto.setExpiryTypeDescription(entity.getExpiryTypeDescription());
 
             dto.setCreatedBy(entity.getCreatedBy());
             dto.setUpdatedBy(entity.getUpdatedBy());

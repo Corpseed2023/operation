@@ -17,13 +17,14 @@ public class ProductRequiredDocumentResponseDto {
     private String stateName;
     private DocumentExpiryType expiryType;
     private boolean isMandatory;
-    private Integer maxValidityYears;
+    private String maxValidityYears;
+    private String expiryTypeDescription;
+
+
     private String allowedFormats;
 
-    // ==================== NEW FIELDS ====================
     private String applicability;
     private String remarks;
-    // ===================================================
 
     private Long createdBy;
     private Long updatedBy;

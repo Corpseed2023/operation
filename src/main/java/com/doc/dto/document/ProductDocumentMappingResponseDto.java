@@ -2,14 +2,13 @@ package com.doc.dto.document;
 
 import com.doc.em.DocumentExpiryType;
 import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
-@Data
-@NoArgsConstructor
 @AllArgsConstructor
+@Getter
+@Setter
 public class ProductDocumentMappingResponseDto {
-
 
     private Long mappingId;
     private Long requiredDocumentId;
@@ -20,11 +19,8 @@ public class ProductDocumentMappingResponseDto {
     private Integer displayOrder;
     private String allowedFormats;
     private DocumentExpiryType expiryType;
-    private Integer maxValidityYears;
-
-    //   NEW FIELDS
+    private String expiryTypeDescription;
+    private String maxValidityYears;
     private Long applicantTypeId;
     private String applicantTypeName;
-
-
 }

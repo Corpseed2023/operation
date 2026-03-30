@@ -62,7 +62,6 @@ public class ProductController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
-    // com.doc.controller.product.ProductController
 
     @PutMapping("/{id}")
     public ResponseEntity<ProductResponseDto> updateProduct(
