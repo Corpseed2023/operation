@@ -80,21 +80,25 @@ public class ProjectExpenseController {
     @GetMapping("/getExpensesList")
     public ResponseEntity<?> getProjectExpensesList(
             @RequestParam Long userId,
-            @RequestParam(required = false, defaultValue = "PENDING") ApprovalStatus approvalStatus) {
+            @RequestParam(required = false) String approvalStatus) {
 
-        try {
-            List<ProjectExpenseResponseDto> response =
-                    activityService.getExpenseList(userId, approvalStatus);
+        ApprovalStatus status = null;
 
-            return ResponseEntity.ok(response);
-
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (ValidationException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
+        if (approvalStatus != null && !approvalStatus.equalsIgnoreCase("ALL")) {
+            try {
+                status = ApprovalStatus.valueOf(approvalStatus.toUpperCase());
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body("Invalid approvalStatus");
+            }
         }
+
+        System.out.println("Raw approvalStatus: " + approvalStatus);
+        System.out.println("Mapped status: " + status);
+
+        List<ProjectExpenseResponseDto> response =
+                activityService.getExpenseList(userId, status);
+
+        return ResponseEntity.ok(response);
     }
 
     /**

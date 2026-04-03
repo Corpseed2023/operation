@@ -19,10 +19,8 @@ public interface ProjectExpenseRepository extends JpaRepository<ProjectExpense, 
     List<ProjectExpense> findByProjectIdOrderByExpenseDateDesc(@Param("projectId") Long projectId);
 
 
-    @Query("SELECT e FROM ProjectExpense e ORDER BY e.expenseDate DESC")
-    List<ProjectExpense> findAllExpensesOrderByExpenseDateDesc();
+    List<ProjectExpense> findAllByOrderByExpenseDateDesc();
 
     // Fetch expenses by approval status ordered by date descending
-    @Query("SELECT e FROM ProjectExpense e WHERE e.approvalStatus = :status ORDER BY e.expenseDate DESC")
-    List<ProjectExpense> findByApprovalStatusOrderByExpenseDateDesc(@Param("status") ApprovalStatus status);
+    List<ProjectExpense> findByApprovalStatusOrderByExpenseDateDesc(ApprovalStatus status);
 }
