@@ -510,7 +510,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         dto.setApprovalStatus(expense.getApprovalStatus());
         dto.setApproved(expense.isApproved());
         dto.setApprovedByUserId(expense.getApprovedByUserId());
-        dto.setApprovedByUserName(expense.getCreatedByUserName()) ;
+        dto.setApprovedByUserName(expense.getApprovedByUserName()) ;
         dto.setCreatedByUserId(expense.getCreatedByUserId());
         dto.setCreatedByUserName(expense.getCreatedByUserName());
 

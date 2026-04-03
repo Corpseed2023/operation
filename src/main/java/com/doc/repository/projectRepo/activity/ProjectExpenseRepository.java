@@ -2,8 +2,6 @@ package com.doc.repository.projectRepo.activity;
 
 import com.doc.em.ApprovalStatus;
 import com.doc.entity.project.activity.ProjectExpense;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
