@@ -29,6 +29,7 @@ public class ProjectExpense {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
+    @JsonIgnore
     private Project project;
 
     @Column(name = "expense_type", length = 50)
@@ -54,6 +55,7 @@ public class ProjectExpense {
 
     @Column(name = "approved_by_user_id")
     private Long approvedByUserId;
+    private String approvedByUserName;
 
     private boolean isApproved = false;
 
