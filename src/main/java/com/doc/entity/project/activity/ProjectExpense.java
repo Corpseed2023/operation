@@ -55,6 +55,7 @@ public class ProjectExpense {
 
     @Column(name = "approved_by_user_id")
     private Long approvedByUserId;
+    private String approvedByUserName;
 
     private boolean isApproved = false;
 
