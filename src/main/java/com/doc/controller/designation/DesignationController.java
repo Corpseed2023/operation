@@ -88,7 +88,7 @@ public class DesignationController {
      */
     @PostMapping("/map-to-department")
     public ResponseEntity<DesignationResponseDto> mapDesignationToDepartment(
-            @RequestParam("designationId") @NotNull List<Long> designationId,
+            @RequestBody @NotNull List<Long> designationId,
             @RequestParam("departmentId") @NotNull Long departmentId) {
 
         DesignationResponseDto response = designationService.mapDesignationToDepartment(designationId, departmentId);
