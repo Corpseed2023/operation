@@ -18,4 +18,8 @@ public interface DesignationService {
     void deleteDesignation(Long id);
 
     DesignationResponseDto createMasterDesignation(DesignationRequestDto requestDto);
+
+    DesignationResponseDto createDesignationName(Long id, String name, Long weightValue);
+
+    DesignationResponseDto mapDesignationToDepartment(Long designationId, Long departmentId);
 }

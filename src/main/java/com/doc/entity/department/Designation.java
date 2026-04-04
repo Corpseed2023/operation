@@ -22,7 +22,7 @@ public class Designation {
     private Long weightValue;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id", nullable = false)
+    @JoinColumn(name = "department_id", nullable = true)
     private Department department;
 
     private boolean isDeleted = false;
