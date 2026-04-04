@@ -6,7 +6,6 @@ import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 
-// ApiError.java
 @Data
 @AllArgsConstructor
 public class ApiError {

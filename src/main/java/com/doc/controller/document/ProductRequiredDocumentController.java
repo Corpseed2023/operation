@@ -8,13 +8,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
-import jakarta.validation.ValidationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -76,6 +73,19 @@ public class ProductRequiredDocumentController {
 
         return ResponseEntity.ok(result);
     }
+
+    @Operation(summary = "Soft delete a required document template")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Document soft deleted successfully"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
+    })
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> softDelete(@PathVariable Long id) {
+        productRequiredDocumentService.softDelete(id);
+        return ResponseEntity.ok().build();   // 200 OK with no content
+    }
+
+
 
 }
 

@@ -11,4 +11,6 @@ public interface ProductRequiredDocumentService {
 
     List<ProductRequiredDocumentResponseDto> getActivePaginated(Long userId, int page, int size);
     List<ProductRequiredDocumentResponseDto> importFromS3(String s3Url, Long createdBy);
+
+    void softDelete(Long id);
 }

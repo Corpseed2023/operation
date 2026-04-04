@@ -13,10 +13,8 @@ import java.util.List;
 @Table(name = "product_required_documents",
         indexes = {
                 @Index(name = "idx_name", columnList = "name")
-        },
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"name", "country", "centralName", "stateName"})
         }
+
 )
 @Getter
 @Setter
@@ -34,8 +32,8 @@ public class ProductRequiredDocuments {
     @Column(length = 1000)
     private String description;
 
-    @Column(nullable = false, length = 50)
-    private String type; // IDENTITY, ADDRESS, FINANCIAL, etc.
+    @Column(nullable = false, length = 255)
+    private String type;
 
     @Column(columnDefinition = "VARCHAR(255) DEFAULT ''")
     private String country = "";
