@@ -324,7 +324,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setApprovalStatus(newStatus);
         expense.setApproved(newStatus == ApprovalStatus.APPROVED);
         expense.setApprovedByUserId(user.getId());
-        expense.setApprovedByUserName(user.getFullName();
+        expense.setApprovedByUserName(user.getFullName());
         expense.setApprovedDate(LocalDateTime.now());
 
         expenseRepository.save(expense);
