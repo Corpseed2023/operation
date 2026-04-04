@@ -21,5 +21,6 @@ public interface DesignationService {
 
     DesignationResponseDto createDesignationName(Long id, String name, Long weightValue);
 
-    DesignationResponseDto mapDesignationToDepartment(Long designationId, Long departmentId);
+
+    DesignationResponseDto mapDesignationToDepartment(List<Long> designationId, Long departmentId);
 }

@@ -209,28 +209,71 @@ public class DesignationServiceImpl implements DesignationService {
 
 
     @Override
-    public DesignationResponseDto mapDesignationToDepartment(Long designationId, Long departmentId) {
-        logger.info("Mapping designation ID: {} to department ID: {}", designationId, departmentId);
+    public DesignationResponseDto mapDesignationToDepartment(List<Long> designationIds, Long departmentId) {
+        if (designationIds == null || designationIds.isEmpty()) {
+            throw new ValidationException("Designation ID list cannot be null or empty", "ERR_EMPTY_DESIGNATION_LIST");
+        }
 
-        Designation designation = designationRepository.findActiveUserById(designationId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Designation with ID " + designationId + " not found",
-                        "ERR_DESIGNATION_NOT_FOUND"));
+        logger.info("Mapping {} designations to department ID: {}", designationIds.size(), departmentId);
 
+        // Validate department exists and is not deleted
         Department department = departmentRepository.findById(departmentId)
                 .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Department with ID " + departmentId + " not found",
-                        "ERR_DEPARTMENT_NOT_FOUND"));
+                .orElseThrow(() -> {
+                    logger.error("Department with ID {} not found or is deleted", departmentId);
+                    return new ResourceNotFoundException("Department with ID " + departmentId + " not found",
+                            "ERR_DEPARTMENT_NOT_FOUND");
+                });
 
-        designation.setDepartment(department);
-        designation.setUpdatedDate(new Date());
+        int successCount = 0;
+        Long lastMappedId = null;
 
-        designation = designationRepository.save(designation);
+        for (Long designationId : designationIds) {
+            if (designationId == null) {
+                logger.warn("Skipping null designation ID in list");
+                continue;
+            }
 
-        logger.info("Designation {} successfully mapped to department {}", designationId, departmentId);
+            try {
+                Designation designation = designationRepository.findActiveUserById(designationId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Designation with ID " + designationId + " not found or deleted",
+                                "ERR_DESIGNATION_NOT_FOUND"));
 
-        return mapToResponseDto(designation);
+                designation.setDepartment(department);
+                designation.setUpdatedDate(new Date());
+
+                designationRepository.save(designation);
+                successCount++;
+                lastMappedId = designationId;
+
+                logger.debug("Successfully mapped designation ID {} to department {}", designationId, departmentId);
+
+            } catch (ResourceNotFoundException e) {
+                logger.warn("Designation ID {} not found, skipping...", designationId);
+                // Continue with other IDs instead of failing entire operation
+            }
+        }
+
+        if (successCount == 0) {
+            throw new ResourceNotFoundException("No valid designations found to map", "ERR_NO_DESIGNATIONS_MAPPED");
+        }
+
+        logger.info("Successfully mapped {} out of {} designations to department ID {}",
+                successCount, designationIds.size(), departmentId);
+
+        // Return response for the last successfully mapped designation (common pattern)
+        // If you want to return something else, you can change this logic
+        if (lastMappedId != null) {
+            Designation lastDesignation = designationRepository.findActiveUserById(lastMappedId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Last mapped designation not found", "ERR_DESIGNATION_NOT_FOUND"));
+
+            return mapToResponseDto(lastDesignation);
+        }
+
+        // Fallback (should not reach here)
+        throw new ResourceNotFoundException("Failed to map designations", "ERR_MAPPING_FAILED");
     }
 
     // Private validation method
