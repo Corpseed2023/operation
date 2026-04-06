@@ -41,10 +41,12 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -1155,8 +1157,10 @@ public class ProjectServiceImpl implements ProjectService {
                 ));
 
         if (project.isCancelled()) {
-            throw new IllegalStateException("Project is already cancelled");
-        }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Project is already cancelled"
+            );        }
 
         // 🔥 Find or create CANCELLED status
         ProjectStatus cancelledStatus = projectStatusRepository
