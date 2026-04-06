@@ -4,6 +4,9 @@ import com.doc.dto.desigantion.DesignationRequestDto;
 import com.doc.dto.desigantion.DesignationResponseDto;
 import com.doc.service.DesignationService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +43,8 @@ public class DesignationController {
         return new ResponseEntity<>(responses, HttpStatus.OK);
     }
 
+
+
     @PutMapping("/{id}")
     public ResponseEntity<DesignationResponseDto> updateDesignation(
             @PathVariable Long id,
@@ -60,4 +65,36 @@ public class DesignationController {
         DesignationResponseDto response = designationService.createMasterDesignation(requestDto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
+
+    /**
+     * Simple Create Designation API using Request Parameters
+     */
+    /**
+     * Simple Create Designation API using Request Parameters
+     */
+    @PostMapping("/createDesignationName")
+    public ResponseEntity<DesignationResponseDto> createDesignationName(
+            @RequestParam("id") @NotNull Long id,
+            @RequestParam("name") @NotBlank String name,
+            @RequestParam(value = "weightValue", required = false)
+            @PositiveOrZero Long weightValue) {
+
+        DesignationResponseDto response = designationService.createDesignationName(id, name, weightValue);
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+    /**
+     * API to map Designation with Department using Request Parameters
+     */
+    @PostMapping("/map-to-department")
+    public ResponseEntity<DesignationResponseDto> mapDesignationToDepartment(
+            @RequestBody @NotNull List<Long> designationId,
+            @RequestParam("departmentId") @NotNull Long departmentId) {
+
+        DesignationResponseDto response = designationService.mapDesignationToDepartment(designationId, departmentId);
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+
+
 }
