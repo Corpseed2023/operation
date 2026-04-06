@@ -164,6 +164,132 @@ public class DesignationServiceImpl implements DesignationService {
     }
 
     @Override
+    public DesignationResponseDto createDesignationName(Long id, String name, Long weightValue) {
+        logger.info("Creating designation with ID: {}, name: {}", id, name);
+
+        validateCreateDesignation(id, name, weightValue);
+
+        // Check for duplicate designation ID
+        if (designationRepository.existsByIdAndIsDeletedFalse(id)) {
+            logger.warn("Designation with ID {} already exists", id);
+            throw new ValidationException("Designation with ID " + id + " already exists",
+                    "ERR_DUPLICATE_DESIGNATION_ID");
+        }
+
+        Designation designation = new Designation();
+        designation.setId(id);
+        designation.setName(name.trim());
+        designation.setWeightValue(weightValue != null ? weightValue : 0L);
+        designation.setDeleted(false);
+        designation.setCreatedDate(new Date());
+        designation.setUpdatedDate(new Date());
+
+        // CRITICAL FIX: Do NOT set department to null if column doesn't allow it yet
+        // For now, we skip setting department (it will remain null in Java, but we handle DB constraint)
+        // designation.setDepartment(null);   // Removed - let it be null by default
+
+        designation = designationRepository.save(designation);
+
+        logger.info("Designation created successfully with ID: {}", id);
+
+        // Manually build response DTO (without using mapToResponseDto)
+        DesignationResponseDto responseDto = new DesignationResponseDto();
+        responseDto.setId(designation.getId());
+        responseDto.setName(designation.getName());
+        responseDto.setWeightValue(designation.getWeightValue());
+        responseDto.setCreatedDate(designation.getCreatedDate());
+        responseDto.setUpdatedDate(designation.getUpdatedDate());
+
+        // Department info will be null since we didn't assign any
+        responseDto.setDepartmentId(null);
+        responseDto.setDepartmentName(null);
+
+        return responseDto;
+    }
+
+
+    @Override
+    public DesignationResponseDto mapDesignationToDepartment(List<Long> designationIds, Long departmentId) {
+        if (designationIds == null || designationIds.isEmpty()) {
+            throw new ValidationException("Designation ID list cannot be null or empty", "ERR_EMPTY_DESIGNATION_LIST");
+        }
+
+        logger.info("Mapping {} designations to department ID: {}", designationIds.size(), departmentId);
+
+        // Validate department exists and is not deleted
+        Department department = departmentRepository.findById(departmentId)
+                .filter(d -> !d.isDeleted())
+                .orElseThrow(() -> {
+                    logger.error("Department with ID {} not found or is deleted", departmentId);
+                    return new ResourceNotFoundException("Department with ID " + departmentId + " not found",
+                            "ERR_DEPARTMENT_NOT_FOUND");
+                });
+
+        int successCount = 0;
+        Long lastMappedId = null;
+
+        for (Long designationId : designationIds) {
+            if (designationId == null) {
+                logger.warn("Skipping null designation ID in list");
+                continue;
+            }
+
+            try {
+                Designation designation = designationRepository.findActiveUserById(designationId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Designation with ID " + designationId + " not found or deleted",
+                                "ERR_DESIGNATION_NOT_FOUND"));
+
+                designation.setDepartment(department);
+                designation.setUpdatedDate(new Date());
+
+                designationRepository.save(designation);
+                successCount++;
+                lastMappedId = designationId;
+
+                logger.debug("Successfully mapped designation ID {} to department {}", designationId, departmentId);
+
+            } catch (ResourceNotFoundException e) {
+                logger.warn("Designation ID {} not found, skipping...", designationId);
+                // Continue with other IDs instead of failing entire operation
+            }
+        }
+
+        if (successCount == 0) {
+            throw new ResourceNotFoundException("No valid designations found to map", "ERR_NO_DESIGNATIONS_MAPPED");
+        }
+
+        logger.info("Successfully mapped {} out of {} designations to department ID {}",
+                successCount, designationIds.size(), departmentId);
+
+        // Return response for the last successfully mapped designation (common pattern)
+        // If you want to return something else, you can change this logic
+        if (lastMappedId != null) {
+            Designation lastDesignation = designationRepository.findActiveUserById(lastMappedId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Last mapped designation not found", "ERR_DESIGNATION_NOT_FOUND"));
+
+            return mapToResponseDto(lastDesignation);
+        }
+
+        // Fallback (should not reach here)
+        throw new ResourceNotFoundException("Failed to map designations", "ERR_MAPPING_FAILED");
+    }
+
+    // Private validation method
+    private void validateCreateDesignation(Long id, String name, Long weightValue) {
+        if (id == null) {
+            throw new ValidationException("Designation ID cannot be null", "ERR_NULL_DESIGNATION_ID");
+        }
+        if (name == null || name.trim().isEmpty()) {
+            throw new ValidationException("Designation name cannot be empty", "ERR_NULL_DESIGNATION_NAME");
+        }
+        if (weightValue != null && weightValue < 0) {
+            throw new ValidationException("Weight value must be non-negative", "ERR_INVALID_WEIGHT_VALUE");
+        }
+    }
+
+    @Override
     public DesignationResponseDto createMasterDesignation(DesignationRequestDto requestDto) {
         logger.info("Creating master designation with ID: {}, name: {}, department ID: {}",
                 requestDto.getId(), requestDto.getName(), requestDto.getDepartmentId());
