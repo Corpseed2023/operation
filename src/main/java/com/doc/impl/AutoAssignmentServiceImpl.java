@@ -47,6 +47,7 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         logger.info("\n=== AUTO-ASSIGNMENT START ===");
         logger.info("Milestone: {} | Product: {} | Project: {}", milestone.getMilestone().getName(), milestone.getProduct().getId(), project.getProjectNo());
 
+
         if (!milestone.isMandatory()) {
             logger.info("Non-mandatory milestone → SKIPPED");
             return new AssignmentResult(null, "Skipped non-mandatory");
