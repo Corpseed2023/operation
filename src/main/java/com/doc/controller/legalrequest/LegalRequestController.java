@@ -50,11 +50,10 @@ public class LegalRequestController {
     @GetMapping("/all")
     public Page<LegalRequestDto> getLegalRequests(
             @RequestParam Long userId,
-            @RequestParam String role,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        return legalRequestService.getLegalRequests(userId, role, page, size);
+        return legalRequestService.getLegalRequests(userId, page, size);
     }
 
     @GetMapping("/AllFilter")

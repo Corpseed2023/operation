@@ -1,4 +1,5 @@
 package com.doc.impl;
+import com.doc.entity.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class LegalRequestServiceImplementation implements LegalRequestService {
+
+    @Autowired
+    private  UserRepository userRepository;
 
     @Autowired
     private LegalRequestRepository legalRequestRepository;
@@ -181,15 +185,21 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         return list.stream().map(this::mapToResponse).toList();
     }
     @Override
-    public Page<LegalRequestDto> getLegalRequests(Long userId, String role, int page, int size) {
+    public Page<LegalRequestDto> getLegalRequests(Long userId, int page, int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         Page<LegalRequest> result;
 
-        if ("ADMIN".equalsIgnoreCase(role)) {
+        if (user.getUserDesignation() != null &&
+                "ADMIN".equalsIgnoreCase(user.getUserDesignation().getName())) {
+
             result = legalRequestRepository.findAll(pageable);
-        } else {
+        }
+        else {
             result = legalRequestRepository.findByAssignedTo(userId, pageable);
         }
 
