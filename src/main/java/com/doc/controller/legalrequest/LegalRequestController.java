@@ -1,19 +1,18 @@
 package com.doc.controller.legalrequest;
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
+import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
 import com.doc.em.LegalStatus;
+
 import com.doc.entity.LegalRequest.LegalRequest;
 import com.doc.service.LegalRequestService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-
 import java.time.LocalDateTime;
-import java.util.List;
 
 @RestController
-@RequestMapping("/legal-request")
+@RequestMapping("/operationService/api/legal-request")
 public class LegalRequestController {
 
     @Autowired
@@ -21,29 +20,20 @@ public class LegalRequestController {
 
     @PostMapping("/create")
     public LegalRequestDto createRequest(
-            @RequestParam Long projectId,
-            @RequestParam Long milestoneId,
-            @RequestParam double tatInDays,
-            @RequestParam(value = "files", required = false) MultipartFile[] files) throws Exception {
-
-        return legalRequestService.createRequest(
-                projectId,
-                milestoneId,
-                tatInDays,
-                files
-        );
+            @RequestBody LegalRequestDto dto
+    ) {
+        return legalRequestService.createRequest(dto);
     }
     @PatchMapping("/{id}/status")
     public LegalRequestDto updateStatus(
             @PathVariable Long id,
-            @RequestParam LegalStatus status,
-            @RequestParam(required = false) String reason
+            @RequestBody LegalStatusUpdateDto dto
     ) {
-        return legalRequestService.updateStatus(id, status, reason);
+        return legalRequestService.updateStatus(id, dto);
     }
-
     @GetMapping("/{id}")
     public LegalRequestDto getLegalRequestById(@PathVariable Long id) {
+
         return legalRequestService.getById(id);
     }
 
@@ -86,5 +76,20 @@ public class LegalRequestController {
                 page,
                 size
         );
+    }
+    @PatchMapping("/{id}/view")
+    public LegalRequestDto markAsViewed(
+            @PathVariable Long id,
+            @RequestParam Long userId
+    ) {
+        return legalRequestService.markAsViewed(id, userId);
+    }
+
+    @PatchMapping("/{id}/tat")
+    public LegalRequestDto updateTat(
+            @PathVariable Long id,
+            @RequestBody LegalRequestDto dto
+    ) {
+        return legalRequestService.updateTat(id, dto);
     }
 }

@@ -12,19 +12,27 @@ import java.util.List;
 public class LegalRequestDto {
 
     private Long id;
-    private String projectName;
-    private String milestoneName;
+    private Long projectId;
+    private Long milestoneId;
     private double tatInDays;
+    private String tatReason;
     private String status;
 
-    private String assignedToName;
-    private String createdByName;
-    private String updatedByName;
+    private Long milestoneAssigneeId;
+    private Long createdById;
+    private Long updatedById;
+
+    private Long assignedToLegal;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String statusReason;
+    private String LegalRequestTitle;
 
+    private String notes;
+
+    private Long viewedBy;
+    private LocalDateTime viewedAt;
 
     private List<String> documents;
 }

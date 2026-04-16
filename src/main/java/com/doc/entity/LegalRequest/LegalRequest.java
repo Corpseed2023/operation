@@ -5,12 +5,12 @@ import com.doc.entity.document.LegalRequestDocument;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
+import com.doc.entity.user.User;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Comment;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +37,8 @@ public class LegalRequest {
 
     @Column(name = "tat_in_days", nullable = false)
     private double tatInDays;
+    @Column(name = "tat_reason")
+    private String tatReason;
 
     private LegalStatus legalStatus;
 
@@ -57,7 +59,22 @@ public class LegalRequest {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
     @Column(name = "status_reason")
     private String statusReason;
+
+    @ManyToOne
+    @JoinColumn(name = "assigned_to_legal")
+    private User assignedToLegal;
+
+    @Column(name = "notes")
+    private String notes;
+
+    @Column(name = "Legal_Request_Title")
+    private String LegalRequestTitle;
+
+    @Column(name = "viewed_by")
+    private Long viewedBy;
+
+    @Column(name = "viewed_at")
+    private LocalDateTime viewedAt;
 }
