@@ -20,7 +20,5 @@ public class CompanyUnitRequestDto {
     private String country;
     private String pinCode;
     private String gstNo;
-    private String gstType;
-    private String gstBusinessType;
     private Date unitOpeningDate;
 }

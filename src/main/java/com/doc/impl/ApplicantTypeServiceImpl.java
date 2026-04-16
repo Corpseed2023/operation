@@ -88,4 +88,17 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
         dto.setActive(entity.isActive());
         return dto;
     }
+
+    @Override
+    public void softDeleteApplicantType(Long id) {
+        ApplicantType entity = applicantTypeRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
+
+        // Optional: Prevent deletion if it's still active and in use (you can add business check here if needed)
+        // For now, we just soft delete
+        entity.setDeleted(true);
+        entity.setActive(false);        // Best practice: also deactivate when soft deleting
+
+        applicantTypeRepository.save(entity);
+    }
 }

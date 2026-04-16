@@ -97,8 +97,6 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             );
         });
 
-
-        // Save all modified users (to persist the removal of department)
         userRepository.saveAll(deptUsers);
 
         logger.info("All users removed from department '{}'", dept.getName());
@@ -209,7 +207,6 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             }
         }
 
-        // === FINAL ROUND-ROBIN WITH TRUE OVERFLOW (PERFECT FAIRNESS) ===
         List<UserProductMap> activeUsers = eligible.stream()
                 .filter(m -> {
                     Integer bs = m.getUser().getBucketSize();
@@ -223,11 +220,11 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             return new AssignmentResult(null, "Pending manual assignment: all users disabled");
         }
 
-        // Try normal assignment (if someone has space)
         boolean anyoneHasSpace = activeUsers.stream()
                 .anyMatch(m -> isBucketAvailable(m.getUser(), milestone.getProduct().getId()));
 
         if (anyoneHasSpace) {
+
             List<UserProductMap> withSpace = activeUsers.stream()
                     .filter(m -> isBucketAvailable(m.getUser(), milestone.getProduct().getId()))
                     .collect(Collectors.toList());

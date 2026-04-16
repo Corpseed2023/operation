@@ -257,8 +257,6 @@ public class CompanyServiceImpl implements CompanyService {
         unit.setCountry(dto.getCountry() != null ? dto.getCountry().trim() : "India");
         unit.setPinCode(dto.getPinCode());
         unit.setGstNo(dto.getGstNo() != null ? dto.getGstNo().trim() : null);
-        unit.setGstType(dto.getGstType());
-        unit.setGstBusinessType(dto.getGstBusinessType());
     }
 
     private void mapContactRequestToEntity(Contact contact, ContactRequestDto dto) {

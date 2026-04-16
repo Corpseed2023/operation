@@ -56,4 +56,11 @@ public class ApplicantTypeController {
         List<ApplicantTypeResponseDto> result = applicantTypeService.getApplicantTypesPaginated(page, size);
         return ResponseEntity.ok(result);
     }
+
+    @Operation(summary = "Soft delete an applicant type")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> softDeleteApplicantType(@PathVariable Long id) {
+        applicantTypeService.softDeleteApplicantType(id);
+        return ResponseEntity.noContent().build();
+    }
 }

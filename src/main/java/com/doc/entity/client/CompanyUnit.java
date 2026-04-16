@@ -50,15 +50,6 @@ public class CompanyUnit {
     @Comment("GSTIN of this specific unit / branch")
     private String gstNo;
 
-    @Column(name = "gst_type", length = 30)
-    @Comment("GST registration type for this unit")
-    private String gstType;
-
-    @Column(name = "gst_business_type", length = 30)
-    @Comment("Business constitution under GST for this unit")
-    private String gstBusinessType;
-
-
     @Column(nullable = false, length = 50)
     @Comment("Current status of the unit")
     private String status = "Active";
