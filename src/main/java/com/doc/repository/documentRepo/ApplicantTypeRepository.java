@@ -17,11 +17,11 @@ public interface ApplicantTypeRepository extends JpaRepository<ApplicantType, Lo
 
     Optional<ApplicantType> findByIdAndIsDeletedFalse(Long id);
 
-    // NEW: For pagination - only non-deleted records
     Page<ApplicantType> findByIsDeletedFalse(Pageable pageable);
 
-    // Optional: You can keep this if you need it elsewhere
     Optional<ApplicantType> findByIdAndIsActiveTrueAndIsDeletedFalse(Long id);
+    Optional<ApplicantType> findByNameIgnoreCaseAndIsDeletedTrue(String name);
+
 
 
 }

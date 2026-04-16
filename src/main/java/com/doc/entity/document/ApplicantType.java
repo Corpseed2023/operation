@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 @Entity
 @Table(name = "applicant_type")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class ApplicantType {
 
     @Id
