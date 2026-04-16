@@ -2,8 +2,6 @@ package com.doc.controller.legalrequest;
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
 import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
 import com.doc.em.LegalStatus;
-
-import com.doc.entity.LegalRequest.LegalRequest;
 import com.doc.service.LegalRequestService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -35,15 +33,6 @@ public class LegalRequestController {
     public LegalRequestDto getLegalRequestById(@PathVariable Long id) {
 
         return legalRequestService.getById(id);
-    }
-
-    @GetMapping("/all")
-    public Page<LegalRequestDto> getLegalRequests(
-            @RequestParam Long userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        return legalRequestService.getLegalRequests(userId, page, size);
     }
 
     @GetMapping("/AllFilter")
@@ -85,11 +74,4 @@ public class LegalRequestController {
         return legalRequestService.markAsViewed(id, userId);
     }
 
-    @PatchMapping("/{id}/tat")
-    public LegalRequestDto updateTat(
-            @PathVariable Long id,
-            @RequestBody LegalRequestDto dto
-    ) {
-        return legalRequestService.updateTat(id, dto);
-    }
 }
