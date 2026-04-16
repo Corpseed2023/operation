@@ -52,6 +52,7 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         request.setProject(project);
         request.setProjectMilestoneAssignment(milestone);
 //        request.setTatInDays(dto.getTatInDays());
+        request.setDocuments(request.getDocuments());
 
         if (dto.getAssignedToLegal() != null) {
             User user = userRepository.findById(dto.getAssignedToLegal())
