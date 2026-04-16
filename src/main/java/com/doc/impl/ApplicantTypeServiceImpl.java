@@ -67,19 +67,18 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
 
     @Override
     public List<ApplicantTypeResponseDto> getApplicantTypesPaginated(int page, int size) {
-        // Page starts from 1 → convert to 0-based for JPA
         page = Math.max(page, 1);
         size = size > 0 ? size : 10;
 
         PageRequest pageRequest = PageRequest.of(page - 1, size, Sort.by("name").ascending());
 
-        return applicantTypeRepository.findAll(pageRequest)
+        // Use custom query method to exclude soft-deleted records
+        return applicantTypeRepository.findByIsDeletedFalse(pageRequest)
                 .getContent()
                 .stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
-
     private ApplicantTypeResponseDto mapToResponseDto(ApplicantType entity) {
         ApplicantTypeResponseDto dto = new ApplicantTypeResponseDto();
         dto.setId(entity.getId());
@@ -94,11 +93,10 @@ public class ApplicantTypeServiceImpl implements ApplicantTypeService {
         ApplicantType entity = applicantTypeRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Applicant type not found", "ERR_APPLICANT_TYPE_NOT_FOUND"));
 
-        // Optional: Prevent deletion if it's still active and in use (you can add business check here if needed)
-        // For now, we just soft delete
         entity.setDeleted(true);
-        entity.setActive(false);        // Best practice: also deactivate when soft deleting
+        entity.setActive(false);
 
         applicantTypeRepository.save(entity);
     }
+
 }

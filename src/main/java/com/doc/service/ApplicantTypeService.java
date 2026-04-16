@@ -15,5 +15,5 @@ public interface ApplicantTypeService {
 
     List<ApplicantTypeResponseDto> getApplicantTypesPaginated(int page, int size);
 
-    void softDeleteApplicantType(Long id);
+       void softDeleteApplicantType(Long id);
 }
