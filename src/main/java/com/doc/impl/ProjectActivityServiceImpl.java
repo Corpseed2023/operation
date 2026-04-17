@@ -511,6 +511,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         dto.setApprovalStatus(expense.getApprovalStatus());
         dto.setApproved(expense.isApproved());
         dto.setApprovedByUserId(expense.getApprovedByUserId());
+        dto.setApprovedByUserName(expense.getApprovedByUserName()) ;
         dto.setCreatedByUserId(expense.getCreatedByUserId());
         dto.setCreatedByUserName(expense.getCreatedByUserName());
 
@@ -534,11 +535,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         List<ProjectExpense> expenses;
 
-        if (approvalStatus == null || approvalStatus == ApprovalStatus.ALL) {
-            // Fetch ALL expenses ordered by expense date descending
-            expenses = expenseRepository.findAllExpensesOrderByExpenseDateDesc();
+        if (approvalStatus == null) {
+            expenses = expenseRepository.findAllByOrderByExpenseDateDesc();
         } else {
-            // Fetch expenses by specific approval status
             expenses = expenseRepository.findByApprovalStatusOrderByExpenseDateDesc(approvalStatus);
         }
 
