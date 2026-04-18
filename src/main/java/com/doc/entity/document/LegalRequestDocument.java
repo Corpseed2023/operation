@@ -1,6 +1,6 @@
 package com.doc.entity.document;
 
-import com.doc.entity.LegalRequest.LegalRequest;
+import com.doc.entity.legalrequest.LegalRequest;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -25,6 +25,7 @@ public class LegalRequestDocument {
     private long fileSize;
     private String uuid;
     private LocalDateTime uploadedAt;
+
     @ManyToOne
     @JoinColumn(name = "legal_request_id")
     private LegalRequest legalRequest;

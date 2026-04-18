@@ -3,9 +3,8 @@ package com.doc.service;
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
 import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
 import com.doc.em.LegalStatus;
-import com.doc.entity.LegalRequest.LegalRequest;
+import com.doc.entity.legalrequest.LegalRequest;
 
-import com.doc.entity.user.User;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
@@ -14,8 +13,6 @@ import java.time.LocalDateTime;
 public interface LegalRequestService {
 
     LegalRequestDto createRequest(LegalRequestDto dto);
-
-
 
     LegalRequestDto mapToResponse(LegalRequest request);
 

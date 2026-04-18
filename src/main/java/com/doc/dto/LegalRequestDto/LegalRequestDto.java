@@ -14,7 +14,7 @@ public class LegalRequestDto {
     private Long id;
     private Long projectId;
     private Long milestoneId;
-    private double tatInDays;
+    private Double tatInDays;
     private String tatReason;
     private String status;
 
