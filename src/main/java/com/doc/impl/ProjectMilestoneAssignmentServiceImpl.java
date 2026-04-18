@@ -19,6 +19,7 @@ import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.service.AutoAssignmentService;
 import com.doc.service.ProjectService;
 import com.doc.service.ProjectMilestoneAssignmentService;
+import com.doc.validation.MilestoneValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Autowired private MilestoneStatusRepository milestoneStatusRepository;
     @Autowired private ProjectStatusRepository projectStatusRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
+    @Autowired private MilestoneValidator milestoneValidator;
 
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
@@ -93,6 +95,27 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 });
 
         validateMilestoneStatusTransition(assignment, newStatus, updateDto.getStatusReason());
+        // 🔒 Business validation before marking COMPLETED
+        if ("COMPLETED".equals(newStatus.getName())) {
+
+            String milestoneName = assignment
+                    .getProductMilestoneMap()
+                    .getMilestone()
+                    .getName();
+
+            if ("Documentation".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateDocumentMilestone(assignment);
+            }
+
+            if ("Legal Verfication".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateLegalMilestone(assignment);
+            }
+            if ("Filling".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateFillingMilestone(assignment);
+            }
+
+
+        }
 
         if ("COMPLETED".equals(newStatus.getName())) {
             // Update performance & unassign old user
@@ -355,6 +378,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         String current = assignment.getStatus().getName();
         String next = newStatus.getName();
 
+        System.out.println("current: "+current);
+        System.out.println("next: "+next);
+
         if (current.equals(next)) {
             throw new ValidationException("Milestone is already in status: " + next, "SAME_STATUS");
         }
@@ -386,10 +412,15 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     throw new ValidationException("From REJECTED → only NEW allowed", "INVALID_TRANSITION");
                 }
             }
+            case "REWORK" -> {
+                if (!"COMPLETED".equals(next)) {
+                    throw new ValidationException("From REJECTED → only COMPLETED allowed", "INVALID_TRANSITION");
+                }
+            }
             case "COMPLETED" -> throw new ValidationException("Cannot change status from COMPLETED", "COMPLETED_FINAL");
             default -> throw new ValidationException("Invalid current status: " + current, "INVALID_CURRENT_STATUS");
         }
-        System.out.println("assignment.isVisible(): "+assignment.isVisible());
+
         if (!assignment.isVisible() && !"NEW".equals(next)) {
             throw new ValidationException("Milestone must be visible to change status", "MILESTONE_NOT_VISIBLE");
         }

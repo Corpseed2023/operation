@@ -26,12 +26,12 @@ public class ProjectMilestoneAssignmentController {
             @ApiResponse(responseCode = "404", description = "Milestone assignment or user not found")
     })
     @PutMapping("/{assignmentId}/status")
-    public ResponseEntity<Void> updateMilestoneStatus(
+    public ResponseEntity<String> updateMilestoneStatus(
             @PathVariable Long assignmentId,
             @Valid @RequestBody UpdateMilestoneStatusDto updateDto) {
         updateDto.setAssignmentId(assignmentId);
         projectMilestoneAssignmentService.updateMilestoneStatus(updateDto);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok("Milestone status updated successfully");
     }
 
     @Operation(summary = "Manually reassign a project milestone to a new user by manager")
@@ -48,4 +48,5 @@ public class ProjectMilestoneAssignmentController {
         ReassignMilestoneResponseDto response = projectMilestoneAssignmentService.reassignMilestone(reassignDto);
         return ResponseEntity.ok(response);
     }
+
 }
