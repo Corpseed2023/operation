@@ -98,6 +98,7 @@ public class DocumentationApplication {
 		status.setDescription(description);
 
 		repo.save(status);
+
 	}
 
 	private void createProjectStatus(ProjectStatusRepository repo, Long id, String name, String description) {
