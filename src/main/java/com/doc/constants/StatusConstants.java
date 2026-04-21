@@ -9,6 +9,7 @@ import java.util.Set;
  */
 public final class StatusConstants {
 
+
     private StatusConstants() {} // Prevent instantiation
 
     // ====================== PROJECT STATUSES ======================
