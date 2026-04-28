@@ -91,8 +91,19 @@ public class DesignationController {
     public ResponseEntity<DesignationResponseDto> mapDesignationToDepartment(
             @RequestBody Map<String, Object> request) {
 
-        List<Long> designationIds = (List<Long>) request.get("designationIds");
-        Long departmentId = Long.valueOf(request.get("departmentId").toString());
+        Object departmentIdObj = request.get("departmentId");
+        Object designationIdsObj = request.get("designationIds");
+
+        if (departmentIdObj == null || designationIdsObj == null) {
+            throw new IllegalArgumentException("departmentId and designationIds are required");
+        }
+
+        Long departmentId = Long.valueOf(departmentIdObj.toString());
+
+        List<Long> designationIds = ((List<?>) designationIdsObj).stream()
+                .map(Object::toString)
+                .map(Long::valueOf)
+                .toList();
 
         DesignationResponseDto response =
                 designationService.mapDesignationToDepartment(designationIds, departmentId);
