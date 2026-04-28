@@ -14,6 +14,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/operationService/api/designations")
@@ -88,11 +89,15 @@ public class DesignationController {
      */
     @PostMapping("/map-to-department")
     public ResponseEntity<DesignationResponseDto> mapDesignationToDepartment(
-            @RequestBody @NotNull List<Long> designationId,
-            @RequestParam("departmentId") @NotNull Long departmentId) {
+            @RequestBody Map<String, Object> request) {
 
-        DesignationResponseDto response = designationService.mapDesignationToDepartment(designationId, departmentId);
-        return new ResponseEntity<>(response, HttpStatus.OK);
+        List<Long> designationIds = (List<Long>) request.get("designationIds");
+        Long departmentId = Long.valueOf(request.get("departmentId").toString());
+
+        DesignationResponseDto response =
+                designationService.mapDesignationToDepartment(designationIds, departmentId);
+
+        return ResponseEntity.ok(response);
     }
 
 
