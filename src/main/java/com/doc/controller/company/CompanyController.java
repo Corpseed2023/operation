@@ -37,5 +37,7 @@ public class CompanyController {
         CompanyResponseDto dto =  companyService.getCompanyById(companyId);
         return ResponseEntity.ok(dto);
     }
+
+
 }
 

@@ -38,9 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -239,11 +237,12 @@ public class ProjectServiceImpl implements ProjectService {
         boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
         boolean isOpHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
 
-        PageRequest pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, "createdDate"));
+
         Page<Project> projectPage;
 
         if (isAdmin || isOpHead) {
-            // Admins & Op Heads see ALL projects
             projectPage = projectRepository.findByIsDeletedFalse(pageable);
         } else {
             List<Long> candidateUserIds = new ArrayList<>(List.of(userId));
@@ -252,18 +251,15 @@ public class ProjectServiceImpl implements ProjectService {
                 candidateUserIds.addAll(subordinates.stream().map(User::getId).toList());
             }
 
-            // Step 1: Get projects where this user (or team) is assigned
             projectPage = projectRepository.findByAssignedUserIds(candidateUserIds, pageable);
 
-            // Step 2: FOR REGULAR USERS ONLY - filter out projects with ZERO visible milestones
+            // For regular users - filter projects with no visible milestones
             if (!user.isManagerFlag()) {
                 List<Project> filteredProjects = new ArrayList<>();
 
                 for (Project project : projectPage.getContent()) {
-                    // Recalculate visibility (important!)
                     updateMilestoneVisibilities(project, userId);
 
-                    // Check if THIS user has at least ONE visible milestone
                     boolean hasVisibleMilestone = projectMilestoneAssignmentRepository
                             .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(project.getId(), userId)
                             .size() > 0;
@@ -271,16 +267,21 @@ public class ProjectServiceImpl implements ProjectService {
                     if (hasVisibleMilestone) {
                         filteredProjects.add(project);
                     }
-                    // else → project is hidden from this regular user
                 }
 
-                // Rebuild page with filtered content (preserve pagination info best-effort)
+                // Re-sort filtered list to maintain newest first
+                filteredProjects.sort(Comparator.comparing(Project::getCreatedDate, Comparator.reverseOrder()));
+
                 projectPage = new PageImpl<>(filteredProjects, pageable, filteredProjects.size());
             }
         }
 
         return projectPage.map(this::mapToResponseDto).getContent();
     }
+
+
+
+
 
     @Override
     public long getProjectCount(Long userId) {
