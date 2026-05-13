@@ -268,7 +268,6 @@ public class CompanyServiceImpl implements CompanyService {
         contact.setContactNo(dto.getContactNo());
         contact.setWhatsappNo(dto.getWhatsappNo());
         contact.setClientDesignation(dto.getDesignation());
-        // Add more mappings as per your DTO fields (remarks, department, etc.)
     }
 
     // ──────────────────────────────────────────────
