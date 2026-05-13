@@ -52,4 +52,6 @@ public interface ProductMilestoneMapService {
      * @return a list of product-milestone mappings
      */
     List<ProductMilestoneMapResponseDto> getProductMilestoneMapsByUserAndProduct(Long userId, Long productId);
+
+    List<ProductMilestoneMapResponseDto> getMilestonesByProductId(Long productId);
 }

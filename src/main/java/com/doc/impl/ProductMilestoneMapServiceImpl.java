@@ -178,6 +178,25 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public List<ProductMilestoneMapResponseDto> getMilestonesByProductId(Long productId) {
+        logger.info("Fetching milestones with payment percentages for product ID: {}", productId);
+
+        // Optional: Validate product exists and is active
+        productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Active product not found with ID: " + productId));
+
+        List<ProductMilestoneMap> mappings = productMilestoneMapRepository.findByProductId(productId);
+
+        // Sort by step order (important for workflow)
+        mappings.sort((a, b) -> Integer.compare(a.getOrder(), b.getOrder()));
+
+        return mappings.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+
     private ProductMilestoneMapResponseDto mapToResponseDto(ProductMilestoneMap mapping) {
         ProductMilestoneMapResponseDto dto = new ProductMilestoneMapResponseDto();
         dto.setId(mapping.getId());

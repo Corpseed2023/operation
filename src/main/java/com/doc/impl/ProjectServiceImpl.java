@@ -105,15 +105,13 @@ public class ProjectServiceImpl implements ProjectService {
             throw new ValidationException("Estimate number already exists", "ERR_DUPLICATE_ESTIMATE_NO");
         }
 
-        // Fetch entities
         Product product = productRepository.findActiveUserById(requestDto.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found", "ERR_PRODUCT_NOT_FOUND"));
-// Fetch active company (not deleted)
         Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found or deleted", "ERR_COMPANY_NOT_FOUND"));
 
         CompanyUnit unit = null;
-        if (requestDto.getUnitId() != null) {  // Optional, but required in multi-unit flow
+        if (requestDto.getUnitId() != null) {
             unit = companyUnitRepository.findByIdAndCompanyIdAndIsDeletedFalse(requestDto.getUnitId(), requestDto.getCompanyId())
                     .orElseThrow(() -> new ResourceNotFoundException("Unit not found or doesn't belong to company", "ERR_UNIT_NOT_FOUND"));
         }

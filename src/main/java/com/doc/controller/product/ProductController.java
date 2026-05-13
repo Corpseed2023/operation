@@ -67,7 +67,7 @@ public class ProductController {
     public ResponseEntity<ProductResponseDto> updateProduct(
             @PathVariable Long id,
             @Valid @RequestBody ProductUpdateDto updateDto,
-            @RequestParam Long userId) {   // ← same pattern as getAllProducts
+            @RequestParam Long userId) {
 
         logger.info("Received update request for product ID: {} by user: {}", id, userId);
 

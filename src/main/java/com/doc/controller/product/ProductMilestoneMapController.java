@@ -62,6 +62,8 @@ public class ProductMilestoneMapController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
+
+
     /**
      * Deletes a product-milestone mapping by ID.
      *
@@ -88,4 +90,20 @@ public class ProductMilestoneMapController {
         List<ProductMilestoneMapResponseDto> response = productMilestoneMapService.getProductMilestoneMapsByUserAndProduct(userId, productId);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
+
+    /**
+     * NEW ENDPOINT: Get all milestones with payment percentage for a product
+     * Example: EPR Plastic → Documentation(20%), Filing(30%), Licensing(30%), etc.
+     */
+    @GetMapping("/product/{productId}")
+    public ResponseEntity<List<ProductMilestoneMapResponseDto>> getMilestonesByProductId(
+            @PathVariable Long productId) {
+
+        List<ProductMilestoneMapResponseDto> response =
+                productMilestoneMapService.getMilestonesByProductId(productId);
+
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+
 }
