@@ -228,7 +228,7 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size) {
+    public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size, List<String> statuses) {
         User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
@@ -240,8 +240,13 @@ public class ProjectServiceImpl implements ProjectService {
 
         Page<Project> projectPage;
 
+        // Normalize statuses (trim + uppercase)
+        List<String> normalizedStatuses = statuses.stream()
+                .map(s -> s.trim().toUpperCase())
+                .collect(Collectors.toList());
+
         if (isAdmin || isOpHead) {
-            projectPage = projectRepository.findByIsDeletedFalse(pageable);
+            projectPage = projectRepository.findByIsDeletedFalseAndStatusIn(normalizedStatuses, pageable);
         } else {
             List<Long> candidateUserIds = new ArrayList<>(List.of(userId));
             if (user.isManagerFlag()) {
@@ -249,7 +254,7 @@ public class ProjectServiceImpl implements ProjectService {
                 candidateUserIds.addAll(subordinates.stream().map(User::getId).toList());
             }
 
-            projectPage = projectRepository.findByAssignedUserIds(candidateUserIds, pageable);
+            projectPage = projectRepository.findByAssignedUserIdsAndStatusIn(candidateUserIds, normalizedStatuses, pageable);
 
             // For regular users - filter projects with no visible milestones
             if (!user.isManagerFlag()) {
@@ -267,16 +272,13 @@ public class ProjectServiceImpl implements ProjectService {
                     }
                 }
 
-                // Re-sort filtered list to maintain newest first
                 filteredProjects.sort(Comparator.comparing(Project::getCreatedDate, Comparator.reverseOrder()));
-
                 projectPage = new PageImpl<>(filteredProjects, pageable, filteredProjects.size());
             }
         }
 
         return projectPage.map(this::mapToResponseDto).getContent();
     }
-
 
 
 

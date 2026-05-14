@@ -14,7 +14,7 @@ public interface ProjectService {
 
     ProjectResponseDto createProject(ProjectRequestDto requestDto);
 
-    List<ProjectResponseDto> getAllProjects(Long userId, int page, int size);
+    List<ProjectResponseDto> getAllProjects(Long userId, int page, int size, List<String> statuses);
 
     long getProjectCount(Long userId);
 
