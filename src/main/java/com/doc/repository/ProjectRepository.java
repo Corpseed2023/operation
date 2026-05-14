@@ -179,14 +179,19 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     /**
      * Find non-deleted projects with given statuses (for Admin / Op Head).
+     * Supports CANCELLED status.
      */
-    @Query("SELECT p FROM Project p WHERE p.isCancelled = false AND p.isDeleted = false AND p.status.name IN :statuses")
+    @Query("SELECT p FROM Project p " +
+            "WHERE p.isDeleted = false " +
+            "AND p.status.name IN :statuses")
     Page<Project> findByIsDeletedFalseAndStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
 
     /**
      * Find non-deleted projects assigned to users with given statuses.
+     * Supports CANCELLED status.
      */
-    @Query("SELECT DISTINCT p FROM Project p WHERE p.isCancelled = false AND p.isDeleted = false " +
+    @Query("SELECT DISTINCT p FROM Project p " +
+            "WHERE p.isDeleted = false " +
             "AND p.status.name IN :statuses " +
             "AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a " +
             "WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
