@@ -59,16 +59,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Page<Project> findByIsDeletedFalse(Pageable pageable);
 
     /**
-     * Retrieves non-deleted projects assigned to specific users (based on milestone assignments), with pagination.
-     *
-     * @param userIds the list of user IDs
-     * @param pageable pagination information
-     * @return a {@link Page} of non-deleted projects assigned to the given users
-     */
-    @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND  p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
-    Page<Project> findByAssignedUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
-
-    /**
      * Finds projects by company name (case-insensitive partial match) and not deleted.
      *
      * @param companyName the company name to search
@@ -185,5 +175,28 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     long countBySalesPersonIdAndIsDeletedFalseAndIsCancelledFalse(Long salesPersonId);
 
     long countBySalesPersonIdAndStatus_NameAndIsDeletedFalseAndIsCancelledFalse(Long salesPersonId, String statusName);
+
+
+    /**
+     * Find non-deleted projects with given statuses (for Admin / Op Head).
+     * Supports CANCELLED status.
+     */
+    @Query("SELECT p FROM Project p " +
+            "WHERE p.isDeleted = false " +
+            "AND p.status.name IN :statuses")
+    Page<Project> findByIsDeletedFalseAndStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
+
+    /**
+     * Find non-deleted projects assigned to users with given statuses.
+     * Supports CANCELLED status.
+     */
+    @Query("SELECT DISTINCT p FROM Project p " +
+            "WHERE p.isDeleted = false " +
+            "AND p.status.name IN :statuses " +
+            "AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a " +
+            "WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
+    Page<Project> findByAssignedUserIdsAndStatusIn(@Param("userIds") List<Long> userIds,
+                                                   @Param("statuses") List<String> statuses,
+                                                   Pageable pageable);
 
 }

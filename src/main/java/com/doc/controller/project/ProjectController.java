@@ -50,19 +50,28 @@ public class ProjectController {
 
     @GetMapping
     @Operation(summary = "Get all projects with pagination - hides projects for regular users if no visible milestone")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Projects retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid parameters")
+    })
     public ResponseEntity<List<ProjectResponseDto>> getAllProjects(
             @RequestParam Long userId,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) List<String> statuses) {
 
         if (page < 1 || size < 1) {
             throw new IllegalArgumentException("Invalid pagination parameters");
         }
 
-        List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page - 1, size);
+        // Default to OPEN if no status is provided
+        if (statuses == null || statuses.isEmpty()) {
+            statuses = List.of("OPEN");
+        }
+
+        List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page - 1, size, statuses);
         return ResponseEntity.ok(responses);
     }
-
 
     @GetMapping("/count")
     @Operation(summary = "Get total count of searched projects")
