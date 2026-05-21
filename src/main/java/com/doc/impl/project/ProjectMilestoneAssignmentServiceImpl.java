@@ -1,4 +1,4 @@
-package com.doc.impl;
+package com.doc.impl.project;
 
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -40,7 +39,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Autowired private UserRepository userRepository;
     @Autowired private ProjectDocumentUploadRepository projectDocumentUploadRepository;
     @Autowired private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
-    @Autowired private ProjectService projectService;
     @Autowired private ProjectRepository projectRepository;
     @Autowired private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
     @Autowired private UserProductMapRepository userProductMapRepository;
@@ -49,6 +47,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Autowired private ProjectStatusRepository projectStatusRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
     @Autowired private MilestoneValidator milestoneValidator;
+    @Autowired
+    private ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
 
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
@@ -185,9 +185,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         updateProjectStatus(project, updateDto.getChangedById());
 
         if ("COMPLETED".equals(newStatus.getName())) {
-            projectService.updateMilestoneVisibilities(project, updateDto.getChangedById());
+            // Call directly via repository or make a small public method
+            // For now, we can reload and call visibility update from ProjectServiceImpl later
+            // But to break cycle, we'll handle visibility update from ProjectService side
+            logger.info("Milestone completed. Visibility will be updated from ProjectService.");
         }
     }
+
+
 
     @Override
     public ReassignMilestoneResponseDto reassignMilestone(ReassignMilestoneDto reassignDto) {

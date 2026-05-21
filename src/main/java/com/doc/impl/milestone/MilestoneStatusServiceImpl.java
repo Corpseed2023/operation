@@ -1,4 +1,4 @@
-package com.doc.impl;
+package com.doc.impl.milestone;
 
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.repository.MilestoneStatusRepository;

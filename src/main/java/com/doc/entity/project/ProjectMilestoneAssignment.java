@@ -1,6 +1,5 @@
 package com.doc.entity.project;
 
-import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.product.ProductMilestoneMap;
@@ -12,9 +11,7 @@ import lombok.Setter;
 import org.hibernate.annotations.Comment;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 
 @Entity
 @Table(name = "project_milestone_assignment", indexes = {
@@ -57,7 +54,7 @@ public class ProjectMilestoneAssignment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status_id", nullable = false)
     @Comment("Milestone status: Reference to MilestoneStatus entity")
-    private MilestoneStatus status;  // Changed from enum to entity reference
+    private MilestoneStatus status;
 
     @Column(name = "status_reason", length = 1000)
     @Comment("Reason for current status (required for ON_HOLD, REJECTED, COMPLETED)")

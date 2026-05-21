@@ -1,4 +1,4 @@
-package com.doc.impl;
+package com.doc.impl.project;
 
 import com.doc.dto.project.ProjectCountResponseDto;
 import com.doc.dto.project.ProjectResponseDto;

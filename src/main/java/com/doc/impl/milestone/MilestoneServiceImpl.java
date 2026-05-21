@@ -1,4 +1,4 @@
-package com.doc.impl;
+package com.doc.impl.milestone;
 
 import com.doc.dto.department.DepartmentResponseDto;
 import com.doc.dto.milestone.MilestoneRequestDto;

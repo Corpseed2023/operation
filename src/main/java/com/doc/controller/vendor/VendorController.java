@@ -1,0 +1,79 @@
+package com.doc.controller.vendor;
+
+import com.doc.dto.vendor.VendorRequestDto;
+import com.doc.dto.vendor.VendorResponseDto;
+import com.doc.service.vendor.VendorService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/operationService/api/vendors")
+public class VendorController {
+
+    @Autowired
+    private VendorService vendorService;
+
+    @PostMapping
+    @Operation(summary = "Create new Vendor")
+    public ResponseEntity<VendorResponseDto> createVendor(
+            @RequestParam @Parameter(description = "User ID who is creating this vendor (for audit)") Long userId,
+            @RequestBody VendorRequestDto dto) {
+
+        dto.setCreatedBy(userId);   // Set createdBy from request param
+        VendorResponseDto response = vendorService.createVendor(dto);
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Update Vendor")
+    public ResponseEntity<VendorResponseDto> updateVendor(
+            @PathVariable Long id,
+            @RequestParam @Parameter(description = "User ID who is updating this vendor (for audit)") Long userId,
+            @RequestBody VendorRequestDto dto) {
+
+        dto.setUpdatedBy(userId);   // Set updatedBy from request param
+        VendorResponseDto response = vendorService.updateVendor(id, dto);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get Vendor by ID")
+    public ResponseEntity<VendorResponseDto> getVendorById(@PathVariable Long id) {
+        return ResponseEntity.ok(vendorService.getVendorById(id));
+    }
+
+    @GetMapping
+    @Operation(summary = "Get all vendors with pagination and search")
+    public ResponseEntity<Page<VendorResponseDto>> getAllVendors(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
+
+        Page<VendorResponseDto> vendors = vendorService.getAllVendors(page, size, keyword);
+        return ResponseEntity.ok(vendors);
+    }
+
+    @GetMapping("/by-product/{productId}")
+    @Operation(summary = "Get vendors who can handle specific product (used in Procurement)")
+    public ResponseEntity<List<VendorResponseDto>> getVendorsByProduct(@PathVariable Long productId) {
+        return ResponseEntity.ok(vendorService.getVendorsByProduct(productId));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Soft delete vendor")
+    public ResponseEntity<Void> deleteVendor(
+            @PathVariable Long id,
+            @RequestParam @Parameter(description = "User ID who is deleting this vendor") Long userId) {
+
+        vendorService.deleteVendor(id);
+        return ResponseEntity.noContent().build();
+    }
+}
