@@ -30,16 +30,12 @@ public interface ProjectService {
 
     void deleteProject(Long id);
 
-
     ProjectHistoryResponseDto getProjectHistory(Long projectId);
 
     // In ProjectService.java
     MilestoneHistoryResponseDto getMilestoneHistory(Long projectId, Long milestoneId, Long requestingUserId);
 
-
     void setApplicantType(Long projectId, Long applicantId);
-
-
 
     List<DocumentChecklistDTO> getDocumentChecklist(Long projectId);
 

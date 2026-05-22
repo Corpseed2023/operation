@@ -38,4 +38,8 @@ public class Milestone {
     @ManyToMany(mappedBy = "milestones", fetch = FetchType.LAZY)
     @Comment("Departments associated with this milestone")
     private List<Department> departments;
+
+
+
+
 }

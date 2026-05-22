@@ -1,4 +1,4 @@
-package com.doc.impl;
+package com.doc.impl.project;
 
 import com.doc.dto.project.DocumentResponseDto;
 import com.doc.dto.project.ProjectDocumentStatusUpdateDto;
