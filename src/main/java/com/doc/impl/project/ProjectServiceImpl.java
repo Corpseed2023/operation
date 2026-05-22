@@ -31,6 +31,8 @@ import com.doc.repository.documentRepo.ApplicantTypeRepository;
 import com.doc.repository.documentRepo.DocumentStatusRepository;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
+import com.doc.repository.vendor.VendorRepository;
+import com.doc.entity.vendor.Vendor;
 import com.doc.service.AutoAssignmentService;
 import com.doc.service.ProjectMilestoneAssignmentService;
 import com.doc.service.ProjectService;
@@ -79,6 +81,8 @@ public class ProjectServiceImpl implements ProjectService {
     @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
     @Autowired private AutoAssignmentService autoAssignmentService;
     @Autowired private ProjectRequestValidator projectRequestValidator;
+    @Autowired
+    private VendorRepository vendorRepository;
 
     @Autowired private CompanyUnitRepository companyUnitRepository;
 
@@ -575,39 +579,100 @@ public class ProjectServiceImpl implements ProjectService {
 
 
     /**
-     * Creates ProcurementMilestoneAssignment when Procurement milestone becomes visible
+     * Creates ProcurementMilestoneAssignment when Procurement milestone becomes visible.
+     *
+     * Flow:
+     * 1. If milestone is not Procurement -> do nothing.
+     * 2. If procurement assignment already exists -> do nothing.
+     * 3. Create procurement assignment.
+     * 4. Fetch vendors by project product/service.
+     * 5. If vendors exist -> status VENDOR_SHORTLISTED.
+     * 6. If vendors do not exist -> status VENDOR_REQUIRED.
      */
     private void handleProcurementMilestoneCreation(ProjectMilestoneAssignment generalAssignment, Long userId) {
+
+        if (generalAssignment == null
+                || generalAssignment.getMilestone() == null
+                || generalAssignment.getProject() == null) {
+            return;
+        }
 
         if (!"Procurement".equalsIgnoreCase(generalAssignment.getMilestone().getName())) {
             return;
         }
 
-        // Avoid duplicate records
-        if (procurementMilestoneAssignmentRepository.existsByProjectIdAndMilestoneId(
-                generalAssignment.getProject().getId(), generalAssignment.getMilestone().getId())) {
+        Long projectId = generalAssignment.getProject().getId();
+        Long milestoneId = generalAssignment.getMilestone().getId();
+
+        // Avoid duplicate procurement assignment
+        boolean alreadyExists = procurementMilestoneAssignmentRepository
+                .existsByProjectIdAndMilestoneId(projectId, milestoneId);
+
+        if (alreadyExists) {
             return;
         }
 
         ProcurementMilestoneAssignment procurement = new ProcurementMilestoneAssignment();
+
         procurement.setProject(generalAssignment.getProject());
         procurement.setMilestone(generalAssignment.getMilestone());
         procurement.setProductMilestoneMap(generalAssignment.getProductMilestoneMap());
         procurement.setAssignedTo(generalAssignment.getAssignedUser());
-        procurement.setStatus(ProcurementStatus.DRAFT);
+
         procurement.setCreatedBy(userId);
         procurement.setUpdatedBy(userId);
         procurement.setCreatedDate(new Date());
         procurement.setUpdatedDate(new Date());
         procurement.setDeleted(false);
 
+        Long productId = generalAssignment.getProject().getProduct() != null
+                ? generalAssignment.getProject().getProduct().getId()
+                : null;
+
+        if (productId == null) {
+            procurement.setStatus(ProcurementStatus.VENDOR_REQUIRED);
+
+            procurementMilestoneAssignmentRepository.save(procurement);
+
+            logger.warn(
+                    "ProcurementMilestoneAssignment created with VENDOR_REQUIRED because project has no product. projectId={}",
+                    projectId
+            );
+
+            return;
+        }
+
+        List<Vendor> vendors = vendorRepository.findVendorsByProductId(productId);
+
+        if (vendors == null || vendors.isEmpty()) {
+            procurement.setStatus(ProcurementStatus.VENDOR_REQUIRED);
+
+            logger.warn(
+                    "No vendor available for projectId={}, productId={}. Please create vendor and map it with this service.",
+                    projectId,
+                    productId
+            );
+        } else {
+            procurement.setStatus(ProcurementStatus.VENDOR_SHORTLISTED);
+            procurement.setVendorShortlistedDate(new Date());
+
+            logger.info(
+                    "Vendors available for projectId={}, productId={}. Eligible vendor count={}",
+                    projectId,
+                    productId,
+                    vendors.size()
+            );
+        }
+
         procurementMilestoneAssignmentRepository.save(procurement);
 
-        logger.info("ProcurementMilestoneAssignment auto-created for projectId={}, milestone={}",
-                generalAssignment.getProject().getId(), generalAssignment.getMilestone().getName());
+        logger.info(
+                "ProcurementMilestoneAssignment auto-created for projectId={}, milestone={}, status={}",
+                projectId,
+                generalAssignment.getMilestone().getName(),
+                procurement.getStatus()
+        );
     }
-
-
     @Cacheable(value = "milestoneMaps", key = "#productId")
     public List<ProductMilestoneMap> getMilestoneMaps(Long productId) {
         return productMilestoneMapRepository.findByProductId(productId, PageRequest.of(0, Integer.MAX_VALUE)).getContent();

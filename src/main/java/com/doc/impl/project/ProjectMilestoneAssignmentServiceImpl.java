@@ -110,11 +110,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             if ("Legal Verfication".equalsIgnoreCase(milestoneName)) {
                 milestoneValidator.validateLegalMilestone(assignment);
             }
+
             if ("Filling".equalsIgnoreCase(milestoneName)) {
                 milestoneValidator.validateFillingMilestone(assignment);
             }
 
-
+            if ("Procurement".equalsIgnoreCase(milestoneName)) {
+                validateProcurementMilestoneBeforeCompletion(assignment);
+            }
         }
 
         if ("COMPLETED".equals(newStatus.getName())) {
@@ -192,6 +195,44 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
     }
 
+    private void validateProcurementMilestoneBeforeCompletion(ProjectMilestoneAssignment assignment) {
+
+        ProcurementMilestoneAssignment procurementAssignment =
+                procurementMilestoneAssignmentRepository
+                        .findByProjectIdAndMilestoneIdAndIsDeletedFalse(
+                                assignment.getProject().getId(),
+                                assignment.getMilestone().getId()
+                        )
+                        .orElseThrow(() -> new ValidationException(
+                                "Procurement assignment is not created for this milestone",
+                                "ERR_PROCUREMENT_ASSIGNMENT_NOT_FOUND"
+                        ));
+
+        if (procurementAssignment.getSelectedVendor() == null) {
+            throw new ValidationException(
+                    "Please select vendor before completing Procurement milestone",
+                    "ERR_VENDOR_NOT_SELECTED"
+            );
+        }
+
+        if (procurementAssignment.getStatus() == ProcurementStatus.VENDOR_REQUIRED) {
+            throw new ValidationException(
+                    "No vendor available for this service. Please create vendor and map it with this service.",
+                    "ERR_VENDOR_REQUIRED"
+            );
+        }
+
+        if (procurementAssignment.getStatus() != ProcurementStatus.VENDOR_SHORTLISTED
+                && procurementAssignment.getStatus() != ProcurementStatus.PO_CREATED
+                && procurementAssignment.getStatus() != ProcurementStatus.PO_RELEASED
+                && procurementAssignment.getStatus() != ProcurementStatus.COMPLETED) {
+
+            throw new ValidationException(
+                    "Procurement milestone cannot be completed until vendor is selected",
+                    "ERR_INVALID_PROCUREMENT_STATUS"
+            );
+        }
+    }
 
 
     @Override

@@ -8,6 +8,7 @@ public enum ProcurementStatus {
 
     DRAFT("Draft", "Initial stage - just received assignment"),
     REQUIREMENT_FINALIZED("Requirement Finalized", "Scope and requirements understood"),
+    VENDOR_REQUIRED("Vendor Required", "Vendor identification required"),
     VENDOR_SHORTLISTED("Vendor Shortlisted", "Vendors evaluated and shortlisted"),
     VENDOR_FINALIZED("Vendor Finalized", "Best vendor selected and approved"),
     PO_CREATED("PO Created", "Purchase Order drafted"),
