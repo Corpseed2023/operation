@@ -19,4 +19,6 @@ public interface ProcurementAssignmentService {
     );
 
     List<ProcurementAssignmentResponseDto> getVendorRequiredAssignments();
+
+
 }

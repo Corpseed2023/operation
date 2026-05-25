@@ -94,70 +94,68 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
     @Override
     public ProcurementAssignmentResponseDto selectVendor(
             Long procurementAssignmentId,
-            SelectProcurementVendorRequestDto requestDto
-    ) {
+            SelectProcurementVendorRequestDto requestDto) {
 
-        ProcurementMilestoneAssignment assignment = procurementMilestoneAssignmentRepository
-                .findByIdAndIsDeletedFalse(procurementAssignmentId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Procurement assignment not found",
-                        "ERR_PROCUREMENT_ASSIGNMENT_NOT_FOUND"
-                ));
+        ProcurementMilestoneAssignment assignment = findAssignmentById(procurementAssignmentId);
 
-        User changedBy = userRepository.findActiveUserById(requestDto.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found",
-                        "ERR_USER_NOT_FOUND"
-                ));
+        User user = userRepository.findActiveUserById(requestDto.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
         Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(requestDto.getVendorId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor not found",
-                        "ERR_VENDOR_NOT_FOUND"
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor not found", "ERR_VENDOR_NOT_FOUND"));
 
+        // Validations
         if (vendor.getStatus() != VendorStatus.ACTIVE) {
-            throw new ValidationException(
-                    "Only ACTIVE vendor can be selected",
-                    "ERR_VENDOR_NOT_ACTIVE"
-            );
+            throw new ValidationException("Only ACTIVE vendor can be selected", "ERR_VENDOR_NOT_ACTIVE");
         }
 
-        Product projectProduct = assignment.getProject().getProduct();
+        validateVendorForProjectProduct(assignment, vendor);
 
-        if (projectProduct == null) {
-            throw new ValidationException(
-                    "Project does not have any service/product mapped",
-                    "ERR_PROJECT_PRODUCT_NOT_FOUND"
-            );
+        // Prevent re-selection if already finalized
+        if (assignment.getSelectedVendor() != null) {
+            throw new ValidationException("Vendor is already selected for this assignment", "ERR_VENDOR_ALREADY_SELECTED");
         }
 
-        Long productId = projectProduct.getId();
-
-        List<Vendor> eligibleVendors = vendorRepository.findVendorsByProductId(productId);
-
-        boolean vendorEligibleForService = eligibleVendors.stream()
-                .anyMatch(v -> v.getId().equals(vendor.getId()));
-
-        if (!vendorEligibleForService) {
-            throw new ValidationException(
-                    "This vendor is not available for this service. Please select a vendor mapped with this project service.",
-                    "ERR_VENDOR_NOT_MAPPED_WITH_SERVICE"
-            );
-        }
-
+        // === Link Vendor to Project ===
         assignment.setSelectedVendor(vendor);
-        assignment.setEstimatedAmount(requestDto.getEstimatedAmount());
-        assignment.setFinalAmount(requestDto.getFinalAmount());
         assignment.setStatus(ProcurementStatus.VENDOR_FINALIZED);
-        assignment.setUpdatedBy(changedBy.getId());
+        assignment.setUpdatedBy(user.getId());
         assignment.setUpdatedDate(new Date());
-
 
         procurementMilestoneAssignmentRepository.save(assignment);
 
         return buildResponseAndRefreshVendorStatus(assignment);
     }
+
+    private ProcurementMilestoneAssignment findAssignmentById(Long id) {
+        return procurementMilestoneAssignmentRepository
+                .findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Procurement assignment not found",
+                        "ERR_PROCUREMENT_ASSIGNMENT_NOT_FOUND"
+                ));
+    }
+
+    private void validateVendorForProjectProduct(ProcurementMilestoneAssignment assignment, Vendor vendor) {
+        Product product = assignment.getProject().getProduct();
+        if (product == null) {
+            throw new ValidationException("Project does not have any service/product mapped",
+                    "ERR_PROJECT_PRODUCT_NOT_FOUND");
+        }
+
+        List<Vendor> eligibleVendors = vendorRepository.findVendorsByProductId(product.getId());
+        boolean isEligible = eligibleVendors.stream()
+                .anyMatch(v -> v.getId().equals(vendor.getId()));
+
+        if (!isEligible) {
+            throw new ValidationException(
+                    "This vendor is not mapped with the required service. Please select a valid vendor.",
+                    "ERR_VENDOR_NOT_MAPPED_WITH_SERVICE"
+            );
+        }
+    }
+
+
 
     private ProcurementAssignmentResponseDto buildResponseAndRefreshVendorStatus(
             ProcurementMilestoneAssignment assignment
@@ -233,9 +231,6 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
                         .map(this::mapVendorSummary)
                         .toList()
         );
-
-        dto.setEstimatedAmount(assignment.getEstimatedAmount());
-        dto.setFinalAmount(assignment.getFinalAmount());
 
         dto.setVendorShortlistedDate(assignment.getVendorShortlistedDate());
         dto.setPoCreatedDate(assignment.getPoCreatedDate());

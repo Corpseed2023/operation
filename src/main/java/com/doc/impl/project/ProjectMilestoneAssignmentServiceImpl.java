@@ -17,7 +17,6 @@ import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.service.AutoAssignmentService;
-import com.doc.service.ProjectService;
 import com.doc.service.ProjectMilestoneAssignmentService;
 import com.doc.validation.MilestoneValidator;
 import org.slf4j.Logger;

@@ -37,10 +37,6 @@ public class ProcurementAssignmentResponseDto {
     private String message;
 
     private List<VendorSummaryDto> eligibleVendors;
-
-    private BigDecimal estimatedAmount;
-    private BigDecimal finalAmount;
-
     private Date vendorShortlistedDate;
     private Date poCreatedDate;
     private Date poReleasedDate;

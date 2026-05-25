@@ -16,9 +16,5 @@ public class SelectProcurementVendorRequestDto {
     @NotNull(message = "User ID is required")
     private Long userId;
 
-    private BigDecimal estimatedAmount;
-
-    private BigDecimal finalAmount;
-
     private String remarks;
 }

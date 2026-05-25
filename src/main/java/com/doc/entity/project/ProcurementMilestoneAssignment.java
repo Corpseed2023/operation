@@ -49,10 +49,6 @@ public class ProcurementMilestoneAssignment {
     @Column(nullable = false)
     private ProcurementStatus status = ProcurementStatus.DRAFT;
 
-    // Financial Details (filled after vendor selection)
-    private BigDecimal estimatedAmount;
-    private BigDecimal finalAmount;
-
     @Temporal(TemporalType.TIMESTAMP)
     private Date vendorShortlistedDate;
 
