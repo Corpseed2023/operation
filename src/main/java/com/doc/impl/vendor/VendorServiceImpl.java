@@ -38,12 +38,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     public VendorResponseDto createVendor(VendorRequestDto dto) {
-        logger.info("Creating vendor with code: {}", dto.getVendorCode());
 
-        // Duplicate checks
-        if (vendorRepository.existsByVendorCodeAndIsDeletedFalse(dto.getVendorCode().trim())) {
-            throw new ValidationException("Vendor code already exists", "ERR_DUPLICATE_VENDOR_CODE");
-        }
         if (dto.getGstNumber() != null &&
                 vendorRepository.existsByGstNumberAndIsDeletedFalse(dto.getGstNumber())) {
             throw new ValidationException("GST number already exists", "ERR_DUPLICATE_GST");
@@ -133,7 +128,6 @@ public class VendorServiceImpl implements VendorService {
     // ==================== Mapping Methods ====================
 
     private void mapDtoToEntity(VendorRequestDto dto, Vendor vendor) {
-        vendor.setVendorCode(dto.getVendorCode().trim());
         vendor.setName(dto.getName().trim());
         vendor.setDescription(dto.getDescription());
         vendor.setEmail(dto.getEmail());
@@ -151,7 +145,6 @@ public class VendorServiceImpl implements VendorService {
         VendorResponseDto dto = new VendorResponseDto();
 
         dto.setId(vendor.getId());
-        dto.setVendorCode(vendor.getVendorCode());
         dto.setName(vendor.getName());
         dto.setDescription(vendor.getDescription());
         dto.setEmail(vendor.getEmail());

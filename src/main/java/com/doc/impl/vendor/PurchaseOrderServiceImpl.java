@@ -4,10 +4,11 @@ import com.doc.dto.vendor.PurchaseOrderRequestDto;
 import com.doc.dto.vendor.PurchaseOrderResponseDto;
 import com.doc.entity.client.PaymentType;
 import com.doc.entity.project.ProcurementMilestoneAssignment;
+
 import com.doc.entity.project.ProcurementStatus;
 import com.doc.entity.user.User;
-import com.doc.entity.vendor.POStatus;
-import com.doc.entity.vendor.PurchaseOrder;
+import com.doc.entity.vendor.ProcurementOrder;
+import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.entity.vendor.Vendor;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -28,6 +29,7 @@ import java.time.LocalDate;
 import java.util.Date;
 
 @Service
+@Transactional
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private static final Logger logger = LoggerFactory.getLogger(PurchaseOrderServiceImpl.class);
@@ -42,7 +44,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     public PurchaseOrderResponseDto createPurchaseOrder(PurchaseOrderRequestDto dto) {
         logger.info("Creating Purchase Order for procurementAssignmentId: {}", dto.getProcurementAssignmentId());
 
-        ProcurementMilestoneAssignment procurement = procurementRepository.findById(dto.getProcurementAssignmentId())
+        ProcurementMilestoneAssignment procurement = procurementRepository
+                .findById(dto.getProcurementAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Procurement assignment not found", "ERR_PROCUREMENT_NOT_FOUND"));
 
         Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
@@ -51,68 +54,86 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         User createdByUser = userRepository.findActiveUserById(dto.getCreatedBy())
                 .orElseThrow(() -> new ResourceNotFoundException("CreatedBy user not found", "ERR_USER_NOT_FOUND"));
 
-        // Validate vendor is assigned
-        if (procurement.getSelectedVendor() == null ||
-                !procurement.getSelectedVendor().getId().equals(vendor.getId())) {
-            throw new ValidationException("Selected vendor does not match assigned vendor in procurement", "ERR_VENDOR_MISMATCH");
+        // Validation
+        if (dto.getFinalAmount() == null || dto.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Final amount must be greater than zero", "ERR_INVALID_AMOUNT");
         }
 
         String poNumber = generatePoNumber();
 
-        PurchaseOrder po = new PurchaseOrder();
-        po.setPoNumber(poNumber);
+        // Create ProcurementOrder
+        ProcurementOrder po = new ProcurementOrder();
         po.setProcurementAssignment(procurement);
         po.setProject(procurement.getProject());
         po.setVendor(vendor);
-        po.setTotalAmount(dto.getTotalAmount());
-        po.setGstAmount(dto.getGstAmount() != null ? dto.getGstAmount() : BigDecimal.ZERO);
-        po.setGrandTotal(po.getTotalAmount().add(po.getGstAmount()));
+
+        po.setPoNumber(poNumber);
+        po.setPoReferenceNumber(dto.getPoReferenceNumber());
+
+        po.setEstimatedAmount(dto.getEstimatedAmount());
+        po.setFinalAmount(dto.getFinalAmount());
+
+        // GST Fields
+        po.setGstRate(dto.getGstRate());
+        po.setCgstAmount(dto.getCgstAmount());
+        po.setSgstAmount(dto.getSgstAmount());
+        po.setIgstAmount(dto.getIgstAmount());
+        po.setTotalTaxAmount(dto.getTotalTaxAmount());
+        po.setGrandTotal(dto.getGrandTotal());
+
         po.setScopeOfWork(dto.getScopeOfWork());
-        po.setIssueDate(LocalDate.now());
-        po.setValidTillDate(dto.getValidTillDate());
-        po.setStatus(POStatus.DRAFT);
+        po.setPaymentTerms(dto.getPaymentTerms());
         po.setTermsAndConditions(dto.getTermsAndConditions());
+        po.setRemarks(dto.getRemarks());
+        po.setAttachmentUrls(dto.getAttachmentUrls());
+
+        po.setStatus(ProcurementOrderStatus.DRAFT);
+        po.setPoCreatedDate(new Date());
+
         po.setCreatedBy(createdByUser.getId());
         po.setCreatedDate(new Date());
         po.setUpdatedDate(new Date());
 
-        if (dto.getPaymentTypeName() != null) {
+        // Payment Type
+        if (dto.getPaymentTypeName() != null && !dto.getPaymentTypeName().trim().isEmpty()) {
             PaymentType paymentType = paymentTypeRepository.findByName(dto.getPaymentTypeName())
-                    .orElseThrow(() -> new ResourceNotFoundException("Payment type not found: " + dto.getPaymentTypeName(), "ERR_PAYMENT_TYPE_NOT_FOUND"));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Payment type not found: " + dto.getPaymentTypeName(), "ERR_PAYMENT_TYPE_NOT_FOUND"));
             po.setPaymentType(paymentType);
         }
 
         po = purchaseOrderRepository.save(po);
 
-        logger.info("Purchase Order created successfully: {}", poNumber);
+        logger.info("Purchase Order created successfully: {} | Project: {} | Vendor: {}",
+                poNumber, procurement.getProject().getProjectNo(), vendor.getName());
+
         return mapToResponseDto(po);
     }
 
     @Override
     public PurchaseOrderResponseDto releasePurchaseOrder(Long poId, Long userId) {
-        PurchaseOrder po = purchaseOrderRepository.findById(poId)
+        ProcurementOrder po = purchaseOrderRepository.findById(poId)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase Order not found", "ERR_PO_NOT_FOUND"));
 
-        if (po.getStatus() != POStatus.DRAFT) {
-            throw new ValidationException("Only DRAFT PO can be released", "ERR_INVALID_PO_STATUS");
+        if (po.getStatus() != ProcurementOrderStatus.DRAFT && po.getStatus() != ProcurementOrderStatus.PENDING_APPROVAL) {
+            throw new ValidationException("Only DRAFT or PENDING_APPROVAL PO can be released", "ERR_INVALID_PO_STATUS");
         }
 
         User approvedBy = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
 
-        po.setStatus(POStatus.RELEASED);
-        po.setApprovedBy(approvedBy);
-        po.setApprovedDate(new Date());
+        po.setStatus(ProcurementOrderStatus.RELEASED);
+        po.setApprovedBy(approvedBy.getId());
+        po.setPoReleasedDate(new Date());
         po.setUpdatedBy(userId);
         po.setUpdatedDate(new Date());
 
         po = purchaseOrderRepository.save(po);
 
-        // Update Procurement Milestone Status
+        // Optional: Update parent procurement status
         ProcurementMilestoneAssignment procurement = po.getProcurementAssignment();
         procurement.setStatus(ProcurementStatus.PO_RELEASED);
         procurement.setPoReleasedDate(new Date());
-        // procurementRepository.save(procurement);   // Uncomment if you want to save immediately
 
         logger.info("Purchase Order {} released successfully by user {}", po.getPoNumber(), userId);
 
@@ -121,7 +142,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     public PurchaseOrderResponseDto getPurchaseOrderById(Long id) {
-        PurchaseOrder po = purchaseOrderRepository.findById(id)
+        ProcurementOrder po = purchaseOrderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase Order not found", "ERR_PO_NOT_FOUND"));
         return mapToResponseDto(po);
     }
@@ -132,15 +153,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new ValidationException("Procurement Assignment ID is required", "ERR_NULL_ID");
         }
 
-        PurchaseOrder po = purchaseOrderRepository.findByProcurementAssignmentId(procurementAssignmentId)
+        ProcurementOrder po = purchaseOrderRepository.findByProcurementAssignmentId(procurementAssignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "No Purchase Order found for procurement assignment ID: " + procurementAssignmentId,
-                        "ERR_PO_NOT_FOUND"));
+                        "No Purchase Order found for this procurement assignment", "ERR_PO_NOT_FOUND"));
 
         return mapToResponseDto(po);
     }
 
-
+    // ==================== Helper Methods ====================
 
     private String generatePoNumber() {
         int year = LocalDate.now().getYear();
@@ -148,27 +168,44 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return String.format("PO-%d-%05d", year, count);
     }
 
-    // ==================== Mapping ====================
-    private PurchaseOrderResponseDto mapToResponseDto(PurchaseOrder po) {
+    private PurchaseOrderResponseDto mapToResponseDto(ProcurementOrder po) {
         PurchaseOrderResponseDto dto = new PurchaseOrderResponseDto();
 
         dto.setId(po.getId());
         dto.setPoNumber(po.getPoNumber());
+        dto.setPoReferenceNumber(po.getPoReferenceNumber());
+
         dto.setProcurementAssignmentId(po.getProcurementAssignment().getId());
         dto.setProjectId(po.getProject() != null ? po.getProject().getId() : null);
+        dto.setProjectName(po.getProject() != null ? po.getProject().getName() : null);
+        dto.setProjectNo(po.getProject() != null ? po.getProject().getProjectNo() : null);
+
         dto.setVendorId(po.getVendor().getId());
         dto.setVendorName(po.getVendor().getName());
-        dto.setTotalAmount(po.getTotalAmount());
-        dto.setGstAmount(po.getGstAmount());
+
+        dto.setEstimatedAmount(po.getEstimatedAmount());
+        dto.setFinalAmount(po.getFinalAmount());
+        dto.setCgstAmount(po.getCgstAmount());
+        dto.setSgstAmount(po.getSgstAmount());
+        dto.setIgstAmount(po.getIgstAmount());
+        dto.setTotalTaxAmount(po.getTotalTaxAmount());
         dto.setGrandTotal(po.getGrandTotal());
+        dto.setGstRate(po.getGstRate());
+
         dto.setScopeOfWork(po.getScopeOfWork());
-        dto.setIssueDate(po.getIssueDate());
-        dto.setValidTillDate(po.getValidTillDate());
-        dto.setStatus(po.getStatus());
-        dto.setPaymentTypeName(po.getPaymentType() != null ? po.getPaymentType().getName() : null);
+        dto.setPaymentTerms(po.getPaymentTerms());
         dto.setTermsAndConditions(po.getTermsAndConditions());
+        dto.setRemarks(po.getRemarks());
+        dto.setAttachmentUrls(po.getAttachmentUrls());
+
+        dto.setStatus(po.getStatus());
+
+        dto.setPoCreatedDate(po.getPoCreatedDate());
+        dto.setPoApprovedDate(po.getPoApprovedDate());
+        dto.setPoReleasedDate(po.getPoReleasedDate());
+
         dto.setCreatedDate(po.getCreatedDate());
-        dto.setApprovedDate(po.getApprovedDate());
+        dto.setUpdatedDate(po.getUpdatedDate());
 
         return dto;
     }

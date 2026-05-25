@@ -9,7 +9,6 @@ import lombok.Setter;
 public class VendorSummaryDto {
 
     private Long id;
-    private String vendorCode;
     private String name;
     private String email;
     private String mobile;

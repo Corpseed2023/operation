@@ -247,7 +247,6 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
         VendorSummaryDto dto = new VendorSummaryDto();
 
         dto.setId(vendor.getId());
-        dto.setVendorCode(vendor.getVendorCode());
         dto.setName(vendor.getName());
         dto.setEmail(vendor.getEmail());
         dto.setMobile(vendor.getMobile());

@@ -12,7 +12,6 @@ import java.util.List;
 
 @Entity
 @Table(name = "vendors", indexes = {
-        @Index(name = "idx_vendor_code", columnList = "vendorCode", unique = true),
         @Index(name = "idx_gst_number", columnList = "gstNumber", unique = true)
 })
 @Getter
@@ -24,10 +23,6 @@ public class Vendor {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, unique = true, length = 50)
-    @Comment("SAP-style Vendor Code - VEND-2026-00123")
-    private String vendorCode;
 
     @Column(nullable = false, length = 255)
     @Comment("Vendor Company Name")

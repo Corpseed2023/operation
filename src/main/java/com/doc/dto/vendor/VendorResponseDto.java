@@ -12,8 +12,6 @@ public class VendorResponseDto {
 
     private Long id;
 
-    private String vendorCode;
-
     private String name;
 
     private String description;

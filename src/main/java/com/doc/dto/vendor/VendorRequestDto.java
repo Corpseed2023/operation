@@ -11,9 +11,6 @@ import lombok.Setter;
 @Setter
 public class VendorRequestDto {
 
-    @NotBlank(message = "Vendor code is required")
-    @Size(max = 50)
-    private String vendorCode;
 
     @NotBlank(message = "Vendor name is required")
     @Size(max = 255)
