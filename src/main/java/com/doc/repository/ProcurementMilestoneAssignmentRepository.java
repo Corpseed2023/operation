@@ -1,6 +1,6 @@
 package com.doc.repository;
 
-import com.doc.entity.project.ProcurementMilestoneAssignment;
+import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.project.ProcurementStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

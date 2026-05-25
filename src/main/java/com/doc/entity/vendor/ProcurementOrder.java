@@ -2,7 +2,6 @@ package com.doc.entity.vendor;
 
 import com.doc.entity.client.PaymentType;
 
-import com.doc.entity.project.ProcurementMilestoneAssignment;
 import com.doc.entity.project.Project;
 import jakarta.persistence.*;
 import lombok.Getter;

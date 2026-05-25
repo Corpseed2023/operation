@@ -11,6 +11,7 @@ import com.doc.entity.project.*;
 import com.doc.entity.department.Department;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
+import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;

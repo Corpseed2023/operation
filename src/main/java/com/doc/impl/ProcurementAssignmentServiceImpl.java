@@ -4,7 +4,7 @@ import com.doc.dto.procurement.ProcurementAssignmentResponseDto;
 import com.doc.dto.procurement.SelectProcurementVendorRequestDto;
 import com.doc.dto.procurement.VendorSummaryDto;
 import com.doc.entity.product.Product;
-import com.doc.entity.project.ProcurementMilestoneAssignment;
+import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.project.ProcurementStatus;
 import com.doc.entity.user.User;
 import com.doc.entity.vendor.Vendor;

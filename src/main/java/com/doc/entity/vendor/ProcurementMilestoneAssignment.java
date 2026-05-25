@@ -1,7 +1,9 @@
-package com.doc.entity.project;
+package com.doc.entity.vendor;
 
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.product.ProductMilestoneMap;
+import com.doc.entity.project.ProcurementStatus;
+import com.doc.entity.project.Project;
 import com.doc.entity.user.User;
 import com.doc.entity.vendor.Vendor;
 import jakarta.persistence.*;

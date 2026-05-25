@@ -3,7 +3,7 @@ package com.doc.impl.vendor;
 import com.doc.dto.vendor.PurchaseOrderRequestDto;
 import com.doc.dto.vendor.PurchaseOrderResponseDto;
 import com.doc.entity.client.PaymentType;
-import com.doc.entity.project.ProcurementMilestoneAssignment;
+import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 
 import com.doc.entity.project.ProcurementStatus;
 import com.doc.entity.user.User;
@@ -165,7 +165,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private String generatePoNumber() {
         int year = LocalDate.now().getYear();
         long count = purchaseOrderRepository.count() + 1;
-        return String.format("PO-%d-%05d", year, count);
+        return String.format("CORP-PO-%d-%05d", year, count);
     }
 
     private PurchaseOrderResponseDto mapToResponseDto(ProcurementOrder po) {

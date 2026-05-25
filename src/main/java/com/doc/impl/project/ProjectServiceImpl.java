@@ -23,6 +23,7 @@ import com.doc.entity.project.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.user.User;
+import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
