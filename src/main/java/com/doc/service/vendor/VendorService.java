@@ -14,9 +14,12 @@ public interface VendorService {
 
     VendorResponseDto getVendorById(Long id);
 
-    Page<VendorResponseDto> getAllVendors(int page, int size, String keyword);
 
     List<VendorResponseDto> getVendorsByProduct(Long productId);
 
     void deleteVendor(Long id);
+
+    Page<VendorResponseDto> getAllVendors(Long userId, int page, int size, String keyword);
+
+
 }

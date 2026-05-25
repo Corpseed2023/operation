@@ -53,14 +53,14 @@ public class VendorController {
     @GetMapping
     @Operation(summary = "Get all vendors with pagination and search")
     public ResponseEntity<Page<VendorResponseDto>> getAllVendors(
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String keyword) {
 
-        Page<VendorResponseDto> vendors = vendorService.getAllVendors(page, size, keyword);
+        Page<VendorResponseDto> vendors = vendorService.getAllVendors(userId, page, size, keyword);
         return ResponseEntity.ok(vendors);
     }
-
     @GetMapping("/by-product/{productId}")
     @Operation(summary = "Get vendors who can handle specific product (used in Procurement)")
     public ResponseEntity<List<VendorResponseDto>> getVendorsByProduct(@PathVariable Long productId) {
