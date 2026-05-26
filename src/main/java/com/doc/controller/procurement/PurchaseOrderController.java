@@ -1,12 +1,16 @@
 package com.doc.controller.procurement;
 
+import com.doc.dto.vendor.ProcurementOrderActionRequestDto;
+import com.doc.dto.vendor.ProcurementOrderResponseDto;
 import com.doc.dto.vendor.PurchaseOrderRequestDto;
 import com.doc.dto.vendor.PurchaseOrderResponseDto;
+import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.service.vendor.PurchaseOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,4 +54,69 @@ public class PurchaseOrderController {
 
         return ResponseEntity.ok(purchaseOrderService.getByProcurementAssignmentId(procurementAssignmentId));
     }
+
+
+    @GetMapping
+    public ResponseEntity<Page<ProcurementOrderResponseDto>> getProcurementOrdersByStatus(
+            @RequestParam(required = false) ProcurementOrderStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Page<ProcurementOrderResponseDto> response =
+                purchaseOrderService.getProcurementOrdersByStatus(
+                        status,
+                        page,
+                        size
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{procurementOrderId}/approve/{userId}")
+    public ResponseEntity<ProcurementOrderResponseDto> approveProcurementOrder(
+            @PathVariable Long procurementOrderId,
+            @PathVariable Long userId,
+            @RequestBody(required = false) ProcurementOrderActionRequestDto request
+    ) {
+        String comment = request != null ? request.getComment() : null;
+
+        ProcurementOrderResponseDto response =
+                purchaseOrderService.approveProcurementOrder(
+                        procurementOrderId,
+                        userId,
+                        comment
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{procurementOrderId}/reject/{userId}")
+    public ResponseEntity<ProcurementOrderResponseDto> rejectProcurementOrder(
+            @PathVariable Long procurementOrderId,
+            @PathVariable Long userId,
+            @RequestBody ProcurementOrderActionRequestDto request
+    ) {
+        String reason = request != null ? request.getReason() : null;
+
+        ProcurementOrderResponseDto response =
+                purchaseOrderService.rejectProcurementOrder(
+                        procurementOrderId,
+                        userId,
+                        reason
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{poId}")
+    @Operation(summary = "Update Purchase Order")
+    public ResponseEntity<PurchaseOrderResponseDto> updatePurchaseOrder(
+            @PathVariable Long poId,
+            @Valid @RequestBody PurchaseOrderRequestDto requestDto
+    ) {
+        PurchaseOrderResponseDto response = purchaseOrderService.updatePurchaseOrder(poId, requestDto);
+        return ResponseEntity.ok(response);
+    }
+
+
 }

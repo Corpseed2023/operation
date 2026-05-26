@@ -1,5 +1,6 @@
 package com.doc.impl.vendor;
 
+import com.doc.dto.vendor.ProcurementOrderResponseDto;
 import com.doc.dto.vendor.PurchaseOrderRequestDto;
 import com.doc.dto.vendor.PurchaseOrderResponseDto;
 import com.doc.entity.client.PaymentType;
@@ -21,6 +22,10 @@ import com.doc.service.vendor.PurchaseOrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -158,6 +163,316 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         "No Purchase Order found for this procurement assignment", "ERR_PO_NOT_FOUND"));
 
         return mapToResponseDto(po);
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProcurementOrderResponseDto> getProcurementOrdersByStatus(
+            ProcurementOrderStatus status,
+            int page,
+            int size
+    ) {
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+
+        Page<ProcurementOrder> orders;
+
+        if (status == null) {
+            orders = purchaseOrderRepository.findByIsDeletedFalse(pageable);
+        } else {
+            orders = purchaseOrderRepository.findByStatusAndIsDeletedFalse(status, pageable);
+        }
+
+        return orders.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional
+    public ProcurementOrderResponseDto approveProcurementOrder(
+            Long procurementOrderId,
+            Long userId,
+            String comment
+    ) {
+        ProcurementOrder order = purchaseOrderRepository.findById(procurementOrderId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Procurement order not found with id: " + procurementOrderId
+                ));
+
+        if (order.isDeleted()) {
+            throw new RuntimeException("Procurement order is deleted and cannot be approved");
+        }
+
+        if (order.getStatus() != ProcurementOrderStatus.PENDING_APPROVAL) {
+            throw new RuntimeException(
+                    "Only PENDING_APPROVAL procurement orders can be approved. Current status: "
+                            + order.getStatus()
+            );
+        }
+
+        order.setStatus(ProcurementOrderStatus.APPROVED);
+        order.setApprovedBy(userId);
+        order.setPoApprovedDate(new Date());
+        order.setUpdatedBy(userId);
+        order.setUpdatedDate(new Date());
+
+        if (comment != null && !comment.trim().isEmpty()) {
+            order.setRemarks(comment.trim());
+        }
+
+        ProcurementOrder savedOrder = purchaseOrderRepository.save(order);
+
+        return mapToResponse(savedOrder);
+    }
+
+    @Override
+    @Transactional
+    public ProcurementOrderResponseDto rejectProcurementOrder(
+            Long procurementOrderId,
+            Long userId,
+            String reason
+    ) {
+        ProcurementOrder order = purchaseOrderRepository.findById(procurementOrderId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Procurement order not found with id: " + procurementOrderId
+                ));
+
+        if (order.isDeleted()) {
+            throw new RuntimeException("Procurement order is deleted and cannot be rejected");
+        }
+
+        if (order.getStatus() != ProcurementOrderStatus.PENDING_APPROVAL) {
+            throw new RuntimeException(
+                    "Only PENDING_APPROVAL procurement orders can be rejected. Current status: "
+                            + order.getStatus()
+            );
+        }
+
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new RuntimeException("Rejection reason is required");
+        }
+
+        order.setStatus(ProcurementOrderStatus.REJECTED);
+        order.setUpdatedBy(userId);
+        order.setUpdatedDate(new Date());
+        order.setRemarks(reason.trim());
+
+        ProcurementOrder savedOrder = purchaseOrderRepository.save(order);
+
+        return mapToResponse(savedOrder);
+    }
+
+
+    @Override
+    @Transactional
+    public PurchaseOrderResponseDto updatePurchaseOrder(Long poId, PurchaseOrderRequestDto dto) {
+
+        logger.info("Updating Purchase Order id: {}", poId);
+
+        if (poId == null) {
+            throw new ValidationException("Purchase Order ID is required", "ERR_PO_ID_REQUIRED");
+        }
+
+        ProcurementOrder po = purchaseOrderRepository.findById(poId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Purchase Order not found",
+                        "ERR_PO_NOT_FOUND"
+                ));
+
+        if (po.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted Purchase Order cannot be updated",
+                    "ERR_DELETED_PO_CANNOT_BE_UPDATED"
+            );
+        }
+
+        /*
+         * Safe workflow:
+         * Only DRAFT or REJECTED PO can be edited.
+         * APPROVED / RELEASED / COMPLETED should not be edited because accounts/vendor flow may already depend on it.
+         */
+        if (po.getStatus() != ProcurementOrderStatus.DRAFT
+                && po.getStatus() != ProcurementOrderStatus.REJECTED) {
+            throw new ValidationException(
+                    "Only DRAFT or REJECTED Purchase Order can be updated. Current status: " + po.getStatus(),
+                    "ERR_INVALID_PO_STATUS_FOR_UPDATE"
+            );
+        }
+
+        if (dto.getFinalAmount() == null || dto.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException(
+                    "Final amount must be greater than zero",
+                    "ERR_INVALID_AMOUNT"
+            );
+        }
+
+        // Optional: update procurement assignment only if sent
+        if (dto.getProcurementAssignmentId() != null) {
+            ProcurementMilestoneAssignment procurement = procurementRepository
+                    .findById(dto.getProcurementAssignmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Procurement assignment not found",
+                            "ERR_PROCUREMENT_NOT_FOUND"
+                    ));
+
+            po.setProcurementAssignment(procurement);
+            po.setProject(procurement.getProject());
+        }
+
+        // Optional: update vendor only if sent
+        if (dto.getVendorId() != null) {
+            Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Vendor not found",
+                            "ERR_VENDOR_NOT_FOUND"
+                    ));
+
+            po.setVendor(vendor);
+        }
+
+        po.setPoReferenceNumber(dto.getPoReferenceNumber());
+
+        po.setEstimatedAmount(dto.getEstimatedAmount());
+        po.setFinalAmount(dto.getFinalAmount());
+
+        po.setGstRate(dto.getGstRate());
+        po.setCgstAmount(dto.getCgstAmount());
+        po.setSgstAmount(dto.getSgstAmount());
+        po.setIgstAmount(dto.getIgstAmount());
+        po.setTotalTaxAmount(dto.getTotalTaxAmount());
+        po.setGrandTotal(dto.getGrandTotal());
+
+        po.setScopeOfWork(dto.getScopeOfWork());
+        po.setPaymentTerms(dto.getPaymentTerms());
+        po.setTermsAndConditions(dto.getTermsAndConditions());
+        po.setRemarks(dto.getRemarks());
+
+        if (dto.getAttachmentUrls() != null) {
+            po.setAttachmentUrls(dto.getAttachmentUrls());
+        }
+
+        if (dto.getUserId() != null) {
+            User updatedByUser = userRepository.findActiveUserById(dto.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "UpdatedBy user not found",
+                            "ERR_USER_NOT_FOUND"
+                    ));
+
+            po.setUpdatedBy(updatedByUser.getId());
+        }
+
+        if (dto.getPaymentTypeName() != null && !dto.getPaymentTypeName().trim().isEmpty()) {
+            PaymentType paymentType = paymentTypeRepository.findByName(dto.getPaymentTypeName())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Payment type not found: " + dto.getPaymentTypeName(),
+                            "ERR_PAYMENT_TYPE_NOT_FOUND"
+                    ));
+
+            po.setPaymentType(paymentType);
+        }
+
+        po.setUpdatedDate(new Date());
+
+        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
+
+        logger.info("Purchase Order updated successfully: {}", savedPo.getPoNumber());
+
+        return mapToResponseDto(savedPo);
+    }
+
+    private ProcurementOrderResponseDto mapToResponse(ProcurementOrder order) {
+        return ProcurementOrderResponseDto.builder()
+                .id(order.getId())
+
+                .procurementAssignmentId(
+                        order.getProcurementAssignment() != null
+                                ? order.getProcurementAssignment().getId()
+                                : null
+                )
+
+                .projectId(
+                        order.getProject() != null
+                                ? order.getProject().getId()
+                                : null
+                )
+                .projectName(
+                        order.getProject() != null
+                                ? order.getProject().getName()
+                                : null
+                )
+
+                .vendorId(
+                        order.getVendor() != null
+                                ? order.getVendor().getId()
+                                : null
+                )
+                .vendorName(
+                        order.getVendor() != null
+                                ? order.getVendor().getName()
+                                : null
+                )
+
+                .vendorContactId(
+                        order.getVendorContact() != null
+                                ? order.getVendorContact().getId()
+                                : null
+                )
+                .vendorContactName(
+                        order.getVendorContact() != null
+                                ? order.getVendorContact().getName()
+                                : null
+                )
+
+                .poNumber(order.getPoNumber())
+                .poReferenceNumber(order.getPoReferenceNumber())
+
+                .estimatedAmount(order.getEstimatedAmount())
+                .finalAmount(order.getFinalAmount())
+                .gstRate(order.getGstRate())
+
+                .cgstAmount(order.getCgstAmount())
+                .sgstAmount(order.getSgstAmount())
+                .igstAmount(order.getIgstAmount())
+
+                .totalTaxAmount(order.getTotalTaxAmount())
+                .grandTotal(order.getGrandTotal())
+
+                .scopeOfWork(order.getScopeOfWork())
+                .paymentTerms(order.getPaymentTerms())
+                .termsAndConditions(order.getTermsAndConditions())
+                .remarks(order.getRemarks())
+
+                .attachmentUrls(order.getAttachmentUrls())
+
+                .status(order.getStatus())
+
+                .poCreatedDate(order.getPoCreatedDate())
+                .poSubmittedForApprovalDate(order.getPoSubmittedForApprovalDate())
+                .poApprovedDate(order.getPoApprovedDate())
+                .poReleasedDate(order.getPoReleasedDate())
+
+                .paymentTypeId(
+                        order.getPaymentType() != null
+                                ? order.getPaymentType().getId()
+                                : null
+                )
+                .paymentTypeName(
+                        order.getPaymentType() != null
+                                ? order.getPaymentType().getName()
+                                : null
+                )
+
+                .createdBy(order.getCreatedBy())
+                .updatedBy(order.getUpdatedBy())
+                .approvedBy(order.getApprovedBy())
+
+                .createdDate(order.getCreatedDate())
+                .updatedDate(order.getUpdatedDate())
+
+                .build();
     }
 
     // ==================== Helper Methods ====================

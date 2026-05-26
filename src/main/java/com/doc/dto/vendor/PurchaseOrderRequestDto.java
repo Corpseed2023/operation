@@ -58,4 +58,6 @@ public class PurchaseOrderRequestDto {
 
     @NotNull(message = "CreatedBy user ID is required")
     private Long createdBy;
+
+    private Long userId;
 }
