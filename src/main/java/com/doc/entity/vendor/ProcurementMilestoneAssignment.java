@@ -5,7 +5,6 @@ import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.project.ProcurementStatus;
 import com.doc.entity.project.Project;
 import com.doc.entity.user.User;
-import com.doc.entity.vendor.Vendor;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
