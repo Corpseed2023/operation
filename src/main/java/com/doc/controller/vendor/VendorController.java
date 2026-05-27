@@ -61,11 +61,7 @@ public class VendorController {
         Page<VendorResponseDto> vendors = vendorService.getAllVendors(userId, page, size, keyword);
         return ResponseEntity.ok(vendors);
     }
-    @GetMapping("/by-product/{productId}")
-    @Operation(summary = "Get vendors who can handle specific product (used in Procurement)")
-    public ResponseEntity<List<VendorResponseDto>> getVendorsByProduct(@PathVariable Long productId) {
-        return ResponseEntity.ok(vendorService.getVendorsByProduct(productId));
-    }
+
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Soft delete vendor")

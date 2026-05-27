@@ -1,6 +1,7 @@
 package com.doc.repository.vendor;
 
 import com.doc.entity.vendor.Vendor;
+import com.doc.entity.vendor.VendorStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,12 +35,17 @@ public interface VendorRepository extends JpaRepository<Vendor, Long> {
     Page<Vendor> searchVendors(@Param("keyword") String keyword, Pageable pageable);
 
     @Query("""
-        SELECT DISTINCT v
-        FROM Vendor v
-        JOIN v.expertiseProducts p
-        WHERE p.id = :productId
-        AND v.isDeleted = false
-        AND v.status = com.doc.entity.vendor.VendorStatus.ACTIVE
-        """)
-    List<Vendor> findVendorsByProductId(@Param("productId") Long productId);
+            SELECT v 
+            FROM Vendor v 
+            WHERE v.status = :status 
+              AND v.isDeleted = :isDeleted
+            """)
+    List<Vendor> findAllByStatusAndIsDeletedFalse(
+            @Param("status") VendorStatus status,
+            @Param("isDeleted") boolean isDeleted);
+
+
+
+
+
 }

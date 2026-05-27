@@ -125,12 +125,6 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
-    public List<VendorResponseDto> getVendorsByProduct(Long productId) {
-        List<Vendor> vendors = vendorRepository.findVendorsByProductId(productId);
-        return vendors.stream().map(this::mapEntityToDto).collect(Collectors.toList());
-    }
-
-    @Override
     public void deleteVendor(Long id) {
         Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found", "ERR_VENDOR_NOT_FOUND"));

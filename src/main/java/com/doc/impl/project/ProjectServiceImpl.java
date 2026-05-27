@@ -24,6 +24,7 @@ import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.user.User;
 import com.doc.entity.vendor.ProcurementMilestoneAssignment;
+import com.doc.entity.vendor.VendorStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
@@ -682,7 +683,9 @@ public class ProjectServiceImpl implements ProjectService {
             return;
         }
 
-        List<Vendor> vendors = vendorRepository.findVendorsByProductId(productId);
+        List<Vendor> vendors = vendorRepository.findAllByStatusAndIsDeletedFalse(
+                VendorStatus.ACTIVE, false);
+
 
         if (vendors == null || vendors.isEmpty()) {
             procurement.setStatus(ProcurementStatus.VENDOR_REQUIRED);
