@@ -977,6 +977,17 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         dto.setContacts(contactDtos);
+
+        // === NEW: Procurement Milestone Assignment ID ===
+        // This tells the frontend whether the project belongs to a procurement assignment
+        // and provides the exact ID needed for procurement APIs.
+        procurementMilestoneAssignmentRepository
+                .findByProjectIdAndIsDeletedFalse(project.getId())
+                .ifPresent(assignment ->
+                        dto.setProcurementMilestoneAssignmentId(assignment.getId())
+                );
+
+
         return dto;
     }
 

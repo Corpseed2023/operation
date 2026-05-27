@@ -41,4 +41,10 @@ public class ProjectDetailsDto {
 
     private Long applicantId;
     private String applicantName;
+
+    // NEW: ProcurementMilestoneAssignment ID (null if no procurement assignment exists for this project)
+    // This field tells the frontend whether this project has an active Procurement milestone assignment
+    // and provides the ID needed for further procurement-related API calls.
+    private Long procurementMilestoneAssignmentId;
+
 }
