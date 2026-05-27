@@ -161,9 +161,17 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
     private ProcurementAssignmentResponseDto buildResponseAndRefreshVendorStatus(
             ProcurementMilestoneAssignment assignment) {
 
-        // Get all ACTIVE vendors (since product mapping is removed)
-        List<Vendor> eligibleVendors = vendorRepository.findAllByStatusAndIsDeletedFalse(
-                VendorStatus.ACTIVE, false);
+        List<Vendor> eligibleVendors;
+
+        //  If vendor is already selected → show only the selected vendor
+        if (assignment.getSelectedVendor() != null) {
+            eligibleVendors = List.of(assignment.getSelectedVendor());
+        }
+        // If no vendor selected → show all active vendors
+        else {
+            eligibleVendors = vendorRepository.findAllByStatusAndIsDeletedFalse(
+                    VendorStatus.ACTIVE, false);
+        }
 
         boolean vendorAvailable = !eligibleVendors.isEmpty();
 
@@ -189,7 +197,7 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
         dto.setProjectName(assignment.getProject() != null ? assignment.getProject().getName() : null);
         dto.setProjectNo(assignment.getProject() != null ? assignment.getProject().getProjectNo() : null);
 
-        Product product = assignment.getProject().getProduct();
+        Product product = assignment.getProject() != null ? assignment.getProject().getProduct() : null;
         dto.setProductId(product != null ? product.getId() : null);
         dto.setProductName(product != null ? product.getProductName() : null);
 
