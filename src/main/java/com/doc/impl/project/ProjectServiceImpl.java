@@ -683,6 +683,7 @@ public class ProjectServiceImpl implements ProjectService {
             return;
         }
 
+
         List<Vendor> vendors = vendorRepository.findAllByStatusAndIsDeletedFalse(
                 VendorStatus.ACTIVE, false);
 
