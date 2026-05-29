@@ -160,18 +160,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         doc.setFileFormat(fileFormat);
         doc.setFileSizeKb(requestDto.getFileSizeKb());
 
-        if (StringUtils.hasText(requestDto.getExpiryDate())) {
-            try {
-                doc.setExpiryDate(java.sql.Date.valueOf(requestDto.getExpiryDate()));
-            } catch (IllegalArgumentException e) {
-                throw new ValidationException(
-                        "Invalid expiry date format. Expected format is yyyy-MM-dd",
-                        "INVALID_EXPIRY_DATE_FORMAT"
-                );
-            }
-        } else {
-            doc.setExpiryDate(null);
-        }
+        doc.setExpiryDate(requestDto.getExpiryDate());
 
         doc.setPermanent(Boolean.TRUE.equals(requestDto.getIsPermanent()));
         doc.setFromCompanyDoc(Boolean.TRUE.equals(requestDto.getIsFromCompanyDoc()));
