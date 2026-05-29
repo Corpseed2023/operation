@@ -59,15 +59,23 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         validateUploadRequest(requestDto);
 
-        validateFileSizeAgainstRequirement(requestDto.getRequiredDocumentId(), requestDto.getFileSizeKb());
+        validateFileSizeAgainstRequirement(
+                requestDto.getRequiredDocumentId(),
+                requestDto.getFileSizeKb()
+        );
 
-        String fileUrl = requestDto.getFileName(); // full S3 URL (note: field name might be misleading)
+        /*
+         * IMPORTANT:
+         * Currently your request DTO does not have fileUrl.
+         * So this assumes requestDto.getFileName() contains the uploaded S3 URL.
+         * If frontend sends only actual file name here, then add fileUrl field in DTO.
+         */
+        String fileUrl = requestDto.getFileName();
 
         if (!StringUtils.hasText(fileUrl)) {
             throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
         }
 
-        // Extract filename from URL
         String extractedFileName;
         try {
             extractedFileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
@@ -77,71 +85,143 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         String fileName = sanitizeFileName(extractedFileName);
 
+        String fileFormat = requestDto.getFileFormat() != null
+                ? requestDto.getFileFormat().trim().toLowerCase()
+                : null;
+
+        validateFileFormat(fileFormat);
+
         Project project = projectRepository.findActiveUserById(requestDto.getProjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "PROJECT_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "PROJECT_NOT_FOUND"
+                ));
 
         ProductRequiredDocuments requiredDoc = productRequiredDocumentsRepository
                 .findById(requestDto.getRequiredDocumentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Required document not found", "DOCUMENT_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Required document not found",
+                        "DOCUMENT_NOT_FOUND"
+                ));
 
         User uploadedBy = userRepository.findActiveUserById(requestDto.getUploadedById())
-                .orElseThrow(() -> new ResourceNotFoundException("Uploader not found", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Uploader not found",
+                        "USER_NOT_FOUND"
+                ));
 
         DocumentStatus uploadedStatus = documentStatusRepository.findByName("UPLOADED")
-                .orElseThrow(() -> new ResourceNotFoundException("Status UPLOADED not found", "STATUS_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Status UPLOADED not found",
+                        "STATUS_NOT_FOUND"
+                ));
 
-        var existingOpt = projectDocumentUploadRepository
-                .findActiveProjectLevelDocument(requestDto.getProjectId(), requestDto.getRequiredDocumentId());
+        Optional<ProjectDocumentUpload> existingOpt =
+                projectDocumentUploadRepository.findActiveProjectLevelDocument(
+                        requestDto.getProjectId(),
+                        requestDto.getRequiredDocumentId()
+                );
 
         ProjectDocumentUpload doc;
-        boolean isReplacement = existingOpt.isPresent();
 
-        if (isReplacement) {
+        if (existingOpt.isPresent()) {
+
             doc = existingOpt.get();
 
-            if ("VERIFIED".equals(doc.getStatus().getName())) {
-                throw new ValidationException("Cannot replace VERIFIED document", "VERIFIED_DOCUMENT_REPLACEMENT");
+            if (doc.getStatus() != null
+                    && "VERIFIED".equalsIgnoreCase(doc.getStatus().getName())) {
+                throw new ValidationException(
+                        "Cannot replace VERIFIED document",
+                        "VERIFIED_DOCUMENT_REPLACEMENT"
+                );
             }
 
             doc.setOldFileUrl(doc.getFileUrl());
             doc.setOldFileName(doc.getFileName());
             doc.setReplacementCount(doc.getReplacementCount() + 1);
+
         } else {
+
             doc = new ProjectDocumentUpload();
+
             doc.setProject(project);
             doc.setRequiredDocument(requiredDoc);
+
+            // from request
             doc.setCreatedBy(requestDto.getCreatedById());
             doc.setCreatedDate(new Date());
+
             doc.setReplacementCount(0);
         }
 
+        // Values coming from request / derived from request
         doc.setFileUrl(fileUrl);
         doc.setFileName(fileName);
-        doc.setFileFormat(requestDto.getFileFormat() != null ?
-                requestDto.getFileFormat().toLowerCase() : null);
+        doc.setFileFormat(fileFormat);
         doc.setFileSizeKb(requestDto.getFileSizeKb());
-        doc.setExpiryDate(requestDto.getExpiryDate() != null ?
-                java.sql.Date.valueOf(requestDto.getExpiryDate()) : null);
+
+        if (StringUtils.hasText(requestDto.getExpiryDate())) {
+            try {
+                doc.setExpiryDate(java.sql.Date.valueOf(requestDto.getExpiryDate()));
+            } catch (IllegalArgumentException e) {
+                throw new ValidationException(
+                        "Invalid expiry date format. Expected format is yyyy-MM-dd",
+                        "INVALID_EXPIRY_DATE_FORMAT"
+                );
+            }
+        } else {
+            doc.setExpiryDate(null);
+        }
+
         doc.setPermanent(Boolean.TRUE.equals(requestDto.getIsPermanent()));
         doc.setFromCompanyDoc(Boolean.TRUE.equals(requestDto.getIsFromCompanyDoc()));
         doc.setCompanyDocSourceId(requestDto.getCompanyDocSourceId());
         doc.setRemarks(requestDto.getRemarks());
 
+        // System/action fields
         doc.setStatus(uploadedStatus);
         doc.setUploadedBy(uploadedBy);
         doc.setUploadTime(new Date());
-        doc.setUpdatedBy(requestDto.getCreatedById());
+
+        /*
+         * Better than createdById here.
+         * The person uploading/replacing the document is the latest updater.
+         */
+        doc.setUpdatedBy(requestDto.getUploadedById());
         doc.setUpdatedDate(new Date());
+
         doc.setDeleted(false);
 
         doc = projectDocumentUploadRepository.save(doc);
 
-        logger.info("Document uploaded successfully. ID: {}, RequiredDoc: {}, Size: {} KB",
-                doc.getId(), requiredDoc.getName(), requestDto.getFileSizeKb());
+        logger.info(
+                "Document uploaded successfully. ID: {}, ProjectId: {}, RequiredDoc: {}, Size: {} KB, Format: {}",
+                doc.getId(),
+                requestDto.getProjectId(),
+                requiredDoc.getName(),
+                requestDto.getFileSizeKb(),
+                fileFormat
+        );
 
         return mapToDocumentResponseDto(doc);
     }
 
+    private void validateFileFormat(String fileFormat) {
+
+        if (!StringUtils.hasText(fileFormat)) {
+            throw new ValidationException(
+                    "File format is required",
+                    "INVALID_FILE_FORMAT"
+            );
+        }
+
+        if (!fileFormat.matches("pdf|jpg|jpeg|png")) {
+            throw new ValidationException(
+                    "Only pdf, jpg, jpeg, png allowed",
+                    "INVALID_FILE_FORMAT"
+            );
+        }
+    }
     /**
      * Validates that the uploaded file size does not exceed the maximum allowed size
      * defined in ProductRequiredDocuments.
