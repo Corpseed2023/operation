@@ -60,14 +60,6 @@ public class Vendor {
 
     private boolean isDeleted = false;
 
-//    @ManyToMany(fetch = FetchType.LAZY)
-//    @JoinTable(
-//            name = "vendor_product_map",
-//            joinColumns = @JoinColumn(name = "vendor_id"),
-//            inverseJoinColumns = @JoinColumn(name = "product_id")
-//    )
-//    @Comment("Which products this vendor can handle (EPR E-Waste, BIS, Lab Testing etc.)")
-//    private List<Product> expertiseProducts = new ArrayList<>();
 
     @OneToMany(mappedBy = "vendor", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<VendorContact> contacts = new ArrayList<>();

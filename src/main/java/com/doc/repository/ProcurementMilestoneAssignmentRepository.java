@@ -21,6 +21,14 @@ public interface ProcurementMilestoneAssignmentRepository extends JpaRepository<
             Long milestoneId
     );
 
+    @Query(value = """
+    SELECT * FROM procurement_milestone_assignment 
+    WHERE project_id = :projectId 
+      AND is_deleted = false 
+    LIMIT 1
+""", nativeQuery = true)
+    Optional<ProcurementMilestoneAssignment> findActiveByProjectIdNative(@Param("projectId") Long projectId);
+
     Optional<ProcurementMilestoneAssignment> findByProjectIdAndIsDeletedFalse(Long projectId);
 
     List<ProcurementMilestoneAssignment> findByAssignedToIdAndIsDeletedFalse(Long userId);
@@ -38,6 +46,7 @@ public interface ProcurementMilestoneAssignmentRepository extends JpaRepository<
     WHERE pma.id = :id AND pma.isDeleted = false
 """)
     Optional<ProcurementMilestoneAssignment> findByIdAndIsDeletedFalse(@Param("id") Long id);
+
 
 
 }
