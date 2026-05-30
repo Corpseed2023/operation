@@ -1,4 +1,9 @@
 package com.doc.service;
 
-public class sd {
+
+import com.doc.notification.NotificationCreateRequestDto;
+
+public interface NotificationPublisherService {
+
+    void sendNotification(NotificationCreateRequestDto requestDto);
 }

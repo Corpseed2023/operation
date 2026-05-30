@@ -14,10 +14,12 @@ import com.doc.entity.user.UserProductMap;
 import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.notification.*;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.service.AutoAssignmentService;
+import com.doc.service.NotificationPublisherService;
 import com.doc.service.ProjectMilestoneAssignmentService;
 import com.doc.validation.MilestoneValidator;
 import org.slf4j.Logger;
@@ -49,6 +51,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Autowired private MilestoneValidator milestoneValidator;
     @Autowired
     private ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    @Autowired
+    private NotificationPublisherService notificationPublisherService;
+
 
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
@@ -360,6 +365,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         assignment.setUpdatedDate(new Date());
         projectMilestoneAssignmentRepository.save(assignment);
 
+        pushProjectAssignmentNotification(
+                assignment,
+                newUser,
+                changedBy,
+                true,
+                reassignDto.getReassignmentReason()
+        );
+
         logger.info("Milestone {} successfully reassigned to {} by {}",
                 reassignDto.getAssignmentId(), newUser.getFullName(), changedBy.getFullName());
 
@@ -396,7 +409,153 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         : "No reason provided"
         );
 
+
+
         return response;
+    }
+
+    private void pushProjectAssignmentNotification(
+            ProjectMilestoneAssignment assignment,
+            User assignedUser,
+            User actor,
+            boolean reassigned,
+            String reason
+    ) {
+        if (assignment == null || assignment.getId() == null) {
+            return;
+        }
+
+        if (assignedUser == null || assignedUser.getId() == null) {
+            return;
+        }
+
+        Project project = assignment.getProject();
+
+        String projectName = getProjectName(project);
+        String projectNumber = getProjectNumber(project);
+        String milestoneName = getMilestoneName(assignment);
+        String actorName = getUserDisplayName(actor);
+
+        NotificationEventType eventType = reassigned
+                ? NotificationEventType.MILESTONE_REASSIGNED
+                : NotificationEventType.MILESTONE_ASSIGNED;
+
+        String title = reassigned
+                ? "Project Milestone Reassigned"
+                : "Project Milestone Assigned";
+
+        String message = reassigned
+                ? "You have been reassigned to milestone \"" + milestoneName + "\" for project \"" + projectName + "\" by " + actorName + "."
+                : "You have been assigned to milestone \"" + milestoneName + "\" for project \"" + projectName + "\".";
+
+        notificationPublisherService.sendNotification(
+                NotificationCreateRequestDto.builder()
+                        .receiverId(assignedUser.getId())
+                        .actorId(actor != null ? actor.getId() : null)
+                        .actorName(actorName)
+                        .module(NotificationModule.PROJECT)
+                        .eventType(eventType)
+                        .referenceId(project != null ? project.getId() : assignment.getId())
+                        .referenceNumber(projectNumber)
+                        .title(title)
+                        .message(message)
+                        .redirectUrl("/projects/" + (project != null ? project.getId() : "") + "/milestones/" + assignment.getId())
+                        .priority(NotificationPriority.HIGH)
+                        .displayType(NotificationDisplayType.INFO)
+                        .metadataJson(
+                                "{"
+                                        + "\"projectId\":" + (project != null ? project.getId() : null) + ","
+                                        + "\"projectName\":\"" + escapeJson(projectName) + "\","
+                                        + "\"projectNumber\":\"" + escapeJson(projectNumber) + "\","
+                                        + "\"milestoneAssignmentId\":" + assignment.getId() + ","
+                                        + "\"milestoneName\":\"" + escapeJson(milestoneName) + "\","
+                                        + "\"assignedUserId\":" + assignedUser.getId() + ","
+                                        + "\"assignedUserName\":\"" + escapeJson(getUserDisplayName(assignedUser)) + "\","
+                                        + "\"assignedById\":" + (actor != null ? actor.getId() : null) + ","
+                                        + "\"assignedByName\":\"" + escapeJson(actorName) + "\","
+                                        + "\"reason\":\"" + escapeJson(reason) + "\","
+                                        + "\"reassigned\":" + reassigned
+                                        + "}"
+                        )
+                        .build()
+        );
+    }
+
+    private String getUserDisplayName(User user) {
+        if (user == null) {
+            return "System";
+        }
+
+        if (user.getFullName() != null && !user.getFullName().trim().isEmpty()) {
+            return user.getFullName().trim();
+        }
+
+        if (user.getEmail() != null && !user.getEmail().trim().isEmpty()) {
+            return user.getEmail().trim();
+        }
+
+        return "User";
+    }
+
+    private String getMilestoneName(ProjectMilestoneAssignment assignment) {
+        if (assignment == null) {
+            return "Milestone";
+        }
+
+        if (assignment.getMilestone() != null
+                && assignment.getMilestone().getName() != null
+                && !assignment.getMilestone().getName().trim().isEmpty()) {
+            return assignment.getMilestone().getName().trim();
+        }
+
+        if (assignment.getProductMilestoneMap() != null
+                && assignment.getProductMilestoneMap().getMilestone() != null
+                && assignment.getProductMilestoneMap().getMilestone().getName() != null
+                && !assignment.getProductMilestoneMap().getMilestone().getName().trim().isEmpty()) {
+            return assignment.getProductMilestoneMap().getMilestone().getName().trim();
+        }
+
+        return "Milestone-" + assignment.getId();
+    }
+
+    private String getProjectName(Project project) {
+        if (project == null) {
+            return "Project";
+        }
+
+        try {
+            if (project.getName() != null && !project.getName().trim().isEmpty()) {
+                return project.getName().trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        return "Project-" + project.getId();
+    }
+
+    private String getProjectNumber(Project project) {
+        if (project == null) {
+            return "";
+        }
+
+        try {
+            if (project.getProjectNo() != null && !project.getProjectNo().trim().isEmpty()) {
+                return project.getProjectNo().trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        return "PROJECT-" + project.getId();
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     private UserProductMap createUserProductMap(User user, Product product, Long createdBy) {

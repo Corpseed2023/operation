@@ -1,4 +1,8 @@
 package com.doc.notification;
 
-public class qw {
+public enum NotificationPriority {
+    LOW,
+    MEDIUM,
+    HIGH,
+    URGENT
 }

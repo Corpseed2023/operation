@@ -1,4 +1,8 @@
 package com.doc.notification;
 
-public class sd {
+public enum NotificationDisplayType {
+    INFO,
+    SUCCESS,
+    WARNING,
+    DANGER
 }
