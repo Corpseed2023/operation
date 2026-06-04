@@ -92,7 +92,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setRemarks(dto.getRemarks());
         po.setAttachmentUrls(dto.getAttachmentUrls());
 
-        po.setStatus(ProcurementOrderStatus.DRAFT);
+        po.setStatus(ProcurementOrderStatus.PENDING_APPROVAL);
         po.setPoCreatedDate(new Date());
 
         po.setCreatedBy(createdByUser.getId());
