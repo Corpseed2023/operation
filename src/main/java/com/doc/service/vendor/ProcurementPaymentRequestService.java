@@ -19,6 +19,13 @@ public interface ProcurementPaymentRequestService {
             int size
     );
 
+    Page<ProcurementPaymentRequestResponseDto> getPaymentRequestsByProcurementOrderId(
+            Long procurementOrderId,
+            int page,
+            int size
+    );
+
+
     ProcurementPaymentRequestResponseDto approvePaymentRequest(
             Long paymentRequestId,
             Long userId,

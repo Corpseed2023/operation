@@ -31,6 +31,19 @@ public class PurchaseOrderController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    @GetMapping("/byProjectId/{projectId}")
+    @Operation(summary = "Get Purchase Order list by Project ID")
+    public ResponseEntity<Page<PurchaseOrderResponseDto>> getPurchaseOrdersByProjectId(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Page<PurchaseOrderResponseDto> response =
+                purchaseOrderService.getPurchaseOrdersByProjectId(projectId, page, size);
+
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/{poId}/release")
     @Operation(summary = "Release Purchase Order (Change status to RELEASED)")
     public ResponseEntity<PurchaseOrderResponseDto> releasePurchaseOrder(

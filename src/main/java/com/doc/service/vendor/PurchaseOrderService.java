@@ -17,6 +17,12 @@ public interface PurchaseOrderService {
     PurchaseOrderResponseDto getByProcurementAssignmentId(Long procurementAssignmentId);
 
 
+    Page<PurchaseOrderResponseDto> getPurchaseOrdersByProjectId(
+            Long projectId,
+            int page,
+            int size
+    );
+
     Page<ProcurementOrderResponseDto> getProcurementOrdersByStatus(
             ProcurementOrderStatus status,
             int page,

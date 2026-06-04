@@ -168,6 +168,33 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<PurchaseOrderResponseDto> getPurchaseOrdersByProjectId(
+            Long projectId,
+            int page,
+            int size
+    ) {
+        if (projectId == null) {
+            throw new ValidationException(
+                    "Project ID is required",
+                    "ERR_PROJECT_ID_REQUIRED"
+            );
+        }
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+
+        Page<ProcurementOrder> purchaseOrders =
+                purchaseOrderRepository.findByProjectIdAndIsDeletedFalse(projectId, pageable);
+
+        return purchaseOrders.map(this::mapToResponseDto);
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<ProcurementOrderResponseDto> getProcurementOrdersByStatus(
             ProcurementOrderStatus status,
             int page,

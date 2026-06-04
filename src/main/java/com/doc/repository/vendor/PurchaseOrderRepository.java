@@ -21,4 +21,11 @@ public interface PurchaseOrderRepository extends JpaRepository<ProcurementOrder,
             ProcurementOrderStatus status,
             Pageable pageable
     );
+
+    Page<ProcurementOrder> findByProjectIdAndIsDeletedFalse(
+            Long projectId,
+            Pageable pageable
+    );
+
+
 }

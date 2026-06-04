@@ -167,6 +167,50 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         return requests.map(this::mapToResponse);
     }
 
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProcurementPaymentRequestResponseDto> getPaymentRequestsByProcurementOrderId(
+            Long procurementOrderId,
+            int page,
+            int size
+    ) {
+        if (procurementOrderId == null) {
+            throw new ValidationException(
+                    "Procurement order id is required",
+                    "ERR_PROCUREMENT_ORDER_ID_REQUIRED"
+            );
+        }
+
+        ProcurementOrder order = purchaseOrderRepository.findById(procurementOrderId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Procurement order not found",
+                        "ERR_PROCUREMENT_ORDER_NOT_FOUND"
+                ));
+
+        if (order.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted procurement order cannot be used for fetching payment requests",
+                    "ERR_DELETED_PROCUREMENT_ORDER"
+            );
+        }
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+
+        Page<ProcurementPaymentRequest> requests =
+                paymentRequestRepository.findByProcurementOrder_IdAndIsDeletedFalse(
+                        procurementOrderId,
+                        pageable
+                );
+
+        return requests.map(this::mapToResponse);
+    }
+
+
     @Override
     @Transactional
     public ProcurementPaymentRequestResponseDto approvePaymentRequest(

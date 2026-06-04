@@ -48,6 +48,23 @@ public class ProcurementPaymentRequestController {
         return ResponseEntity.ok(response);
     }
 
+
+    @GetMapping("/byPurchaseOrderId/{procurementOrderId}")
+    public ResponseEntity<Page<ProcurementPaymentRequestResponseDto>> getPaymentRequestsByProcurementOrderId(
+            @PathVariable Long procurementOrderId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Page<ProcurementPaymentRequestResponseDto> response =
+                procurementPaymentRequestService.getPaymentRequestsByProcurementOrderId(
+                        procurementOrderId,
+                        page,
+                        size
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/{paymentRequestId}/approve/{userId}")
     public ResponseEntity<ProcurementPaymentRequestResponseDto> approvePaymentRequest(
             @PathVariable Long paymentRequestId,
