@@ -43,4 +43,10 @@ public interface PurchaseOrderService {
 
     PurchaseOrderResponseDto updatePurchaseOrder(Long poId, PurchaseOrderRequestDto dto);
 
+    PurchaseOrderResponseDto updatePurchaseOrderStatus(
+            Long poId,
+            ProcurementOrderStatus status,
+            Long userId,
+            String remarks
+    );
 }

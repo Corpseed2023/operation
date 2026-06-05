@@ -410,6 +410,125 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return mapToResponseDto(savedPo);
     }
 
+    @Override
+    @Transactional
+    public PurchaseOrderResponseDto updatePurchaseOrderStatus(
+            Long poId,
+            ProcurementOrderStatus newStatus,
+            Long userId,
+            String remarks
+    ) {
+        logger.info("Updating Purchase Order status | poId={}, newStatus={}, userId={}",
+                poId, newStatus, userId);
+
+        if (poId == null) {
+            throw new ValidationException(
+                    "Purchase Order ID is required",
+                    "ERR_PO_ID_REQUIRED"
+            );
+        }
+
+        if (newStatus == null) {
+            throw new ValidationException(
+                    "Purchase Order status is required",
+                    "ERR_PO_STATUS_REQUIRED"
+            );
+        }
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        ProcurementOrder po = purchaseOrderRepository.findById(poId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Purchase Order not found",
+                        "ERR_PO_NOT_FOUND"
+                ));
+
+        if (po.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted Purchase Order status cannot be updated",
+                    "ERR_DELETED_PO_STATUS_CANNOT_BE_UPDATED"
+            );
+        }
+
+        User updatedByUser = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
+
+        ProcurementOrderStatus currentStatus = po.getStatus();
+
+        validatePurchaseOrderStatusTransition(currentStatus, newStatus);
+
+        po.setStatus(newStatus);
+        po.setUpdatedBy(updatedByUser.getId());
+        po.setUpdatedDate(new Date());
+
+        if (remarks != null && !remarks.trim().isEmpty()) {
+            po.setRemarks(remarks.trim());
+        }
+
+        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
+
+        logger.info("Purchase Order status updated successfully | poNumber={} | oldStatus={} | newStatus={}",
+                savedPo.getPoNumber(), currentStatus, newStatus);
+
+        return mapToResponseDto(savedPo);
+    }
+
+    private void validatePurchaseOrderStatusTransition(
+            ProcurementOrderStatus currentStatus,
+            ProcurementOrderStatus newStatus
+    ) {
+        if (currentStatus == null) {
+            throw new ValidationException(
+                    "Current Purchase Order status is missing",
+                    "ERR_CURRENT_PO_STATUS_MISSING"
+            );
+        }
+
+        if (currentStatus == newStatus) {
+            throw new ValidationException(
+                    "Purchase Order is already in status: " + newStatus,
+                    "ERR_PO_ALREADY_IN_SAME_STATUS"
+            );
+        }
+
+        /*
+         * Allowed transitions:
+         * APPROVED  -> PARTIALLY_COMPLETED / COMPLETED
+         * RELEASED  -> PARTIALLY_COMPLETED / COMPLETED
+         * PARTIALLY_COMPLETED -> COMPLETED
+         */
+        boolean validTransition =
+                (currentStatus == ProcurementOrderStatus.APPROVED
+                        && (newStatus == ProcurementOrderStatus.PARTIALLY_COMPLETED
+                        || newStatus == ProcurementOrderStatus.COMPLETED))
+
+                        || (currentStatus == ProcurementOrderStatus.RELEASED
+                        && (newStatus == ProcurementOrderStatus.PARTIALLY_COMPLETED
+                        || newStatus == ProcurementOrderStatus.COMPLETED))
+
+                        || (currentStatus == ProcurementOrderStatus.PARTIALLY_COMPLETED
+                        && newStatus == ProcurementOrderStatus.COMPLETED);
+
+        if (!validTransition) {
+            throw new ValidationException(
+                    "Invalid Purchase Order status change from "
+                            + currentStatus
+                            + " to "
+                            + newStatus
+                            + ". Allowed transitions are: APPROVED/RELEASED -> PARTIALLY_COMPLETED, APPROVED/RELEASED -> COMPLETED, PARTIALLY_COMPLETED -> COMPLETED",
+                    "ERR_INVALID_PO_STATUS_TRANSITION"
+            );
+        }
+    }
+
     private ProcurementOrderResponseDto mapToResponse(ProcurementOrder order) {
         return ProcurementOrderResponseDto.builder()
                 .id(order.getId())

@@ -1,9 +1,6 @@
 package com.doc.controller.procurement;
 
-import com.doc.dto.vendor.ProcurementOrderActionRequestDto;
-import com.doc.dto.vendor.ProcurementOrderResponseDto;
-import com.doc.dto.vendor.PurchaseOrderRequestDto;
-import com.doc.dto.vendor.PurchaseOrderResponseDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.service.vendor.PurchaseOrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -128,6 +125,24 @@ public class PurchaseOrderController {
             @Valid @RequestBody PurchaseOrderRequestDto requestDto
     ) {
         PurchaseOrderResponseDto response = purchaseOrderService.updatePurchaseOrder(poId, requestDto);
+        return ResponseEntity.ok(response);
+    }
+
+
+    @PutMapping("/{poId}/updateStatus")
+    @Operation(summary = "Update Purchase Order status")
+    public ResponseEntity<PurchaseOrderResponseDto> updatePurchaseOrderStatus(
+            @PathVariable Long poId,
+            @Valid @RequestBody PurchaseOrderStatusUpdateRequestDto request
+    ) {
+        PurchaseOrderResponseDto response =
+                purchaseOrderService.updatePurchaseOrderStatus(
+                        poId,
+                        request.getStatus(),
+                        request.getUserId(),
+                        request.getRemarks()
+                );
+
         return ResponseEntity.ok(response);
     }
 
