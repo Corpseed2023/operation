@@ -20,7 +20,6 @@ public class VendorController {
     @Autowired
     private VendorService vendorService;
 
-
     @PostMapping
     @Operation(summary = "Create new Vendor")
     public ResponseEntity<VendorResponseDto> createVendor(
