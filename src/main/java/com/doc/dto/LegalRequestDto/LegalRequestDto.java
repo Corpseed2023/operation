@@ -9,6 +9,8 @@ import java.util.List;
 @Setter
 public class LegalRequestDto {
 
+    private Long id;
+
     private Long projectId;
 
     private Long projectMilestoneAssignmentId;

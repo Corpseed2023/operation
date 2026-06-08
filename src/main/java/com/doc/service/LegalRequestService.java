@@ -1,27 +1,25 @@
 package com.doc.service;
 
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
+import com.doc.dto.LegalRequestDto.LegalRequestResponseDto;
 import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
 import com.doc.em.LegalStatus;
-import com.doc.entity.legalrequest.LegalRequest;
-
 import org.springframework.data.domain.Page;
-
-import java.time.LocalDateTime;
-
 
 public interface LegalRequestService {
 
-    LegalRequestDto createRequest(LegalRequestDto dto);
+    LegalRequestResponseDto createRequest(LegalRequestDto dto);
 
-    LegalRequestDto mapToResponse(LegalRequest request);
+    LegalRequestResponseDto updateStatus(Long id, LegalStatusUpdateDto dto);
 
-    LegalRequestDto updateStatus(Long id, LegalStatusUpdateDto dto);
+    LegalRequestResponseDto getById(Long id);
 
-     LegalRequestDto getById(Long id);
+    LegalRequestResponseDto markAsViewed(Long id, Long userId);
 
-    LegalRequestDto markAsViewed(Long id, Long userId);
-
-    Page<LegalRequestDto> getAllLegalRequests(Long userId, LegalStatus status, int page, int size);
+    Page<LegalRequestResponseDto> getAllLegalRequests(
+            Long userId,
+            LegalStatus status,
+            int page,
+            int size
+    );
 }
-
