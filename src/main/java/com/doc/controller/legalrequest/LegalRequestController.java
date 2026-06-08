@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/legal-requests")
+@RequestMapping("/operationService/api/legal-requests")
 public class LegalRequestController {
 
     private final LegalRequestService legalRequestService;
