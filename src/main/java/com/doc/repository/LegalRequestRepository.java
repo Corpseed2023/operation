@@ -84,29 +84,28 @@ public interface LegalRequestRepository extends JpaRepository<LegalRequest, Long
     );
 
 
-    // Optional: fetch both created and assigned records
     @Query(
             value = """
-                    SELECT *
-                    FROM legal_request lr
-                    WHERE lr.is_deleted = false
-                    AND lr.legal_status = :status
-                    AND (
-                        lr.created_by = :userId
-                        OR lr.assigned_to_legal = :userId
-                    )
-                    ORDER BY lr.created_at DESC
-                    """,
+                SELECT *
+                FROM legal_request lr
+                WHERE lr.is_deleted = false
+                AND lr.legal_status = :status
+                AND (
+                    lr.created_by = :userId
+                    OR lr.assigned_to_legal = :userId
+                )
+                ORDER BY lr.created_at DESC
+                """,
             countQuery = """
-                    SELECT COUNT(*)
-                    FROM legal_request lr
-                    WHERE lr.is_deleted = false
-                    AND lr.legal_status = :status
-                    AND (
-                        lr.created_by = :userId
-                        OR lr.assigned_to_legal = :userId
-                    )
-                    """,
+                SELECT COUNT(*)
+                FROM legal_request lr
+                WHERE lr.is_deleted = false
+                AND lr.legal_status = :status
+                AND (
+                    lr.created_by = :userId
+                    OR lr.assigned_to_legal = :userId
+                )
+                """,
             nativeQuery = true
     )
     Page<LegalRequest> findByUserRelatedAndStatusNative(

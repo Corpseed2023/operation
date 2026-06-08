@@ -255,8 +255,6 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
                         "ERR_USER_NOT_FOUND"
                 ));
 
-        Page<LegalRequest> result;
-
         String designationName = user.getUserDesignation() != null
                 ? user.getUserDesignation().getName()
                 : null;
@@ -264,24 +262,15 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         boolean isAdmin = designationName != null
                 && "ADMIN".equalsIgnoreCase(designationName.trim());
 
-        if (isAdmin) {
+        Page<LegalRequest> result;
 
+        if (isAdmin) {
             result = legalRequestRepository.findAllByStatusNative(
                     status.name(),
                     pageable
             );
-
-        } else if (status == LegalStatus.INITIATED) {
-
-            result = legalRequestRepository.findByCreatedByAndStatusNative(
-                    userId,
-                    status.name(),
-                    pageable
-            );
-
         } else {
-
-            result = legalRequestRepository.findByAssignedLegalAndStatusNative(
+            result = legalRequestRepository.findByUserRelatedAndStatusNative(
                     userId,
                     status.name(),
                     pageable
@@ -402,4 +391,5 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
 
         return dto;
     }
+
 }
