@@ -7,15 +7,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
-
 public interface LegalRequestRepository extends JpaRepository<LegalRequest, Long> {
+
+    // ADMIN: fetch all legal requests by status
     @Query(
             value = """
                     SELECT *
                     FROM legal_request lr
                     WHERE lr.is_deleted = false
                     AND lr.legal_status = :status
+                    ORDER BY lr.created_at DESC
                     """,
             countQuery = """
                     SELECT COUNT(*)
@@ -30,6 +31,8 @@ public interface LegalRequestRepository extends JpaRepository<LegalRequest, Long
             Pageable pageable
     );
 
+
+    // LEGAL USER: fetch requests assigned to legal user
     @Query(
             value = """
                     SELECT *
@@ -37,6 +40,7 @@ public interface LegalRequestRepository extends JpaRepository<LegalRequest, Long
                     WHERE lr.is_deleted = false
                     AND lr.legal_status = :status
                     AND lr.assigned_to_legal = :userId
+                    ORDER BY lr.created_at DESC
                     """,
             countQuery = """
                     SELECT COUNT(*)
@@ -54,8 +58,60 @@ public interface LegalRequestRepository extends JpaRepository<LegalRequest, Long
     );
 
 
+    // NORMAL USER: fetch own initiated requests
+    @Query(
+            value = """
+                    SELECT *
+                    FROM legal_request lr
+                    WHERE lr.is_deleted = false
+                    AND lr.legal_status = :status
+                    AND lr.created_by = :userId
+                    ORDER BY lr.created_at DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(*)
+                    FROM legal_request lr
+                    WHERE lr.is_deleted = false
+                    AND lr.legal_status = :status
+                    AND lr.created_by = :userId
+                    """,
+            nativeQuery = true
+    )
+    Page<LegalRequest> findByCreatedByAndStatusNative(
+            @Param("userId") Long userId,
+            @Param("status") String status,
+            Pageable pageable
+    );
 
 
-
-
+    // Optional: fetch both created and assigned records
+    @Query(
+            value = """
+                    SELECT *
+                    FROM legal_request lr
+                    WHERE lr.is_deleted = false
+                    AND lr.legal_status = :status
+                    AND (
+                        lr.created_by = :userId
+                        OR lr.assigned_to_legal = :userId
+                    )
+                    ORDER BY lr.created_at DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(*)
+                    FROM legal_request lr
+                    WHERE lr.is_deleted = false
+                    AND lr.legal_status = :status
+                    AND (
+                        lr.created_by = :userId
+                        OR lr.assigned_to_legal = :userId
+                    )
+                    """,
+            nativeQuery = true
+    )
+    Page<LegalRequest> findByUserRelatedAndStatusNative(
+            @Param("userId") Long userId,
+            @Param("status") String status,
+            Pageable pageable
+    );
 }

@@ -236,11 +236,7 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         int pageIndex = page <= 0 ? 0 : page - 1;
         int pageSize = size <= 0 ? 10 : size;
 
-        Pageable pageable = PageRequest.of(
-                pageIndex,
-                pageSize,
-                Sort.by("created_at").descending()
-        );
+        Pageable pageable = PageRequest.of(pageIndex, pageSize);
 
         User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -250,16 +246,34 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
 
         Page<LegalRequest> result;
 
-        if (user.getUserDesignation() != null
-                && "ADMIN".equalsIgnoreCase(user.getUserDesignation().getName())) {
+        String designationName = user.getUserDesignation() != null
+                ? user.getUserDesignation().getName()
+                : null;
 
+        boolean isAdmin = designationName != null
+                && "ADMIN".equalsIgnoreCase(designationName.trim());
+
+        if (isAdmin) {
+
+            // ADMIN: fetch all requests by selected status
             result = legalRequestRepository.findAllByStatusNative(
+                    status.name(),
+                    pageable
+            );
+
+        } else if (status == LegalStatus.INITIATED) {
+
+            // Non-admin INITIATED records are not assigned yet,
+            // so fetch by created_by.
+            result = legalRequestRepository.findByCreatedByAndStatusNative(
+                    userId,
                     status.name(),
                     pageable
             );
 
         } else {
 
+            // Other statuses should be assigned to legal user.
             result = legalRequestRepository.findByAssignedLegalAndStatusNative(
                     userId,
                     status.name(),
@@ -321,7 +335,6 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
                             .map(document -> {
                                 LegalRequestDocumentDto docDto = new LegalRequestDocumentDto();
 
-                                docDto.setId(document.getId());
                                 docDto.setFileName(document.getFileName());
                                 docDto.setFileUrl(document.getFileUrl());
                                 docDto.setFileType(document.getFileType());

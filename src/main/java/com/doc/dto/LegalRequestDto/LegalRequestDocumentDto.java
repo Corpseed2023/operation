@@ -9,8 +9,6 @@ import java.time.LocalDateTime;
 @Setter
 public class LegalRequestDocumentDto {
 
-    private Long id;
-
     private String fileName;
 
     private String fileUrl;
