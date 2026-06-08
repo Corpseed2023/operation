@@ -22,5 +22,6 @@ public interface LegalRequestService {
 
     LegalRequestDto markAsViewed(Long id, Long userId);
 
+    Page<LegalRequestDto> getAllLegalRequests(Long userId, LegalStatus status, int page, int size);
 }
 

@@ -68,4 +68,17 @@ public class LegalRequestController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping
+    public ResponseEntity<Page<LegalRequestDto>> getAllLegalRequests(
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "INITIATED") LegalStatus status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Page<LegalRequestDto> response =
+                legalRequestService.getAllLegalRequests(userId, status, page, size);
+
+        return ResponseEntity.ok(response);
+    }
+
 }

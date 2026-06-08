@@ -222,6 +222,53 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         return mapToResponse(request);
     }
 
+    @Override
+    public Page<LegalRequestDto> getAllLegalRequests(Long userId, LegalStatus status, int page, int size) {
+
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required");
+        }
+
+        if (status == null) {
+            status = LegalStatus.INITIATED;
+        }
+
+        int pageIndex = page <= 0 ? 0 : page - 1;
+        int pageSize = size <= 0 ? 10 : size;
+
+        Pageable pageable = PageRequest.of(
+                pageIndex,
+                pageSize,
+                Sort.by("created_at").descending()
+        );
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
+
+        Page<LegalRequest> result;
+
+        if (user.getUserDesignation() != null
+                && "ADMIN".equalsIgnoreCase(user.getUserDesignation().getName())) {
+
+            result = legalRequestRepository.findAllByStatusNative(
+                    status.name(),
+                    pageable
+            );
+
+        } else {
+
+            result = legalRequestRepository.findByAssignedLegalAndStatusNative(
+                    userId,
+                    status.name(),
+                    pageable
+            );
+        }
+
+        return result.map(this::mapToResponse);
+    }
 
     @Override
     @Transactional
@@ -290,4 +337,6 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
 
         return dto;
     }
+
+
 }
