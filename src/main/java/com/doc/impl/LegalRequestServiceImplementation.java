@@ -1,5 +1,6 @@
 package com.doc.impl;
 
+import com.doc.dto.LegalRequestDto.LegalRequestDocumentDto;
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
 import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
 import com.doc.em.LegalStatus;
@@ -103,25 +104,37 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
             request.setLegalStatus(LegalStatus.INITIATED);
         }
 
-        request.setCreatedBy(dto.getCreatedById());
+        Long currentUserId = dto.getCreatedById() != null ? dto.getCreatedById() : 1L;
+
+        request.setCreatedBy(currentUserId);
+        request.setUpdatedBy(currentUserId);
         request.setCreatedAt(LocalDateTime.now());
         request.setUpdatedAt(LocalDateTime.now());
 
-        if (dto.getDocuments() != null && !dto.getDocuments().isEmpty()) {
+        if (dto.getLegalRequestDocumentDtoList() != null
+                && !dto.getLegalRequestDocumentDtoList().isEmpty()) {
 
-            for (String fileUrl : dto.getDocuments()) {
+            for (LegalRequestDocumentDto docDto : dto.getLegalRequestDocumentDtoList()) {
 
-                if (fileUrl == null || fileUrl.trim().isEmpty()) {
+                if (docDto == null
+                        || docDto.getFileUrl() == null
+                        || docDto.getFileUrl().trim().isEmpty()) {
                     continue;
                 }
 
                 LegalRequestDocument document = new LegalRequestDocument();
 
-                document.setFileUrl(fileUrl.trim());
-                document.setUploadedAt(LocalDateTime.now());
+                document.setFileName(docDto.getFileName());
+                document.setFileUrl(docDto.getFileUrl().trim());
+                document.setFileType(docDto.getFileType());
+                document.setFileSize(docDto.getFileSize());
+                document.setUuid(docDto.getUuid());
 
-                String fileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
-                document.setFileName(fileName);
+                document.setUploadedAt(
+                        docDto.getUploadedAt() != null
+                                ? docDto.getUploadedAt()
+                                : LocalDateTime.now()
+                );
 
                 request.addDocument(document);
             }
@@ -233,7 +246,18 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
 
         dto.setProjectId(request.getProject() != null ? request.getProject().getId() : null);
 
+        if (request.getProjectMilestoneAssignment() != null) {
+            dto.setProjectMilestoneAssignmentId(request.getProjectMilestoneAssignment().getId());
+
+            if (request.getProjectMilestoneAssignment().getAssignedUser() != null) {
+                dto.setMilestoneAssigneeId(
+                        request.getProjectMilestoneAssignment().getAssignedUser().getId()
+                );
+            }
+        }
+
         dto.setStatus(request.getLegalStatus() != null ? request.getLegalStatus().name() : null);
+        dto.setStatusReason(request.getStatusReason());
 
         if (request.getAssignedToLegal() != null) {
             dto.setAssignedToLegal(request.getAssignedToLegal().getId());
@@ -241,7 +265,28 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
 
         dto.setLegalRequestTitle(request.getLegalRequestTitle());
         dto.setNotes(request.getNotes());
+        dto.setCreatedById(request.getCreatedBy());
 
+        if (request.getDocuments() != null && !request.getDocuments().isEmpty()) {
+            dto.setLegalRequestDocumentDtoList(
+                    request.getDocuments()
+                            .stream()
+                            .map(document -> {
+                                LegalRequestDocumentDto docDto = new LegalRequestDocumentDto();
+
+                                docDto.setId(document.getId());
+                                docDto.setFileName(document.getFileName());
+                                docDto.setFileUrl(document.getFileUrl());
+                                docDto.setFileType(document.getFileType());
+                                docDto.setFileSize(document.getFileSize());
+                                docDto.setUuid(document.getUuid());
+                                docDto.setUploadedAt(document.getUploadedAt());
+
+                                return docDto;
+                            })
+                            .toList()
+            );
+        }
 
         return dto;
     }
