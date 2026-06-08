@@ -95,7 +95,7 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
                     ));
 
             request.setAssignedToLegal(assignedLegalUser);
-            request.setLegalStatus(LegalStatus.PENDING);
+            request.setLegalStatus(LegalStatus.INITIATED);
         } else {
             request.setLegalStatus(LegalStatus.INITIATED);
         }
