@@ -1,11 +1,10 @@
-package com.doc.entity.legalrequest;   // Better package structure
+package com.doc.entity.legalrequest;
 
 import com.doc.em.LegalStatus;
 import com.doc.entity.document.LegalRequestDocument;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.user.User;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -26,27 +25,44 @@ public class LegalRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Project for which legal help is requested
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
-    @JsonIgnore
     private Project project;
 
+    // Exact milestone assignment: Document, Filing, Approval, etc.
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_milestone_assignment_id", nullable = false)   // Better column name
+    @JoinColumn(name = "project_milestone_assignment_id", nullable = false)
     private ProjectMilestoneAssignment projectMilestoneAssignment;
 
-    @Column(name = "tat_in_days", nullable = false)
-    private Double tatInDays;
-
-    @Column(name = "tat_reason", length = 500)
-    private String tatReason;
-
     @Enumerated(EnumType.STRING)
-    @Column(name = "legal_status", nullable = false)
-    private LegalStatus legalStatus;
+    @Column(name = "legal_status", nullable = false, length = 50)
+    private LegalStatus legalStatus = LegalStatus.INITIATED;
 
-    @OneToMany(mappedBy = "legalRequest", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<LegalRequestDocument> documents = new ArrayList<>();   // Initialize + orphanRemoval
+    @OneToMany(
+            mappedBy = "legalRequest",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
+    private List<LegalRequestDocument> documents = new ArrayList<>();
+
+    // Legal person assigned to this request
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_to_legal")
+    private User assignedToLegal;
+
+    @Column(name = "legal_request_title", nullable = false, length = 255)
+    private String legalRequestTitle;
+
+    @Column(name = "notes", length = 2000)
+    private String notes;
+
+    @Column(name = "status_reason", length = 1000)
+    private String statusReason;
+
+    @Column(name = "resolution_summary", length = 2000)
+    private String resolutionSummary;
 
     @Column(name = "created_by", nullable = false, updatable = false)
     private Long createdBy;
@@ -54,8 +70,17 @@ public class LegalRequest {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    @Column(name = "assigned_to")
-    private Long assignedTo;
+    @Column(name = "viewed_by")
+    private Long viewedBy;
+
+    @Column(name = "viewed_at")
+    private LocalDateTime viewedAt;
+
+    @Column(name = "resolved_by")
+    private Long resolvedBy;
+
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -63,24 +88,16 @@ public class LegalRequest {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "status_reason", length = 1000)
-    private String statusReason;
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_to_legal")
-    private User assignedToLegal;
+    public void addDocument(LegalRequestDocument document) {
+        documents.add(document);
+        document.setLegalRequest(this);
+    }
 
-    @Column(name = "notes", length = 2000)
-    private String notes;
-
-    @Column(name = "legal_request_title", nullable = false, length = 255)
-    private String legalRequestTitle;
-
-    @Column(name = "viewed_by")
-    private Long viewedBy;
-
-    @Column(name = "viewed_at")
-    private LocalDateTime viewedAt;
-
-
+    public void removeDocument(LegalRequestDocument document) {
+        documents.remove(document);
+        document.setLegalRequest(null);
+    }
 }

@@ -54,31 +54,7 @@ public class LegalRequestController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Search/Filter Legal Requests with pagination
-     */
-    @GetMapping
-    public ResponseEntity<Page<LegalRequestDto>> searchRequests(
-            @RequestParam(required = false) LegalStatus status,
-            @RequestParam(required = false) Long projectId,
-            @RequestParam(required = false) Long assignedTo,
-            @RequestParam(required = false) Long createdBy,
-            @RequestParam(required = false) String projectName,
-            @RequestParam(required = false) String milestoneName,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
 
-        Page<LegalRequestDto> result = legalRequestService.searchRequests(
-                status, projectId, assignedTo, createdBy,
-                projectName, milestoneName, startDate, endDate, page, size
-        );
-
-        return ResponseEntity.ok(result);
-    }
 
     /**
      * Mark Legal Request as Viewed

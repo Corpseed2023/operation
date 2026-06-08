@@ -6,9 +6,15 @@ import lombok.Setter;
 @Getter
 @Setter
 public class LegalStatusUpdateDto {
+
     private String status;
+
     private String statusReason;
+
+    private String resolutionSummary;
+
+    private Long userId;
+
 
 
 }
-

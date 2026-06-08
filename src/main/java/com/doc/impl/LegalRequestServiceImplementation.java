@@ -3,6 +3,7 @@ package com.doc.impl;
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
 import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
 import com.doc.em.LegalStatus;
+import com.doc.entity.document.LegalRequestDocument;
 import com.doc.entity.legalrequest.LegalRequest;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
@@ -32,7 +33,7 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
     private final LegalRequestRepository legalRequestRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMilestoneAssignmentRepository milestoneRepo;
-    private final LegalRequestDocumentRepository documentRepository;
+    private final LegalRequestDocumentRepository legalRequestDocumentRepository;
 
     @Autowired
     public LegalRequestServiceImplementation(
@@ -40,54 +41,93 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
             LegalRequestRepository legalRequestRepository,
             ProjectRepository projectRepository,
             ProjectMilestoneAssignmentRepository milestoneRepo,
-            LegalRequestDocumentRepository documentRepository) {
+            LegalRequestDocumentRepository legalRequestDocumentRepository) {
 
         this.userRepository = userRepository;
         this.legalRequestRepository = legalRequestRepository;
         this.projectRepository = projectRepository;
         this.milestoneRepo = milestoneRepo;
-        this.documentRepository = documentRepository;
+        this.legalRequestDocumentRepository = legalRequestDocumentRepository;
     }
 
     @Override
     @Transactional
     public LegalRequestDto createRequest(LegalRequestDto dto) {
 
-        Project project = projectRepository.findById(dto.getProjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
-
-        ProjectMilestoneAssignment milestone = milestoneRepo
-                .findByIdAndProjectIdAndIsDeletedFalse(dto.getMilestoneId(), dto.getProjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found", "ERR_MILESTONE_NOT_FOUND"));
-
-        LegalRequest request = new LegalRequest();
-        request.setProject(project);
-        request.setProjectMilestoneAssignment(milestone);
-
-        if (dto.getAssignedToLegal() != null) {
-            User user = userRepository.findById(dto.getAssignedToLegal())
-                    .orElseThrow(() -> new ResourceNotFoundException("Assigned legal user not found", "ERR_USER_NOT_FOUND"));
-            request.setAssignedToLegal(user);
+        if (dto.getProjectId() == null) {
+            throw new IllegalArgumentException("projectId is required");
         }
 
-        request.setLegalRequestTitle(dto.getLegalRequestTitle());
+        if (dto.getProjectMilestoneAssignmentId() == null) {
+            throw new IllegalArgumentException("projectMilestoneAssignmentId is required");
+        }
+
+        if (dto.getLegalRequestTitle() == null || dto.getLegalRequestTitle().trim().isEmpty()) {
+            throw new IllegalArgumentException("legalRequestTitle is required");
+        }
+
+        Project project = projectRepository.findById(dto.getProjectId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
+
+        ProjectMilestoneAssignment milestoneAssignment =
+                milestoneRepo.findByIdAndProjectIdAndIsDeletedFalse(
+                        dto.getProjectMilestoneAssignmentId(),
+                        dto.getProjectId()
+                ).orElseThrow(() -> new ResourceNotFoundException(
+                        "Project milestone assignment not found",
+                        "ERR_PROJECT_MILESTONE_ASSIGNMENT_NOT_FOUND"
+                ));
+
+        LegalRequest request = new LegalRequest();
+
+        request.setProject(project);
+        request.setProjectMilestoneAssignment(milestoneAssignment);
+
+        request.setLegalRequestTitle(dto.getLegalRequestTitle().trim());
         request.setNotes(dto.getNotes());
-        request.setTatInDays(dto.getTatInDays() != null ? dto.getTatInDays() : 0.0);
-        request.setTatReason(dto.getTatReason());
+        request.setStatusReason(dto.getStatusReason());
 
-        request.setLegalStatus(LegalStatus.INITIATED);
+        if (dto.getAssignedToLegal() != null) {
+            User user = userRepository.findActiveUserById(dto.getAssignedToLegal())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Assigned legal user not found",
+                            "ERR_USER_NOT_FOUND"
+                    ));
 
-        // TODO: Replace hardcoded user with Spring Security context later
-        Long currentUserId = 1L; // Replace with actual logged-in user
-        request.setCreatedBy(currentUserId);
-        request.setUpdatedBy(currentUserId);
+            request.setAssignedToLegal(user);
+            request.setLegalStatus(LegalStatus.PENDING);
+        } else {
+            request.setLegalStatus(LegalStatus.INITIATED);
+        }
 
+        request.setCreatedBy(dto.getCreatedById());
         request.setCreatedAt(LocalDateTime.now());
         request.setUpdatedAt(LocalDateTime.now());
 
-        LegalRequest savedRequest = legalRequestRepository.save(request);
+        if (dto.getDocuments() != null && !dto.getDocuments().isEmpty()) {
 
-        // If documents are sent in DTO, you can handle them here later
+            for (String fileUrl : dto.getDocuments()) {
+
+                if (fileUrl == null || fileUrl.trim().isEmpty()) {
+                    continue;
+                }
+
+                LegalRequestDocument document = new LegalRequestDocument();
+
+                document.setFileUrl(fileUrl.trim());
+                document.setUploadedAt(LocalDateTime.now());
+
+                String fileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+                document.setFileName(fileName);
+
+                request.addDocument(document);
+            }
+        }
+
+        LegalRequest savedRequest = legalRequestRepository.save(request);
 
         return mapToResponse(savedRequest);
     }
@@ -96,96 +136,70 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
     @Transactional
     public LegalRequestDto updateStatus(Long id, LegalStatusUpdateDto dto) {
 
-        LegalRequest request = legalRequestRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Legal request not found", "ERR_LEGAL_REQUEST_NOT_FOUND"));
+        if (id == null) {
+            throw new IllegalArgumentException("Legal request id is required");
+        }
 
-        LegalStatus newStatus = LegalStatus.valueOf(dto.getStatus().toUpperCase());
+        if (dto.getStatus() == null || dto.getStatus().trim().isEmpty()) {
+            throw new IllegalArgumentException("status is required");
+        }
+
+        LegalRequest request = legalRequestRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Legal request not found",
+                        "ERR_LEGAL_REQUEST_NOT_FOUND"
+                ));
+
+        if (request.isDeleted()) {
+            throw new ResourceNotFoundException(
+                    "Legal request not found",
+                    "ERR_LEGAL_REQUEST_NOT_FOUND"
+            );
+        }
+
+        LegalStatus newStatus;
+
+        try {
+            newStatus = LegalStatus.valueOf(dto.getStatus().trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid legal status: " + dto.getStatus());
+        }
+
+        // Optional validation for statuses where reason should be compulsory
+        if ((newStatus == LegalStatus.NEED_MORE_INFO
+                || newStatus == LegalStatus.DISAPPROVED
+                || newStatus == LegalStatus.CANCELLED)
+                && (dto.getStatusReason() == null || dto.getStatusReason().trim().isEmpty())) {
+
+            throw new IllegalArgumentException("statusReason is required for status: " + newStatus);
+        }
+
 
         request.setLegalStatus(newStatus);
         request.setStatusReason(dto.getStatusReason());
         request.setUpdatedAt(LocalDateTime.now());
-        request.setUpdatedBy(1L); // Replace with current user
+        request.setUpdatedBy(dto.getUserId());
+
+        if (dto.getResolutionSummary() != null && !dto.getResolutionSummary().trim().isEmpty()) {
+            request.setResolutionSummary(dto.getResolutionSummary().trim());
+        }
+
+        // Mark resolved only for final/closing statuses
+        if (newStatus == LegalStatus.APPROVED
+                || newStatus == LegalStatus.DISAPPROVED
+                || newStatus == LegalStatus.GUIDANCE_GIVEN
+                || newStatus == LegalStatus.COMPLETED
+                || newStatus == LegalStatus.CANCELLED) {
+
+            request.setResolvedBy(dto.getUserId());
+            request.setResolvedAt(LocalDateTime.now());
+        }
 
         LegalRequest updated = legalRequestRepository.save(request);
+
         return mapToResponse(updated);
     }
 
-    @Override
-    public Page<LegalRequestDto> getLegalRequests(Long userId, int page, int size) {
-
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
-
-        Page<LegalRequest> result;
-
-        if (user.getUserDesignation() != null && "ADMIN".equalsIgnoreCase(user.getUserDesignation().getName())) {
-            result = legalRequestRepository.findAll(pageable);
-        } else {
-            result = legalRequestRepository.findByAssignedTo(userId, pageable);
-        }
-
-        return result.map(this::mapToResponse);
-    }
-
-    @Override
-    public Page<LegalRequestDto> searchRequests(
-            LegalStatus status,
-            Long projectId,
-            Long assignedTo,
-            Long createdBy,
-            String projectName,
-            String milestoneName,
-            LocalDateTime startDate,
-            LocalDateTime endDate,
-            int page,
-            int size) {
-
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
-        Specification<LegalRequest> spec = Specification.where(null);
-
-        if (status != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("legalStatus"), status));
-        }
-
-        if (projectId != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("project").get("id"), projectId));
-        }
-
-        if (assignedTo != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("assignedTo"), assignedTo));
-        }
-
-        if (createdBy != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("createdBy"), createdBy));
-        }
-
-        if (startDate != null && endDate != null) {
-            spec = spec.and((root, query, cb) -> cb.between(root.get("createdAt"), startDate, endDate));
-        } else if (startDate != null) {
-            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
-        } else if (endDate != null) {
-            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), endDate));
-        }
-
-        if (projectName != null && !projectName.trim().isEmpty()) {
-            spec = spec.and((root, query, cb) ->
-                    cb.like(cb.lower(root.get("project").get("name")), "%" + projectName.toLowerCase() + "%"));
-        }
-
-        if (milestoneName != null && !milestoneName.trim().isEmpty()) {
-            spec = spec.and((root, query, cb) ->
-                    cb.like(cb.lower(root.get("projectMilestoneAssignment")
-                                    .get("milestone")
-                                    .get("name")),
-                            "%" + milestoneName.toLowerCase() + "%"));
-        }
-
-        Page<LegalRequest> result = legalRequestRepository.findAll(spec, pageable);
-        return result.map(this::mapToResponse);
-    }
 
     @Override
     public LegalRequestDto getById(Long id) {
@@ -195,30 +209,6 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         return mapToResponse(request);
     }
 
-    @Override
-    @Transactional
-    public LegalRequestDto assignRequest(Long requestId, Long assignedToLegal, String note) {
-
-        LegalRequest request = legalRequestRepository.findById(requestId)
-                .orElseThrow(() -> new ResourceNotFoundException("Legal request not found", "ERR_LEGAL_REQUEST_NOT_FOUND"));
-
-        User assignedUser = userRepository.findById(assignedToLegal)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
-
-        // Fixed logic
-        request.setAssignedTo(assignedToLegal);   // Corrected
-        request.setAssignedToLegal(assignedUser);
-
-        if (note != null && !note.trim().isEmpty()) {
-            request.setNotes(note);
-        }
-
-        request.setUpdatedAt(LocalDateTime.now());
-        request.setUpdatedBy(1L); // Replace with current user
-
-        LegalRequest saved = legalRequestRepository.save(request);
-        return mapToResponse(saved);
-    }
 
     @Override
     @Transactional
@@ -235,38 +225,15 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         return mapToResponse(saved);
     }
 
-    @Override
-    @Transactional
-    public LegalRequestDto updateTat(Long id, LegalRequestDto dto) {
 
-        LegalRequest request = legalRequestRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Request not found", "ERR_LEGAL_REQUEST_NOT_FOUND"));
-
-        request.setTatInDays(dto.getTatInDays());
-        request.setTatReason(dto.getTatReason());
-        request.setUpdatedAt(LocalDateTime.now());
-        request.setUpdatedBy(1L); // Replace with current user
-
-        LegalRequest saved = legalRequestRepository.save(request);
-        return mapToResponse(saved);
-    }
 
     public LegalRequestDto mapToResponse(LegalRequest request) {
 
         LegalRequestDto dto = new LegalRequestDto();
 
-        dto.setId(request.getId());
         dto.setProjectId(request.getProject() != null ? request.getProject().getId() : null);
-        dto.setMilestoneId(request.getProjectMilestoneAssignment() != null ?
-                request.getProjectMilestoneAssignment().getId() : null);
 
-        dto.setTatInDays(request.getTatInDays());
-        dto.setTatReason(request.getTatReason());
         dto.setStatus(request.getLegalStatus() != null ? request.getLegalStatus().name() : null);
-
-        dto.setCreatedById(request.getCreatedBy());
-        dto.setUpdatedById(request.getUpdatedBy());
-        dto.setMilestoneAssigneeId(request.getAssignedTo());
 
         if (request.getAssignedToLegal() != null) {
             dto.setAssignedToLegal(request.getAssignedToLegal().getId());
@@ -274,10 +241,7 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
 
         dto.setLegalRequestTitle(request.getLegalRequestTitle());
         dto.setNotes(request.getNotes());
-        dto.setCreatedAt(request.getCreatedAt());
-        dto.setUpdatedAt(request.getUpdatedAt());
-        dto.setViewedBy(request.getViewedBy());
-        dto.setViewedAt(request.getViewedAt());
+
 
         return dto;
     }

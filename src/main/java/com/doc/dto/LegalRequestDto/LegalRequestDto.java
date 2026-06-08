@@ -2,6 +2,7 @@ package com.doc.dto.LegalRequestDto;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.aspectj.apache.bcel.generic.LineNumberGen;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -11,28 +12,17 @@ import java.util.List;
 @Setter
 public class LegalRequestDto {
 
-    private Long id;
     private Long projectId;
-    private Long milestoneId;
-    private Double tatInDays;
-    private String tatReason;
+    private Long projectMilestoneAssignmentId;
     private String status;
-
     private Long milestoneAssigneeId;
-    private Long createdById;
-    private Long updatedById;
-
-    private Long assignedToLegal;
-
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
     private String statusReason;
-    private String LegalRequestTitle;
+    private String legalRequestTitle;
+    private Long assignedToLegal;
+    private Long createdById;
 
     private String notes;
 
-    private Long viewedBy;
-    private LocalDateTime viewedAt;
-
     private List<String> documents;
+
 }
