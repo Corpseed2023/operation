@@ -50,7 +50,6 @@ public class ProcurementOrder {
 
     // ==================== AMOUNT & TAX BREAKUP ====================
 
-    private BigDecimal estimatedAmount;
     private BigDecimal finalAmount;           // Base amount before tax
 
     private BigDecimal gstRate;               // e.g. 18.00
@@ -66,9 +65,6 @@ public class ProcurementOrder {
 
     @Column(length = 2000)
     private String scopeOfWork;
-
-    @Column(length = 1000)
-    private String paymentTerms;
 
     @Column(length = 2000)
     private String termsAndConditions;

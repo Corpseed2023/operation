@@ -27,7 +27,6 @@ public class ProcurementOrderResponseDto {
     private String poNumber;
     private String poReferenceNumber;
 
-    private BigDecimal estimatedAmount;
     private BigDecimal finalAmount;
     private BigDecimal gstRate;
 
@@ -39,7 +38,6 @@ public class ProcurementOrderResponseDto {
     private BigDecimal grandTotal;
 
     private String scopeOfWork;
-    private String paymentTerms;
     private String termsAndConditions;
     private String remarks;
 

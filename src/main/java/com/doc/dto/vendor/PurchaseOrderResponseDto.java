@@ -23,8 +23,6 @@ public class PurchaseOrderResponseDto {
 
     private Long vendorId;
     private String vendorName;
-
-    private BigDecimal estimatedAmount;
     private BigDecimal finalAmount;
 
     private BigDecimal cgstAmount;
@@ -35,7 +33,6 @@ public class PurchaseOrderResponseDto {
     private BigDecimal gstRate;
 
     private String scopeOfWork;
-    private String paymentTerms;
     private String termsAndConditions;
     private String remarks;
     private ProcurementOrderStatus status;

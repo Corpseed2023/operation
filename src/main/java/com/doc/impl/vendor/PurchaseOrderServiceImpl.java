@@ -75,7 +75,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setPoNumber(poNumber);
         po.setPoReferenceNumber(dto.getPoReferenceNumber());
 
-        po.setEstimatedAmount(dto.getEstimatedAmount());
         po.setFinalAmount(dto.getFinalAmount());
 
         // GST Fields
@@ -87,7 +86,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setGrandTotal(dto.getGrandTotal());
 
         po.setScopeOfWork(dto.getScopeOfWork());
-        po.setPaymentTerms(dto.getPaymentTerms());
         po.setTermsAndConditions(dto.getTermsAndConditions());
         po.setRemarks(dto.getRemarks());
         po.setAttachmentUrls(dto.getAttachmentUrls());
@@ -362,7 +360,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         po.setPoReferenceNumber(dto.getPoReferenceNumber());
 
-        po.setEstimatedAmount(dto.getEstimatedAmount());
         po.setFinalAmount(dto.getFinalAmount());
 
         po.setGstRate(dto.getGstRate());
@@ -373,7 +370,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setGrandTotal(dto.getGrandTotal());
 
         po.setScopeOfWork(dto.getScopeOfWork());
-        po.setPaymentTerms(dto.getPaymentTerms());
         po.setTermsAndConditions(dto.getTermsAndConditions());
         po.setRemarks(dto.getRemarks());
 
@@ -574,8 +570,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
                 .poNumber(order.getPoNumber())
                 .poReferenceNumber(order.getPoReferenceNumber())
-
-                .estimatedAmount(order.getEstimatedAmount())
                 .finalAmount(order.getFinalAmount())
                 .gstRate(order.getGstRate())
 
@@ -587,7 +581,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .grandTotal(order.getGrandTotal())
 
                 .scopeOfWork(order.getScopeOfWork())
-                .paymentTerms(order.getPaymentTerms())
                 .termsAndConditions(order.getTermsAndConditions())
                 .remarks(order.getRemarks())
 
@@ -643,8 +636,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         dto.setVendorId(po.getVendor().getId());
         dto.setVendorName(po.getVendor().getName());
-
-        dto.setEstimatedAmount(po.getEstimatedAmount());
         dto.setFinalAmount(po.getFinalAmount());
         dto.setCgstAmount(po.getCgstAmount());
         dto.setSgstAmount(po.getSgstAmount());
@@ -654,7 +645,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         dto.setGstRate(po.getGstRate());
 
         dto.setScopeOfWork(po.getScopeOfWork());
-        dto.setPaymentTerms(po.getPaymentTerms());
         dto.setTermsAndConditions(po.getTermsAndConditions());
         dto.setRemarks(po.getRemarks());
         dto.setAttachmentUrls(po.getAttachmentUrls());

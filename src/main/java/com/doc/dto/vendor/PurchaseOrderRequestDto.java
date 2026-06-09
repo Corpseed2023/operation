@@ -26,8 +26,6 @@ public class PurchaseOrderRequestDto {
     @Positive(message = "Final amount must be positive")
     private BigDecimal finalAmount;
 
-    private BigDecimal estimatedAmount;         // Optional
-
     // ==================== GST BREAKUP ====================
     private BigDecimal gstRate;                 // e.g., 18.0
 
@@ -41,8 +39,6 @@ public class PurchaseOrderRequestDto {
     // ==================== COMMERCIAL DETAILS ====================
     @NotBlank(message = "Scope of Work is required")
     private String scopeOfWork;
-
-    private String paymentTerms;                // e.g., "50% Advance, 50% after delivery"
 
     private String termsAndConditions;
 
