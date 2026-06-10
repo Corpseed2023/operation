@@ -2,6 +2,8 @@ package com.doc.controller.designation;
 
 import com.doc.dto.desigantion.DesignationRequestDto;
 import com.doc.dto.desigantion.DesignationResponseDto;
+import com.doc.dto.desigantion.MapDesignationDepartmentRequestDto;
+import com.doc.exception.ValidationException;
 import com.doc.service.DesignationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -89,28 +91,30 @@ public class DesignationController {
      */
     @PostMapping("/map-to-department")
     public ResponseEntity<DesignationResponseDto> mapDesignationToDepartment(
-            @RequestBody Map<String, Object> request) {
+            @RequestBody MapDesignationDepartmentRequestDto requestDto) {
 
-        Object departmentIdObj = request.get("departmentId");
-        Object designationIdsObj = request.get("designationIds");
-
-        if (departmentIdObj == null || designationIdsObj == null) {
-            throw new IllegalArgumentException("departmentId and designationIds are required");
+        if (requestDto.getDepartmentId() == null) {
+            throw new ValidationException(
+                    "Department ID is required",
+                    "ERR_DEPARTMENT_ID_REQUIRED"
+            );
         }
 
-        Long departmentId = Long.valueOf(departmentIdObj.toString());
-
-        List<Long> designationIds = ((List<?>) designationIdsObj).stream()
-                .map(Object::toString)
-                .map(Long::valueOf)
-                .toList();
+        if (requestDto.getDesignationIds() == null || requestDto.getDesignationIds().isEmpty()) {
+            throw new ValidationException(
+                    "Designation IDs are required",
+                    "ERR_DESIGNATION_IDS_REQUIRED"
+            );
+        }
 
         DesignationResponseDto response =
-                designationService.mapDesignationToDepartment(designationIds, departmentId);
+                designationService.mapDesignationToDepartment(
+                        requestDto.getDesignationIds(),
+                        requestDto.getDepartmentId()
+                );
 
         return ResponseEntity.ok(response);
     }
-
 
 
 }

@@ -3,13 +3,15 @@ package com.doc.dto.vendor;
 import com.doc.entity.vendor.ProcurementOrderStatus;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 
-@Data
-@Builder
+@Getter
+@Setter
 public class ProcurementOrderResponseDto {
 
     private Long id;

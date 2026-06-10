@@ -526,92 +526,99 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private ProcurementOrderResponseDto mapToResponse(ProcurementOrder order) {
-        return ProcurementOrderResponseDto.builder()
-                .id(order.getId())
 
-                .procurementAssignmentId(
-                        order.getProcurementAssignment() != null
-                                ? order.getProcurementAssignment().getId()
-                                : null
-                )
+        ProcurementOrderResponseDto dto = new ProcurementOrderResponseDto();
 
-                .projectId(
-                        order.getProject() != null
-                                ? order.getProject().getId()
-                                : null
-                )
-                .projectName(
-                        order.getProject() != null
-                                ? order.getProject().getName()
-                                : null
-                )
+        dto.setId(order.getId());
 
-                .vendorId(
-                        order.getVendor() != null
-                                ? order.getVendor().getId()
-                                : null
-                )
-                .vendorName(
-                        order.getVendor() != null
-                                ? order.getVendor().getName()
-                                : null
-                )
+        dto.setProcurementAssignmentId(
+                order.getProcurementAssignment() != null
+                        ? order.getProcurementAssignment().getId()
+                        : null
+        );
 
-                .vendorContactId(
-                        order.getVendorContact() != null
-                                ? order.getVendorContact().getId()
-                                : null
-                )
-                .vendorContactName(
-                        order.getVendorContact() != null
-                                ? order.getVendorContact().getName()
-                                : null
-                )
+        dto.setProjectId(
+                order.getProject() != null
+                        ? order.getProject().getId()
+                        : null
+        );
 
-                .poNumber(order.getPoNumber())
-                .poReferenceNumber(order.getPoReferenceNumber())
-                .finalAmount(order.getFinalAmount())
-                .gstRate(order.getGstRate())
+        dto.setProjectName(
+                order.getProject() != null
+                        ? order.getProject().getName()
+                        : null
+        );
 
-                .cgstAmount(order.getCgstAmount())
-                .sgstAmount(order.getSgstAmount())
-                .igstAmount(order.getIgstAmount())
+        dto.setVendorId(
+                order.getVendor() != null
+                        ? order.getVendor().getId()
+                        : null
+        );
 
-                .totalTaxAmount(order.getTotalTaxAmount())
-                .grandTotal(order.getGrandTotal())
+        dto.setVendorName(
+                order.getVendor() != null
+                        ? order.getVendor().getName()
+                        : null
+        );
 
-                .scopeOfWork(order.getScopeOfWork())
-                .termsAndConditions(order.getTermsAndConditions())
-                .remarks(order.getRemarks())
+        dto.setVendorContactId(
+                order.getVendorContact() != null
+                        ? order.getVendorContact().getId()
+                        : null
+        );
 
-                .attachmentUrls(order.getAttachmentUrls())
+        dto.setVendorContactName(
+                order.getVendorContact() != null
+                        ? order.getVendorContact().getName()
+                        : null
+        );
 
-                .status(order.getStatus())
+        dto.setPoNumber(order.getPoNumber());
+        dto.setPoReferenceNumber(order.getPoReferenceNumber());
 
-                .poCreatedDate(order.getPoCreatedDate())
-                .poSubmittedForApprovalDate(order.getPoSubmittedForApprovalDate())
-                .poApprovedDate(order.getPoApprovedDate())
-                .poReleasedDate(order.getPoReleasedDate())
+        dto.setFinalAmount(order.getFinalAmount());
+        dto.setGstRate(order.getGstRate());
 
-                .paymentTypeId(
-                        order.getPaymentType() != null
-                                ? order.getPaymentType().getId()
-                                : null
-                )
-                .paymentTypeName(
-                        order.getPaymentType() != null
-                                ? order.getPaymentType().getName()
-                                : null
-                )
+        dto.setCgstAmount(order.getCgstAmount());
+        dto.setSgstAmount(order.getSgstAmount());
+        dto.setIgstAmount(order.getIgstAmount());
 
-                .createdBy(order.getCreatedBy())
-                .updatedBy(order.getUpdatedBy())
-                .approvedBy(order.getApprovedBy())
+        dto.setTotalTaxAmount(order.getTotalTaxAmount());
+        dto.setGrandTotal(order.getGrandTotal());
 
-                .createdDate(order.getCreatedDate())
-                .updatedDate(order.getUpdatedDate())
+        dto.setScopeOfWork(order.getScopeOfWork());
+        dto.setTermsAndConditions(order.getTermsAndConditions());
+        dto.setRemarks(order.getRemarks());
 
-                .build();
+        dto.setAttachmentUrls(order.getAttachmentUrls());
+
+        dto.setStatus(order.getStatus());
+
+        dto.setPoCreatedDate(order.getPoCreatedDate());
+        dto.setPoSubmittedForApprovalDate(order.getPoSubmittedForApprovalDate());
+        dto.setPoApprovedDate(order.getPoApprovedDate());
+        dto.setPoReleasedDate(order.getPoReleasedDate());
+
+        dto.setPaymentTypeId(
+                order.getPaymentType() != null
+                        ? order.getPaymentType().getId()
+                        : null
+        );
+
+        dto.setPaymentTypeName(
+                order.getPaymentType() != null
+                        ? order.getPaymentType().getName()
+                        : null
+        );
+
+        dto.setCreatedBy(order.getCreatedBy());
+        dto.setUpdatedBy(order.getUpdatedBy());
+        dto.setApprovedBy(order.getApprovedBy());
+
+        dto.setCreatedDate(order.getCreatedDate());
+        dto.setUpdatedDate(order.getUpdatedDate());
+
+        return dto;
     }
 
     // ==================== Helper Methods ====================

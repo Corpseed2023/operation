@@ -276,7 +276,6 @@ public class DesignationServiceImpl implements DesignationService {
         throw new ResourceNotFoundException("Failed to map designations", "ERR_MAPPING_FAILED");
     }
 
-    // Private validation method
     private void validateCreateDesignation(Long id, String name, Long weightValue) {
         if (id == null) {
             throw new ValidationException("Designation ID cannot be null", "ERR_NULL_DESIGNATION_ID");
@@ -352,13 +351,18 @@ public class DesignationServiceImpl implements DesignationService {
 
     private DesignationResponseDto mapToResponseDto(Designation designation) {
         DesignationResponseDto dto = new DesignationResponseDto();
+
         dto.setId(designation.getId());
         dto.setName(designation.getName());
         dto.setWeightValue(designation.getWeightValue());
-        dto.setDepartmentId(designation.getDepartment().getId());
-        dto.setDepartmentName(designation.getDepartment().getName());
         dto.setCreatedDate(designation.getCreatedDate());
         dto.setUpdatedDate(designation.getUpdatedDate());
+
+        if (designation.getDepartment() != null) {
+            dto.setDepartmentId(designation.getDepartment().getId());
+            dto.setDepartmentName(designation.getDepartment().getName());
+        }
+
         return dto;
     }
 }
