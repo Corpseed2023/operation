@@ -322,25 +322,35 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
-        if (procurementAssignment.getStatus() == ProcurementStatus.VENDOR_REQUIRED) {
+        ProcurementStatus currentProcurementStatus = procurementAssignment.getStatus();
+
+        if (currentProcurementStatus == ProcurementStatus.VENDOR_REQUIRED) {
             throw new ValidationException(
                     "No vendor available for this service. Please create vendor and map it with this service.",
                     "ERR_VENDOR_REQUIRED"
             );
         }
 
-        if (procurementAssignment.getStatus() != ProcurementStatus.VENDOR_SHORTLISTED
-                && procurementAssignment.getStatus() != ProcurementStatus.PO_CREATED
-                && procurementAssignment.getStatus() != ProcurementStatus.PO_RELEASED
-                && procurementAssignment.getStatus() != ProcurementStatus.COMPLETED) {
-
+        if (!isProcurementEligibleForMilestoneCompletion(currentProcurementStatus)) {
             throw new ValidationException(
-                    "Procurement milestone cannot be completed until vendor is selected",
+                    "Procurement milestone cannot be completed until vendor is finalized",
                     "ERR_INVALID_PROCUREMENT_STATUS"
             );
         }
     }
 
+    private boolean isProcurementEligibleForMilestoneCompletion(ProcurementStatus status) {
+        return List.of(
+                ProcurementStatus.VENDOR_FINALIZED,
+                ProcurementStatus.PO_CREATED,
+                ProcurementStatus.PO_APPROVED,
+                ProcurementStatus.PO_RELEASED,
+                ProcurementStatus.ADVANCE_PAID,
+                ProcurementStatus.IN_PROGRESS,
+                ProcurementStatus.UNDER_REVIEW,
+                ProcurementStatus.COMPLETED
+        ).contains(status);
+    }
 
     @Override
     public ReassignMilestoneResponseDto reassignMilestone(ReassignMilestoneDto reassignDto) {
