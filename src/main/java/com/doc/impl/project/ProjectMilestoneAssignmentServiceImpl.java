@@ -102,29 +102,29 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         boolean isManager = changedBy.isManagerFlag();
 
         // Manager can update only milestones of his/her department
-        if (isManager && !isAdmin && !isOperationHead) {
-            if (!isManagerOfMilestoneDepartment(changedBy, assignment)) {
-                logger.warn("Manager ID {} attempted to update milestone {} from another department",
-                        changedBy.getId(),
-                        assignment.getId());
-
-                throw new ValidationException(
-                        "You can only update milestones that belong to your department(s)",
-                        "MANAGER_DEPARTMENT_MISMATCH"
-                );
-            }
-        }
+//        if (isManager && !isAdmin && !isOperationHead) {
+//            if (!isManagerOfMilestoneDepartment(changedBy, assignment)) {
+//                logger.warn("Manager ID {} attempted to update milestone {} from another department",
+//                        changedBy.getId(),
+//                        assignment.getId());
+//
+//                throw new ValidationException(
+//                        "You can only update milestones that belong to your department(s)",
+//                        "MANAGER_DEPARTMENT_MISMATCH"
+//                );
+//            }
+//        }
 
         // Only ADMIN, OPERATION_HEAD, MANAGER can update milestone status
-        if (!isAdmin && !isOperationHead && !isManager) {
-            logger.warn("User ID {} is not authorized to update milestone status",
-                    changedBy.getId());
-
-            throw new ValidationException(
-                    "Only ADMIN, OPERATION_HEAD, or MANAGER can update milestone status",
-                    "NOT_AUTHORIZED"
-            );
-        }
+//        if (!isAdmin && !isOperationHead && !isManager) {
+//            logger.warn("User ID {} is not authorized to update milestone status",
+//                    changedBy.getId());
+//
+//            throw new ValidationException(
+//                    "Only ADMIN, OPERATION_HEAD, or MANAGER can update milestone status",
+//                    "NOT_AUTHORIZED"
+//            );
+//        }
 
         MilestoneStatus newStatus =
                 milestoneStatusRepository.findByName(updateDto.getNewStatusName())
