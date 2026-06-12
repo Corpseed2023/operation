@@ -14,6 +14,8 @@ public interface ProjectDocumentUploadService {
 
     DocumentResponseDto updateDocumentStatus(Long documentId, ProjectDocumentStatusUpdateDto updateDto);
 
+    DocumentResponseDto replaceDocument(Long documentId, ProjectDocumentUploadRequestDto requestDto);
+
 
 
 }

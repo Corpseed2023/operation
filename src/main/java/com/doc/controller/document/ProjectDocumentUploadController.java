@@ -58,4 +58,20 @@ public class ProjectDocumentUploadController {
         DocumentResponseDto response = projectDocumentUploadService.updateDocumentStatus(documentId, updateDto);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
+
+
+    @PutMapping("/{projectId}/documents/{documentId}/replace")
+    public ResponseEntity<DocumentResponseDto> replaceDocument(
+            @PathVariable Long projectId,
+            @PathVariable Long documentId,
+            @Valid @RequestBody ProjectDocumentUploadRequestDto requestDto) {
+
+        requestDto.setProjectId(projectId);
+
+        DocumentResponseDto response =
+                projectDocumentUploadService.replaceDocument(documentId, requestDto);
+
+        return ResponseEntity.ok(response);
+    }
+
 }

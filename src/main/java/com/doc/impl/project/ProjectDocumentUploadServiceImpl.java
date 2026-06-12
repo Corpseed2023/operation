@@ -381,6 +381,96 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         return sanitized;
     }
 
+    @Override
+    @Transactional
+    public DocumentResponseDto replaceDocument(Long documentId, ProjectDocumentUploadRequestDto requestDto) {
+
+        validateUploadRequest(requestDto);
+
+        validateFileSizeAgainstRequirement(
+                requestDto.getRequiredDocumentId(),
+                requestDto.getFileSizeKb()
+        );
+
+        ProjectDocumentUpload doc = projectDocumentUploadRepository.findActiveUserById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Document not found",
+                        "DOCUMENT_UPLOAD_NOT_FOUND"
+                ));
+
+        if (!doc.getProject().getId().equals(requestDto.getProjectId())) {
+            throw new ValidationException(
+                    "Document does not belong to this project",
+                    "DOCUMENT_PROJECT_MISMATCH"
+            );
+        }
+
+        if (doc.getStatus() != null &&
+                "VERIFIED".equalsIgnoreCase(doc.getStatus().getName())) {
+            throw new ValidationException(
+                    "Cannot replace VERIFIED document",
+                    "VERIFIED_DOCUMENT_REPLACEMENT"
+            );
+        }
+
+        User uploadedBy = userRepository.findActiveUserById(requestDto.getUploadedById())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Uploader not found",
+                        "USER_NOT_FOUND"
+                ));
+
+        DocumentStatus uploadedStatus = documentStatusRepository.findByName("UPLOADED")
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Status UPLOADED not found",
+                        "STATUS_NOT_FOUND"
+                ));
+
+        String fileUrl = requestDto.getFileName();
+
+        if (!StringUtils.hasText(fileUrl)) {
+            throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
+        }
+
+        String extractedFileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+        String fileName = sanitizeFileName(extractedFileName);
+
+        String fileFormat = requestDto.getFileFormat() != null
+                ? requestDto.getFileFormat().trim().toLowerCase()
+                : null;
+
+        validateFileFormat(fileFormat);
+
+        doc.setOldFileUrl(doc.getFileUrl());
+        doc.setOldFileName(doc.getFileName());
+
+        doc.setFileUrl(fileUrl);
+        doc.setFileName(fileName);
+        doc.setFileFormat(fileFormat);
+        doc.setFileSizeKb(requestDto.getFileSizeKb());
+
+        doc.setExpiryDate(requestDto.getExpiryDate());
+        doc.setPermanent(Boolean.TRUE.equals(requestDto.getIsPermanent()));
+        doc.setFromCompanyDoc(Boolean.TRUE.equals(requestDto.getIsFromCompanyDoc()));
+        doc.setCompanyDocSourceId(requestDto.getCompanyDocSourceId());
+        doc.setRemarks(requestDto.getRemarks());
+
+        doc.setStatus(uploadedStatus);
+        doc.setUploadedBy(uploadedBy);
+        doc.setUploadTime(new Date());
+
+        doc.setUpdatedBy(requestDto.getUploadedById());
+        doc.setUpdatedDate(new Date());
+
+        doc.setValidationPassed(false);
+        doc.setValidationIssues(null);
+
+        doc.setReplacementCount(doc.getReplacementCount() + 1);
+
+        ProjectDocumentUpload saved = projectDocumentUploadRepository.save(doc);
+
+        return mapToDocumentResponseDto(saved);
+    }
+
     private DocumentResponseDto mapToDocumentResponseDto(ProjectDocumentUpload doc) {
 
         DocumentResponseDto dto = new DocumentResponseDto();
