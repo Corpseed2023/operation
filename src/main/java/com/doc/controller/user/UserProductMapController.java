@@ -58,9 +58,9 @@ public class UserProductMapController {
      * @return a list of all non-deleted mappings
      */
 
-    @GetMapping("/list")
+    @GetMapping("/user/{userId}/productsList")
     public ResponseEntity<UserProductListByUserResponseDto> getMappedProductsByUserId(
-            @PathVariable Long userId) {
+            @PathVariable("userId") Long userId) {
 
         logger.info("Received request to fetch mapped products for user ID: {}", userId);
 

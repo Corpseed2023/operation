@@ -46,7 +46,6 @@ public interface UserProductMapService {
 
     Object getUserProductMaps(String groupBy);
 
-    // Additions to UserProductMapService interface
     List<UserProductMapResponseDto> getActiveProductsForUser(Long userId);
     List<UserProductMapResponseDto> getActiveUsersForProduct(Long productId);
 
@@ -56,4 +55,6 @@ public interface UserProductMapService {
      * @return a list of all non-deleted mappings
      */
     UserProductListByUserResponseDto getMappedProductsByUserId(Long userId);
+
+
 }
