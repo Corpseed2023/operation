@@ -38,6 +38,15 @@ public class CompanyController {
         return ResponseEntity.ok(dto);
     }
 
+    @PostMapping("/syncCompany")
+    public ResponseEntity<CompanyResponseDto> syncCompany(
+            @Valid @RequestBody CompanyRequestDto requestDto,
+            @RequestParam(required = true) Long companyId) {
+
+        CompanyResponseDto response = companyService.syncCompany(requestDto, companyId);
+        return ResponseEntity.ok(response);
+    }
+
 
 }
 

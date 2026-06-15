@@ -173,6 +173,248 @@ public class CompanyServiceImpl implements CompanyService {
     }
 
     @Override
+    @Transactional
+    public CompanyResponseDto syncCompany(CompanyRequestDto requestDto, Long externalCompanyId) {
+
+        logger.info(
+                "Syncing company from Account service | externalCompanyId={} | units={} | contacts={}",
+                externalCompanyId,
+                requestDto.getUnits() != null ? requestDto.getUnits().size() : 0,
+                requestDto.getContacts() != null ? requestDto.getContacts().size() : 0
+        );
+
+        if (externalCompanyId == null) {
+            throw new ValidationException(
+                    "External company ID is required",
+                    "INVALID_EXTERNAL_COMPANY_ID"
+            );
+        }
+
+        if (requestDto.getCreatedBy() == null) {
+            throw new ValidationException(
+                    "CreatedBy user ID is required",
+                    "INVALID_CREATED_BY"
+            );
+        }
+
+        User creator = userRepository.findById(requestDto.getCreatedBy())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with id: " + requestDto.getCreatedBy(),
+                        "USER_NOT_FOUND"
+                ));
+
+        Company company = companyRepository.findById(externalCompanyId).orElse(null);
+
+        if (company == null) {
+
+            logger.info(
+                    "Company not found in Operation service. Creating new company | companyId={}",
+                    externalCompanyId
+            );
+
+            company = new Company();
+            company.setId(externalCompanyId);
+            company.setCreatedDate(new Date());
+            company.setCreatedById(creator.getId());
+            company.setDeleted(false);
+
+        } else {
+
+            logger.info(
+                    "Company already exists in Operation service. Syncing missing units/contacts | companyId={}",
+                    externalCompanyId
+            );
+
+            if (company.isDeleted()) {
+                throw new ValidationException(
+                        "Company exists in Operation service but is deleted",
+                        "COMPANY_DELETED"
+                );
+            }
+        }
+
+        company.setName(requestDto.getName() != null ? requestDto.getName().trim() : company.getName());
+        company.setPanNo(requestDto.getPanNo() != null ? requestDto.getPanNo().trim() : company.getPanNo());
+        company.setIndustry(requestDto.getIndustry());
+        company.setIndustries(requestDto.getIndustries());
+        company.setSubIndustry(requestDto.getSubIndustry());
+        company.setSubSubIndustry(requestDto.getSubSubIndustry());
+        company.setUpdatedDate(new Date());
+        company.setUpdatedBy(creator.getId());
+
+        company = companyRepository.save(company);
+
+        List<CompanyUnit> syncedUnits = new ArrayList<>();
+
+        if (requestDto.getUnits() != null && !requestDto.getUnits().isEmpty()) {
+
+            for (CompanyUnitRequestDto unitDto : requestDto.getUnits()) {
+
+                if (unitDto.getUnitId() == null) {
+                    logger.warn("Skipping unit because unitId is null | companyId={}", company.getId());
+                    continue;
+                }
+
+                CompanyUnit unit = companyUnitRepository
+                        .findByIdAndCompanyIdAndIsDeletedFalse(unitDto.getUnitId(), company.getId())
+                        .orElse(null);
+
+                if (unit == null) {
+
+                    logger.info(
+                            "Creating missing unit in Operation service | companyId={} | unitId={}",
+                            company.getId(),
+                            unitDto.getUnitId()
+                    );
+
+                    unit = new CompanyUnit();
+                    unit.setId(unitDto.getUnitId());
+                    unit.setCompany(company);
+                    unit.setCreatedDate(new Date());
+                    unit.setCreatedBy(creator.getId());
+                    unit.setDeleted(false);
+
+                } else {
+
+                    logger.info(
+                            "Unit already exists in Operation service. Updating safely | companyId={} | unitId={}",
+                            company.getId(),
+                            unit.getId()
+                    );
+                }
+
+                unit.setUnitName(unitDto.getUnitName() != null ? unitDto.getUnitName().trim() : unit.getUnitName());
+                unit.setAddress(unitDto.getAddress() != null ? unitDto.getAddress().trim() : unit.getAddress());
+                unit.setCity(unitDto.getCity());
+                unit.setState(unitDto.getState());
+                unit.setCountry(unitDto.getCountry() != null ? unitDto.getCountry().trim() : "India");
+                unit.setPinCode(unitDto.getPinCode());
+                unit.setGstNo(unitDto.getGstNo() != null ? unitDto.getGstNo().trim() : null);
+
+                /*
+                 * Newly synced Account-approved unit should be APPROVED in Operation.
+                 * If your Operation module uses status only for Active/Inactive,
+                 * create a separate onboardingStatus field instead.
+                 */
+//                unit.setStatus(
+//                        StringUtils.hasText(unitDto.getStatus())
+//                                ? unitDto.getStatus().trim()
+//                                : "APPROVED"
+//                );
+
+                unit.setUpdatedDate(new Date());
+                unit.setUpdatedBy(creator.getId());
+
+                unit = companyUnitRepository.save(unit);
+                syncedUnits.add(unit);
+
+                if (!company.getUnits().contains(unit)) {
+                    company.getUnits().add(unit);
+                }
+            }
+        }
+
+        List<Contact> syncedContacts = new ArrayList<>();
+
+        if (requestDto.getContacts() != null && !requestDto.getContacts().isEmpty()) {
+
+            for (ContactRequestDto contactDto : requestDto.getContacts()) {
+
+                if (contactDto.getContactId() == null) {
+                    logger.warn("Skipping contact because contactId is null | companyId={}", company.getId());
+                    continue;
+                }
+
+                Contact contact = contactRepository.findById(contactDto.getContactId()).orElse(null);
+
+                if (contact == null) {
+
+                    logger.info(
+                            "Creating missing contact in Operation service | contactId={} | companyId={}",
+                            contactDto.getContactId(),
+                            company.getId()
+                    );
+
+                    contact = new Contact();
+                    contact.setId(contactDto.getContactId());
+                    contact.setCreatedDate(new Date());
+                    contact.setCreatedBy(creator.getId());
+                    contact.setDeleteStatus(false);
+                    contact.setActive(true);
+
+                } else {
+
+                    logger.info(
+                            "Contact already exists in Operation service. Updating safely | contactId={}",
+                            contact.getId()
+                    );
+                }
+
+                contact.setName(contactDto.getName() != null ? contactDto.getName().trim() : contact.getName());
+                contact.setTitle(contactDto.getTitle());
+                contact.setDesignation(contactDto.getDesignation());
+                contact.setClientDesignation(contactDto.getDesignation());
+                contact.setEmail(contactDto.getEmail());
+                contact.setContactNo(contactDto.getContactNo());
+                contact.setWhatsappNo(contactDto.getWhatsappNo());
+
+                if (contactDto.getUnitId() != null) {
+
+                    CompanyUnit targetUnit = companyUnitRepository
+                            .findByIdAndCompanyIdAndIsDeletedFalse(contactDto.getUnitId(), company.getId())
+                            .orElseThrow(() -> new ValidationException(
+                                    "Contact unit not found in Operation service. unitId=" + contactDto.getUnitId(),
+                                    "INVALID_CONTACT_UNIT_ID"
+                            ));
+
+                    if (Boolean.TRUE.equals(contactDto.getIsPrimary())) {
+                        contact.assignAsPrimaryToUnit(targetUnit);
+                    } else {
+                        contact.assignAsSecondaryToUnit(targetUnit);
+                    }
+
+                } else {
+
+                    if (Boolean.TRUE.equals(contactDto.getIsPrimary())) {
+                        contact.assignAsPrimaryToCompany(company);
+                    } else {
+                        contact.assignAsSecondaryToCompany(company);
+                    }
+                }
+
+                contact.setUpdatedDate(new Date());
+                contact.setUpdatedBy(creator.getId());
+
+                contact = contactRepository.save(contact);
+                syncedContacts.add(contact);
+            }
+        }
+
+        company = companyRepository.save(company);
+
+        logger.info(
+                "Company sync completed | companyId={} | syncedUnits={} | syncedContacts={}",
+                company.getId(),
+                syncedUnits.size(),
+                syncedContacts.size()
+        );
+
+        List<CompanyUnit> allUnits =
+                companyUnitRepository.findByCompanyIdAndIsDeletedFalse(company.getId());
+
+        List<Long> unitIds = allUnits.stream()
+                .map(CompanyUnit::getId)
+                .toList();
+
+        List<Contact> allContacts = new ArrayList<>();
+
+        if (!unitIds.isEmpty()) {
+            allContacts.addAll(contactRepository.findByCompanyUnitIds(unitIds));
+        }
+
+        return mapToResponseDto(company, allUnits, allContacts);
+    }
+    @Override
     public CompanyResponseDto getCompanyById(Long companyId) {
 
         logger.info("Fetching company with ID={}", companyId);

@@ -8,8 +8,8 @@ import jakarta.validation.Valid;
 import java.util.List;
 
 public interface CompanyService {
-
-
     CompanyResponseDto createCompany(@Valid CompanyRequestDto requestDto, Long companyId);
     CompanyResponseDto getCompanyById(Long companyId);
+
+    CompanyResponseDto syncCompany(CompanyRequestDto requestDto, Long companyId);
 }
