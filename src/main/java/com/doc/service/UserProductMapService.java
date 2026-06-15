@@ -48,13 +48,5 @@ public interface UserProductMapService {
 
     List<UserProductMapResponseDto> getActiveProductsForUser(Long userId);
     List<UserProductMapResponseDto> getActiveUsersForProduct(Long productId);
-
-    /**
-     * Retrieves all user-product mappings.
-     *
-     * @return a list of all non-deleted mappings
-     */
-    UserProductListByUserResponseDto getMappedProductsByUserId(Long userId);
-
-
+    List<UserProductListByUserResponseDto> getAllMappedProductsGroupedByUser();
 }

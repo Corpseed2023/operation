@@ -333,6 +333,48 @@ public class UserProductMapServiceImpl implements UserProductMapService {
         }
     }
 
+    @Override
+    public List<UserProductListByUserResponseDto> getAllMappedProductsGroupedByUser() {
+        logger.info("Fetching all mapped users with their products");
+
+        List<UserProductMap> mappings =
+                userProductMapRepository.findAllMappedUsersWithProducts();
+
+        Map<Long, UserProductListByUserResponseDto> userMap = new LinkedHashMap<>();
+
+        for (UserProductMap mapping : mappings) {
+
+            Long userId = mapping.getUser().getId();
+
+            UserProductListByUserResponseDto userDto =
+                    userMap.computeIfAbsent(userId, id -> {
+                        UserProductListByUserResponseDto dto =
+                                new UserProductListByUserResponseDto();
+
+                        dto.setUserId(mapping.getUser().getId());
+                        dto.setUserName(mapping.getUser().getFullName());
+
+                        return dto;
+                    });
+
+            UserMappedProductDto productDto = new UserMappedProductDto();
+
+            productDto.setMappingId(mapping.getId());
+            productDto.setProductId(mapping.getProduct().getId());
+            productDto.setProductName(mapping.getProduct().getProductName());
+            productDto.setRating(mapping.getRating());
+            productDto.setAssigned(mapping.isAssigned());
+
+            productDto.setCreatedBy(mapping.getCreatedBy());
+            productDto.setUpdatedBy(mapping.getUpdatedBy());
+            productDto.setCreatedDate(mapping.getCreatedDate());
+            productDto.setUpdatedDate(mapping.getUpdatedDate());
+
+            userDto.getProducts().add(productDto);
+        }
+
+        return new ArrayList<>(userMap.values());
+    }
 
     // Additions to UserProductMapServiceImpl
     @Override
@@ -349,56 +391,6 @@ public class UserProductMapServiceImpl implements UserProductMapService {
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public UserProductListByUserResponseDto getMappedProductsByUserId(Long userId) {
-        logger.info("Fetching mapped products for user ID: {}", userId);
-
-        if (userId == null) {
-            throw new ValidationException(
-                    "User ID is required",
-                    "INVALID_USER_ID"
-            );
-        }
-
-        User user = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> {
-                    logger.error("User with ID {} not found or inactive/deleted", userId);
-                    return new ResourceNotFoundException(
-                            "User with ID " + userId + " not found or inactive/deleted",
-                            "USER_NOT_FOUND"
-                    );
-                });
-
-        List<UserProductMap> mappings =
-                userProductMapRepository.findMappedProductsByUserId(userId);
-
-        UserProductListByUserResponseDto response = new UserProductListByUserResponseDto();
-        response.setUserId(user.getId());
-        response.setUserName(user.getFullName());
-
-        List<UserMappedProductDto> products = mappings.stream()
-                .map(mapping -> {
-                    UserMappedProductDto dto = new UserMappedProductDto();
-
-                    dto.setMappingId(mapping.getId());
-                    dto.setProductId(mapping.getProduct().getId());
-                    dto.setProductName(mapping.getProduct().getProductName());
-                    dto.setRating(mapping.getRating());
-                    dto.setAssigned(mapping.isAssigned());
-
-                    dto.setCreatedBy(mapping.getCreatedBy());
-                    dto.setUpdatedBy(mapping.getUpdatedBy());
-                    dto.setCreatedDate(mapping.getCreatedDate());
-                    dto.setUpdatedDate(mapping.getUpdatedDate());
-
-                    return dto;
-                })
-                .toList();
-
-        response.setProducts(products);
-
-        return response;
-    }
 
 
     @Override

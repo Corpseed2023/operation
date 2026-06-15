@@ -58,18 +58,16 @@ public class UserProductMapController {
      * @return a list of all non-deleted mappings
      */
 
-    @GetMapping("/user/{userId}/productsList")
-    public ResponseEntity<UserProductListByUserResponseDto> getMappedProductsByUserId(
-            @PathVariable("userId") Long userId) {
+    @GetMapping("/users/products")
+    public ResponseEntity<List<UserProductListByUserResponseDto>> getAllMappedProductsGroupedByUser() {
 
-        logger.info("Received request to fetch mapped products for user ID: {}", userId);
+        logger.info("Received request to fetch all mapped users with their products");
 
-        UserProductListByUserResponseDto response =
-                userProductMapService.getMappedProductsByUserId(userId);
+        List<UserProductListByUserResponseDto> response =
+                userProductMapService.getAllMappedProductsGroupedByUser();
 
         return ResponseEntity.ok(response);
     }
-
     /**
      * Updates an existing user-product mapping.
      *
