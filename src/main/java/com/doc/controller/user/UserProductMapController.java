@@ -1,5 +1,6 @@
 package com.doc.controller.user;
 
+import com.doc.dto.product.UserProductListByUserResponseDto;
 import com.doc.dto.product.UserProductMapRequestDto;
 import com.doc.dto.product.UserProductMapResponseDto;
 import com.doc.service.UserProductMapService;
@@ -56,11 +57,17 @@ public class UserProductMapController {
      *
      * @return a list of all non-deleted mappings
      */
+
     @GetMapping("/list")
-    public ResponseEntity<List<UserProductMapResponseDto>> getAllUserProductMaps() {
-        logger.info("Received request to fetch all user-product mappings");
-        List<UserProductMapResponseDto> responseDtos = userProductMapService.getAllUserProductMaps();
-        return ResponseEntity.ok(responseDtos);
+    public ResponseEntity<UserProductListByUserResponseDto> getMappedProductsByUserId(
+            @PathVariable Long userId) {
+
+        logger.info("Received request to fetch mapped products for user ID: {}", userId);
+
+        UserProductListByUserResponseDto response =
+                userProductMapService.getMappedProductsByUserId(userId);
+
+        return ResponseEntity.ok(response);
     }
 
     /**

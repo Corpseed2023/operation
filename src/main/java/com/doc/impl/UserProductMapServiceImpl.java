@@ -35,8 +35,6 @@ public class UserProductMapServiceImpl implements UserProductMapService {
     @Autowired
     private UserRepository userRepository;
 
-
-
     @Autowired
     private ProductRepository productRepository;
 
@@ -112,17 +110,7 @@ public class UserProductMapServiceImpl implements UserProductMapService {
         return mapToResponseDto(mapping);
     }
 
-    @Override
-    public List<UserProductMapResponseDto> getAllUserProductMaps() {
-        logger.info("Fetching all user-product mappings");
-        List<UserProductMap> mappings = userProductMapRepository.findAll()
-                .stream()
-                .filter(m -> !m.isDeleted())
-                .collect(Collectors.toList());
-        return mappings.stream()
-                .map(this::mapToResponseDto)
-                .collect(Collectors.toList());
-    }
+
 
     /**
      * Note: This update method expects a single userId and productId,
@@ -360,6 +348,58 @@ public class UserProductMapServiceImpl implements UserProductMapService {
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public UserProductListByUserResponseDto getMappedProductsByUserId(Long userId) {
+        logger.info("Fetching mapped products for user ID: {}", userId);
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "INVALID_USER_ID"
+            );
+        }
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> {
+                    logger.error("User with ID {} not found or inactive/deleted", userId);
+                    return new ResourceNotFoundException(
+                            "User with ID " + userId + " not found or inactive/deleted",
+                            "USER_NOT_FOUND"
+                    );
+                });
+
+        List<UserProductMap> mappings =
+                userProductMapRepository.findMappedProductsByUserId(userId);
+
+        UserProductListByUserResponseDto response = new UserProductListByUserResponseDto();
+        response.setUserId(user.getId());
+        response.setUserName(user.getFullName());
+
+        List<UserMappedProductDto> products = mappings.stream()
+                .map(mapping -> {
+                    UserMappedProductDto dto = new UserMappedProductDto();
+
+                    dto.setMappingId(mapping.getId());
+                    dto.setProductId(mapping.getProduct().getId());
+                    dto.setProductName(mapping.getProduct().getProductName());
+                    dto.setRating(mapping.getRating());
+                    dto.setAssigned(mapping.isAssigned());
+
+                    dto.setCreatedBy(mapping.getCreatedBy());
+                    dto.setUpdatedBy(mapping.getUpdatedBy());
+                    dto.setCreatedDate(mapping.getCreatedDate());
+                    dto.setUpdatedDate(mapping.getUpdatedDate());
+
+                    return dto;
+                })
+                .toList();
+
+        response.setProducts(products);
+
+        return response;
+    }
+
 
     @Override
     public List<UserProductMapResponseDto> getActiveUsersForProduct(Long productId) {

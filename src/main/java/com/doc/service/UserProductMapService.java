@@ -1,5 +1,6 @@
 package com.doc.service;
 
+import com.doc.dto.product.UserProductListByUserResponseDto;
 import com.doc.dto.product.UserProductMapRequestDto;
 import com.doc.dto.product.UserProductMapResponseDto;
 
@@ -26,12 +27,6 @@ public interface UserProductMapService {
      */
     UserProductMapResponseDto getUserProductMapById(Long id);
 
-    /**
-     * Retrieves all user-product mappings.
-     *
-     * @return a list of all non-deleted mappings
-     */
-    List<UserProductMapResponseDto> getAllUserProductMaps();
 
     /**
      * Updates an existing user-product mapping.
@@ -54,4 +49,11 @@ public interface UserProductMapService {
     // Additions to UserProductMapService interface
     List<UserProductMapResponseDto> getActiveProductsForUser(Long userId);
     List<UserProductMapResponseDto> getActiveUsersForProduct(Long productId);
+
+    /**
+     * Retrieves all user-product mappings.
+     *
+     * @return a list of all non-deleted mappings
+     */
+    UserProductListByUserResponseDto getMappedProductsByUserId(Long userId);
 }
