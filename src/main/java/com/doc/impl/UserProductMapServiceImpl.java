@@ -407,4 +407,17 @@ public class UserProductMapServiceImpl implements UserProductMapService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public List<UserProductMapResponseDto> getAllUserProductMaps() {
+        logger.info("Fetching all user-product mappings");
+        List<UserProductMap> mappings = userProductMapRepository.findAll()
+                .stream()
+                .filter(m -> !m.isDeleted())
+                .collect(Collectors.toList());
+        return mappings.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+
 }

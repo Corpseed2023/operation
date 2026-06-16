@@ -49,4 +49,6 @@ public interface UserProductMapService {
     List<UserProductMapResponseDto> getActiveProductsForUser(Long userId);
     List<UserProductMapResponseDto> getActiveUsersForProduct(Long productId);
     List<UserProductListByUserResponseDto> getAllMappedProductsGroupedByUser();
+
+    List<UserProductMapResponseDto> getAllUserProductMaps();
 }

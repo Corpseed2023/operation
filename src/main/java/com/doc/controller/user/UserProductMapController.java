@@ -117,4 +117,19 @@ public class UserProductMapController {
         List<UserProductMapResponseDto> responses = userProductMapService.getActiveUsersForProduct(productId);
         return ResponseEntity.ok(responses);
     }
+
+
+    /**
+     * Retrieves all user-product mappings.
+     *
+     * @return a list of all non-deleted mappings
+     */
+    @GetMapping("/list")
+    public ResponseEntity<List<UserProductMapResponseDto>> getAllUserProductMaps() {
+        logger.info("Received request to fetch all user-product mappings");
+        List<UserProductMapResponseDto> responseDtos = userProductMapService.getAllUserProductMaps();
+        return ResponseEntity.ok(responseDtos);
+    }
+
+
 }
