@@ -16,10 +16,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/operationService/api/projects")
 @Validated
-@SecurityRequirement(name = "Bearer Authentication")
 public class ProjectDocumentUploadController {
 
     @Autowired
@@ -60,6 +61,7 @@ public class ProjectDocumentUploadController {
     }
 
 
+
     @PutMapping("/{projectId}/documents/{documentId}/replace")
     public ResponseEntity<DocumentResponseDto> replaceDocument(
             @PathVariable Long projectId,
@@ -70,6 +72,17 @@ public class ProjectDocumentUploadController {
 
         DocumentResponseDto response =
                 projectDocumentUploadService.replaceDocument(documentId, requestDto);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/company-documents")
+    public ResponseEntity<List<DocumentResponseDto>> getCompanyDocuments(
+            @RequestParam Long companyId,
+            @RequestParam Long companyUnitId
+    ) {
+        List<DocumentResponseDto> response =
+                projectDocumentUploadService.getCompanyDocuments(companyId, companyUnitId);
 
         return ResponseEntity.ok(response);
     }

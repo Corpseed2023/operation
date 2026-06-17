@@ -18,7 +18,7 @@ import java.util.List;
 @RequestMapping("/operationService/api/products")
 @RequiredArgsConstructor
 @Tag(name = "Product Document Mapping", description = "Manage required documents per product and applicant type")
-public class ProductDocumentMappingController {
+public class  ProductDocumentMappingController {
 
     private final ProductDocumentMappingService mappingService;
 

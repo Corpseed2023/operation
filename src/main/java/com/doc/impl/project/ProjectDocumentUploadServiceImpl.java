@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -235,14 +236,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             );
         }
 
-//        // Optional: You can also enforce minimum size if needed in future
-//        if (requiredDoc.getMinFileSizeKb() != null && uploadedFileSizeKb < requiredDoc.getMinFileSizeKb()) {
-//            throw new ValidationException(
-//                    String.format("File size is below minimum required. Minimum: %d KB, Uploaded: %d KB",
-//                            requiredDoc.getMinFileSizeKb(), uploadedFileSizeKb),
-//                    "ERR_MIN_FILE_SIZE_NOT_MET"
-//            );
-//        }
     }
 
     @Override
@@ -381,6 +374,71 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         return sanitized;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<DocumentResponseDto> getCompanyDocuments(Long companyId, Long companyUnitId) {
+
+        if (companyId == null) {
+            throw new ValidationException("Company ID is required", "INVALID_COMPANY_ID");
+        }
+
+        if (companyUnitId == null) {
+            throw new ValidationException("Company Unit ID is required", "INVALID_COMPANY_UNIT_ID");
+        }
+
+        List<CompanyDocument> documents =
+                companyDocumentRepository.findByCompanyIdAndCompanyUnitIdAndIsDeletedFalse(
+                        companyId,
+                        companyUnitId
+                );
+
+        return documents.stream()
+                .map(this::mapCompanyDocumentToDto)
+                .toList();
+    }
+
+    private DocumentResponseDto mapCompanyDocumentToDto(CompanyDocument doc) {
+
+        DocumentResponseDto dto = new DocumentResponseDto();
+
+        dto.setId(doc.getId());
+        dto.setFileUrl(doc.getFileUrl());
+        dto.setFileName(doc.getFileName());
+        dto.setOldFileUrl(doc.getOldFileUrl());
+        dto.setOldFileName(doc.getOldFileName());
+
+        dto.setStatus(doc.getStatus() != null ? doc.getStatus().getName() : null);
+
+        dto.setRemarks(doc.getRemarks());
+        dto.setUploadTime(doc.getUploadTime());
+        dto.setExpiryDate(doc.getExpiryDate());
+        dto.setPermanent(doc.isPermanent());
+        dto.setExpired(doc.isExpired());
+
+        dto.setFileSizeKb(doc.getFileSizeKb());
+        dto.setFileFormat(doc.getFileFormat());
+        dto.setValidationPassed(doc.isValidationPassed());
+        dto.setValidationIssues(doc.getValidationIssues());
+
+        dto.setRequiredDocumentId(doc.getRequiredDocument() != null
+                ? doc.getRequiredDocument().getId()
+                : null);
+
+        dto.setUploadedById(doc.getUploadedBy() != null
+                ? doc.getUploadedBy().getId()
+                : null);
+
+        dto.setCreatedBy(doc.getCreatedBy());
+        dto.setUpdatedBy(doc.getUpdatedBy());
+        dto.setCreatedDate(doc.getCreatedDate());
+        dto.setUpdatedDate(doc.getUpdatedDate());
+
+        dto.setReplacementCount(doc.getReplacementCount());
+        dto.setFromCompanyDoc(true);
+        dto.setCompanyDocSourceId(doc.getId());
+
+        return dto;
+    }
     @Override
     @Transactional
     public DocumentResponseDto replaceDocument(Long documentId, ProjectDocumentUploadRequestDto requestDto) {
