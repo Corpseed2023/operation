@@ -424,6 +424,10 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 ? doc.getRequiredDocument().getId()
                 : null);
 
+        dto.setRequiredDocumentName(doc.getRequiredDocument() != null
+                ? doc.getRequiredDocument().getName()
+                : null);
+
         dto.setUploadedById(doc.getUploadedBy() != null
                 ? doc.getUploadedBy().getId()
                 : null);
@@ -439,6 +443,9 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         return dto;
     }
+
+
+
     @Override
     @Transactional
     public DocumentResponseDto replaceDocument(Long documentId, ProjectDocumentUploadRequestDto requestDto) {
@@ -551,12 +558,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         dto.setFileFormat(doc.getFileFormat());
         dto.setValidationPassed(doc.isValidationPassed());
         dto.setValidationIssues(doc.getValidationIssues());
+        dto.setRequiredDocumentId(doc.getRequiredDocument() != null
+                ? doc.getRequiredDocument().getId()
+                : null);
 
-        dto.setRequiredDocumentId(doc.getRequiredDocument() != null ?
-                doc.getRequiredDocument().getId() : null);
-
-        dto.setProjectId(doc.getProject() != null ?
-                doc.getProject().getId() : null);
+        dto.setRequiredDocumentName(doc.getRequiredDocument() != null
+                ? doc.getRequiredDocument().getName()
+                : null);
 
         dto.setUploadedById(doc.getUploadedBy() != null ?
                 doc.getUploadedBy().getId() : null);

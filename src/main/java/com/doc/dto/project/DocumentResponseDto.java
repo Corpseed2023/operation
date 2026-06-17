@@ -13,6 +13,7 @@ import java.util.Date;
 public class DocumentResponseDto {
 
     private Long id;
+    private String requiredDocumentName;
     private String fileUrl;
     private String fileName;
     private String oldFileUrl;

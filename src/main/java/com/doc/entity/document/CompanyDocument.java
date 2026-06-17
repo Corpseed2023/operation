@@ -143,15 +143,7 @@ public class CompanyDocument {
     @Column(name = "quality_score", columnDefinition = "DECIMAL(3,2)")
     private Double qualityScore = 0.0;
 
-    @PrePersist
-    protected void onCreate() {
-        this.createdDate = new Date();
-        this.updatedDate = new Date();
-        this.uploadTime = new Date();
-        if (this.expiryDate != null && this.expirySetDate == null) {
-            this.expirySetDate = new Date();
-        }
-    }
+
 
     @PreUpdate
     protected void onUpdate() {
