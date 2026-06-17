@@ -58,19 +58,6 @@ public class ProcurementAssignmentController {
         return procurementAssignmentService.selectVendor(procurementAssignmentId, requestDto);
     }
 
-
-    @PostMapping("/{procurementAssignmentId}/vendor-quotations")
-    @Operation(summary = "Add vendor quotation for procurement assignment")
-    public ProcurementAssignmentResponseDto addVendorQuotation(
-            @PathVariable Long procurementAssignmentId,
-            @RequestBody AddVendorQuotationRequestDto requestDto
-    ) {
-        return procurementAssignmentService.addVendorQuotation(
-                procurementAssignmentId,
-                requestDto
-        );
-    }
-
     @PutMapping("/{procurementAssignmentId}/vendor-quotations/select")
     @Operation(summary = "Select final vendor quotation for procurement assignment")
     public ProcurementAssignmentResponseDto selectVendorQuotation(

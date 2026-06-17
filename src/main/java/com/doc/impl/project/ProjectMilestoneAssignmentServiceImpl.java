@@ -39,27 +39,55 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
     private static final Logger logger = LoggerFactory.getLogger(ProjectMilestoneAssignmentServiceImpl.class);
 
-    @Autowired private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private ProjectDocumentUploadRepository projectDocumentUploadRepository;
-    @Autowired private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
-    @Autowired private ProjectRepository projectRepository;
-    @Autowired private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
-    @Autowired private UserProductMapRepository userProductMapRepository;
-    @Autowired private UserPerformanceCountRepository userPerformanceCountRepository;
-    @Autowired private MilestoneStatusRepository milestoneStatusRepository;
-    @Autowired private ProjectStatusRepository projectStatusRepository;
-    @Autowired private AutoAssignmentService autoAssignmentService;
-    @Autowired private MilestoneValidator milestoneValidator;
+    private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+    private final UserRepository userRepository;
+    private final ProjectDocumentUploadRepository projectDocumentUploadRepository;
+    private final MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
+    private final ProjectRepository projectRepository;
+    private final ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
+    private final UserProductMapRepository userProductMapRepository;
+    private final UserPerformanceCountRepository userPerformanceCountRepository;
+    private final MilestoneStatusRepository milestoneStatusRepository;
+    private final ProjectStatusRepository projectStatusRepository;
+    private final AutoAssignmentService autoAssignmentService;
+    private final MilestoneValidator milestoneValidator;
+    private final ProjectService projectService;
+    private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    private final NotificationPublisherService notificationPublisherService;
 
-    @Lazy
-    @Autowired private ProjectService projectService;
-
-    @Autowired
-    private ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
-    @Autowired
-    private NotificationPublisherService notificationPublisherService;
-
+    public ProjectMilestoneAssignmentServiceImpl(
+            ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
+            UserRepository userRepository,
+            ProjectDocumentUploadRepository projectDocumentUploadRepository,
+            MilestoneStatusHistoryRepository milestoneStatusHistoryRepository,
+            ProjectRepository projectRepository,
+            ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository,
+            UserProductMapRepository userProductMapRepository,
+            UserPerformanceCountRepository userPerformanceCountRepository,
+            MilestoneStatusRepository milestoneStatusRepository,
+            ProjectStatusRepository projectStatusRepository,
+            AutoAssignmentService autoAssignmentService,
+            MilestoneValidator milestoneValidator,
+            @Lazy ProjectService projectService,
+            ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
+            NotificationPublisherService notificationPublisherService
+    ) {
+        this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
+        this.userRepository = userRepository;
+        this.projectDocumentUploadRepository = projectDocumentUploadRepository;
+        this.milestoneStatusHistoryRepository = milestoneStatusHistoryRepository;
+        this.projectRepository = projectRepository;
+        this.projectAssignmentHistoryRepository = projectAssignmentHistoryRepository;
+        this.userProductMapRepository = userProductMapRepository;
+        this.userPerformanceCountRepository = userPerformanceCountRepository;
+        this.milestoneStatusRepository = milestoneStatusRepository;
+        this.projectStatusRepository = projectStatusRepository;
+        this.autoAssignmentService = autoAssignmentService;
+        this.milestoneValidator = milestoneValidator;
+        this.projectService = projectService;
+        this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
+        this.notificationPublisherService = notificationPublisherService;
+    }
 
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {

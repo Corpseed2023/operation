@@ -32,18 +32,22 @@ public class UserServiceImpl implements UserService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final DesignationRepository designationRepository;
+    private final DepartmentRepository departmentRepository;
+    private final RoleRepository roleRepository;
 
-    @Autowired
-    private DesignationRepository designationRepository;
+    public UserServiceImpl(
+            UserRepository userRepository,
+            DesignationRepository designationRepository,
+            DepartmentRepository departmentRepository,
+            RoleRepository roleRepository) {
 
-    @Autowired
-    private DepartmentRepository departmentRepository;
-
-    @Autowired
-    private RoleRepository roleRepository;
-
+        this.userRepository = userRepository;
+        this.designationRepository = designationRepository;
+        this.departmentRepository = departmentRepository;
+        this.roleRepository = roleRepository;
+    }
     @Override
     public UserResponseDto createUser(UserRequestDto requestDto) {
         logger.info("Creating user with ID: {}, email: {}, roleIds: {}", requestDto.getId(), requestDto.getEmail(), requestDto.getRoleIds());

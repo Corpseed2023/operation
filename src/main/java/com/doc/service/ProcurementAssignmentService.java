@@ -22,8 +22,6 @@ public interface ProcurementAssignmentService {
 
     List<ProcurementAssignmentResponseDto> getVendorRequiredAssignments();
 
-
     ProcurementAssignmentResponseDto selectVendorQuotation(Long procurementAssignmentId, SelectVendorQuotationRequestDto requestDto);
 
-    ProcurementAssignmentResponseDto addVendorQuotation(Long procurementAssignmentId, AddVendorQuotationRequestDto requestDto);
 }

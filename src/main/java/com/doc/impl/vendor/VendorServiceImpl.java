@@ -9,6 +9,7 @@ import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.VendorRepository;
+import com.doc.service.vendor.VendorMailService;
 import com.doc.service.vendor.VendorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,11 +31,19 @@ public class VendorServiceImpl implements VendorService {
 
     private static final Logger logger = LoggerFactory.getLogger(VendorServiceImpl.class);
 
-    @Autowired
-    private VendorRepository vendorRepository;
+    private final VendorRepository vendorRepository;
+    private final VendorMailService vendorMailService;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private UserRepository userRepository;     // ← Added as per your request
+    public VendorServiceImpl(
+            VendorRepository vendorRepository,
+            VendorMailService vendorMailService,
+            UserRepository userRepository
+    ) {
+        this.vendorRepository = vendorRepository;
+        this.vendorMailService = vendorMailService;
+        this.userRepository = userRepository;
+    }
 
     @Override
     public VendorResponseDto createVendor(VendorRequestDto dto) {
@@ -61,7 +70,15 @@ public class VendorServiceImpl implements VendorService {
         vendor = vendorRepository.save(vendor);
         logger.info("Vendor created successfully with ID: {}", vendor.getId());
 
+        try {
+            vendorMailService.sendVendorOnboardedMail(vendor);
+            logger.info("Vendor onboarded mail sent successfully to: {}", vendor.getEmail());
+        } catch (Exception e) {
+            logger.error("Failed to send vendor onboarded mail to: {}", vendor.getEmail(), e);
+        }
+
         return mapEntityToDto(vendor);
+
     }
 
     @Override

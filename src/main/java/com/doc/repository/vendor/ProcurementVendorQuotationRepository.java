@@ -11,12 +11,9 @@ import java.util.Optional;
 public interface ProcurementVendorQuotationRepository
         extends JpaRepository<ProcurementVendorQuotation, Long> {
 
+
     List<ProcurementVendorQuotation> findByProcurementAssignmentIdAndIsDeletedFalse(Long procurementAssignmentId);
 
     Optional<ProcurementVendorQuotation> findByIdAndIsDeletedFalse(Long id);
 
-    boolean existsByProcurementAssignmentIdAndVendorIdAndIsDeletedFalse(
-            Long procurementAssignmentId,
-            Long vendorId
-    );
 }

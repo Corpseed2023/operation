@@ -3,7 +3,6 @@ package com.doc.impl;
 import com.doc.dto.procurement.ProcurementAssignmentResponseDto;
 import com.doc.dto.procurement.SelectProcurementVendorRequestDto;
 import com.doc.dto.procurement.VendorSummaryDto;
-import com.doc.dto.vendor.request.AddVendorQuotationRequestDto;
 import com.doc.dto.vendor.request.SelectVendorQuotationRequestDto;
 import com.doc.entity.product.Product;
 import com.doc.entity.vendor.ProcurementMilestoneAssignment;
@@ -17,10 +16,8 @@ import com.doc.repository.ProcurementMilestoneAssignmentRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.ProcurementAssignmentService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.doc.dto.procurement.VendorQuotationResponseDto;
 import com.doc.entity.vendor.ProcurementVendorQuotation;
 import com.doc.repository.vendor.ProcurementVendorQuotationRepository;
 
@@ -32,17 +29,22 @@ import java.util.List;
 @Transactional
 public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentService {
 
-    @Autowired
-    private ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    private final VendorRepository vendorRepository;
+    private final UserRepository userRepository;
+    private final ProcurementVendorQuotationRepository procurementVendorQuotationRepository;
 
-    @Autowired
-    private VendorRepository vendorRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private ProcurementVendorQuotationRepository procurementVendorQuotationRepository;
+    public ProcurementAssignmentServiceImpl(
+            ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
+            VendorRepository vendorRepository,
+            UserRepository userRepository,
+            ProcurementVendorQuotationRepository procurementVendorQuotationRepository
+    ) {
+        this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
+        this.vendorRepository = vendorRepository;
+        this.userRepository = userRepository;
+        this.procurementVendorQuotationRepository = procurementVendorQuotationRepository;
+    }
 
     @Override
     public ProcurementAssignmentResponseDto getProcurementAssignment(Long procurementAssignmentId) {
@@ -248,80 +250,7 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
 
         return dto;
     }
-    @Override
-    public ProcurementAssignmentResponseDto addVendorQuotation(
-            Long procurementAssignmentId,
-            AddVendorQuotationRequestDto requestDto) {
 
-        ProcurementMilestoneAssignment assignment = findAssignmentById(procurementAssignmentId);
-
-        User user = userRepository.findActiveUserById(requestDto.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found",
-                        "ERR_USER_NOT_FOUND"
-                ));
-
-        Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(requestDto.getVendorId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor not found",
-                        "ERR_VENDOR_NOT_FOUND"
-                ));
-
-        if (vendor.getStatus() != VendorStatus.ACTIVE) {
-            throw new ValidationException(
-                    "Only ACTIVE vendor quotation can be added",
-                    "ERR_VENDOR_NOT_ACTIVE"
-            );
-        }
-
-        if (requestDto.getQuotedAmount() == null ||
-                requestDto.getQuotedAmount().doubleValue() <= 0) {
-            throw new ValidationException(
-                    "Quoted amount must be greater than 0",
-                    "ERR_INVALID_QUOTED_AMOUNT"
-            );
-        }
-
-        boolean alreadyExists =
-                procurementVendorQuotationRepository
-                        .existsByProcurementAssignmentIdAndVendorIdAndIsDeletedFalse(
-                                procurementAssignmentId,
-                                requestDto.getVendorId()
-                        );
-
-        if (alreadyExists) {
-            throw new ValidationException(
-                    "Quotation already added for this vendor",
-                    "ERR_VENDOR_QUOTATION_ALREADY_EXISTS"
-            );
-        }
-
-        ProcurementVendorQuotation quotation = new ProcurementVendorQuotation();
-        quotation.setProcurementAssignment(assignment);
-        quotation.setVendor(vendor);
-        quotation.setQuotedAmount(requestDto.getQuotedAmount());
-        quotation.setRemarks(requestDto.getRemarks());
-        quotation.setQuotationFilePath(requestDto.getQuotationFilePath());
-        quotation.setSelected(false);
-        quotation.setCreatedBy(user.getId());
-        quotation.setUpdatedBy(user.getId());
-        quotation.setCreatedDate(new Date());
-        quotation.setUpdatedDate(new Date());
-        quotation.setDeleted(false);
-
-        procurementVendorQuotationRepository.save(quotation);
-
-        if (assignment.getStatus() == ProcurementStatus.VENDOR_REQUIRED ||
-                assignment.getStatus() == ProcurementStatus.DRAFT) {
-            assignment.setStatus(ProcurementStatus.VENDOR_SHORTLISTED);
-            assignment.setVendorShortlistedDate(new Date());
-            assignment.setUpdatedBy(user.getId());
-            assignment.setUpdatedDate(new Date());
-            procurementMilestoneAssignmentRepository.save(assignment);
-        }
-
-        return buildResponseAndRefreshVendorStatus(assignment);
-    }
 
     @Override
     public ProcurementAssignmentResponseDto selectVendorQuotation(

@@ -36,6 +36,7 @@ import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.entity.vendor.Vendor;
 import com.doc.service.AutoAssignmentService;
+import com.doc.service.ProjectMailService;
 import com.doc.service.ProjectMilestoneAssignmentService;
 import com.doc.service.ProjectService;
 import com.doc.validator.request.ProjectRequestValidator;
@@ -61,43 +62,98 @@ public class ProjectServiceImpl implements ProjectService {
 
     private static final Logger logger = LoggerFactory.getLogger(ProjectServiceImpl.class);
 
-    @Autowired private ProjectRepository projectRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private ProductRepository productRepository;
-    @Autowired private CompanyRepository companyRepository;
-    @Autowired private ContactRepository contactRepository;
-    @Autowired private PaymentTypeRepository paymentTypeRepository;
-    @Autowired private ProjectPaymentDetailRepository projectPaymentDetailRepository;
-    @Autowired private ProjectPaymentTransactionRepository projectPaymentTransactionRepository;
-    @Autowired private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
-    @Autowired private ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
-    @Autowired private UserPerformanceCountRepository userPerformanceCountRepository;
-    @Autowired private UserProductMapRepository userProductMapRepository;
-    @Autowired private UserLoginStatusRepository userOnlineStatusRepository;
-    @Autowired private ProductMilestoneMapRepository productMilestoneMapRepository;
-    @Autowired private ProjectDocumentUploadRepository projectDocumentUploadRepository;
-    @Autowired private MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
-    @Autowired private MilestoneStatusRepository milestoneStatusRepository;
-    @Autowired private DocumentStatusRepository documentStatusRepository;
-    @Autowired private ProjectStatusRepository projectStatusRepository;
-    @Autowired private DepartmentAutoConfigRepository departmentAutoConfigRepository;
-    @Autowired private AutoAssignmentService autoAssignmentService;
-    @Autowired private ProjectRequestValidator projectRequestValidator;
-    @Autowired
-    private VendorRepository vendorRepository;
+    private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
+    private final ProductRepository productRepository;
+    private final CompanyRepository companyRepository;
+    private final ContactRepository contactRepository;
+    private final PaymentTypeRepository paymentTypeRepository;
+    private final ProjectPaymentDetailRepository projectPaymentDetailRepository;
+    private final ProjectPaymentTransactionRepository projectPaymentTransactionRepository;
+    private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+    private final ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
+    private final UserPerformanceCountRepository userPerformanceCountRepository;
+    private final UserProductMapRepository userProductMapRepository;
+    private final UserLoginStatusRepository userOnlineStatusRepository;
+    private final ProductMilestoneMapRepository productMilestoneMapRepository;
+    private final ProjectDocumentUploadRepository projectDocumentUploadRepository;
+    private final MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
+    private final MilestoneStatusRepository milestoneStatusRepository;
+    private final DocumentStatusRepository documentStatusRepository;
+    private final ProjectStatusRepository projectStatusRepository;
+    private final DepartmentAutoConfigRepository departmentAutoConfigRepository;
+    private final AutoAssignmentService autoAssignmentService;
+    private final ProjectRequestValidator projectRequestValidator;
+    private final VendorRepository vendorRepository;
+    private final CompanyUnitRepository companyUnitRepository;
+    private final ProductDocumentMappingRepository productDocumentMappingRepository;
+    private final ProjectMilestoneAssignmentService projectMilestoneAssignmentService;
+    private final ApplicantTypeRepository applicantTypeRepository;
+    private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    private final ProjectMailService projectMailService;
 
-    @Autowired private CompanyUnitRepository companyUnitRepository;
 
-    @Autowired private ProductDocumentMappingRepository productDocumentMappingRepository;
-
-    @Autowired
-    private ProjectMilestoneAssignmentService projectMilestoneAssignmentService;
-
-    @Autowired
-    private ApplicantTypeRepository applicantTypeRepository;
-
-    @Autowired
-    private ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    public ProjectServiceImpl(
+            ProjectRepository projectRepository,
+            UserRepository userRepository,
+            ProductRepository productRepository,
+            CompanyRepository companyRepository,
+            ContactRepository contactRepository,
+            PaymentTypeRepository paymentTypeRepository,
+            ProjectPaymentDetailRepository projectPaymentDetailRepository,
+            ProjectPaymentTransactionRepository projectPaymentTransactionRepository,
+            ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
+            ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository,
+            UserPerformanceCountRepository userPerformanceCountRepository,
+            UserProductMapRepository userProductMapRepository,
+            UserLoginStatusRepository userOnlineStatusRepository,
+            ProductMilestoneMapRepository productMilestoneMapRepository,
+            ProjectDocumentUploadRepository projectDocumentUploadRepository,
+            MilestoneStatusHistoryRepository milestoneStatusHistoryRepository,
+            MilestoneStatusRepository milestoneStatusRepository,
+            DocumentStatusRepository documentStatusRepository,
+            ProjectStatusRepository projectStatusRepository,
+            DepartmentAutoConfigRepository departmentAutoConfigRepository,
+            AutoAssignmentService autoAssignmentService,
+            ProjectRequestValidator projectRequestValidator,
+            VendorRepository vendorRepository,
+            CompanyUnitRepository companyUnitRepository,
+            ProductDocumentMappingRepository productDocumentMappingRepository,
+            ProjectMilestoneAssignmentService projectMilestoneAssignmentService,
+            ApplicantTypeRepository applicantTypeRepository,
+            ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
+            ProjectMailService projectMailService
+    ) {
+        this.projectRepository = projectRepository;
+        this.userRepository = userRepository;
+        this.productRepository = productRepository;
+        this.companyRepository = companyRepository;
+        this.contactRepository = contactRepository;
+        this.paymentTypeRepository = paymentTypeRepository;
+        this.projectPaymentDetailRepository = projectPaymentDetailRepository;
+        this.projectPaymentTransactionRepository = projectPaymentTransactionRepository;
+        this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
+        this.projectAssignmentHistoryRepository = projectAssignmentHistoryRepository;
+        this.userPerformanceCountRepository = userPerformanceCountRepository;
+        this.userProductMapRepository = userProductMapRepository;
+        this.userOnlineStatusRepository = userOnlineStatusRepository;
+        this.productMilestoneMapRepository = productMilestoneMapRepository;
+        this.projectDocumentUploadRepository = projectDocumentUploadRepository;
+        this.milestoneStatusHistoryRepository = milestoneStatusHistoryRepository;
+        this.milestoneStatusRepository = milestoneStatusRepository;
+        this.documentStatusRepository = documentStatusRepository;
+        this.projectStatusRepository = projectStatusRepository;
+        this.departmentAutoConfigRepository = departmentAutoConfigRepository;
+        this.autoAssignmentService = autoAssignmentService;
+        this.projectRequestValidator = projectRequestValidator;
+        this.vendorRepository = vendorRepository;
+        this.companyUnitRepository = companyUnitRepository;
+        this.productDocumentMappingRepository = productDocumentMappingRepository;
+        this.projectMilestoneAssignmentService = projectMilestoneAssignmentService;
+        this.applicantTypeRepository = applicantTypeRepository;
+        this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
+        this.projectMailService = projectMailService;
+    }
 
     @Override
     @Transactional(isolation = Isolation.SERIALIZABLE)
@@ -187,6 +243,12 @@ public class ProjectServiceImpl implements ProjectService {
 
         project.setPaymentDetail(paymentDetail);
         project = projectRepository.save(project);
+
+        try {
+            projectMailService.sendProjectCreatedMail(project, contact);
+        } catch (Exception e) {
+            logger.error("Failed to send project created mail to client contact: {}", contact.getEmail(), e);
+        }
 
         if (paidAmount > 0) {
             ProjectPaymentTransaction transaction = new ProjectPaymentTransaction();
