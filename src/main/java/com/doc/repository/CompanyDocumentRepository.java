@@ -21,4 +21,25 @@ public interface CompanyDocumentRepository extends JpaRepository<CompanyDocument
             Long companyId,
             Long companyUnitId
     );
+
+    @Query("""
+        SELECT cd.requiredDocument.id
+        FROM CompanyDocument cd
+        WHERE cd.company.id = :companyId
+        AND cd.requiredDocument.id IN :requiredDocumentIds
+        AND cd.isDeleted = false
+        AND cd.status.name = 'VERIFIED'
+        AND (
+            cd.isPermanent = true
+            OR cd.expiryDate IS NULL
+            OR cd.expiryDate >= CURRENT_DATE
+        )
+    """)
+    List<Long> findReusableRequiredDocumentIdsByCompany(
+            @Param("companyId") Long companyId,
+            @Param("requiredDocumentIds") List<Long> requiredDocumentIds
+    );
+
+
+
 }
