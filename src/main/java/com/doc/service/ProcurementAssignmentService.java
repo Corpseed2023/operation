@@ -2,6 +2,8 @@ package com.doc.service;
 
 import com.doc.dto.procurement.ProcurementAssignmentResponseDto;
 import com.doc.dto.procurement.SelectProcurementVendorRequestDto;
+import com.doc.dto.vendor.request.AddVendorQuotationRequestDto;
+import com.doc.dto.vendor.request.SelectVendorQuotationRequestDto;
 
 import java.util.List;
 
@@ -21,4 +23,7 @@ public interface ProcurementAssignmentService {
     List<ProcurementAssignmentResponseDto> getVendorRequiredAssignments();
 
 
+    ProcurementAssignmentResponseDto selectVendorQuotation(Long procurementAssignmentId, SelectVendorQuotationRequestDto requestDto);
+
+    ProcurementAssignmentResponseDto addVendorQuotation(Long procurementAssignmentId, AddVendorQuotationRequestDto requestDto);
 }

@@ -2,6 +2,8 @@ package com.doc.controller.procurement;
 
 import com.doc.dto.procurement.ProcurementAssignmentResponseDto;
 import com.doc.dto.procurement.SelectProcurementVendorRequestDto;
+import com.doc.dto.vendor.request.AddVendorQuotationRequestDto;
+import com.doc.dto.vendor.request.SelectVendorQuotationRequestDto;
 import com.doc.service.ProcurementAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -56,5 +58,29 @@ public class ProcurementAssignmentController {
         return procurementAssignmentService.selectVendor(procurementAssignmentId, requestDto);
     }
 
+
+    @PostMapping("/{procurementAssignmentId}/vendor-quotations")
+    @Operation(summary = "Add vendor quotation for procurement assignment")
+    public ProcurementAssignmentResponseDto addVendorQuotation(
+            @PathVariable Long procurementAssignmentId,
+            @RequestBody AddVendorQuotationRequestDto requestDto
+    ) {
+        return procurementAssignmentService.addVendorQuotation(
+                procurementAssignmentId,
+                requestDto
+        );
+    }
+
+    @PutMapping("/{procurementAssignmentId}/vendor-quotations/select")
+    @Operation(summary = "Select final vendor quotation for procurement assignment")
+    public ProcurementAssignmentResponseDto selectVendorQuotation(
+            @PathVariable Long procurementAssignmentId,
+            @RequestBody SelectVendorQuotationRequestDto requestDto
+    ) {
+        return procurementAssignmentService.selectVendorQuotation(
+                procurementAssignmentId,
+                requestDto
+        );
+    }
 
 }

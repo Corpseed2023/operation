@@ -3,6 +3,8 @@ package com.doc.impl;
 import com.doc.dto.procurement.ProcurementAssignmentResponseDto;
 import com.doc.dto.procurement.SelectProcurementVendorRequestDto;
 import com.doc.dto.procurement.VendorSummaryDto;
+import com.doc.dto.vendor.request.AddVendorQuotationRequestDto;
+import com.doc.dto.vendor.request.SelectVendorQuotationRequestDto;
 import com.doc.entity.product.Product;
 import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.project.ProcurementStatus;
@@ -18,6 +20,10 @@ import com.doc.service.ProcurementAssignmentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.doc.dto.procurement.VendorQuotationResponseDto;
+import com.doc.entity.vendor.ProcurementVendorQuotation;
+import com.doc.repository.vendor.ProcurementVendorQuotationRepository;
+
 
 import java.util.Date;
 import java.util.List;
@@ -34,6 +40,9 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ProcurementVendorQuotationRepository procurementVendorQuotationRepository;
 
     @Override
     public ProcurementAssignmentResponseDto getProcurementAssignment(Long procurementAssignmentId) {
@@ -238,6 +247,142 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
         dto.setUpdatedDate(assignment.getUpdatedDate());
 
         return dto;
+    }
+    @Override
+    public ProcurementAssignmentResponseDto addVendorQuotation(
+            Long procurementAssignmentId,
+            AddVendorQuotationRequestDto requestDto) {
+
+        ProcurementMilestoneAssignment assignment = findAssignmentById(procurementAssignmentId);
+
+        User user = userRepository.findActiveUserById(requestDto.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
+
+        Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(requestDto.getVendorId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor not found",
+                        "ERR_VENDOR_NOT_FOUND"
+                ));
+
+        if (vendor.getStatus() != VendorStatus.ACTIVE) {
+            throw new ValidationException(
+                    "Only ACTIVE vendor quotation can be added",
+                    "ERR_VENDOR_NOT_ACTIVE"
+            );
+        }
+
+        if (requestDto.getQuotedAmount() == null ||
+                requestDto.getQuotedAmount().doubleValue() <= 0) {
+            throw new ValidationException(
+                    "Quoted amount must be greater than 0",
+                    "ERR_INVALID_QUOTED_AMOUNT"
+            );
+        }
+
+        boolean alreadyExists =
+                procurementVendorQuotationRepository
+                        .existsByProcurementAssignmentIdAndVendorIdAndIsDeletedFalse(
+                                procurementAssignmentId,
+                                requestDto.getVendorId()
+                        );
+
+        if (alreadyExists) {
+            throw new ValidationException(
+                    "Quotation already added for this vendor",
+                    "ERR_VENDOR_QUOTATION_ALREADY_EXISTS"
+            );
+        }
+
+        ProcurementVendorQuotation quotation = new ProcurementVendorQuotation();
+        quotation.setProcurementAssignment(assignment);
+        quotation.setVendor(vendor);
+        quotation.setQuotedAmount(requestDto.getQuotedAmount());
+        quotation.setRemarks(requestDto.getRemarks());
+        quotation.setQuotationFilePath(requestDto.getQuotationFilePath());
+        quotation.setSelected(false);
+        quotation.setCreatedBy(user.getId());
+        quotation.setUpdatedBy(user.getId());
+        quotation.setCreatedDate(new Date());
+        quotation.setUpdatedDate(new Date());
+        quotation.setDeleted(false);
+
+        procurementVendorQuotationRepository.save(quotation);
+
+        if (assignment.getStatus() == ProcurementStatus.VENDOR_REQUIRED ||
+                assignment.getStatus() == ProcurementStatus.DRAFT) {
+            assignment.setStatus(ProcurementStatus.VENDOR_SHORTLISTED);
+            assignment.setVendorShortlistedDate(new Date());
+            assignment.setUpdatedBy(user.getId());
+            assignment.setUpdatedDate(new Date());
+            procurementMilestoneAssignmentRepository.save(assignment);
+        }
+
+        return buildResponseAndRefreshVendorStatus(assignment);
+    }
+
+    @Override
+    public ProcurementAssignmentResponseDto selectVendorQuotation(
+            Long procurementAssignmentId,
+            SelectVendorQuotationRequestDto requestDto) {
+
+        ProcurementMilestoneAssignment assignment = findAssignmentById(procurementAssignmentId);
+
+        User user = userRepository.findActiveUserById(requestDto.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
+
+        ProcurementVendorQuotation selectedQuotation =
+                procurementVendorQuotationRepository.findByIdAndIsDeletedFalse(requestDto.getQuotationId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Vendor quotation not found",
+                                "ERR_VENDOR_QUOTATION_NOT_FOUND"
+                        ));
+
+        if (!selectedQuotation.getProcurementAssignment().getId().equals(procurementAssignmentId)) {
+            throw new ValidationException(
+                    "Quotation does not belong to this procurement assignment",
+                    "ERR_INVALID_QUOTATION_ASSIGNMENT"
+            );
+        }
+
+        if (assignment.getSelectedVendor() != null) {
+            throw new ValidationException(
+                    "Vendor is already selected for this assignment",
+                    "ERR_VENDOR_ALREADY_SELECTED"
+            );
+        }
+
+        List<ProcurementVendorQuotation> quotations =
+                procurementVendorQuotationRepository
+                        .findByProcurementAssignmentIdAndIsDeletedFalse(procurementAssignmentId);
+
+        for (ProcurementVendorQuotation quotation : quotations) {
+            quotation.setSelected(false);
+            quotation.setUpdatedBy(user.getId());
+            quotation.setUpdatedDate(new Date());
+        }
+
+        selectedQuotation.setSelected(true);
+        selectedQuotation.setUpdatedBy(user.getId());
+        selectedQuotation.setUpdatedDate(new Date());
+
+        procurementVendorQuotationRepository.saveAll(quotations);
+
+        Vendor selectedVendor = selectedQuotation.getVendor();
+
+        assignment.setSelectedVendor(selectedVendor);
+        assignment.setStatus(ProcurementStatus.VENDOR_FINALIZED);
+        assignment.setUpdatedBy(user.getId());
+        assignment.setUpdatedDate(new Date());
+
+        procurementMilestoneAssignmentRepository.save(assignment);
+
+        return buildResponseAndRefreshVendorStatus(assignment);
     }
 
 
