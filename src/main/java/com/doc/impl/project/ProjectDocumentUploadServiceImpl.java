@@ -294,6 +294,13 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 companyDoc.setFileName(documentUpload.getFileName());
 
                 companyDoc.setReplacementCount(companyDoc.getReplacementCount() + 1);
+                // Common fields
+                companyDoc.setStatus(newStatus);
+                companyDoc.setRemarks(documentUpload.getRemarks());
+
+                companyDoc.setUploadedBy(documentUpload.getUploadedBy());
+                companyDoc.setCreatedBy(documentUpload.getCreatedBy());
+                companyDoc.setUpdatedBy(documentUpload.getUpdatedBy());
 
             } else {
                 // Create new
@@ -314,8 +321,21 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             companyDoc.setRemarks(documentUpload.getRemarks());
 
             companyDoc.setUploadedBy(documentUpload.getUploadedBy());
-            companyDoc.setCreatedBy(documentUpload.getCreatedBy());
-            companyDoc.setUpdatedBy(documentUpload.getUpdatedBy());
+
+            companyDoc.setCreatedBy(
+                    documentUpload.getCreatedBy() != null
+                            ? documentUpload.getCreatedBy()
+                            : updateDto.getChangedById()
+            );
+
+            companyDoc.setUpdatedBy(updateDto.getChangedById());
+            companyDoc.setUpdatedDate(new Date());
+
+            companyDoc.setUploadTime(
+                    documentUpload.getUploadTime() != null
+                            ? documentUpload.getUploadTime()
+                            : new Date()
+            );
 
             companyDoc.setFileSizeKb(documentUpload.getFileSizeKb());
             companyDoc.setFileFormat(documentUpload.getFileFormat());

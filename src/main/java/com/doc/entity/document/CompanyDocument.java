@@ -165,4 +165,23 @@ public class CompanyDocument {
         long diff = expiryDate.getTime() - System.currentTimeMillis();
         return (int) (diff / (1000 * 60 * 60 * 24));
     }
+
+    @PrePersist
+    protected void onCreate() {
+        Date now = new Date();
+
+        if (this.createdDate == null) {
+            this.createdDate = now;
+        }
+
+        if (this.updatedDate == null) {
+            this.updatedDate = now;
+        }
+
+        if (this.uploadTime == null) {
+            this.uploadTime = now;
+        }
+    }
+
+
 }
