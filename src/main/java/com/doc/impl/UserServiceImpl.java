@@ -76,6 +76,7 @@ public class UserServiceImpl implements UserService {
         user.setUserDesignation(designation);
         user.setDepartments(departments);
         user.setRoles(roles);
+        user.setBucketSize(requestDto.getBucketSize());
 
         user.setManager(manager);
         user.setDate(LocalDate.now());
@@ -145,6 +146,7 @@ public class UserServiceImpl implements UserService {
         user.setDepartments(departments);
         user.setRoles(roles);
         user.setManager(manager);
+        user.setBucketSize(requestDto.getBucketSize());
 
         user = userRepository.save(user);
         return mapToResponseDto(user);
@@ -196,9 +198,6 @@ public class UserServiceImpl implements UserService {
         if (departments.size() != departmentIds.size()) {
             throw new ResourceNotFoundException("One or more departments not found", "DEPARTMENT_NOT_FOUND");
         }
-
-        // The strict check has been removed:
-        // if (!departmentIds.contains(designationDepartmentId)) { ... }
 
         return departments;
     }

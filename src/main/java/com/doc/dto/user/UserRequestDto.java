@@ -39,4 +39,7 @@ public class UserRequestDto {
     private Long managerId;
 
     private Boolean managerFlag;
+
+    private int bucketSize = 0;
+
 }
