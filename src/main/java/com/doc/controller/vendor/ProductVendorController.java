@@ -2,6 +2,7 @@ package com.doc.controller.vendor;
 
 import com.doc.dto.vendor.ProductVendorCreateRequestDto;
 import com.doc.dto.vendor.ProductVendorResponseDto;
+import com.doc.dto.vendor.ProductVendorUpdateRequestDto;
 import com.doc.service.vendor.ProductVendorService;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.domain.Page;
@@ -51,7 +52,7 @@ public class ProductVendorController {
     public ResponseEntity<ProductVendorResponseDto> updateProductVendorMapping(
             @PathVariable Long mappingId,
             @RequestParam Long userId,
-            @RequestBody ProductVendorCreateRequestDto dto
+            @RequestBody ProductVendorUpdateRequestDto dto
     ) {
         ProductVendorResponseDto response =
                 productVendorService.updateProductVendorMapping(mappingId, userId, dto);

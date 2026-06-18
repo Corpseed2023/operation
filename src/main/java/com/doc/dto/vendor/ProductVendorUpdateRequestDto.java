@@ -3,7 +3,8 @@ package com.doc.dto.vendor;
 import lombok.Data;
 
 @Data
-public class ProductVendorCreateRequestDto {
+public class ProductVendorUpdateRequestDto {
+
 
     private Long vendorId;
 

@@ -2,6 +2,7 @@ package com.doc.service.vendor;
 
 import com.doc.dto.vendor.ProductVendorCreateRequestDto;
 import com.doc.dto.vendor.ProductVendorResponseDto;
+import com.doc.dto.vendor.ProductVendorUpdateRequestDto;
 import org.springframework.data.domain.Page;
 
 public interface ProductVendorService {
@@ -19,11 +20,9 @@ public interface ProductVendorService {
             int size
     );
 
-    ProductVendorResponseDto updateProductVendorMapping(
-            Long mappingId,
-            Long userId,
-            ProductVendorCreateRequestDto dto
-    );
+
 
     void removeVendorFromProduct(Long mappingId, Long userId);
+
+    ProductVendorResponseDto updateProductVendorMapping(Long mappingId, Long userId, ProductVendorUpdateRequestDto dto);
 }
