@@ -24,8 +24,6 @@ public class ProductVendorResponseDto {
     private String gstNumber;
     private String panNumber;
     private VendorStatus status;
-    private boolean verified;
-
     private String emailSubject;
     private String emailBody;
     private String agreementAttachment;

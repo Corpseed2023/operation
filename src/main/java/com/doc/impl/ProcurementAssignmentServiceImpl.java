@@ -324,7 +324,6 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
         dto.setGstNumber(vendor.getGstNumber());
         dto.setPanNumber(vendor.getPanNumber());
         dto.setStatus(vendor.getStatus());
-        dto.setVerified(vendor.isVerified());
         return dto;
     }
 }

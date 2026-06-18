@@ -29,5 +29,4 @@ public class NewVendorDto {
 
     private VendorStatus status;
 
-    private boolean verified = false;
 }

@@ -101,7 +101,6 @@ public class ProductVendorServiceImpl implements ProductVendorService {
             vendor.setStatus(dto.getVendor().getStatus() != null
                     ? dto.getVendor().getStatus()
                     : VendorStatus.ACTIVE);
-            vendor.setVerified(dto.getVendor().isVerified());
             vendor.setCreatedBy(currentUser.getId());
             vendor.setUpdatedBy(currentUser.getId());
             vendor.setCreatedDate(new Date());
@@ -333,7 +332,6 @@ public class ProductVendorServiceImpl implements ProductVendorService {
         dto.setGstNumber(vendor != null ? vendor.getGstNumber() : null);
         dto.setPanNumber(vendor != null ? vendor.getPanNumber() : null);
         dto.setStatus(vendor != null ? vendor.getStatus() : null);
-        dto.setVerified(vendor != null && vendor.isVerified());
 
         dto.setEmailSubject(mapping.getEmailSubject());
         dto.setEmailBody(mapping.getEmailBody());

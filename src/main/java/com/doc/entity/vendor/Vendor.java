@@ -47,8 +47,6 @@ public class Vendor {
     @Column(nullable = false)
     private VendorStatus status = VendorStatus.ACTIVE;
 
-    private boolean isVerified = false;
-
     @Temporal(TemporalType.TIMESTAMP)
     private Date createdDate;
 

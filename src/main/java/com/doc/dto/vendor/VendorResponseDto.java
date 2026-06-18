@@ -26,8 +26,6 @@ public class VendorResponseDto {
 
     private VendorStatus status;
 
-    private boolean isVerified;
-
     private Long createdBy;
     private Long updatedBy;
 

@@ -15,5 +15,4 @@ public class VendorSummaryDto {
     private String gstNumber;
     private String panNumber;
     private VendorStatus status;
-    private boolean verified;
 }

@@ -33,8 +33,6 @@ public class VendorRequestDto {
 
     private VendorStatus status;
 
-    private boolean isVerified = false;
-
     @NotNull(message = "CreatedBy user ID is required")
     private Long createdBy;
 

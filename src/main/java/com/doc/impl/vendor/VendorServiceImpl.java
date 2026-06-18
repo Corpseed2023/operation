@@ -160,7 +160,6 @@ public class VendorServiceImpl implements VendorService {
         vendor.setMobile(dto.getMobile());
         vendor.setGstNumber(dto.getGstNumber());
         vendor.setPanNumber(dto.getPanNumber());
-        vendor.setVerified(dto.isVerified());
 
         if (dto.getStatus() != null) {
             vendor.setStatus(dto.getStatus());
@@ -178,7 +177,6 @@ public class VendorServiceImpl implements VendorService {
         dto.setGstNumber(vendor.getGstNumber());
         dto.setPanNumber(vendor.getPanNumber());
         dto.setStatus(vendor.getStatus());
-        dto.setVerified(vendor.isVerified());
 
         dto.setCreatedBy(vendor.getCreatedBy());
         dto.setUpdatedBy(vendor.getUpdatedBy());
