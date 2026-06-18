@@ -45,6 +45,7 @@ public interface VendorRepository extends JpaRepository<Vendor, Long> {
             @Param("isDeleted") boolean isDeleted);
 
 
+    boolean existsByPanNumberAndIsDeletedFalse(String panNumber);
 
 
 

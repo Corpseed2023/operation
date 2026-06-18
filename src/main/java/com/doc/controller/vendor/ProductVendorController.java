@@ -21,10 +21,10 @@ public class ProductVendorController {
     }
 
     @PostMapping("/{productId}/vendors")
-    @Operation(summary = "Create vendor against product")
+    @Operation(summary = "Create or map vendor against product")
     public ResponseEntity<ProductVendorResponseDto> createVendorAgainstProduct(
             @PathVariable Long productId,
-            @RequestParam Long userId,
+            @RequestParam  Long userId,
             @RequestBody ProductVendorCreateRequestDto dto
     ) {
         ProductVendorResponseDto response =
@@ -69,6 +69,12 @@ public class ProductVendorController {
         productVendorService.removeVendorFromProduct(mappingId, userId);
         return ResponseEntity.noContent().build();
     }
+
+
+
+
+
+
 
 
 }

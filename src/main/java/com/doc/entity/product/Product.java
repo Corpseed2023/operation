@@ -17,9 +17,10 @@ import java.util.List;
 @Table(name = "products", indexes = {
         @Index(name = "idx_product_name", columnList = "productName", unique = true)
 })
-@Getter @Setter @NoArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
 public class Product {
-
 
     @Id
     private Long id;

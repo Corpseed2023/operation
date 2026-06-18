@@ -1,5 +1,6 @@
 package com.doc.impl.vendor;
 
+import com.doc.dto.vendor.NewVendorDto;
 import com.doc.dto.vendor.ProductVendorCreateRequestDto;
 import com.doc.dto.vendor.ProductVendorResponseDto;
 import com.doc.dto.vendor.ProductVendorUpdateRequestDto;
@@ -63,20 +64,61 @@ public class ProductVendorServiceImpl implements ProductVendorService {
                         "ERR_PRODUCT_NOT_FOUND"
                 ));
 
-        if (dto.getVendorId() == null) {
-            throw new ValidationException(
-                    "Vendor ID is required",
-                    "ERR_VENDOR_ID_REQUIRED"
-            );
+        Vendor vendor;
+
+        /*
+         * CASE 1: Existing vendor selected from dropdown.
+         */
+        if (dto.getVendorId() != null) {
+
+            vendor = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Vendor not found",
+                            "ERR_VENDOR_NOT_FOUND"
+                    ));
+
+        } else {
+
+            /*
+             * CASE 2: New vendor created from product screen.
+             */
+            if (dto.getVendor() == null) {
+                throw new ValidationException(
+                        "Either vendorId or vendor details are required",
+                        "ERR_VENDOR_REQUIRED"
+                );
+            }
+
+            validateNewVendor(dto.getVendor());
+
+            vendor = new Vendor();
+            vendor.setName(dto.getVendor().getName().trim());
+            vendor.setDescription(dto.getVendor().getDescription());
+            vendor.setEmail(dto.getVendor().getEmail());
+            vendor.setMobile(dto.getVendor().getMobile());
+            vendor.setGstNumber(normalize(dto.getVendor().getGstNumber()));
+            vendor.setPanNumber(normalize(dto.getVendor().getPanNumber()));
+            vendor.setStatus(dto.getVendor().getStatus() != null
+                    ? dto.getVendor().getStatus()
+                    : VendorStatus.ACTIVE);
+            vendor.setVerified(dto.getVendor().isVerified());
+            vendor.setCreatedBy(currentUser.getId());
+            vendor.setUpdatedBy(currentUser.getId());
+            vendor.setCreatedDate(new Date());
+            vendor.setUpdatedDate(new Date());
+            vendor.setDeleted(false);
+
+            vendor = vendorRepository.save(vendor);
         }
 
-        Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor not found",
-                        "ERR_VENDOR_NOT_FOUND"
-                ));
-
-        if (productVendorMappingRepository.existsByProductIdAndVendorIdAndIsDeletedFalse(product.getId(), vendor.getId())) {
+        /*
+         * Prevent same vendor from being mapped again with same product.
+         * Example: CDSO + Ramesh Trader should not be duplicated.
+         */
+        if (productVendorMappingRepository.existsByProductIdAndVendorIdAndIsDeletedFalse(
+                product.getId(),
+                vendor.getId()
+        )) {
             throw new ValidationException(
                     "This vendor is already mapped with this product",
                     "ERR_PRODUCT_VENDOR_ALREADY_EXISTS"
@@ -86,9 +128,11 @@ public class ProductVendorServiceImpl implements ProductVendorService {
         ProductVendorMapping mapping = new ProductVendorMapping();
         mapping.setProduct(product);
         mapping.setVendor(vendor);
+
         mapping.setEmailSubject(normalize(dto.getEmailSubject()));
         mapping.setEmailBody(normalize(dto.getEmailBody()));
         mapping.setAgreementAttachment(normalize(dto.getAgreementAttachment()));
+
         mapping.setCreatedBy(currentUser.getId());
         mapping.setUpdatedBy(currentUser.getId());
         mapping.setCreatedDate(new Date());
@@ -101,6 +145,35 @@ public class ProductVendorServiceImpl implements ProductVendorService {
         return mapToResponse(mapping);
     }
 
+    private void validateNewVendor(NewVendorDto vendorDto) {
+
+        if (vendorDto.getName() == null || vendorDto.getName().trim().isEmpty()) {
+            throw new ValidationException(
+                    "Vendor name is required",
+                    "ERR_VENDOR_NAME_REQUIRED"
+            );
+        }
+
+        String gstNumber = normalize(vendorDto.getGstNumber());
+
+        if (gstNumber != null &&
+                vendorRepository.existsByGstNumberAndIsDeletedFalse(gstNumber)) {
+            throw new ValidationException(
+                    "GST number already exists",
+                    "ERR_DUPLICATE_GST"
+            );
+        }
+
+        String panNumber = normalize(vendorDto.getPanNumber());
+
+        if (panNumber != null &&
+                vendorRepository.existsByPanNumberAndIsDeletedFalse(panNumber)) {
+            throw new ValidationException(
+                    "PAN number already exists",
+                    "ERR_DUPLICATE_PAN"
+            );
+        }
+    }
     @Override
     public Page<ProductVendorResponseDto> getVendorsByProduct(
             Long productId,
