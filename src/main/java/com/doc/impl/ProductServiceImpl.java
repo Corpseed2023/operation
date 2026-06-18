@@ -120,6 +120,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
 
+
     @Override
     public ProductResponseDto updateProduct(Long productId, ProductUpdateDto updateDto, Long currentUserId) {
         logger.info("Updating product ID: {} by user: {}", productId, currentUserId);

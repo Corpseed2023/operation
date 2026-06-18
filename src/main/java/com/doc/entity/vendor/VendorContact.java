@@ -25,4 +25,6 @@ public class VendorContact {
     private String email;
     private String mobile;
     private boolean isPrimary = false;
+
+
 }

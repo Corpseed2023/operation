@@ -21,6 +21,9 @@ public interface VendorRepository extends JpaRepository<Vendor, Long> {
 
     Page<Vendor> findByIsDeletedFalse(Pageable pageable);
 
+    boolean existsByPanNumberAndIsDeletedFalse(String panNumber);
+
+
     @Query("""
             SELECT v
             FROM Vendor v
