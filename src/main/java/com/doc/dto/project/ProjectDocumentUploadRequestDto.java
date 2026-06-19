@@ -1,4 +1,3 @@
-
 package com.doc.dto.project;
 
 import jakarta.validation.constraints.*;
@@ -21,18 +20,20 @@ public class ProjectDocumentUploadRequestDto {
     @Size(max = 255, message = "File name cannot exceed 255 characters")
     private String fileName;
 
+    @NotBlank(message = "File URL cannot be empty")
+    @Size(max = 1000, message = "File URL cannot exceed 1000 characters")
+    private String fileUrl;
+
     @NotNull(message = "Uploaded by user ID is required")
     private Long uploadedById;
 
     @NotNull(message = "Created by user ID is required")
     private Long createdById;
 
-    // Optional: for reuse from company documents
     private Long companyDocSourceId;
 
     private Boolean isFromCompanyDoc = false;
 
-    // Optional: override expiry (for EXPIRING docs)
     private Date expiryDate;
 
     private Boolean isPermanent = false;

@@ -16,6 +16,7 @@ import com.doc.exception.ValidationException;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.*;
 import com.doc.service.ProjectDocumentUploadService;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,9 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final DocumentStatusRepository documentStatusRepository;
     private final CompanyDocumentRepository companyDocumentRepository;
 
+    @Value("${aws_path}")
+    private String awsPath;
+
     public ProjectDocumentUploadServiceImpl(
             ProjectDocumentUploadRepository projectDocumentUploadRepository,
             ProjectRepository projectRepository,
@@ -55,6 +59,15 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         this.companyDocumentRepository = companyDocumentRepository;
     }
 
+    private String buildResponseFileUrl(String fileName) {
+        if (!StringUtils.hasText(fileName)) {
+            return null;
+        }
+
+        String basePath = awsPath.endsWith("/") ? awsPath : awsPath + "/";
+        return basePath + fileName;
+    }
+
     @Override
     public DocumentResponseDto uploadDocument(ProjectDocumentUploadRequestDto requestDto) {
 
@@ -65,26 +78,18 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 requestDto.getFileSizeKb()
         );
 
-        /*
-         * IMPORTANT:
-         * Currently your request DTO does not have fileUrl.
-         * So this assumes requestDto.getFileName() contains the uploaded S3 URL.
-         * If frontend sends only actual file name here, then add fileUrl field in DTO.
-         */
-        String fileUrl = requestDto.getFileName();
+        String fileUrl = requestDto.getFileUrl();
 
         if (!StringUtils.hasText(fileUrl)) {
             throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
         }
 
-        String extractedFileName;
-        try {
-            extractedFileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
-        } catch (Exception e) {
-            throw new ValidationException("Invalid file URL format", "INVALID_FILE_URL_FORMAT");
-        }
-
+        String extractedFileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
         String fileName = sanitizeFileName(extractedFileName);
+
+        if (!StringUtils.hasText(fileUrl)) {
+            throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
+        }
 
         String fileFormat = requestDto.getFileFormat() != null
                 ? requestDto.getFileFormat().trim().toLowerCase()
@@ -147,20 +152,17 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
             doc.setProject(project);
             doc.setRequiredDocument(requiredDoc);
-
-            // from request
             doc.setCreatedBy(requestDto.getCreatedById());
             doc.setCreatedDate(new Date());
-
             doc.setReplacementCount(0);
         }
 
-        // Values coming from request / derived from request
-        doc.setFileUrl(fileUrl);
+        // Save exactly what frontend sends
         doc.setFileName(fileName);
+        doc.setFileUrl(fileUrl);
+
         doc.setFileFormat(fileFormat);
         doc.setFileSizeKb(requestDto.getFileSizeKb());
-
         doc.setExpiryDate(requestDto.getExpiryDate());
 
         doc.setPermanent(Boolean.TRUE.equals(requestDto.getIsPermanent()));
@@ -168,34 +170,30 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         doc.setCompanyDocSourceId(requestDto.getCompanyDocSourceId());
         doc.setRemarks(requestDto.getRemarks());
 
-        // System/action fields
         doc.setStatus(uploadedStatus);
         doc.setUploadedBy(uploadedBy);
         doc.setUploadTime(new Date());
 
-        /*
-         * Better than createdById here.
-         * The person uploading/replacing the document is the latest updater.
-         */
         doc.setUpdatedBy(requestDto.getUploadedById());
         doc.setUpdatedDate(new Date());
 
         doc.setDeleted(false);
 
-        doc = projectDocumentUploadRepository.save(doc);
+        ProjectDocumentUpload savedDoc = projectDocumentUploadRepository.save(doc);
 
         logger.info(
-                "Document uploaded successfully. ID: {}, ProjectId: {}, RequiredDoc: {}, Size: {} KB, Format: {}",
-                doc.getId(),
+                "Document uploaded successfully. ID: {}, ProjectId: {}, RequiredDoc: {}, FileName: {}, FileUrl: {}, Size: {} KB, Format: {}",
+                savedDoc.getId(),
                 requestDto.getProjectId(),
                 requiredDoc.getName(),
+                savedDoc.getFileName(),
+                savedDoc.getFileUrl(),
                 requestDto.getFileSizeKb(),
                 fileFormat
         );
 
-        return mapToDocumentResponseDto(doc);
+        return mapToDocumentResponseDto(savedDoc);
     }
-
     private void validateFileFormat(String fileFormat) {
 
         if (!StringUtils.hasText(fileFormat)) {
