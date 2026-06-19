@@ -242,10 +242,16 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         ProjectDocumentUpload documentUpload = projectDocumentUploadRepository
                 .findActiveUserById(documentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Document not found", "DOCUMENT_UPLOAD_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Document not found",
+                        "DOCUMENT_UPLOAD_NOT_FOUND"
+                ));
 
         DocumentStatus newStatus = documentStatusRepository.findByName(updateDto.getNewStatus())
-                .orElseThrow(() -> new ResourceNotFoundException("Status not found", "STATUS_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Status not found",
+                        "STATUS_NOT_FOUND"
+                ));
 
         validateDocumentStatusTransition(documentUpload.getStatus(), newStatus);
 
@@ -253,6 +259,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         documentUpload.setRemarks(updateDto.getRemarks());
         documentUpload.setUpdatedBy(updateDto.getChangedById());
         documentUpload.setUpdatedDate(new Date());
+
         documentUpload = projectDocumentUploadRepository.save(documentUpload);
 
         if ("VERIFIED".equalsIgnoreCase(newStatus.getName())) {
@@ -270,8 +277,10 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             }
 
             ProductRequiredDocuments requiredDoc = documentUpload.getRequiredDocument();
+            if (requiredDoc == null) {
+                throw new RuntimeException("Required document missing for uploaded document");
+            }
 
-            // Check existing company document
             Optional<CompanyDocument> existingOpt =
                     companyDocumentRepository
                             .findByCompanyIdAndRequiredDocumentIdAndIsDeletedFalse(
@@ -282,49 +291,36 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             CompanyDocument companyDoc;
 
             if (existingOpt.isPresent()) {
-                // Update (Replacement)
                 companyDoc = existingOpt.get();
 
                 companyDoc.setOldFileUrl(companyDoc.getFileUrl());
                 companyDoc.setOldFileName(companyDoc.getFileName());
 
-                companyDoc.setFileUrl(documentUpload.getFileUrl());
-                companyDoc.setFileName(documentUpload.getFileName());
-
                 companyDoc.setReplacementCount(companyDoc.getReplacementCount() + 1);
-                // Common fields
-                companyDoc.setStatus(newStatus);
-                companyDoc.setRemarks(documentUpload.getRemarks());
-
-                companyDoc.setUploadedBy(documentUpload.getUploadedBy());
-                companyDoc.setCreatedBy(documentUpload.getCreatedBy());
-                companyDoc.setUpdatedBy(documentUpload.getUpdatedBy());
 
             } else {
-                // Create new
                 companyDoc = new CompanyDocument();
 
                 companyDoc.setCompany(company);
                 companyDoc.setCompanyUnit(unit);
                 companyDoc.setRequiredDocument(requiredDoc);
 
-                companyDoc.setFileUrl(documentUpload.getFileUrl());
-                companyDoc.setFileName(documentUpload.getFileName());
-
                 companyDoc.setReplacementCount(0);
+                companyDoc.setCreatedBy(
+                        documentUpload.getCreatedBy() != null
+                                ? documentUpload.getCreatedBy()
+                                : updateDto.getChangedById()
+                );
+                companyDoc.setCreatedDate(new Date());
             }
 
-            // Common fields
+            companyDoc.setFileUrl(documentUpload.getFileUrl());
+            companyDoc.setFileName(documentUpload.getFileName());
+
             companyDoc.setStatus(newStatus);
             companyDoc.setRemarks(documentUpload.getRemarks());
 
             companyDoc.setUploadedBy(documentUpload.getUploadedBy());
-
-            companyDoc.setCreatedBy(
-                    documentUpload.getCreatedBy() != null
-                            ? documentUpload.getCreatedBy()
-                            : updateDto.getChangedById()
-            );
 
             companyDoc.setUpdatedBy(updateDto.getChangedById());
             companyDoc.setUpdatedDate(new Date());
@@ -338,11 +334,19 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             companyDoc.setFileSizeKb(documentUpload.getFileSizeKb());
             companyDoc.setFileFormat(documentUpload.getFileFormat());
 
+            companyDoc.setPermanent(documentUpload.isPermanent());
+            companyDoc.setExpiryDate(documentUpload.getExpiryDate());
+
             companyDoc.setValidationPassed(documentUpload.isValidationPassed());
             companyDoc.setValidationIssues(documentUpload.getValidationIssues());
 
-            // VERIFIED INFO
-            companyDoc.setVerifiedBy(documentUpload.getUploadedBy());
+            User verifiedBy = userRepository.findActiveUserById(updateDto.getChangedById())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Verifier not found",
+                            "USER_NOT_FOUND"
+                    ));
+
+            companyDoc.setVerifiedBy(verifiedBy);
             companyDoc.setVerifiedDate(new Date());
 
             companyDocumentRepository.save(companyDoc);
@@ -350,6 +354,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         return mapToDocumentResponseDto(documentUpload);
     }
+
 
     private void validateUploadRequest(ProjectDocumentUploadRequestDto requestDto) {
 
