@@ -78,3 +78,15 @@ liquibase*
 .project
 .settings/
 bin/
+
+# Spring Boot / Application config files – DO NOT commit to Git
+application.properties
+application.yml
+application.yaml
+application-*.properties
+application-*.yml
+application-*.yaml
+bootstrap.properties
+bootstrap.yml
+bootstrap-*.properties
+bootstrap-*.yml
