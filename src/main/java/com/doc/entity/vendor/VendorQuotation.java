@@ -39,7 +39,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class VendorQuotation {
+public class  VendorQuotation {
 
     /**
      * Primary key of vendor quotation table.
