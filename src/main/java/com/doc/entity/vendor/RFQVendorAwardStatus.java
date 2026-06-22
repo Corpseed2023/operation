@@ -10,6 +10,7 @@ public enum RFQVendorAwardStatus {
      */
     DRAFT,
 
+
     /**
      * Vendor is selected/awarded for item or service.
      */
