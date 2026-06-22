@@ -96,6 +96,22 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         return mapToResponse(saved);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorQuotationResponseDto> getVendorQuotationsByRfqId(Long rfqId) {
+
+        List<VendorQuotation> quotations =
+                vendorQuotationRepository.findByRfq_IdAndIsDeletedFalseOrderByCreatedDateDesc(rfqId);
+
+        List<VendorQuotationResponseDto> responseList = new ArrayList<>();
+
+        for (VendorQuotation quotation : quotations) {
+            responseList.add(mapToResponse(quotation));
+        }
+
+        return responseList;
+    }
+
 
     private VendorQuotationResponseDto mapToResponse(VendorQuotation quotation) {
 

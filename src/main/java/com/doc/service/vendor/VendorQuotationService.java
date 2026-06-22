@@ -9,6 +9,8 @@ public interface VendorQuotationService {
 
     VendorQuotationResponseDto createVendorQuotation(VendorQuotationRequestDto requestDto);
 
+    List<VendorQuotationResponseDto> getVendorQuotationsByRfqId(Long rfqId);
+
     VendorQuotationResponseDto getVendorQuotationById(Long id);
 
     List<VendorQuotationResponseDto> getAllVendorQuotations();

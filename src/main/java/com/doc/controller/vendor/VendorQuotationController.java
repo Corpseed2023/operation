@@ -18,10 +18,12 @@ public class VendorQuotationController {
 
     private final VendorQuotationService vendorQuotationService;
 
-    @GetMapping
-    public ResponseEntity<List<VendorQuotationResponseDto>> getAllQuotations() {
+    @GetMapping("/rfq/{rfqId}")
+    public ResponseEntity<List<VendorQuotationResponseDto>> getQuotationsByRfqId(
+            @PathVariable Long rfqId
+    ) {
         List<VendorQuotationResponseDto> response =
-                vendorQuotationService.getAllVendorQuotations();
+                vendorQuotationService.getVendorQuotationsByRfqId(rfqId);
 
         return ResponseEntity.ok(response);
     }
