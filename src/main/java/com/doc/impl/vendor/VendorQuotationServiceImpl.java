@@ -57,7 +57,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         quotation.setRfqVendor(rfqVendor);
         quotation.setVendor(vendor);
 
-//        quotation.setQuotationNumber(requestDto.getQuotationNumber());
+        quotation.setQuotationNumber(requestDto.getQuotationNumber());
         quotation.setQuotationDate(requestDto.getQuotationDate());
         quotation.setValidTill(requestDto.getValidTill());
 
