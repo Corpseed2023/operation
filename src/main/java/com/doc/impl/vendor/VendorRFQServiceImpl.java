@@ -231,17 +231,21 @@ public class VendorRFQServiceImpl implements VendorRFQService {
 
         List<RFQVendor> vendorsToSend;
 
-        if (requestDto.getRfqVendorIds() == null || requestDto.getRfqVendorIds().isEmpty()) {
+        if (requestDto == null
+                || requestDto.getRfqVendorIds() == null
+                || requestDto.getRfqVendorIds().isEmpty()) {
+
             vendorsToSend = rfq.getVendors()
                     .stream()
-                    .filter(rfqVendor -> !rfqVendor.isDeleted())
+                    .filter(rfqVendor -> rfqVendor != null && !rfqVendor.isDeleted())
                     .toList();
+
         } else {
             Set<Long> requestedRfqVendorIds = new HashSet<>(requestDto.getRfqVendorIds());
 
             vendorsToSend = rfq.getVendors()
                     .stream()
-                    .filter(rfqVendor -> !rfqVendor.isDeleted())
+                    .filter(rfqVendor -> rfqVendor != null && !rfqVendor.isDeleted())
                     .filter(rfqVendor -> requestedRfqVendorIds.contains(rfqVendor.getId()))
                     .toList();
         }
@@ -249,6 +253,8 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         if (vendorsToSend.isEmpty()) {
             throw new RuntimeException("No valid RFQ vendors found for sending mail");
         }
+
+        validateNoVendorEmailsInCcOrBcc(vendorsToSend, requestDto);
 
         int sentCount = 0;
 
@@ -268,10 +274,15 @@ public class VendorRFQServiceImpl implements VendorRFQService {
 
             String body = buildRFQMailBody(rfq, rfqVendor, vendor, requestDto);
 
+            /*
+             * IMPORTANT:
+             * One mail is sent to one vendor only.
+             * Do not add other vendor emails in TO/CC/BCC.
+             */
             MailRequestDto mailRequestDto = MailRequestDto.builder()
                     .to(vendor.getEmail())
-                    .cc(requestDto.getCc())
-                    .bcc(requestDto.getBcc())
+                    .cc(requestDto != null ? requestDto.getCc() : null)
+                    .bcc(requestDto != null ? requestDto.getBcc() : null)
                     .subject(subject)
                     .body(body)
                     .html(true)
@@ -284,7 +295,7 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             rfqVendor.setSentToEmail(vendor.getEmail());
             rfqVendor.setSentToMobile(vendor.getMobile());
             rfqVendor.setUpdatedBy(userId);
-            rfqVendor.setRemarks("RFQ sent to vendor by mail");
+            rfqVendor.setRemarks("RFQ sent to vendor by separate mail");
 
             sentCount++;
         }
@@ -299,6 +310,45 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         RFQ savedRFQ = vendorRFQRepository.save(rfq);
 
         return mapToResponseDto(savedRFQ);
+    }
+
+    private void validateNoVendorEmailsInCcOrBcc(
+            List<RFQVendor> vendorsToSend,
+            RFQSendMailRequestDto requestDto
+    ) {
+        if (requestDto == null) {
+            return;
+        }
+
+        Set<String> vendorEmails = vendorsToSend.stream()
+                .map(RFQVendor::getVendor)
+                .filter(Objects::nonNull)
+                .map(Vendor::getEmail)
+                .filter(StringUtils::hasText)
+                .map(email -> email.trim().toLowerCase())
+                .collect(Collectors.toSet());
+
+        List<String> ccList = requestDto.getCc() != null
+                ? requestDto.getCc()
+                : Collections.emptyList();
+
+        List<String> bccList = requestDto.getBcc() != null
+                ? requestDto.getBcc()
+                : Collections.emptyList();
+
+        for (String cc : ccList) {
+            if (StringUtils.hasText(cc)
+                    && vendorEmails.contains(cc.trim().toLowerCase())) {
+                throw new RuntimeException("Vendor email cannot be added in CC: " + cc);
+            }
+        }
+
+        for (String bcc : bccList) {
+            if (StringUtils.hasText(bcc)
+                    && vendorEmails.contains(bcc.trim().toLowerCase())) {
+                throw new RuntimeException("Vendor email cannot be added in BCC: " + bcc);
+            }
+        }
     }
 
     @Override
