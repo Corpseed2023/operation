@@ -168,9 +168,11 @@ public class VendorRFQServiceImpl implements VendorRFQService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<RFQResponseDto> getAllRFQs(
             Long productId,
             RFQStatus status,
+            Long userId,
             int page,
             int size
     ) {
@@ -184,7 +186,9 @@ public class VendorRFQServiceImpl implements VendorRFQService {
 
         Pageable pageable = PageRequest.of(page - 1, size);
 
-        return vendorRFQRepository.getAllRFQs(productId, status, pageable);
+        return vendorRFQRepository
+                .getAllRFQs(productId, status, userId, pageable)
+                .map(this::mapToResponseDto);
     }
 
     private String generateRFQNumber() {
@@ -374,37 +378,42 @@ public class VendorRFQServiceImpl implements VendorRFQService {
 
     private RFQResponseDto mapToResponseDto(RFQ rfq) {
 
+        if (rfq == null) {
+            return null;
+        }
+
         Product product = rfq.getProduct();
 
-        RFQResponseDto responseDto = new RFQResponseDto(
-                rfq.getId(),
-                rfq.getRfqNumber(),
-                rfq.getTitle(),
-                rfq.getDescription(),
-                product != null ? product.getId() : null,
-                product != null ? product.getProductName() : null,
-                rfq.getScopeOfWork(),
-                rfq.getTermsAndConditions(),
-                rfq.getDeliveryLocation(),
-                rfq.getQuotationSubmissionDeadline(),
-                rfq.getExpectedStartDate(),
-                rfq.getExpectedEndDate(),
-                rfq.getContactPersonName(),
-                rfq.getContactPersonEmail(),
-                rfq.getContactPersonMobile(),
-                rfq.getStatus(),
-                rfq.getAttachmentUrl(),
-                rfq.getCreatedDate(),
-                rfq.getUpdatedDate(),
-                rfq.getCreatedBy(),
-                rfq.getUpdatedBy(),
-                rfq.isDeleted()
-        );
-
-        responseDto.setVendors(mapRFQVendors(rfq.getVendors()));
-
-        return responseDto;
+        return RFQResponseDto.builder()
+                .id(rfq.getId())
+                .rfqNumber(rfq.getRfqNumber())
+                .title(rfq.getTitle())
+                .description(rfq.getDescription())
+                .productId(product != null ? product.getId() : null)
+                .productName(product != null ? product.getProductName() : null)
+                .scopeOfWork(rfq.getScopeOfWork())
+                .termsAndConditions(rfq.getTermsAndConditions())
+                .deliveryLocation(rfq.getDeliveryLocation())
+                .quotationSubmissionDeadline(rfq.getQuotationSubmissionDeadline())
+                .expectedStartDate(rfq.getExpectedStartDate())
+                .expectedEndDate(rfq.getExpectedEndDate())
+                .contactPersonName(rfq.getContactPersonName())
+                .contactPersonEmail(rfq.getContactPersonEmail())
+                .contactPersonMobile(rfq.getContactPersonMobile())
+                .status(rfq.getStatus())
+                .attachmentUrl(rfq.getAttachmentUrl())
+                .createdDate(rfq.getCreatedDate())
+                .updatedDate(rfq.getUpdatedDate())
+                .createdBy(rfq.getCreatedBy())
+                .updatedBy(rfq.getUpdatedBy())
+                .deleted(rfq.isDeleted())
+                .vendors(mapRFQVendors(rfq.getVendors()))
+                .build();
     }
+
+
+
+
     private List<RFQVendorResponseDto> mapRFQVendors(List<RFQVendor> rfqVendors) {
 
         List<RFQVendorResponseDto> vendorResponseList = new ArrayList<>();

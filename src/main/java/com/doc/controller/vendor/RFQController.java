@@ -25,10 +25,13 @@ public class RFQController {
     public ResponseEntity<Page<RFQResponseDto>> getAllRFQs(
             @RequestParam(required = false) Long productId,
             @RequestParam(required = false) RFQStatus status,
+            @RequestParam(required = false) Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Page<RFQResponseDto> response = vendorRFQService.getAllRFQs(productId, status, page, size);
+        Page<RFQResponseDto> response =
+                vendorRFQService.getAllRFQs(productId, status, userId, page, size);
+
         return ResponseEntity.ok(response);
     }
 

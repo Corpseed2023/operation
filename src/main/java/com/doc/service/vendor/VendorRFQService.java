@@ -11,6 +11,7 @@ public interface VendorRFQService {
     Page<RFQResponseDto> getAllRFQs(
             Long productId,
             RFQStatus status,
+            Long userId,
             int page,
             int size
     );

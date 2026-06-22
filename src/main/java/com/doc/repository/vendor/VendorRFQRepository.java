@@ -15,51 +15,20 @@ public interface VendorRFQRepository extends JpaRepository<RFQ, Long> {
 
     Optional<RFQ> findTopByRfqNumberStartingWithOrderByRfqNumberDesc(String prefix);
 
-    @Query(
-            value = """
-                    SELECT new com.doc.dto.vendor.RFQResponseDto(
-                        r.id,
-                        r.rfqNumber,
-                        r.title,
-                        r.description,
-                        p.id,
-                        p.productName,
-                        r.scopeOfWork,
-                        r.termsAndConditions,
-                        r.deliveryLocation,
-                        r.quotationSubmissionDeadline,
-                        r.expectedStartDate,
-                        r.expectedEndDate,
-                        r.contactPersonName,
-                        r.contactPersonEmail,
-                        r.contactPersonMobile,
-                        r.status,
-                        r.attachmentUrl,
-                        r.createdDate,
-                        r.updatedDate,
-                        r.createdBy,
-                        r.updatedBy,
-                        r.isDeleted
-                    )
-                    FROM RFQ r
-                    LEFT JOIN r.product p
-                    WHERE r.isDeleted = false
-                    AND (:productId IS NULL OR p.id = :productId)
-                    AND (:status IS NULL OR r.status = :status)
-                    ORDER BY r.createdDate DESC
-                    """,
-            countQuery = """
-                    SELECT COUNT(r)
-                    FROM RFQ r
-                    LEFT JOIN r.product p
-                    WHERE r.isDeleted = false
-                    AND (:productId IS NULL OR p.id = :productId)
-                    AND (:status IS NULL OR r.status = :status)
-                    """
-    )
-    Page<RFQResponseDto> getAllRFQs(
+    @Query("""
+            SELECT r
+            FROM RFQ r
+            LEFT JOIN FETCH r.product p
+            WHERE r.isDeleted = false
+            AND (:productId IS NULL OR p.id = :productId)
+            AND (:status IS NULL OR r.status = :status)
+            AND (:userId IS NULL OR r.createdBy = :userId)
+            ORDER BY r.createdDate DESC
+            """)
+    Page<RFQ> getAllRFQs(
             @Param("productId") Long productId,
             @Param("status") RFQStatus status,
+            @Param("userId") Long userId,
             Pageable pageable
     );
 }
