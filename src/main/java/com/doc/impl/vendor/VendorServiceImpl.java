@@ -46,7 +46,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional
-    public VendorResponseDto createVendor(VendorRequestDto dto) {
+    public VendorResponseDto createVendor(Long userId, VendorRequestDto dto) {
 
         if (dto.getName() == null || dto.getName().trim().isEmpty()) {
             throw new ValidationException("Vendor name is required", "ERR_VENDOR_NAME_REQUIRED");
@@ -65,7 +65,7 @@ public class VendorServiceImpl implements VendorService {
             throw new ValidationException("PAN number already exists", "ERR_DUPLICATE_PAN");
         }
 
-        User createdByUser = userRepository.findActiveUserById(dto.getCreatedBy())
+        User createdByUser = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "CreatedBy user not found",
                         "ERR_USER_NOT_FOUND"
@@ -79,10 +79,7 @@ public class VendorServiceImpl implements VendorService {
         vendor.setMobile(normalize(dto.getMobile()));
         vendor.setGstNumber(gstNumber);
         vendor.setPanNumber(panNumber);
-
-        // Important: vendor starts as PROSPECTIVE
         vendor.setStatus(VendorStatus.PROSPECTIVE);
-
         vendor.setCreatedBy(createdByUser.getId());
         vendor.setUpdatedBy(createdByUser.getId());
         vendor.setDeleted(false);
@@ -94,34 +91,43 @@ public class VendorServiceImpl implements VendorService {
         return mapEntityToDto(vendor);
     }
 
+
     private String normalize(String value) {
         if (value == null || value.trim().isEmpty()) {
             return null;
         }
         return value.trim();
     }
-    @Override
-    public VendorResponseDto updateVendor(Long id, VendorRequestDto dto) {
-        Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Vendor not found", "ERR_VENDOR_NOT_FOUND"));
 
-        // Validate UpdatedBy User
-        if (dto.getUpdatedBy() != null) {
-            userRepository.findActiveUserById(dto.getUpdatedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("UpdatedBy user not found", "ERR_USER_NOT_FOUND"));
-        }
+
+    @Override
+    @Transactional
+    public VendorResponseDto updateVendor(Long id, Long userId, VendorRequestDto dto) {
+
+        Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor not found",
+                        "ERR_VENDOR_NOT_FOUND"
+                ));
+
+        User updatedByUser = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "UpdatedBy user not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
 
         mapDtoToEntity(dto, vendor);
+
+        vendor.setUpdatedBy(updatedByUser.getId());
         vendor.setUpdatedDate(new Date());
-        if (dto.getUpdatedBy() != null) {
-            vendor.setUpdatedBy(dto.getUpdatedBy());
-        }
 
         vendor = vendorRepository.save(vendor);
+
         logger.info("Vendor updated successfully with ID: {}", vendor.getId());
 
         return mapEntityToDto(vendor);
     }
+
 
     @Override
     public VendorResponseDto getVendorById(Long id) {
@@ -185,9 +191,6 @@ public class VendorServiceImpl implements VendorService {
         vendor.setGstNumber(normalize(dto.getGstNumber()));
         vendor.setPanNumber(normalize(dto.getPanNumber()));
 
-        if (dto.getStatus() != null) {
-            vendor.setStatus(dto.getStatus());
-        }
     }
     private VendorResponseDto mapEntityToDto(Vendor vendor) {
         VendorResponseDto dto = new VendorResponseDto();

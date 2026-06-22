@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Request for Quotation</title>
+</head>
+
+<body style="font-family: Arial, sans-serif; font-size: 14px; color: #222; margin: 0; padding: 0; background-color: #f6f6f6;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f6f6f6; padding: 20px;">
+    <tr>
+        <td align="center">
+
+            <table width="700" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
+
+                <tr>
+                    <td style="padding: 18px 24px; background-color: #1f2937; color: #ffffff;">
+                        <h2 style="margin: 0; font-size: 20px;">Request for Quotation</h2>
+                        <p style="margin: 6px 0 0; font-size: 13px;" th:text="${rfqNumber}">
+                            RFQ-2026-0001
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding: 24px;">
+
+                        <p style="margin-top: 0;">
+                            Dear <b th:text="${vendorName}">Vendor Name</b>,
+                        </p>
+
+                        <p th:if="${customMessage != null and customMessage != ''}"
+                           th:text="${customMessage}"
+                           style="white-space: pre-line;">
+                            Custom message
+                        </p>
+
+                        <p>
+                            We are inviting you to submit your quotation for the below RFQ.
+                        </p>
+
+                        <table cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; border: 1px solid #ddd;">
+                            <tr>
+                                <td style="border: 1px solid #ddd; width: 35%;"><b>RFQ Number</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${rfqNumber}">RFQ-2026-0001</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>RFQ Title</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${rfqTitle}">RFQ Title</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Product / Service</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${productName}">Product Name</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Description</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${description}">Description</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Scope of Work</b></td>
+                                <td style="border: 1px solid #ddd; white-space: pre-line;" th:text="${scopeOfWork}">
+                                    Scope of Work
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Terms & Conditions</b></td>
+                                <td style="border: 1px solid #ddd; white-space: pre-line;" th:text="${termsAndConditions}">
+                                    Terms
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Delivery Location</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${deliveryLocation}">Location</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Quotation Submission Deadline</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${quotationSubmissionDeadline}">Deadline</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Expected Start Date</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${expectedStartDate}">Start Date</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Expected End Date</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${expectedEndDate}">End Date</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Contact Person</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${contactPersonName}">Contact Person</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Contact Email</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${contactPersonEmail}">Contact Email</td>
+                            </tr>
+
+                            <tr>
+                                <td style="border: 1px solid #ddd;"><b>Contact Mobile</b></td>
+                                <td style="border: 1px solid #ddd;" th:text="${contactPersonMobile}">Contact Mobile</td>
+                            </tr>
+                        </table>
+
+                        <p th:if="${hasAttachment}" style="margin-top: 18px;">
+                            <b>RFQ Attachment:</b>
+                            <a th:href="${attachmentUrl}" target="_blank">View Attachment</a>
+                        </p>
+
+                        <p style="margin-top: 20px;">
+                            Please share your quotation by replying to this email with price, TAT,
+                            payment terms, tax details and any applicable attachments.
+                        </p>
+
+                        <p>
+                            Regards,<br/>
+                            <b>Corpseed Procurement Team</b>
+                        </p>
+
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

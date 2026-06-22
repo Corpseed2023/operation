@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -25,10 +26,13 @@ import java.util.List;
                 )
         },
         indexes = {
-                @Index(name = "idx_quotation_number", columnList = "quotationNumber", unique = true),
+                @Index(name = "idx_quotation_number", columnList = "quotation_number", unique = true),
                 @Index(name = "idx_quotation_status", columnList = "status"),
                 @Index(name = "idx_quotation_rfq", columnList = "rfq_id"),
-                @Index(name = "idx_quotation_vendor", columnList = "vendor_id")
+                @Index(name = "idx_quotation_vendor", columnList = "vendor_id"),
+                @Index(name = "idx_quotation_rfq_vendor", columnList = "rfq_vendor_id"),
+                @Index(name = "idx_quotation_latest", columnList = "is_latest"),
+                @Index(name = "idx_quotation_deleted", columnList = "is_deleted")
         }
 )
 @Getter
@@ -50,7 +54,7 @@ public class  VendorQuotation {
      * Example:
      * QUO-CDSO-BALAJI-001
      */
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(name = "quotation_number", nullable = false, unique = true, length = 100)
     private String quotationNumber;
 
     /**
@@ -83,6 +87,7 @@ public class  VendorQuotation {
      * Quotation date given by vendor.
      */
     @Temporal(TemporalType.DATE)
+    @Column(name = "quotation_date")
     private Date quotationDate;
 
     /**
@@ -92,6 +97,7 @@ public class  VendorQuotation {
      * This quotation is valid till 30-June-2026.
      */
     @Temporal(TemporalType.DATE)
+    @Column(name = "valid_till")
     private Date validTill;
 
     /**
@@ -110,6 +116,7 @@ public class  VendorQuotation {
      * true = latest quotation version
      * false = old/revised version
      */
+    @Column(name = "is_latest", nullable = false)
     private boolean isLatest = true;
 
     /**
@@ -118,25 +125,25 @@ public class  VendorQuotation {
      * Example:
      * INR
      */
-    @Column(length = 10)
+    @Column(name = "currency", length = 10)
     private String currency = "INR";
 
     /**
      * Basic amount before tax.
      */
-    @Column(precision = 15, scale = 2)
+    @Column(name = "subtotal_amount", precision = 15, scale = 2)
     private BigDecimal subtotalAmount = BigDecimal.ZERO;
 
     /**
      * Tax amount like GST.
      */
-    @Column(precision = 15, scale = 2)
+    @Column(name = "tax_amount", precision = 15, scale = 2)
     private BigDecimal taxAmount = BigDecimal.ZERO;
 
     /**
      * Final quotation amount including tax.
      */
-    @Column(precision = 15, scale = 2)
+    @Column(name = "grand_total", precision = 15, scale = 2)
     private BigDecimal grandTotal = BigDecimal.ZERO;
 
     /**
@@ -145,6 +152,7 @@ public class  VendorQuotation {
      * Example:
      * 5 days, 10 days, 15 days.
      */
+    @Column(name = "delivery_days")
     private Integer deliveryDays;
 
     /**
@@ -153,19 +161,19 @@ public class  VendorQuotation {
      * Example:
      * 50% advance, 50% after delivery.
      */
-    @Column(length = 1000)
+    @Column(name = "payment_terms", length = 1000)
     private String paymentTerms;
 
     /**
      * Warranty or service terms, if applicable.
      */
-    @Column(length = 1000)
+    @Column(name = "warranty_terms", length = 1000)
     private String warrantyTerms;
 
     /**
      * Additional vendor remarks.
      */
-    @Column(length = 1000)
+    @Column(name = "remarks", length = 1000)
     private String remarks;
 
     /**
@@ -174,32 +182,46 @@ public class  VendorQuotation {
      * Example:
      * PDF quotation sent by vendor.
      */
-    @Column(length = 500)
+    @Column(name = "quotation_attachment_url", length = 500)
     private String quotationAttachmentUrl;
 
     /**
      * Status of this quotation.
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
+    @Column(name = "status", nullable = false, length = 50)
     private VendorQuotationStatus status = VendorQuotationStatus.SUBMITTED;
 
     /**
      * User ID who entered quotation in system.
      */
+    @Column(name = "created_by")
     private Long createdBy;
 
     /**
      * User ID who last updated quotation.
      */
+    @Column(name = "updated_by")
     private Long updatedBy;
 
+    /**
+     * Record creation date.
+     */
     @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_date", updatable = false)
     private Date createdDate;
 
+    /**
+     * Last update date.
+     */
     @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_date")
     private Date updatedDate;
 
+    /**
+     * Soft delete flag.
+     */
+    @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
     /**
@@ -208,17 +230,95 @@ public class  VendorQuotation {
      * Example:
      * Cement, Steel Bars, Transport Charges, etc.
      */
-    @OneToMany(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(
+            mappedBy = "quotation",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
     private List<VendorQuotationItem> items = new ArrayList<>();
 
     @PrePersist
     public void onCreate() {
         this.createdDate = new Date();
         this.updatedDate = new Date();
+
+        calculateQuotationTotals();
     }
 
     @PreUpdate
     public void onUpdate() {
         this.updatedDate = new Date();
+
+        calculateQuotationTotals();
+    }
+
+    /**
+     * Adds quotation item and maintains bidirectional relation.
+     *
+     * This helps when creating quotation from service layer.
+     */
+    public void addItem(VendorQuotationItem item) {
+        if (item == null) {
+            return;
+        }
+
+        item.setQuotation(this);
+        this.items.add(item);
+    }
+
+    /**
+     * Removes quotation item and maintains bidirectional relation.
+     */
+    public void removeItem(VendorQuotationItem item) {
+        if (item == null) {
+            return;
+        }
+
+        item.setQuotation(null);
+        this.items.remove(item);
+    }
+
+    /**
+     * Calculates quotation subtotal, total tax and grand total
+     * from all active quotation items.
+     *
+     * Formula:
+     * subtotalAmount = sum of all item amount
+     * taxAmount = sum of all item taxAmount
+     * grandTotal = sum of all item totalAmount
+     */
+    public void calculateQuotationTotals() {
+        if (this.items == null) {
+            this.items = new ArrayList<>();
+        }
+
+        BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal tax = BigDecimal.ZERO;
+        BigDecimal total = BigDecimal.ZERO;
+
+        for (VendorQuotationItem item : this.items) {
+            if (item == null || item.isDeleted()) {
+                continue;
+            }
+
+            item.calculateAmounts();
+
+            subtotal = subtotal.add(
+                    item.getAmount() != null ? item.getAmount() : BigDecimal.ZERO
+            );
+
+            tax = tax.add(
+                    item.getTaxAmount() != null ? item.getTaxAmount() : BigDecimal.ZERO
+            );
+
+            total = total.add(
+                    item.getTotalAmount() != null ? item.getTotalAmount() : BigDecimal.ZERO
+            );
+        }
+
+        this.subtotalAmount = subtotal.setScale(2, RoundingMode.HALF_UP);
+        this.taxAmount = tax.setScale(2, RoundingMode.HALF_UP);
+        this.grandTotal = total.setScale(2, RoundingMode.HALF_UP);
     }
 }

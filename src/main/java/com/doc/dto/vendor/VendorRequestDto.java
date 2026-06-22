@@ -31,10 +31,4 @@ public class VendorRequestDto {
     @Size(max = 10)
     private String panNumber;
 
-    private VendorStatus status;
-
-    @NotNull(message = "CreatedBy user ID is required")
-    private Long createdBy;
-
-    private Long updatedBy;
 }
