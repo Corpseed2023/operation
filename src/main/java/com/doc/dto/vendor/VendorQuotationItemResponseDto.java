@@ -16,7 +16,7 @@ public class VendorQuotationItemResponseDto {
 
     private String itemType;
 
-    private Integer sequenceNo;
+//    private Integer sequenceNo;
 
     private String itemName;
 
