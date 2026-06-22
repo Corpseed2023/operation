@@ -1,45 +1,44 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.vendor.RFQCreateRequestDto;
-import com.doc.dto.vendor.RFQResponseDto;
-import com.doc.dto.vendor.RFQUpdateRequestDto;
-import com.doc.dto.vendor.RFQVendorResponseDto;
+import com.doc.dto.mail.MailRequestDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.product.Product;
-import com.doc.entity.vendor.RFQ;
-import com.doc.entity.vendor.RFQStatus;
-import com.doc.entity.vendor.RFQVendor;
-import com.doc.entity.vendor.Vendor;
+import com.doc.entity.vendor.*;
 import com.doc.repository.ProductRepository;
 import com.doc.repository.vendor.VendorRFQRepository;
 import com.doc.repository.vendor.VendorRepository;
+import com.doc.service.mail.MailService;
 import com.doc.service.vendor.VendorRFQService;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 
 import java.time.Year;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class VendorRFQServiceImpl implements VendorRFQService {
 
     private final VendorRFQRepository vendorRFQRepository;
     private final ProductRepository productRepository;
     private final VendorRepository vendorRepository;
+    private final MailService mailService;
+    private final TemplateEngine templateEngine;
 
     @Override
     @Transactional
     public RFQResponseDto createRFQ(Long userId, RFQCreateRequestDto requestDto) {
 
-        Product product = productRepository.findById(requestDto.getProductId())
+
+        Product product = productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(requestDto.getProductId())
                 .orElseThrow(() -> new RuntimeException(
                         "Product not found with ID: " + requestDto.getProductId()
                 ));
@@ -204,6 +203,173 @@ public class VendorRFQServiceImpl implements VendorRFQService {
                     return prefix + String.format("%04d", nextNumber);
                 })
                 .orElse(prefix + "0001");
+    }
+
+    @Override
+    @Transactional
+    public RFQResponseDto sendRFQToVendors(
+            Long rfqId,
+            Long userId,
+            RFQSendMailRequestDto requestDto
+    ) {
+        RFQ rfq = vendorRFQRepository.findById(rfqId)
+                .orElseThrow(() -> new RuntimeException("RFQ not found with ID: " + rfqId));
+
+        if (rfq.isDeleted()) {
+            throw new RuntimeException("RFQ is deleted with ID: " + rfqId);
+        }
+
+        if (rfq.getVendors() == null || rfq.getVendors().isEmpty()) {
+            throw new RuntimeException("No vendors mapped with this RFQ");
+        }
+
+        List<RFQVendor> vendorsToSend;
+
+        if (requestDto.getRfqVendorIds() == null || requestDto.getRfqVendorIds().isEmpty()) {
+            vendorsToSend = rfq.getVendors()
+                    .stream()
+                    .filter(rfqVendor -> !rfqVendor.isDeleted())
+                    .toList();
+        } else {
+            Set<Long> requestedRfqVendorIds = new HashSet<>(requestDto.getRfqVendorIds());
+
+            vendorsToSend = rfq.getVendors()
+                    .stream()
+                    .filter(rfqVendor -> !rfqVendor.isDeleted())
+                    .filter(rfqVendor -> requestedRfqVendorIds.contains(rfqVendor.getId()))
+                    .toList();
+        }
+
+        if (vendorsToSend.isEmpty()) {
+            throw new RuntimeException("No valid RFQ vendors found for sending mail");
+        }
+
+        int sentCount = 0;
+
+        for (RFQVendor rfqVendor : vendorsToSend) {
+
+            Vendor vendor = rfqVendor.getVendor();
+
+            if (vendor == null) {
+                continue;
+            }
+
+            if (!StringUtils.hasText(vendor.getEmail())) {
+                throw new RuntimeException("Vendor email is missing for vendor ID: " + vendor.getId());
+            }
+
+            String subject = buildRFQMailSubject(rfq, requestDto);
+
+            String body = buildRFQMailBody(rfq, rfqVendor, vendor, requestDto);
+
+            MailRequestDto mailRequestDto = MailRequestDto.builder()
+                    .to(vendor.getEmail())
+                    .cc(requestDto.getCc())
+                    .bcc(requestDto.getBcc())
+                    .subject(subject)
+                    .body(body)
+                    .html(true)
+                    .build();
+
+            mailService.sendMail(mailRequestDto);
+
+            rfqVendor.setStatus(RFQVendorStatus.SENT);
+            rfqVendor.setSentDate(new Date());
+            rfqVendor.setSentToEmail(vendor.getEmail());
+            rfqVendor.setSentToMobile(vendor.getMobile());
+            rfqVendor.setUpdatedBy(userId);
+            rfqVendor.setRemarks("RFQ sent to vendor by mail");
+
+            sentCount++;
+        }
+
+        if (sentCount == 0) {
+            throw new RuntimeException("RFQ mail was not sent to any vendor");
+        }
+
+        rfq.setStatus(RFQStatus.SENT);
+        rfq.setUpdatedBy(userId);
+
+        RFQ savedRFQ = vendorRFQRepository.save(rfq);
+
+        return mapToResponseDto(savedRFQ);
+    }
+
+    private String buildRFQMailSubject(
+            RFQ rfq,
+            RFQSendMailRequestDto requestDto
+    ) {
+        if (requestDto != null && StringUtils.hasText(requestDto.getSubject())) {
+            return requestDto.getSubject();
+        }
+
+        return "Request for Quotation - " + rfq.getRfqNumber() + " - " + rfq.getTitle();
+    }
+
+    private String buildRFQMailBody(
+            RFQ rfq,
+            RFQVendor rfqVendor,
+            Vendor vendor,
+            RFQSendMailRequestDto requestDto
+    ) {
+        String productName = rfq.getProduct() != null
+                ? rfq.getProduct().getProductName()
+                : "N/A";
+
+        String customMessage = "";
+
+        if (requestDto != null && StringUtils.hasText(requestDto.getMessage())) {
+            customMessage = requestDto.getMessage();
+        }
+
+        Context context = new Context();
+
+        context.setVariable("vendorName", safe(vendor.getName()));
+        context.setVariable("rfqVendorId", rfqVendor != null ? rfqVendor.getId() : null);
+
+        context.setVariable("customMessage", customMessage);
+
+        context.setVariable("rfqNumber", safe(rfq.getRfqNumber()));
+        context.setVariable("rfqTitle", safe(rfq.getTitle()));
+        context.setVariable("productName", safe(productName));
+        context.setVariable("description", safe(rfq.getDescription()));
+        context.setVariable("scopeOfWork", safe(rfq.getScopeOfWork()));
+        context.setVariable("termsAndConditions", safe(rfq.getTermsAndConditions()));
+        context.setVariable("deliveryLocation", safe(rfq.getDeliveryLocation()));
+
+        context.setVariable(
+                "quotationSubmissionDeadline",
+                rfq.getQuotationSubmissionDeadline() != null
+                        ? rfq.getQuotationSubmissionDeadline().toString()
+                        : "N/A"
+        );
+
+        context.setVariable(
+                "expectedStartDate",
+                rfq.getExpectedStartDate() != null
+                        ? rfq.getExpectedStartDate().toString()
+                        : "N/A"
+        );
+
+        context.setVariable(
+                "expectedEndDate",
+                rfq.getExpectedEndDate() != null
+                        ? rfq.getExpectedEndDate().toString()
+                        : "N/A"
+        );
+
+        context.setVariable("contactPersonName", safe(rfq.getContactPersonName()));
+        context.setVariable("contactPersonEmail", safe(rfq.getContactPersonEmail()));
+        context.setVariable("contactPersonMobile", safe(rfq.getContactPersonMobile()));
+
+        context.setVariable("hasAttachment", StringUtils.hasText(rfq.getAttachmentUrl()));
+        context.setVariable("attachmentUrl", rfq.getAttachmentUrl());
+
+        return templateEngine.process("mail/rfq-mail", context);
+    }
+
+    private String safe(String value) {
+        return StringUtils.hasText(value) ? value : "N/A";
     }
 
     private RFQResponseDto mapToResponseDto(RFQ rfq) {

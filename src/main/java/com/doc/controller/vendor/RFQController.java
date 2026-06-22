@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.doc.dto.vendor.RFQSendMailRequestDto;
 
 @RestController
 @RequestMapping("/operationService/api/rfq")
@@ -55,4 +56,22 @@ public class RFQController {
 
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/{rfqId}/send-to-vendors")
+    @Operation(summary = "Send RFQ mail to mapped vendors")
+    public ResponseEntity<RFQResponseDto> sendRFQToVendors(
+            @PathVariable Long rfqId,
+            @RequestParam Long userId,
+            @RequestBody RFQSendMailRequestDto requestDto
+    ) {
+        RFQResponseDto response = vendorRFQService.sendRFQToVendors(
+                rfqId,
+                userId,
+                requestDto
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+
 }
