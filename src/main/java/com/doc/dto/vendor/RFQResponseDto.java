@@ -45,7 +45,7 @@ public class RFQResponseDto {
 
     private boolean deleted;
 
-    private List<RFQVendorResponseDto> vendors;
+//    private List<RFQVendorResponseDto> vendors;
 
 
 }
