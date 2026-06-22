@@ -46,4 +46,16 @@ public class VendorQuotationController {
 
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<VendorQuotationResponseDto> updateQuotation(
+            @PathVariable Long id,
+            @Valid @RequestBody VendorQuotationRequestDto requestDto
+    ) {
+        VendorQuotationResponseDto response =
+                vendorQuotationService.updateVendorQuotation(id, requestDto);
+
+        return ResponseEntity.ok(response);
+    }
+
 }

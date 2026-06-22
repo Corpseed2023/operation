@@ -12,4 +12,6 @@ public interface VendorQuotationService {
     VendorQuotationResponseDto getVendorQuotationById(Long id);
 
     List<VendorQuotationResponseDto> getAllVendorQuotations();
+
+    VendorQuotationResponseDto updateVendorQuotation(Long id, VendorQuotationRequestDto requestDto);
 }

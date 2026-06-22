@@ -3,6 +3,7 @@ package com.doc.repository.vendor;
 import com.doc.dto.vendor.RFQResponseDto;
 import com.doc.entity.vendor.RFQ;
 import com.doc.entity.vendor.RFQStatus;
+import com.doc.entity.vendor.VendorQuotation;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,4 +32,5 @@ public interface VendorRFQRepository extends JpaRepository<RFQ, Long> {
             @Param("userId") Long userId,
             Pageable pageable
     );
+
 }

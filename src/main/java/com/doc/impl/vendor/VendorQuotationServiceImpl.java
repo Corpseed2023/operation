@@ -203,4 +203,73 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         return responseList;
     }
+
+    @Override
+    @Transactional
+    public VendorQuotationResponseDto updateVendorQuotation(Long id, VendorQuotationRequestDto requestDto) {
+
+        VendorQuotation quotation = vendorQuotationRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new RuntimeException("Vendor quotation not found"));
+
+        RFQ rfq = rfqRepository.findById(requestDto.getRfqId())
+                .orElseThrow(() -> new RuntimeException("RFQ not found"));
+
+        RFQVendor rfqVendor = rfqVendorRepository.findById(requestDto.getRfqVendorId())
+                .orElseThrow(() -> new RuntimeException("RFQ vendor not found"));
+
+        Vendor vendor = vendorRepository.findById(requestDto.getVendorId())
+                .orElseThrow(() -> new RuntimeException("Vendor not found"));
+
+        if (rfqVendor.getRfq() == null || !rfqVendor.getRfq().getId().equals(rfq.getId())) {
+            throw new RuntimeException("RFQ Vendor does not belong to selected RFQ");
+        }
+
+        if (rfqVendor.getVendor() == null || !rfqVendor.getVendor().getId().equals(vendor.getId())) {
+            throw new RuntimeException("Vendor does not match RFQ Vendor");
+        }
+
+        quotation.setRfq(rfq);
+        quotation.setRfqVendor(rfqVendor);
+        quotation.setVendor(vendor);
+
+        quotation.setQuotationNumber(requestDto.getQuotationNumber());
+        quotation.setQuotationDate(requestDto.getQuotationDate());
+        quotation.setValidTill(requestDto.getValidTill());
+
+        quotation.setCurrency(requestDto.getCurrency() != null ? requestDto.getCurrency() : "INR");
+        quotation.setDeliveryDays(requestDto.getDeliveryDays());
+
+        quotation.setPaymentTerms(requestDto.getPaymentTerms());
+        quotation.setWarrantyTerms(requestDto.getWarrantyTerms());
+        quotation.setRemarks(requestDto.getRemarks());
+        quotation.setQuotationAttachmentUrl(requestDto.getQuotationAttachmentUrl());
+
+        quotation.setUpdatedBy(requestDto.getCreatedBy());
+
+        quotation.getItems().clear();
+
+        if (requestDto.getItems() != null) {
+            for (VendorQuotationItemRequestDto itemDto : requestDto.getItems()) {
+
+                VendorQuotationItem item = new VendorQuotationItem();
+
+                item.setItemType(itemDto.getItemType());
+                item.setItemName(itemDto.getItemName());
+                item.setDescription(itemDto.getDescription());
+                item.setQuantity(itemDto.getQuantity());
+                item.setUnit(itemDto.getUnit());
+                item.setUnitRate(itemDto.getUnitRate());
+                item.setTaxPercent(itemDto.getTaxPercent());
+                item.setRemarks(itemDto.getRemarks());
+                item.setCreatedBy(requestDto.getCreatedBy());
+                item.setUpdatedBy(requestDto.getCreatedBy());
+
+                quotation.addItem(item);
+            }
+        }
+
+        VendorQuotation saved = vendorQuotationRepository.save(quotation);
+
+        return mapToResponse(saved);
+    }
 }

@@ -8,8 +8,11 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface VendorQuotationRepository extends JpaRepository<VendorQuotation,Long> {
+public interface VendorQuotationRepository extends JpaRepository<VendorQuotation, Long> {
+
     Optional<VendorQuotation> findByIdAndIsDeletedFalse(Long id);
 
     List<VendorQuotation> findByIsDeletedFalseOrderByCreatedDateDesc();
+
+    Optional<VendorQuotation> findTopByRfqVendor_IdOrderByVersionNoDesc(Long rfqVendorId);
 }
