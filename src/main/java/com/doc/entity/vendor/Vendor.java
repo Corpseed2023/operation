@@ -1,7 +1,6 @@
 package com.doc.entity.vendor;
 
-import com.doc.entity.milestone.Milestone;
-import com.doc.entity.product.Product;
+
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Comment;
@@ -9,6 +8,7 @@ import org.hibernate.annotations.Comment;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+
 
 @Entity
 @Table(name = "vendors", indexes = {

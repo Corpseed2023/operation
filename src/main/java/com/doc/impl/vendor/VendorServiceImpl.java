@@ -69,12 +69,6 @@ public class VendorServiceImpl implements VendorService {
         vendor = vendorRepository.save(vendor);
         logger.info("Vendor created successfully with ID: {}", vendor.getId());
 
-        try {
-            vendorMailService.sendVendorOnboardedMail(vendor);
-            logger.info("Vendor onboarded mail sent successfully to: {}", vendor.getEmail());
-        } catch (Exception e) {
-            logger.error("Failed to send vendor onboarded mail to: {}", vendor.getEmail(), e);
-        }
 
         return mapEntityToDto(vendor);
 
