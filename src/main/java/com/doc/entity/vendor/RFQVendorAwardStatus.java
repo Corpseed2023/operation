@@ -5,7 +5,6 @@ package com.doc.entity.vendor;
  */
 public enum RFQVendorAwardStatus {
 
-
     /**
      * Award is being prepared but not finalized.
      */
