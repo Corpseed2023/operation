@@ -15,4 +15,6 @@ public interface VendorQuotationRepository extends JpaRepository<VendorQuotation
     List<VendorQuotation> findByIsDeletedFalseOrderByCreatedDateDesc();
 
     Optional<VendorQuotation> findTopByRfqVendor_IdOrderByVersionNoDesc(Long rfqVendorId);
+
+    List<VendorQuotation> findByRfq_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long rfqId);
 }
