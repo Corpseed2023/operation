@@ -60,4 +60,14 @@ public class VendorQuotationController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/vendor/{vendorId}")
+    public ResponseEntity<List<VendorQuotationResponseDto>> getQuotationsByVendorId(
+            @PathVariable Long vendorId
+    ) {
+        List<VendorQuotationResponseDto> response =
+                vendorQuotationService.getVendorQuotationsByVendorId(vendorId);
+
+        return ResponseEntity.ok(response);
+    }
+
 }

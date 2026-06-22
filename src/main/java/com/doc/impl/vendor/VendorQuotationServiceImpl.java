@@ -221,6 +221,22 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<VendorQuotationResponseDto> getVendorQuotationsByVendorId(Long vendorId) {
+
+        List<VendorQuotation> quotations =
+                vendorQuotationRepository.getQuotationsByVendorId(vendorId);
+
+        List<VendorQuotationResponseDto> responseList = new ArrayList<>();
+
+        for (VendorQuotation quotation : quotations) {
+            responseList.add(mapToResponse(quotation));
+        }
+
+        return responseList;
+    }
+
+    @Override
     @Transactional
     public VendorQuotationResponseDto updateVendorQuotation(Long id, VendorQuotationRequestDto requestDto) {
 

@@ -31,6 +31,7 @@ public class VendorQuotationResponseDto {
 
     private String currency;
 
+
     private BigDecimal subtotalAmount;
     private BigDecimal taxAmount;
     private BigDecimal grandTotal;
