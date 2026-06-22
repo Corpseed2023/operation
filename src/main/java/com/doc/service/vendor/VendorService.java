@@ -8,15 +8,14 @@ import java.util.List;
 
 public interface VendorService {
 
-    VendorResponseDto createVendor(VendorRequestDto dto);
-
-    VendorResponseDto updateVendor(Long id, VendorRequestDto dto);
-
     VendorResponseDto getVendorById(Long id);
+
+    VendorResponseDto updateVendor(Long id, Long userId, VendorRequestDto dto);
 
     void deleteVendor(Long id);
 
     Page<VendorResponseDto> getAllVendors(Long userId, int page, int size, String keyword);
 
 
+    VendorResponseDto createVendor(Long userId, VendorRequestDto dto);
 }

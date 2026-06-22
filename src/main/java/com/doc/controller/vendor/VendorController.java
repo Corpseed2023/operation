@@ -21,13 +21,11 @@ public class VendorController {
     private VendorService vendorService;
 
     @PostMapping
-    @Operation(summary = "Create new Vendor")
     public ResponseEntity<VendorResponseDto> createVendor(
-            @RequestParam @Parameter(description = "User ID who is creating this vendor (for audit)") Long userId,
+            @RequestParam Long userId,
             @RequestBody VendorRequestDto dto) {
 
-        dto.setCreatedBy(userId);   // Set createdBy from request param
-        VendorResponseDto response = vendorService.createVendor(dto);
+        VendorResponseDto response = vendorService.createVendor(userId, dto);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
@@ -38,8 +36,7 @@ public class VendorController {
             @RequestParam @Parameter(description = "User ID who is updating this vendor (for audit)") Long userId,
             @RequestBody VendorRequestDto dto) {
 
-        dto.setUpdatedBy(userId);   // Set updatedBy from request param
-        VendorResponseDto response = vendorService.updateVendor(id, dto);
+        VendorResponseDto response = vendorService.updateVendor(id, userId, dto);
         return ResponseEntity.ok(response);
     }
 
