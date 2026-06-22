@@ -1,16 +1,10 @@
 package com.doc.entity.vendor;
 
-/**
- * Vendor master status.
- *
- * Important:
- * This status is only for vendor master.
- * Onboarding statuses like LEGAL_APPROVED, ACCOUNTS_APPROVED
- * should be maintained separately in VendorOnboardingStatus.
- */
 public enum VendorStatus {
 
     PROSPECTIVE("Prospective", "Basic vendor created but not fully onboarded"),
+
+    ONBOARDING("Onboarding", "Vendor selected and onboarding/legal/accounts verification is in progress"),
 
     ACTIVE("Active", "Vendor is fully approved and can be used for PO creation"),
 

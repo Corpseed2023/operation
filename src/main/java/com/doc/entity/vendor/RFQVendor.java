@@ -24,7 +24,7 @@ import java.util.Date;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class RFQVendor {
+public class  RFQVendor {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
