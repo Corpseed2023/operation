@@ -101,18 +101,6 @@ public class RFQVendorAward {
     private VendorQuotationItem quotationItem;
 
     /**
-     * Name of awarded item/service.
-     *
-     * This is stored separately for audit/history purpose.
-     * Even if quotation item changes later, award record remains readable.
-     *
-     * Example:
-     * NBFC Documentation Support.
-     */
-    @Column(nullable = false, length = 255)
-    private String awardedFor;
-
-    /**
      * Description of awarded work/service/item.
      */
     @Column(length = 1000)

@@ -27,30 +27,6 @@ public enum RFQStatus {
     SENT,
 
     /**
-     * At least one vendor has submitted quotation.
-     *
-     * Example:
-     * Balaji submitted quotation of Rs. 8,50,000.
-     */
-    QUOTATION_RECEIVED,
-
-    /**
-     * Procurement team is comparing vendor quotations.
-     *
-     * Example:
-     * Comparing price, delivery time, quality, warranty, and payment terms.
-     */
-    COMPARISON_PENDING,
-
-    /**
-     * One or multiple vendors are selected for this RFQ.
-     *
-     * Example:
-     * Balaji selected for Cement and RK Suppliers selected for Steel Bars.
-     */
-    VENDOR_SELECTED,
-
-    /**
      * RFQ is cancelled before completion.
      *
      * Example:
@@ -58,11 +34,4 @@ public enum RFQStatus {
      */
     CANCELLED,
 
-    /**
-     * RFQ process is fully closed.
-     *
-     * Example:
-     * Vendor selected, onboarding done, PO created, and no further RFQ action pending.
-     */
-    CLOSED
 }

@@ -26,54 +26,6 @@ public enum RFQVendorStatus {
     SENT,
 
     /**
-     * Vendor has viewed/opened the RFQ.
-     *
-     * Optional status if your system tracks email open or portal view.
-     */
-    VIEWED,
-
-    /**
-     * Vendor quotation has been received or entered in system.
-     *
-     * Example:
-     * Balaji submitted quotation of Rs. 8,50,000.
-     */
-    QUOTATION_RECEIVED,
-
-    /**
-     * Vendor did not respond before quotation deadline.
-     *
-     * Example:
-     * RFQ sent to Shree Enterprises but no quotation received.
-     */
-    NO_RESPONSE,
-
-    /**
-     * Vendor refused to participate in the RFQ.
-     *
-     * Example:
-     * Vendor says they cannot supply material.
-     */
-    DECLINED,
-
-    /**
-     * Vendor is shortlisted after initial comparison.
-     *
-     * Example:
-     * Balaji and RK are shortlisted, Shree is rejected.
-     */
-    SHORTLISTED,
-
-    /**
-     * Vendor is finally selected for full or partial work.
-     *
-     * Example:
-     * Balaji selected for Cement.
-     * RK selected for Steel Bars.
-     */
-    SELECTED,
-
-    /**
      * Vendor is not selected after comparison.
      *
      * Example:

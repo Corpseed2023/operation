@@ -8,9 +8,38 @@ public enum VendorOnboardingStatus {
 
     /**
      * Onboarding started after vendor award.
-     * Registration form/agreement has to be sent to vendor.
+     * Registration form/agreement has to be prepared.
      */
     ONBOARDING_PENDING,
+
+    /**
+     * Vendor registration form, agreement, NDA, bank detail form
+     * are sent to vendor.
+     */
+    FORM_SENT_TO_VENDOR,
+
+    /**
+     * Vendor is reviewing agreement/form.
+     */
+    VENDOR_REVIEW,
+
+    /**
+     * Vendor accepted agreement/form and submitted signed documents.
+     */
+    VENDOR_ACCEPTED,
+
+    /**
+     * Vendor requested modification in agreement/form.
+     *
+     * Example:
+     * Payment terms change, liability clause change, termination clause change.
+     */
+    VENDOR_CHANGE_REQUESTED,
+
+    /**
+     * Vendor rejected onboarding/agreement completely.
+     */
+    VENDOR_REJECTED,
 
     /**
      * Registration form, agreement, PAN, GST, bank details etc.

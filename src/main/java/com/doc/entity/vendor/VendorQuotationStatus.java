@@ -4,7 +4,7 @@ package com.doc.entity.vendor;
  * VendorQuotationStatus represents quotation lifecycle.
  *
  * This status belongs only to VendorQuotation.
- * Do not use this status for RFQ, RFQVendor, Vendor, Award, Onboarding, PO or Payment.
+ * Do not use this status for RFQ, RFQVendor, Vendor, Award, Onboarding
  */
 public enum VendorQuotationStatus {
 
