@@ -5,10 +5,12 @@ package com.doc.entity.vendor;
  */
 public enum RFQVendorAwardStatus {
 
+
     /**
      * Award is being prepared but not finalized.
      */
     DRAFT,
+
 
     /**
      * Vendor is selected/awarded for item or service.
