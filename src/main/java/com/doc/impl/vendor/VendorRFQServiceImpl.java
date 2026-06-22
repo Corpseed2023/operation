@@ -5,6 +5,7 @@ import com.doc.dto.vendor.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.vendor.*;
 import com.doc.repository.ProductRepository;
+import com.doc.repository.vendor.RFQVendorRepository;
 import com.doc.repository.vendor.VendorRFQRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.mail.MailService;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class VendorRFQServiceImpl implements VendorRFQService {
 
     private final VendorRFQRepository vendorRFQRepository;
+    private final RFQVendorRepository rfqVendorRepository;
     private final ProductRepository productRepository;
     private final VendorRepository vendorRepository;
     private final MailService mailService;
@@ -299,6 +301,12 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         return mapToResponseDto(savedRFQ);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<RFQVendorResponseDto> getVendorsByRfqId(Long rfqId) {
+        return rfqVendorRepository.findVendorsByRfqId(rfqId);
+    }
+
     private String buildRFQMailSubject(
             RFQ rfq,
             RFQSendMailRequestDto requestDto
@@ -407,7 +415,7 @@ public class VendorRFQServiceImpl implements VendorRFQService {
                 .createdBy(rfq.getCreatedBy())
                 .updatedBy(rfq.getUpdatedBy())
                 .deleted(rfq.isDeleted())
-                .vendors(mapRFQVendors(rfq.getVendors()))
+//                .vendors(mapRFQVendors(rfq.getVendors()))
                 .build();
     }
 

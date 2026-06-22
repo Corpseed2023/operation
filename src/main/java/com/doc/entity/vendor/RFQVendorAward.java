@@ -45,6 +45,7 @@ public class RFQVendorAward {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+
     /**
      * RFQ for which vendor is selected.
      *

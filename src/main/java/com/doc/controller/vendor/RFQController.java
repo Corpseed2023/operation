@@ -1,8 +1,6 @@
 package com.doc.controller.vendor;
 
-import com.doc.dto.vendor.RFQCreateRequestDto;
-import com.doc.dto.vendor.RFQResponseDto;
-import com.doc.dto.vendor.RFQUpdateRequestDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.RFQStatus;
 import com.doc.service.vendor.VendorRFQService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,7 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.doc.dto.vendor.RFQSendMailRequestDto;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/operationService/api/rfq")
@@ -72,6 +71,16 @@ public class RFQController {
                 userId,
                 requestDto
         );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{rfqId}/vendors")
+    public ResponseEntity<List<RFQVendorResponseDto>> getVendorsByRfqId(
+            @PathVariable Long rfqId
+    ) {
+        List<RFQVendorResponseDto> response =
+                vendorRFQService.getVendorsByRfqId(rfqId);
 
         return ResponseEntity.ok(response);
     }
