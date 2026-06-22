@@ -11,8 +11,10 @@
     <tr>
         <td align="center">
 
-            <table width="700" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
+            <table width="700" cellpadding="0" cellspacing="0"
+                   style="background-color: #ffffff; border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
 
+                <!-- Header -->
                 <tr>
                     <td style="padding: 18px 24px; background-color: #1f2937; color: #ffffff;">
                         <h2 style="margin: 0; font-size: 20px;">Request for Quotation</h2>
@@ -22,6 +24,7 @@
                     </td>
                 </tr>
 
+                <!-- Body -->
                 <tr>
                     <td style="padding: 24px;">
 
@@ -29,84 +32,139 @@
                             Dear <b th:text="${vendorName}">Vendor Name</b>,
                         </p>
 
-                        <p th:if="${customMessage != null and customMessage != ''}"
-                           th:text="${customMessage}"
-                           style="white-space: pre-line;">
+                        <!--
+                            IMPORTANT:
+                            customMessage is coming from rich text editor as HTML.
+                            Use th:utext so <p>, <b>, <ul>, <li>, etc. render as HTML.
+                        -->
+                        <div th:if="${customMessage != null and customMessage != ''}"
+                             th:utext="${customMessage}"
+                             style="margin-bottom: 16px;">
                             Custom message
-                        </p>
+                        </div>
 
                         <p>
                             We are inviting you to submit your quotation for the below RFQ.
                         </p>
 
-                        <table cellpadding="8" cellspacing="0" width="100%" style="border-collapse: collapse; border: 1px solid #ddd;">
+                        <table cellpadding="8" cellspacing="0" width="100%"
+                               style="border-collapse: collapse; border: 1px solid #ddd;">
+
                             <tr>
-                                <td style="border: 1px solid #ddd; width: 35%;"><b>RFQ Number</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${rfqNumber}">RFQ-2026-0001</td>
+                                <td style="border: 1px solid #ddd; width: 35%; vertical-align: top;">
+                                    <b>RFQ Number</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${rfqNumber}">
+                                    RFQ-2026-0001
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>RFQ Title</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${rfqTitle}">RFQ Title</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>RFQ Title</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${rfqTitle}">
+                                    RFQ Title
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Product / Service</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${productName}">Product Name</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Product / Service</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${productName}">
+                                    Product Name
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Description</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${description}">Description</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Description</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${description}">
+                                    Description
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Scope of Work</b></td>
-                                <td style="border: 1px solid #ddd; white-space: pre-line;" th:text="${scopeOfWork}">
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Scope of Work</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:utext="${scopeOfWork}">
                                     Scope of Work
                                 </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Terms & Conditions</b></td>
-                                <td style="border: 1px solid #ddd; white-space: pre-line;" th:text="${termsAndConditions}">
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Terms &amp; Conditions</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:utext="${termsAndConditions}">
                                     Terms
                                 </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Delivery Location</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${deliveryLocation}">Location</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Delivery Location</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${deliveryLocation}">
+                                    Location
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Quotation Submission Deadline</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${quotationSubmissionDeadline}">Deadline</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Quotation Submission Deadline</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${quotationSubmissionDeadline}">
+                                    Deadline
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Expected Start Date</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${expectedStartDate}">Start Date</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Expected Start Date</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${expectedStartDate}">
+                                    Start Date
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Expected End Date</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${expectedEndDate}">End Date</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Expected End Date</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${expectedEndDate}">
+                                    End Date
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Contact Person</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${contactPersonName}">Contact Person</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Contact Person</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${contactPersonName}">
+                                    Contact Person
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Contact Email</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${contactPersonEmail}">Contact Email</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Contact Email</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${contactPersonEmail}">
+                                    Contact Email
+                                </td>
                             </tr>
 
                             <tr>
-                                <td style="border: 1px solid #ddd;"><b>Contact Mobile</b></td>
-                                <td style="border: 1px solid #ddd;" th:text="${contactPersonMobile}">Contact Mobile</td>
+                                <td style="border: 1px solid #ddd; vertical-align: top;">
+                                    <b>Contact Mobile</b>
+                                </td>
+                                <td style="border: 1px solid #ddd;" th:text="${contactPersonMobile}">
+                                    Contact Mobile
+                                </td>
                             </tr>
                         </table>
 
