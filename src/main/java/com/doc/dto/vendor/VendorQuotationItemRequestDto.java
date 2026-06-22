@@ -14,7 +14,7 @@ public class VendorQuotationItemRequestDto {
 
     private QuotationItemType itemType;
 
-    private Integer sequenceNo;
+//    private Integer sequenceNo;
 
     @NotBlank(message = "Item name is required")
     private String itemName;

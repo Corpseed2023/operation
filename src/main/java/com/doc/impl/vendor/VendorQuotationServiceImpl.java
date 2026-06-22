@@ -57,7 +57,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         quotation.setRfqVendor(rfqVendor);
         quotation.setVendor(vendor);
 
-        quotation.setQuotationNumber(requestDto.getQuotationNumber());
+//        quotation.setQuotationNumber(requestDto.getQuotationNumber());
         quotation.setQuotationDate(requestDto.getQuotationDate());
         quotation.setValidTill(requestDto.getValidTill());
 
@@ -77,7 +77,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                 VendorQuotationItem item = new VendorQuotationItem();
 
                 item.setItemType(itemDto.getItemType());
-                item.setSequenceNo(itemDto.getSequenceNo());
+//                item.setSequenceNo(itemDto.getSequenceNo());
                 item.setItemName(itemDto.getItemName());
                 item.setDescription(itemDto.getDescription());
                 item.setQuantity(itemDto.getQuantity());
@@ -95,6 +95,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         return mapToResponse(saved);
     }
+
 
     private VendorQuotationResponseDto mapToResponse(VendorQuotation quotation) {
 
@@ -148,7 +149,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                 itemResponse.setId(item.getId());
                 itemResponse.setQuotationId(quotation.getId());
                 itemResponse.setItemType(item.getItemType() != null ? item.getItemType().name() : null);
-                itemResponse.setSequenceNo(item.getSequenceNo());
+//                itemResponse.setSequenceNo(item.getSequenceNo());
                 itemResponse.setItemName(item.getItemName());
                 itemResponse.setDescription(item.getDescription());
 
@@ -175,5 +176,31 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         response.setItems(itemResponses);
 
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VendorQuotationResponseDto getVendorQuotationById(Long id) {
+
+        VendorQuotation quotation = vendorQuotationRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new RuntimeException("Vendor quotation not found"));
+
+        return mapToResponse(quotation);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorQuotationResponseDto> getAllVendorQuotations() {
+
+        List<VendorQuotation> quotations =
+                vendorQuotationRepository.findByIsDeletedFalseOrderByCreatedDateDesc();
+
+        List<VendorQuotationResponseDto> responseList = new ArrayList<>();
+
+        for (VendorQuotation quotation : quotations) {
+            responseList.add(mapToResponse(quotation));
+        }
+
+        return responseList;
     }
 }

@@ -9,12 +9,33 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/operationService/api/quotation")
 @RequiredArgsConstructor
 public class VendorQuotationController {
 
     private final VendorQuotationService vendorQuotationService;
+
+    @GetMapping
+    public ResponseEntity<List<VendorQuotationResponseDto>> getAllQuotations() {
+        List<VendorQuotationResponseDto> response =
+                vendorQuotationService.getAllVendorQuotations();
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<VendorQuotationResponseDto> getQuotationById(
+            @PathVariable Long id
+    ) {
+        VendorQuotationResponseDto response =
+                vendorQuotationService.getVendorQuotationById(id);
+
+        return ResponseEntity.ok(response);
+    }
+
 
     @PostMapping
     public ResponseEntity<VendorQuotationResponseDto> createQuotation(
