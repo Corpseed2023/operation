@@ -56,8 +56,8 @@ public class VendorServiceMapping {
      * RFQ award from which this approved rate/service was created.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "rfq_vendor_award_id")
-    private RFQVendorAward rfqVendorAward;
+    @JoinColumn(name = "vendor_finalization_id")
+    private VendorFinalization vendorFinalization;
 
     /**
      * Vendor onboarding from which this mapping was activated.

@@ -32,7 +32,6 @@ import java.util.Date;
         name = "vendor_onboardings",
         indexes = {
                 @Index(name = "idx_onboarding_vendor", columnList = "vendor_id"),
-                @Index(name = "idx_onboarding_award", columnList = "award_id"),
                 @Index(name = "idx_onboarding_status", columnList = "status"),
                 @Index(name = "idx_onboarding_rfq", columnList = "rfq_id")
         }
@@ -87,8 +86,8 @@ public class VendorOnboarding {
      * Balaji awarded for FSSAI Filing Support.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "award_id")
-    private RFQVendorAward award;
+    @JoinColumn(name = "vendor_finalization_id")
+    private VendorFinalization vendorFinalization;
 
     /**
      * Service category for which vendor is being onboarded.
