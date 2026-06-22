@@ -1,18 +1,24 @@
 package com.doc.entity.vendor;
 
-import org.hibernate.annotations.Comment;
-
 /**
- * Vendor Status Enum - Similar to ProjectStatus / MilestoneStatus in your system
+ * Vendor master status.
+ *
+ * Important:
+ * This status is only for vendor master.
+ * Onboarding statuses like LEGAL_APPROVED, ACCOUNTS_APPROVED
+ * should be maintained separately in VendorOnboardingStatus.
  */
 public enum VendorStatus {
 
-    ACTIVE("Active", "Vendor is active and can be used"),
+    PROSPECTIVE("Prospective", "Basic vendor created but not fully onboarded"),
+
+    ACTIVE("Active", "Vendor is fully approved and can be used for PO creation"),
+
     INACTIVE("Inactive", "Vendor is temporarily inactive"),
-    UNDER_REVIEW("Under Review", "Vendor is being evaluated"),
-    BLACKLISTED("Blacklisted", "Vendor is blacklisted due to poor performance or issues"),
-    SUSPENDED("Suspended", "Vendor is suspended temporarily"),
-    VERIFIED("Verified", "Vendor has been fully verified and approved");
+
+    BLACKLISTED("Blacklisted", "Vendor is blacklisted due to poor performance or compliance issue"),
+
+    SUSPENDED("Suspended", "Vendor is temporarily suspended");
 
     private final String displayName;
     private final String description;

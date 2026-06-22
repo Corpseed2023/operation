@@ -45,35 +45,61 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
+    @Transactional
     public VendorResponseDto createVendor(VendorRequestDto dto) {
 
-        if (dto.getGstNumber() != null &&
-                vendorRepository.existsByGstNumberAndIsDeletedFalse(dto.getGstNumber())) {
+        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
+            throw new ValidationException("Vendor name is required", "ERR_VENDOR_NAME_REQUIRED");
+        }
+
+        String gstNumber = normalize(dto.getGstNumber());
+        String panNumber = normalize(dto.getPanNumber());
+
+        if (gstNumber != null &&
+                vendorRepository.existsByGstNumberAndIsDeletedFalse(gstNumber)) {
             throw new ValidationException("GST number already exists", "ERR_DUPLICATE_GST");
         }
 
-        // Validate CreatedBy User
+        if (panNumber != null &&
+                vendorRepository.existsByPanNumberAndIsDeletedFalse(panNumber)) {
+            throw new ValidationException("PAN number already exists", "ERR_DUPLICATE_PAN");
+        }
+
         User createdByUser = userRepository.findActiveUserById(dto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("CreatedBy user not found", "ERR_USER_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "CreatedBy user not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
 
         Vendor vendor = new Vendor();
-        mapDtoToEntity(dto, vendor);
 
-        vendor.setStatus(VendorStatus.ACTIVE);
+        vendor.setName(dto.getName().trim());
+        vendor.setDescription(dto.getDescription());
+        vendor.setEmail(normalize(dto.getEmail()));
+        vendor.setMobile(normalize(dto.getMobile()));
+        vendor.setGstNumber(gstNumber);
+        vendor.setPanNumber(panNumber);
+
+        // Important: vendor starts as PROSPECTIVE
+        vendor.setStatus(VendorStatus.PROSPECTIVE);
+
         vendor.setCreatedBy(createdByUser.getId());
-        vendor.setUpdatedBy(createdByUser.getId());   // Initially same as createdBy
-        vendor.setCreatedDate(new Date());
-        vendor.setUpdatedDate(new Date());
+        vendor.setUpdatedBy(createdByUser.getId());
         vendor.setDeleted(false);
 
         vendor = vendorRepository.save(vendor);
+
         logger.info("Vendor created successfully with ID: {}", vendor.getId());
 
-
         return mapEntityToDto(vendor);
-
     }
 
+    private String normalize(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
     @Override
     public VendorResponseDto updateVendor(Long id, VendorRequestDto dto) {
         Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(id)
@@ -148,18 +174,21 @@ public class VendorServiceImpl implements VendorService {
     // ==================== Mapping Methods ====================
 
     private void mapDtoToEntity(VendorRequestDto dto, Vendor vendor) {
-        vendor.setName(dto.getName().trim());
+
+        if (dto.getName() != null) {
+            vendor.setName(dto.getName().trim());
+        }
+
         vendor.setDescription(dto.getDescription());
-        vendor.setEmail(dto.getEmail());
-        vendor.setMobile(dto.getMobile());
-        vendor.setGstNumber(dto.getGstNumber());
-        vendor.setPanNumber(dto.getPanNumber());
+        vendor.setEmail(normalize(dto.getEmail()));
+        vendor.setMobile(normalize(dto.getMobile()));
+        vendor.setGstNumber(normalize(dto.getGstNumber()));
+        vendor.setPanNumber(normalize(dto.getPanNumber()));
 
         if (dto.getStatus() != null) {
             vendor.setStatus(dto.getStatus());
         }
     }
-
     private VendorResponseDto mapEntityToDto(Vendor vendor) {
         VendorResponseDto dto = new VendorResponseDto();
 
