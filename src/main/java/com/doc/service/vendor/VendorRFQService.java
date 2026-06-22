@@ -15,6 +15,7 @@ public interface VendorRFQService {
             int page,
             int size
     );
+
     RFQResponseDto createRFQ(Long userId, RFQCreateRequestDto requestDto);
     RFQResponseDto updateRFQ(
             Long rfqId,
