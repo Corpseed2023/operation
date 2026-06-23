@@ -357,6 +357,20 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         return rfqVendorRepository.findVendorsByRfqId(rfqId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public RFQResponseDto getRFQById(Long rfqId) {
+
+        RFQ rfq = vendorRFQRepository.findById(rfqId)
+                .orElseThrow(() -> new RuntimeException("RFQ not found with ID: " + rfqId));
+
+        if (rfq.isDeleted()) {
+            throw new RuntimeException("RFQ is deleted with ID: " + rfqId);
+        }
+
+        return mapToResponseDto(rfq);
+    }
+
     private String buildRFQMailSubject(
             RFQ rfq,
             RFQSendMailRequestDto requestDto
