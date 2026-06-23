@@ -95,5 +95,15 @@ public class RFQController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/{rfqId}/vendors/{vendorId}")
+    public ResponseEntity<RFQVendorResponseDto> getVendorByRfqIdAndVendorId(
+            @PathVariable Long rfqId,
+            @PathVariable Long vendorId
+    ) {
+        RFQVendorResponseDto response =
+                vendorRFQService.getVendorByRfqIdAndVendorId(rfqId, vendorId);
+
+        return ResponseEntity.ok(response);
+    }
 
 }

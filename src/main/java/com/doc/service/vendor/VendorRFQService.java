@@ -37,4 +37,6 @@ public interface VendorRFQService {
     List<RFQVendorResponseDto> getVendorsByRfqId(Long rfqId);
 
     RFQResponseDto getRFQById(Long rfqId);
+
+    RFQVendorResponseDto getVendorByRfqIdAndVendorId(Long rfqId, Long vendorId);
 }

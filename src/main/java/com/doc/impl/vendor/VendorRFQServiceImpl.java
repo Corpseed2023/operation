@@ -518,4 +518,13 @@ public class VendorRFQServiceImpl implements VendorRFQService {
 
         return vendorResponseList;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RFQVendorResponseDto getVendorByRfqIdAndVendorId(Long rfqId, Long vendorId) {
+        return rfqVendorRepository.findVendorByRfqIdAndVendorId(rfqId, vendorId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Vendor not found for RFQ ID: " + rfqId + " and Vendor ID: " + vendorId
+                ));
+    }
 }
