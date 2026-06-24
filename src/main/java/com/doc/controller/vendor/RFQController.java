@@ -86,6 +86,7 @@ public class RFQController {
     }
 
     @GetMapping("/{rfqId}/vendors")
+    @Operation(summary = "Get Vendors by RFQ Id")
     public ResponseEntity<List<RFQVendorResponseDto>> getVendorsByRfqId(
             @PathVariable Long rfqId
     ) {
@@ -96,6 +97,7 @@ public class RFQController {
     }
 
     @GetMapping("/{rfqId}/vendors/{vendorId}")
+    @Operation(summary = "Get Vendor by RFQ Id & Vendor Id")
     public ResponseEntity<RFQVendorResponseDto> getVendorByRfqIdAndVendorId(
             @PathVariable Long rfqId,
             @PathVariable Long vendorId
