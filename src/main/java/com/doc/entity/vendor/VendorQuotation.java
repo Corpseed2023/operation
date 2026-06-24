@@ -96,6 +96,11 @@ public class  VendorQuotation {
      * Example:
      * This quotation is valid till 30-June-2026.
      */
+
+    @Temporal(TemporalType.DATE)
+    @Column(name = "valid_from")
+    private Date validFrom;
+
     @Temporal(TemporalType.DATE)
     @Column(name = "valid_till")
     private Date validTill;

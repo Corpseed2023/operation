@@ -5,6 +5,7 @@ import com.doc.dto.vendor.VendorQuotationItemResponseDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
 import com.doc.entity.vendor.*;
+import com.doc.exception.ValidationException;
 import com.doc.repository.vendor.RFQVendorRepository;
 import com.doc.repository.vendor.VendorQuotationRepository;
 import com.doc.repository.vendor.VendorRFQRepository;
@@ -48,6 +49,16 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
             throw new RuntimeException("Vendor does not match RFQ Vendor");
         }
 
+        if (requestDto.getValidFrom() != null
+                && requestDto.getValidTill() != null
+                && requestDto.getValidTill().before(requestDto.getValidFrom())) {
+
+            throw new ValidationException(
+                    "Valid Till date cannot be before Valid From date",
+                    "ERR_INVALID_DATE_RANGE"
+            );
+        }
+
         VendorQuotation quotation = new VendorQuotation();
 
         quotation.setRfq(rfq);
@@ -56,8 +67,8 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         quotation.setQuotationNumber(requestDto.getQuotationNumber());
         quotation.setQuotationDate(requestDto.getQuotationDate());
+        quotation.setValidFrom(requestDto.getValidFrom());
         quotation.setValidTill(requestDto.getValidTill());
-
         quotation.setCurrency(requestDto.getCurrency() != null ? requestDto.getCurrency() : "INR");
         quotation.setDeliveryDays(requestDto.getDeliveryDays());
 
@@ -137,8 +148,8 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         }
 
         response.setQuotationDate(quotation.getQuotationDate());
+        response.setValidFrom(quotation.getValidFrom());
         response.setValidTill(quotation.getValidTill());
-
         response.setVersionNo(quotation.getVersionNo());
         response.setLatest(quotation.isLatest());
         response.setCurrency(quotation.getCurrency());
@@ -265,6 +276,15 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         if (rfqVendor.getVendor() == null || !rfqVendor.getVendor().getId().equals(vendor.getId())) {
             throw new RuntimeException("Vendor does not match RFQ Vendor");
         }
+        if (requestDto.getValidFrom() != null
+                && requestDto.getValidTill() != null
+                && requestDto.getValidTill().before(requestDto.getValidFrom())) {
+
+            throw new ValidationException(
+                    "Valid Till date cannot be before Valid From date",
+                    "ERR_INVALID_DATE_RANGE"
+            );
+        }
 
         quotation.setRfq(rfq);
         quotation.setRfqVendor(rfqVendor);
@@ -272,6 +292,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         quotation.setQuotationNumber(requestDto.getQuotationNumber());
         quotation.setQuotationDate(requestDto.getQuotationDate());
+        quotation.setValidFrom(requestDto.getValidFrom());
         quotation.setValidTill(requestDto.getValidTill());
 
         quotation.setCurrency(requestDto.getCurrency() != null ? requestDto.getCurrency() : "INR");
