@@ -2,91 +2,65 @@ package com.doc.entity.vendor;
 
 /**
  * VendorOnboardingStatus represents onboarding workflow
- * after vendor is finalized from RFQ/Award process.
+ * after vendor is finalized from RFQ finalization process.
  */
 public enum VendorOnboardingStatus {
 
     /**
-     * Onboarding started after vendor award.
-     * Registration form/agreement has to be prepared.
+     * Onboarding record created after vendor finalization.
+     * Registration form, NDA, agreement and bank detail form are not sent yet.
      */
     ONBOARDING_PENDING,
 
     /**
-     * Vendor registration form, agreement, NDA, bank detail form
+     * Vendor registration form, NDA, agreement and bank detail form
      * are sent to vendor.
      */
     FORM_SENT_TO_VENDOR,
 
     /**
-     * Vendor is reviewing agreement/form.
-     */
-    VENDOR_REVIEW,
-
-    /**
-     * Vendor accepted agreement/form and submitted signed documents.
-     */
-    VENDOR_ACCEPTED,
-
-    /**
-     * Vendor requested modification in agreement/form.
+     * Vendor submitted / acknowledged onboarding documents.
      *
      * Example:
-     * Payment terms change, liability clause change, termination clause change.
-     */
-    VENDOR_CHANGE_REQUESTED,
-
-    /**
-     * Vendor rejected onboarding/agreement completely.
-     */
-    VENDOR_REJECTED,
-
-    /**
-     * Registration form, agreement, PAN, GST, bank details etc.
-     * are received from vendor.
+     * Filled vendor form, signed NDA, signed agreement, PAN, GST,
+     * cancelled cheque / bank proof, MSME certificate if applicable.
      */
     DOCUMENTS_RECEIVED,
 
     /**
-     * Procurement team verified documents, commercial terms,
-     * selected quotation, scope and service/category.
+     * Documents are waiting for legal team verification.
      */
-    PROCUREMENT_VERIFIED,
+    LEGAL_REVIEW_PENDING,
 
     /**
-     * Vendor onboarding is sent to legal team for agreement review.
-     */
-    LEGAL_REVIEW,
-
-    /**
-     * Legal team requested changes in agreement/document.
-     */
-    LEGAL_REWORK,
-
-    /**
-     * Legal team approved agreement.
+     * Legal team approved NDA and agreement.
      */
     LEGAL_APPROVED,
 
     /**
-     * Vendor onboarding is sent to accounts team for bank/GST/TDS verification.
+     * Legal team rejected or requested correction in NDA/agreement.
      */
-    ACCOUNTS_REVIEW,
+    LEGAL_REJECTED,
 
     /**
-     * Accounts rejected or requested correction.
+     * Documents are waiting for accounts team verification.
      */
-    ACCOUNTS_REJECTED,
+    ACCOUNTS_REVIEW_PENDING,
 
     /**
-     * Accounts verified bank details, GST, PAN, TDS and payment details.
+     * Accounts team approved PAN, GST, bank and payment details.
      */
     ACCOUNTS_APPROVED,
 
     /**
-     * Vendor onboarding completed and vendor is active for future projects.
+     * Accounts team rejected or requested correction in PAN/GST/bank/payment details.
      */
-    ACTIVE,
+    ACCOUNTS_REJECTED,
+
+    /**
+     * Vendor onboarding completed and vendor master is activated.
+     */
+    VENDOR_ACTIVATED,
 
     /**
      * Onboarding cancelled before activation.

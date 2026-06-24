@@ -95,6 +95,7 @@ public class VendorOnboarding {
      * Example:
      * FSSAI, NBFC, CDSCO, EPR_EWASTE, BIS, BAR_LICENSE.
      */
+
     @Column(length = 100)
     private String serviceCategory;
 
@@ -212,7 +213,7 @@ public class VendorOnboarding {
     public void onUpdate() {
         this.updatedDate = new Date();
 
-        if (this.status == VendorOnboardingStatus.ACTIVE && this.activationDate == null) {
+        if (this.status == VendorOnboardingStatus.VENDOR_ACTIVATED && this.activationDate == null) {
             this.activationDate = new Date();
         }
     }
