@@ -5,10 +5,7 @@ import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
-import com.doc.repository.MilestoneRepository;
-import com.doc.repository.ProductMilestoneMapRepository;
-import com.doc.repository.ProductRepository;
-import com.doc.repository.UserProductMapRepository;
+import com.doc.repository.*;
 import com.doc.service.ProductMilestoneMapService;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
@@ -29,21 +26,29 @@ import java.util.stream.Collectors;
 @Transactional
 public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapService {
 
-    private static final Logger logger = LoggerFactory.getLogger(ProductMilestoneMapServiceImpl.class);
+    private static final Logger logger =
+            LoggerFactory.getLogger(ProductMilestoneMapServiceImpl.class);
+
+    private final ProductMilestoneMapRepository productMilestoneMapRepository;
+    private final ProductRepository productRepository;
+    private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+    private final MilestoneRepository milestoneRepository;
+    private final UserProductMapRepository userProductMapRepository;
 
     @Autowired
-    private ProductMilestoneMapRepository productMilestoneMapRepository;
-
-    @Autowired
-    private ProductRepository productRepository;
-
-
-
-    @Autowired
-    private MilestoneRepository milestoneRepository;
-
-    @Autowired
-    private UserProductMapRepository userProductMapRepository;
+    public ProductMilestoneMapServiceImpl(
+            ProductMilestoneMapRepository productMilestoneMapRepository,
+            ProductRepository productRepository,
+            ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
+            MilestoneRepository milestoneRepository,
+            UserProductMapRepository userProductMapRepository
+    ) {
+        this.productMilestoneMapRepository = productMilestoneMapRepository;
+        this.productRepository = productRepository;
+        this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
+        this.milestoneRepository = milestoneRepository;
+        this.userProductMapRepository = userProductMapRepository;
+    }
 
     @Override
     public ProductMilestoneMapResponseDto createProductMilestoneMap(ProductMilestoneMapRequestDto requestDto) {
@@ -161,9 +166,23 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
     @Override
     public void deleteProductMilestoneMap(Long id) {
         logger.info("Deleting product-milestone mapping with ID: {}", id);
+
         ProductMilestoneMap mapping = productMilestoneMapRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Product-milestone mapping not found with ID: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Product-milestone mapping not found with ID: " + id
+                ));
+
+        boolean alreadyUsed =
+                projectMilestoneAssignmentRepository.existsByProductMilestoneMapId(id);
+
+        if (alreadyUsed) {
+            throw new IllegalStateException(
+                    "Cannot delete this milestone mapping because it is already used in project milestone assignments."
+            );
+        }
+
         productMilestoneMapRepository.delete(mapping);
+
         logger.info("Product-milestone mapping deleted with ID: {}", id);
     }
 

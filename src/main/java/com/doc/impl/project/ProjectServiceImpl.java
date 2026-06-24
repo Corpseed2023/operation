@@ -778,9 +778,19 @@ public class ProjectServiceImpl implements ProjectService {
                 procurement.getStatus()
         );
     }
+
     @Cacheable(value = "milestoneMaps", key = "#productId")
     public List<ProductMilestoneMap> getMilestoneMaps(Long productId) {
-        return productMilestoneMapRepository.findByProductId(productId, PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        return productMilestoneMapRepository
+                .findByProductId(
+                        productId,
+                        PageRequest.of(
+                                0,
+                                Integer.MAX_VALUE,
+                                Sort.by(Sort.Direction.ASC, "order")
+                        )
+                )
+                .getContent();
     }
 
     private void validateTransactionDto(ProjectPaymentTransactionDto dto) {
@@ -923,84 +933,134 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
-        logger.info("Fetching project details and milestones for project ID: {}, user ID: {}", projectId, userId);
+
+        logger.info(
+                "Fetching project details and milestones for project ID: {}, user ID: {}",
+                projectId,
+                userId
+        );
 
         Project project = projectRepository.findActiveUserById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
 
         User user = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
 
-        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
-        boolean isOperationHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isAdmin = user.getRoles()
+                .stream()
+                .anyMatch(r -> "ADMIN".equals(r.getName()));
+
+        boolean isOperationHead = user.getRoles()
+                .stream()
+                .anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+
+        /*
+         * Important:
+         * Recalculate visibility for everyone before returning milestones.
+         * Previously admin/op-head returned before this call.
+         */
+        updateMilestoneVisibilities(project, userId);
+
+        List<ProjectMilestoneAssignment> assignments;
 
         if (isAdmin || isOperationHead) {
-            List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
+
+            assignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndIsDeletedFalse(projectId);
+
+            assignments = sortMilestoneAssignments(assignments);
 
             ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
             response.setProjectDetails(mapToProjectDetailsDto(project, userId));
             response.setMilestones(assignments.stream()
                     .map(this::mapToAssignedMilestoneDto)
                     .collect(Collectors.toList()));
+
             return response;
         }
 
-        // === RECALCULATE VISIBILITY FIRST (critical) ===
-        updateMilestoneVisibilities(project, userId);
-
-        // === Check authorization ===
         boolean isAssignedToAnyMilestone = projectMilestoneAssignmentRepository
-                .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId).isPresent();
+                .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId)
+                .isPresent();
 
         List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
-        List<Long> managedUserIds = subordinates.stream().map(User::getId).collect(Collectors.toList());
+
+        List<Long> managedUserIds = subordinates.stream()
+                .map(User::getId)
+                .collect(Collectors.toList());
 
         boolean isManagerOfAssignedUser = projectMilestoneAssignmentRepository
-                .findByProjectIdAndIsDeletedFalse(projectId).stream()
+                .findByProjectIdAndIsDeletedFalse(projectId)
+                .stream()
                 .filter(a -> a.getAssignedUser() != null)
                 .map(a -> a.getAssignedUser().getId())
                 .anyMatch(managedUserIds::contains);
 
         if (!isAssignedToAnyMilestone && !isManagerOfAssignedUser) {
-            throw new ValidationException("You are not authorized to view this project", "ERR_UNAUTHORIZED_ACCESS");
+            throw new ValidationException(
+                    "You are not authorized to view this project",
+                    "ERR_UNAUTHORIZED_ACCESS"
+            );
         }
 
-        // === FETCH MILESTONES DIFFERENTLY FOR REGULAR USER ===
-        List<ProjectMilestoneAssignment> assignments;
-
         if (isManagerOfAssignedUser) {
-            // Manager sees team’s visible milestones (including completed ones for history)
+
             List<Long> teamIds = new ArrayList<>(managedUserIds);
-            if (!teamIds.contains(userId)) teamIds.add(userId);
+
+            if (!teamIds.contains(userId)) {
+                teamIds.add(userId);
+            }
 
             assignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(projectId, teamIds);
+
         } else {
-            // Regular user: show ONLY HIS/HER milestones that are VISIBLE
-            // → Include COMPLETED ones too! (This was your bug)
+
             assignments = projectMilestoneAssignmentRepository
-                    .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(projectId, userId);
+                    .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(
+                            projectId,
+                            userId
+                    );
         }
 
+        assignments = sortMilestoneAssignments(assignments);
 
         System.out.println("=== DEBUG VISIBILITY ===");
         System.out.println("User ID: " + userId);
         System.out.println("Is Manager: " + isManagerOfAssignedUser);
         System.out.println("Visible milestones count for this user: " + assignments.size());
+
         assignments.forEach(a -> {
-            System.out.println("Milestone: " + a.getMilestone().getName() +
-                    " | Visible: " + a.isVisible() +
-                    " | Status: " + a.getStatus().getName() +
-                    " | Assigned To: " + (a.getAssignedUser() != null ? a.getAssignedUser().getId() : "null"));
+            System.out.println(
+                    "Milestone: " + a.getMilestone().getName()
+                            + " | Order: " + (
+                            a.getProductMilestoneMap() != null
+                                    ? a.getProductMilestoneMap().getOrder()
+                                    : null
+                    )
+                            + " | Visible: " + a.isVisible()
+                            + " | Status: " + a.getStatus().getName()
+                            + " | Assigned To: " + (
+                            a.getAssignedUser() != null
+                                    ? a.getAssignedUser().getId()
+                                    : "null"
+                    )
+            );
         });
+
         System.out.println("=== END DEBUG ===");
 
-        // === ONLY BLOCK REGULAR USER IF NO VISIBLE MILESTONE AT ALL ===
         if (!isManagerOfAssignedUser && assignments.isEmpty()) {
             throw new ValidationException(
                     "This project is currently not accessible. It will become available once the required payment is completed.",
-                    "ERR_PROJECT_HIDDEN_DUE_TO_PAYMENT");
+                    "ERR_PROJECT_HIDDEN_DUE_TO_PAYMENT"
+            );
         }
 
         ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
@@ -1010,6 +1070,26 @@ public class ProjectServiceImpl implements ProjectService {
                 .collect(Collectors.toList()));
 
         return response;
+    }
+
+    private List<ProjectMilestoneAssignment> sortMilestoneAssignments(
+            List<ProjectMilestoneAssignment> assignments
+    ) {
+        if (assignments == null) {
+            return new ArrayList<>();
+        }
+
+        return assignments.stream()
+                .sorted(
+                        Comparator
+                                .comparingInt((ProjectMilestoneAssignment a) ->
+                                        a.getProductMilestoneMap() != null
+                                                ? a.getProductMilestoneMap().getOrder()
+                                                : Integer.MAX_VALUE
+                                )
+                                .thenComparing(ProjectMilestoneAssignment::getId)
+                )
+                .collect(Collectors.toList());
     }
 
     private ProjectDetailsDto mapToProjectDetailsDto(Project project, Long userId) {
