@@ -2,6 +2,7 @@ package com.doc.impl.project;
 
 import com.doc.dto.project.portal.*;
 import com.doc.entity.project.Project;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.project.ProjectPortalDetail;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
@@ -15,9 +16,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.doc.entity.department.Department;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -60,7 +64,8 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         }
 
         entity = portalDetailRepo.save(entity);
-        return mapToResponseDto(entity);
+        return mapToResponseDto(entity, user);
+
     }
 
     @Override
@@ -70,8 +75,10 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         List<ProjectPortalDetail> details = portalDetailRepo
                 .findByProjectIdAndIsDeletedFalseOrderByCreatedDateDesc(projectId);
 
+        User user = getUser(userId);
+
         List<ProjectPortalDetailResponseDto> dtos = details.stream()
-                .map(this::mapToResponseDto)
+                .map(detail -> mapToResponseDto(detail, user))
                 .toList();
 
         ProjectPortalDetailListResponseDto response = new ProjectPortalDetailListResponseDto();
@@ -113,7 +120,8 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         }
 
         entity = portalDetailRepo.save(entity);
-        return mapToResponseDto(entity);
+        return mapToResponseDto(entity, user);
+
     }
 
     @Override
@@ -151,8 +159,14 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
 
         User approver = getUser(userId);
 
-        if (!isAdminOrOpHead(approver) && !approver.isManagerFlag()) {
-            throw new ValidationException("Unauthorized: Only Admin, Operation Head or Manager can approve", "ERR_UNAUTHORIZED_APPROVAL");
+        boolean canApprove = isAdminOrOpHead(approver)
+                || isDepartmentManagerForProject(approver, project);
+
+        if (!canApprove) {
+            throw new ValidationException(
+                    "Unauthorized: Only Admin, Operation Head or project department manager can approve",
+                    "ERR_UNAUTHORIZED_APPROVAL"
+            );
         }
 
         String action = approvalDto.getStatus();
@@ -167,9 +181,41 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         entity.setUpdatedBy(approver);
 
         entity = portalDetailRepo.save(entity);
-        return mapToResponseDto(entity);
+        return mapToResponseDto(entity, approver);
+
     }
 
+    private boolean isDepartmentManagerForProject(User manager, Project project) {
+
+        if (manager == null || project == null || !manager.isManagerFlag()) {
+            return false;
+        }
+
+        if (manager.getDepartments() == null || manager.getDepartments().isEmpty()) {
+            return false;
+        }
+
+        Set<Long> managerDepartmentIds = manager.getDepartments()
+                .stream()
+                .map(Department::getId)
+                .collect(Collectors.toSet());
+
+        List<ProjectMilestoneAssignment> assignments =
+                assignmentRepo.findByProjectIdAndIsDeletedFalse(project.getId());
+
+        if (assignments == null || assignments.isEmpty()) {
+            return false;
+        }
+
+        return assignments.stream()
+                .filter(a -> a.getAssignedUser() != null)
+                .anyMatch(a ->
+                        a.getAssignedUser().getDepartments() != null
+                                && a.getAssignedUser().getDepartments()
+                                .stream()
+                                .anyMatch(dept -> managerDepartmentIds.contains(dept.getId()))
+                );
+    }
     // Helper Methods
     private User getUser(Long userId) {
         return userRepo.findActiveUserById(userId)
@@ -184,8 +230,12 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
     }
 
     private Project getProjectAndCheckAccess(Long projectId, Long userId) {
+
         Project project = projectRepo.findActiveUserById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
 
         User user = getUser(userId);
 
@@ -197,15 +247,21 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
                 .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId)
                 .isPresent();
 
-        if (!isAssigned) {
-            throw new ValidationException("Access denied to this project", "ERR_UNAUTHORIZED_PORTAL_ACCESS");
+        boolean isDepartmentManager = isDepartmentManagerForProject(user, project);
+
+        if (!isAssigned && !isDepartmentManager) {
+            throw new ValidationException(
+                    "Access denied to this project",
+                    "ERR_UNAUTHORIZED_PORTAL_ACCESS"
+            );
         }
 
         return project;
     }
 
-    private ProjectPortalDetailResponseDto mapToResponseDto(ProjectPortalDetail entity) {
+    private ProjectPortalDetailResponseDto mapToResponseDto(ProjectPortalDetail entity, User viewer) {
         ProjectPortalDetailResponseDto dto = new ProjectPortalDetailResponseDto();
+
         dto.setId(entity.getId());
         dto.setProjectId(entity.getProject().getId());
         dto.setPortalName(entity.getPortalName());
@@ -222,6 +278,17 @@ public class ProjectPortalDetailServiceImpl implements ProjectPortalDetailServic
         dto.setApprovalDate(entity.getApprovalDate());
         dto.setApprovalRemarks(entity.getApprovalRemarks());
 
+        boolean canViewPassword = isAdminOrOpHead(viewer)
+                || isDepartmentManagerForProject(viewer, entity.getProject());
+
+        if (canViewPassword) {
+            dto.setPassword(entity.getPassword());
+        } else {
+            dto.setPassword("********");
+        }
+
         return dto;
     }
+
+
 }

@@ -63,7 +63,7 @@ public class MilestoneValidator {
 
         if (portalDetails == null || portalDetails.isEmpty()) {
             throw new ValidationException(
-                    "Cannot complete Filing milestone. No portal details have been added for this project.",
+                    "Cannot start Filing milestone. No portal details have been added for this project.",
                     "PORTAL_DETAILS_MISSING"
             );
         }
@@ -77,7 +77,7 @@ public class MilestoneValidator {
 
         if (!hasApprovedPortal) {
             throw new ValidationException(
-                    "Cannot complete Filing milestone. At least one portal detail must be APPROVED.",
+                    "Cannot start Filing milestone. At least one portal detail must be APPROVED",
                     "PORTAL_NOT_APPROVED"
             );
         }
