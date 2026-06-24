@@ -4,6 +4,8 @@ import com.doc.dto.mail.MailRequestDto;
 import com.doc.dto.vendor.*;
 import com.doc.entity.product.Product;
 import com.doc.entity.vendor.*;
+import com.doc.exception.ResourceNotFoundException;
+import com.doc.exception.ValidationException;
 import com.doc.repository.ProductRepository;
 import com.doc.repository.vendor.RFQVendorRepository;
 import com.doc.repository.vendor.VendorRFQRepository;
@@ -41,8 +43,9 @@ public class VendorRFQServiceImpl implements VendorRFQService {
 
 
         Product product = productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(requestDto.getProductId())
-                .orElseThrow(() -> new RuntimeException(
-                        "Product not found with ID: " + requestDto.getProductId()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Product not found with ID: " + requestDto.getProductId(),
+                        "ERR_PRODUCT_NOT_FOUND"
                 ));
 
         Set<Long> uniqueVendorIds = new HashSet<>(requestDto.getVendorIds());
@@ -51,8 +54,9 @@ public class VendorRFQServiceImpl implements VendorRFQService {
 
         for (Long vendorId : uniqueVendorIds) {
             Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(vendorId)
-                    .orElseThrow(() -> new RuntimeException(
-                            "Vendor not found or deleted with ID: " + vendorId
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Vendor not found or deleted with ID: " + vendorId,
+                            "ERR_VENDOR_NOT_FOUND"
                     ));
 
             vendors.add(vendor);
@@ -102,15 +106,16 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             RFQUpdateRequestDto requestDto
     ) {
         RFQ rfq = vendorRFQRepository.findById(rfqId)
-                .orElseThrow(() -> new RuntimeException("RFQ not found with ID: " + rfqId));
+                .orElseThrow(() -> new ResourceNotFoundException("RFQ not found with ID: " + rfqId,"ERR_RFQ_NOT_FOUND"));
 
         if (rfq.isDeleted()) {
-            throw new RuntimeException("RFQ is deleted with ID: " + rfqId);
+            throw new ValidationException("RFQ is deleted with ID: " + rfqId,"ERR_RFQ_DELETED");
         }
 
         Product product = productRepository.findById(requestDto.getProductId())
-                .orElseThrow(() -> new RuntimeException(
-                        "Product not found with ID: " + requestDto.getProductId()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Product not found with ID: " + requestDto.getProductId(),
+                        "ERR_PRODUCT_NOT_FOUND"
                 ));
 
         rfq.setTitle(requestDto.getTitle());
@@ -149,8 +154,9 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             }
 
             Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(vendorId)
-                    .orElseThrow(() -> new RuntimeException(
-                            "Vendor not found or deleted with ID: " + vendorId
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Vendor not found or deleted with ID: " + vendorId,
+                            "ERR_VENDOR_NOT_FOUND"
                     ));
 
             RFQVendor rfqVendor = new RFQVendor();
@@ -219,14 +225,14 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             RFQSendMailRequestDto requestDto
     ) {
         RFQ rfq = vendorRFQRepository.findById(rfqId)
-                .orElseThrow(() -> new RuntimeException("RFQ not found with ID: " + rfqId));
+                .orElseThrow(() -> new ResourceNotFoundException("RFQ not found with ID: " + rfqId,"ERR_RFQ_NOT_FOUND"));
 
         if (rfq.isDeleted()) {
-            throw new RuntimeException("RFQ is deleted with ID: " + rfqId);
+            throw new ValidationException("RFQ is deleted with ID: " + rfqId,"ERR_RFQ_IS_DELETED");
         }
 
         if (rfq.getVendors() == null || rfq.getVendors().isEmpty()) {
-            throw new RuntimeException("No vendors mapped with this RFQ");
+            throw new ValidationException("No vendors mapped with this RFQ","ERR_NO_MAPPED_VENDORS");
         }
 
         List<RFQVendor> vendorsToSend;
@@ -251,7 +257,7 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         }
 
         if (vendorsToSend.isEmpty()) {
-            throw new RuntimeException("No valid RFQ vendors found for sending mail");
+            throw new ValidationException("No valid RFQ vendors found for sending mail","ERR_NO_VALID_RFQ_VENDORS");
         }
 
         validateNoVendorEmailsInCcOrBcc(vendorsToSend, requestDto);
@@ -267,7 +273,7 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             }
 
             if (!StringUtils.hasText(vendor.getEmail())) {
-                throw new RuntimeException("Vendor email is missing for vendor ID: " + vendor.getId());
+                throw new ValidationException("Vendor email is missing for vendor ID: " + vendor.getId(),"ERR_VENDOR_EMAIL_MISSING");
             }
 
             String subject = buildRFQMailSubject(rfq, requestDto);
@@ -301,7 +307,7 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         }
 
         if (sentCount == 0) {
-            throw new RuntimeException("RFQ mail was not sent to any vendor");
+            throw new ValidationException("RFQ mail was not sent to any vendor","ERR_RFQ_MAIL_NOT_SENT");
         }
 
         rfq.setStatus(RFQStatus.SENT);
@@ -339,14 +345,14 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         for (String cc : ccList) {
             if (StringUtils.hasText(cc)
                     && vendorEmails.contains(cc.trim().toLowerCase())) {
-                throw new RuntimeException("Vendor email cannot be added in CC: " + cc);
+                throw new ValidationException("Vendor email cannot be added in CC: " + cc,"ERR_VENDOR_EMAIL_CANNOT_BE_ADDED");
             }
         }
 
         for (String bcc : bccList) {
             if (StringUtils.hasText(bcc)
                     && vendorEmails.contains(bcc.trim().toLowerCase())) {
-                throw new RuntimeException("Vendor email cannot be added in BCC: " + bcc);
+                throw new ValidationException("Vendor email cannot be added in BCC: " + bcc,"ERR_VENDOR_EMAIL_CANNOT_BE_ADDED");
             }
         }
     }
@@ -362,10 +368,10 @@ public class VendorRFQServiceImpl implements VendorRFQService {
     public RFQResponseDto getRFQById(Long rfqId) {
 
         RFQ rfq = vendorRFQRepository.findById(rfqId)
-                .orElseThrow(() -> new RuntimeException("RFQ not found with ID: " + rfqId));
+                .orElseThrow(() -> new ResourceNotFoundException("RFQ not found with ID: " + rfqId,"ERR_RFQ_NOT_FOUND"));
 
         if (rfq.isDeleted()) {
-            throw new RuntimeException("RFQ is deleted with ID: " + rfqId);
+            throw new ValidationException("RFQ is deleted with ID: " + rfqId,"ERR_RFQ_DELETED");
         }
 
         return mapToResponseDto(rfq);
@@ -523,8 +529,8 @@ public class VendorRFQServiceImpl implements VendorRFQService {
     @Transactional(readOnly = true)
     public RFQVendorResponseDto getVendorByRfqIdAndVendorId(Long rfqId, Long vendorId) {
         return rfqVendorRepository.findVendorByRfqIdAndVendorId(rfqId, vendorId)
-                .orElseThrow(() -> new RuntimeException(
-                        "Vendor not found for RFQ ID: " + rfqId + " and Vendor ID: " + vendorId
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor not found for RFQ ID: " + rfqId + " and Vendor ID: " + vendorId,"ERR_VENDOR_NOT_FOUND"
                 ));
     }
 }
