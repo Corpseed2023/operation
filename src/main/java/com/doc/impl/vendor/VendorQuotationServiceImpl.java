@@ -4,11 +4,7 @@ import com.doc.dto.vendor.VendorQuotationItemRequestDto;
 import com.doc.dto.vendor.VendorQuotationItemResponseDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
-import com.doc.entity.vendor.RFQ;
-import com.doc.entity.vendor.RFQVendor;
-import com.doc.entity.vendor.Vendor;
-import com.doc.entity.vendor.VendorQuotation;
-import com.doc.entity.vendor.VendorQuotationItem;
+import com.doc.entity.vendor.*;
 import com.doc.repository.vendor.RFQVendorRepository;
 import com.doc.repository.vendor.VendorQuotationRepository;
 import com.doc.repository.vendor.VendorRFQRepository;
@@ -19,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -92,6 +89,15 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         }
 
         VendorQuotation saved = vendorQuotationRepository.save(quotation);
+
+        /**
+         * After procurement manually enters quotation,
+         * vendor-wise RFQ status should become QUOTATION_RECEIVED.
+         */
+        rfqVendor.setStatus(RFQVendorStatus.QUOTATION_RECEIVED);
+        rfqVendor.setQuotationReceivedDate(new Date());
+        rfqVendor.setUpdatedBy(requestDto.getCreatedBy());
+        rfqVendorRepository.save(rfqVendor);
 
         return mapToResponse(saved);
     }

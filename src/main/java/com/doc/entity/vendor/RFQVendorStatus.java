@@ -26,10 +26,35 @@ public enum RFQVendorStatus {
     SENT,
 
     /**
+     * Procurement manually entered quotation received from vendor
+     * through email, WhatsApp or offline.
+     *
+     * Example:
+     * Balaji sent quotation by email and procurement entered it in ERP.
+     */
+    QUOTATION_RECEIVED,
+
+    /**
+     * Vendor is shortlisted during quotation comparison.
+     *
+     * Example:
+     * Vendor price, GST, TAT and terms are acceptable.
+     */
+    SHORTLISTED,
+
+    /**
      * Vendor is not selected after comparison.
      *
      * Example:
      * Shree Enterprises rejected due to high price.
      */
-    REJECTED
+    REJECTED,
+
+    /**
+     * Vendor is finally selected/finalized.
+     *
+     * Example:
+     * Balaji finalized for NBFC documentation support.
+     */
+    SELECTED
 }
