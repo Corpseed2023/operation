@@ -165,21 +165,34 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                             );
                         });
 
-        validateMilestoneStatusTransition(
-                assignment,
-                newStatus,
-                updateDto.getStatusReason()
-        );
+        /*
+         * Business validation before starting Filing milestone
+         *
+         * Requirement:
+         * Before user changes Filing/Filling milestone to IN_PROGRESS,
+         * portal details must already be added.
+         */
+        String milestoneName = getMilestoneName(assignment);
+
+        if ("IN_PROGRESS".equalsIgnoreCase(newStatus.getName())
+                && isFilingMilestone(milestoneName)) {
+
+            milestoneValidator.validateFillingMilestone(assignment);
+        }
+
 
         /*
          * Business validation before marking COMPLETED
          */
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
 
-            String milestoneName = assignment
-                    .getProductMilestoneMap()
-                    .getMilestone()
-                    .getName();
+            if ("Documentation".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateDocumentMilestone(assignment);
+            }
+
+            if ("Legal Verfication".equalsIgnoreCase(milestoneName)) {
+                milestoneValidator.validateLegalMilestone(assignment);
+            }
 
             if ("Documentation".equalsIgnoreCase(milestoneName)) {
                 milestoneValidator.validateDocumentMilestone(assignment);
@@ -329,6 +342,11 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
          * Update project status after milestone status/visibility update
          */
         updateProjectStatus(project, updateDto.getChangedById());
+    }
+
+    private boolean isFilingMilestone(String milestoneName) {
+        return "Filing".equalsIgnoreCase(milestoneName)
+                || "Filling".equalsIgnoreCase(milestoneName);
     }
     private void validateProcurementMilestoneBeforeCompletion(ProjectMilestoneAssignment assignment) {
 

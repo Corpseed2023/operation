@@ -161,7 +161,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         response.setUpdatedDate(quotation.getUpdatedDate());
         response.setDeleted(quotation.isDeleted());
 
-        List<VendorQuotationItemResponseDto> itemResponses = new ArrayList<>();
+        List<VendorQuotationItemResponseDto> itemResponses = new ArrayList<>() ;
 
         if (quotation.getItems() != null) {
             for (VendorQuotationItem item : quotation.getItems()) {
