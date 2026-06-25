@@ -1763,6 +1763,64 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getProjectMilestoneAssignmentOptions(Long projectId) {
+
+        if (projectId == null) {
+            throw new ValidationException("Project ID is required", "ERR_PROJECT_ID_REQUIRED");
+        }
+
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
+
+        List<ProjectMilestoneAssignment> assignments =
+                projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
+
+        return assignments.stream()
+                .sorted(
+                        Comparator
+                                .comparingInt((ProjectMilestoneAssignment a) ->
+                                        a.getProductMilestoneMap() != null
+                                                ? a.getProductMilestoneMap().getOrder()
+                                                : Integer.MAX_VALUE
+                                )
+                                .thenComparing(ProjectMilestoneAssignment::getId)
+                )
+                .map(assignment -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("assignmentId", assignment.getId());
+                    map.put("milestoneName", getProjectMilestoneName(assignment));
+                    return map;
+                })
+                .toList();
+    }
+
+    private String getProjectMilestoneName(ProjectMilestoneAssignment assignment) {
+
+        if (assignment == null) {
+            return "Milestone";
+        }
+
+        if (assignment.getMilestone() != null
+                && assignment.getMilestone().getName() != null
+                && !assignment.getMilestone().getName().trim().isEmpty()) {
+            return assignment.getMilestone().getName().trim();
+        }
+
+        if (assignment.getProductMilestoneMap() != null
+                && assignment.getProductMilestoneMap().getMilestone() != null
+                && assignment.getProductMilestoneMap().getMilestone().getName() != null
+                && !assignment.getProductMilestoneMap().getMilestone().getName().trim().isEmpty()) {
+            return assignment.getProductMilestoneMap().getMilestone().getName().trim();
+        }
+
+        return "Milestone-" + assignment.getId();
+    }
+
 
 
 

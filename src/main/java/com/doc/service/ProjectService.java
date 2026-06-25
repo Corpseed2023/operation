@@ -10,6 +10,7 @@ import com.doc.entity.project.Project;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
+import java.util.Map;
 
 public interface ProjectService {
 
@@ -52,4 +53,5 @@ public interface ProjectService {
             int size
     );
 
+    List<Map<String, Object>> getProjectMilestoneAssignmentOptions(Long projectId);
 }

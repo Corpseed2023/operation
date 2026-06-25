@@ -294,5 +294,19 @@ public class ProjectController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/{projectId}/milestone-assignment-options")
+    @Operation(
+            summary = "Get project milestone assignment options",
+            description = "Returns all project milestone assignment IDs with milestone names."
+    )
+    public ResponseEntity<List<Map<String, Object>>> getProjectMilestoneAssignmentOptions(
+            @PathVariable Long projectId
+    ) {
+        List<Map<String, Object>> response =
+                projectService.getProjectMilestoneAssignmentOptions(projectId);
+
+        return ResponseEntity.ok(response);
+    }
+
 
 }
