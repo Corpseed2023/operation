@@ -5,6 +5,8 @@ import com.doc.dto.vendor.VendorQuotationItemResponseDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
 import com.doc.dto.vendor.request.VendorQuotationDocumentRequestDto;
+import com.doc.dto.mail.MailRequestDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -12,10 +14,12 @@ import com.doc.repository.vendor.RFQVendorRepository;
 import com.doc.repository.vendor.VendorQuotationRepository;
 import com.doc.repository.vendor.VendorRFQRepository;
 import com.doc.repository.vendor.VendorRepository;
+import com.doc.service.mail.MailService;
 import com.doc.service.vendor.VendorQuotationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -29,6 +33,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
     private final VendorRFQRepository rfqRepository;
     private final RFQVendorRepository rfqVendorRepository;
     private final VendorRepository vendorRepository;
+    private final MailService mailService;
 
     @Override
     @Transactional
@@ -277,6 +282,73 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
     @Override
     @Transactional
+    public VendorQuotationResponseDto sendAgreementToVendor(
+            Long quotationId,
+            Long userId,
+            SendAgreementToVendorRequestDto requestDto
+    ) {
+        VendorQuotation quotation = vendorQuotationRepository
+                .findByIdAndIsDeletedFalse(quotationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor quotation not found",
+                        "ERR_VENDOR_QUOTATION_NOT_FOUND"
+                ));
+
+        if (!StringUtils.hasText(requestDto.getAttachmentUrl())) {
+            throw new ValidationException(
+                    "Agreement attachment URL is required",
+                    "ERR_AGREEMENT_ATTACHMENT_REQUIRED"
+            );
+        }
+
+        Vendor vendor = quotation.getVendor();
+
+        if (vendor == null) {
+            throw new ResourceNotFoundException(
+                    "Vendor not found for quotation",
+                    "ERR_VENDOR_NOT_FOUND"
+            );
+        }
+
+        String vendorEmail = null;
+
+        if (quotation.getRfqVendor() != null &&
+                StringUtils.hasText(quotation.getRfqVendor().getSentToEmail())) {
+            vendorEmail = quotation.getRfqVendor().getSentToEmail();
+        } else if (StringUtils.hasText(vendor.getEmail())) {
+            vendorEmail = vendor.getEmail();
+        }
+
+        if (!StringUtils.hasText(vendorEmail)) {
+            throw new ValidationException(
+                    "Vendor email is missing",
+                    "ERR_VENDOR_EMAIL_MISSING"
+            );
+        }
+
+        sendFinalAgreementMail(
+                vendorEmail,
+                vendor,
+                quotation,
+                requestDto
+        );
+
+        quotation.setAgreementFileUrl(requestDto.getAttachmentUrl());
+        quotation.setRemarks(
+                StringUtils.hasText(requestDto.getRemarks())
+                        ? requestDto.getRemarks()
+                        : quotation.getRemarks()
+        );
+        quotation.setStatus(VendorQuotationStatus.AGREEMENT_SENT_TO_VENDOR);
+        quotation.setUpdatedBy(userId);
+
+        VendorQuotation saved = vendorQuotationRepository.save(quotation);
+
+        return mapToResponse(saved);
+    }
+
+    @Override
+    @Transactional
     public VendorQuotationResponseDto updateVendorQuotation(Long id, VendorQuotationRequestDto requestDto) {
 
         VendorQuotation quotation = vendorQuotationRepository.findByIdAndIsDeletedFalse(id)
@@ -390,5 +462,66 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         quotation.setUpdatedBy(userId);
 
         return mapToResponse(vendorQuotationRepository.save(quotation));
+    }
+    private void sendFinalAgreementMail(
+            String vendorEmail,
+            Vendor vendor,
+            VendorQuotation quotation,
+            SendAgreementToVendorRequestDto requestDto
+    ) {
+        String subject = StringUtils.hasText(requestDto.getSubject())
+                ? requestDto.getSubject()
+                : "Final Service Agreement - " + safe(quotation.getQuotationNumber());
+
+        StringBuilder body = new StringBuilder();
+
+        body.append("<p>Dear ").append(safe(vendor.getName())).append(",</p>");
+
+        if (StringUtils.hasText(requestDto.getMessage())) {
+            body.append("<p>").append(requestDto.getMessage()).append("</p>");
+        } else {
+            body.append("<p>Your final service agreement has been shared by Corpseed Procurement Team.</p>");
+        }
+
+        body.append("<p><b>Quotation Number:</b> ")
+                .append(safe(quotation.getQuotationNumber()))
+                .append("</p>");
+
+        if (quotation.getRfq() != null) {
+            body.append("<p><b>RFQ ID:</b> ")
+                    .append(quotation.getRfq().getId())
+                    .append("</p>");
+        }
+
+        body.append("<p><b>Agreement Attachment:</b></p>");
+        body.append("<ul>");
+        body.append("<li>")
+                .append("<a href='")
+                .append(requestDto.getAttachmentUrl())
+                .append("' target='_blank'>")
+                .append("View Final Agreement")
+                .append("</a>")
+                .append("</li>");
+        body.append("</ul>");
+
+        if (StringUtils.hasText(requestDto.getRemarks())) {
+            body.append("<p><b>Remarks:</b> ")
+                    .append(requestDto.getRemarks())
+                    .append("</p>");
+        }
+
+        body.append("<p>Regards,<br/>Corpseed Procurement Team</p>");
+
+        MailRequestDto mailRequestDto = MailRequestDto.builder()
+                .to(vendorEmail)
+                .subject(subject)
+                .body(body.toString())
+                .html(true)
+                .build();
+
+        mailService.sendMail(mailRequestDto);
+    }
+    private String safe(String value) {
+        return StringUtils.hasText(value) ? value : "-";
     }
 }
