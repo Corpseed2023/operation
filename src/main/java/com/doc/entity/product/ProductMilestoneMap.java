@@ -62,6 +62,7 @@ public class ProductMilestoneMap {
     @Comment("Maximum retry attempts for disapproval")
     private int maxAttempts = 1;
 
+
     @Column(name = "is_mandatory", nullable = false)
     @Comment("Whether the milestone is required")
     private boolean isMandatory = true;

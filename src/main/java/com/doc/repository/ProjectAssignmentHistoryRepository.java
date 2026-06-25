@@ -1,6 +1,7 @@
 package com.doc.repository;
 
 import com.doc.entity.project.ProjectAssignmentHistory;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -51,5 +52,22 @@ public interface ProjectAssignmentHistoryRepository extends JpaRepository<Projec
 
     @Query("SELECT h FROM ProjectAssignmentHistory h WHERE h.milestoneAssignment.id = :milestoneAssignmentId AND h.isDeleted = false")
     List<ProjectAssignmentHistory> findByMilestoneAssignmentIdAndIsDeletedFalse(@Param("milestoneAssignmentId") Long milestoneAssignmentId);
+
+    @Query("""
+        SELECT DISTINCT a
+        FROM ProjectMilestoneAssignment a
+        LEFT JOIN FETCH a.project p
+        LEFT JOIN FETCH a.productMilestoneMap pmm
+        LEFT JOIN FETCH a.milestone m
+        LEFT JOIN FETCH m.departments d
+        LEFT JOIN FETCH a.assignedUser u
+        LEFT JOIN FETCH a.status s
+        WHERE p.id IN :projectIds
+          AND a.isDeleted = false
+        ORDER BY p.id ASC, pmm.order ASC, a.id ASC
+        """)
+    List<ProjectMilestoneAssignment> findDashboardAssignmentsByProjectIds(
+            @Param("projectIds") List<Long> projectIds
+    );
 
 }

@@ -2,7 +2,10 @@ package com.doc.impl.project;
 
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
+import com.doc.dto.ProjectMilestoneassignment.SendBackToPreviousMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
+import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
+import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.milestone.MilestoneStatusHistory;
 import com.doc.entity.product.Product;
@@ -25,8 +28,11 @@ import com.doc.service.ProjectService;
 import com.doc.validation.MilestoneValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.doc.repository.documentRepo.DocumentStatusRepository;
+import com.doc.entity.document.ProjectDocumentUpload;
+import com.doc.entity.document.DocumentStatus;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +61,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final NotificationPublisherService notificationPublisherService;
 
+    private final DocumentStatusRepository documentStatusRepository;
+
     public ProjectMilestoneAssignmentServiceImpl(
             ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
             UserRepository userRepository,
@@ -70,7 +78,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             MilestoneValidator milestoneValidator,
             @Lazy ProjectService projectService,
             ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
-            NotificationPublisherService notificationPublisherService
+            NotificationPublisherService notificationPublisherService,
+            DocumentStatusRepository documentStatusRepository
     ) {
         this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
         this.userRepository = userRepository;
@@ -87,6 +96,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         this.projectService = projectService;
         this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
         this.notificationPublisherService = notificationPublisherService;
+        this.documentStatusRepository = documentStatusRepository;
     }
 
     @Override
@@ -127,32 +137,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 .stream()
                 .anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
 
-        boolean isManager = changedBy.isManagerFlag();
 
-        // Manager can update only milestones of his/her department
-//        if (isManager && !isAdmin && !isOperationHead) {
-//            if (!isManagerOfMilestoneDepartment(changedBy, assignment)) {
-//                logger.warn("Manager ID {} attempted to update milestone {} from another department",
-//                        changedBy.getId(),
-//                        assignment.getId());
-//
-//                throw new ValidationException(
-//                        "You can only update milestones that belong to your department(s)",
-//                        "MANAGER_DEPARTMENT_MISMATCH"
-//                );
-//            }
-//        }
-
-        // Only ADMIN, OPERATION_HEAD, MANAGER can update milestone status
-//        if (!isAdmin && !isOperationHead && !isManager) {
-//            logger.warn("User ID {} is not authorized to update milestone status",
-//                    changedBy.getId());
-//
-//            throw new ValidationException(
-//                    "Only ADMIN, OPERATION_HEAD, or MANAGER can update milestone status",
-//                    "NOT_AUTHORIZED"
-//            );
-//        }
 
         MilestoneStatus newStatus =
                 milestoneStatusRepository.findByName(updateDto.getNewStatusName())
@@ -196,10 +181,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
             if ("Documentation".equalsIgnoreCase(milestoneName)) {
                 milestoneValidator.validateDocumentMilestone(assignment);
-            }
-
-            if ("Legal Verfication".equalsIgnoreCase(milestoneName)) {
-                milestoneValidator.validateLegalMilestone(assignment);
             }
 
             if ("Filling".equalsIgnoreCase(milestoneName)) {
@@ -737,79 +718,250 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         return managerDepts.stream().anyMatch(milestoneDepts::contains);
     }
 
-    private void validateMilestoneStatusTransition(ProjectMilestoneAssignment assignment, MilestoneStatus newStatus, String reason) {
-        String current = assignment.getStatus().getName();
-        String next = newStatus.getName();
-
-        System.out.println("current: "+current);
-        System.out.println("next: "+next);
-
-        if (current.equals(next)) {
-            throw new ValidationException("Milestone is already in status: " + next, "SAME_STATUS");
-        }
-
-        if (reason == null || reason.trim().isEmpty()) {
-            if (List.of("COMPLETED", "REJECTED", "ON_HOLD").contains(next)) {
-                throw new ValidationException("Reason is required for status: " + next, "REASON_REQUIRED");
-            }
-        }
-
-        switch (current) {
-            case "NEW", "MANUAL_PENDING" -> {
-                if (!List.of("IN_PROGRESS", "ON_HOLD").contains(next)) {
-                    throw new ValidationException("From " + current + " → only IN_PROGRESS or ON_HOLD allowed", "INVALID_TRANSITION");
-                }
-            }
-            case "IN_PROGRESS" -> {
-                if (!List.of("COMPLETED", "ON_HOLD", "REJECTED").contains(next)) {
-                    throw new ValidationException("From IN_PROGRESS → only COMPLETED, ON_HOLD, REJECTED allowed", "INVALID_TRANSITION");
-                }
-            }
-            case "ON_HOLD" -> {
-                if (!"IN_PROGRESS".equals(next)) {
-                    throw new ValidationException("From ON_HOLD → only IN_PROGRESS allowed", "INVALID_TRANSITION");
-                }
-            }
-            case "REJECTED" -> {
-                if (!"NEW".equals(next)) {
-                    throw new ValidationException("From REJECTED → only NEW allowed", "INVALID_TRANSITION");
-                }
-            }
-            case "REWORK" -> {
-                if (!"COMPLETED".equals(next)) {
-                    throw new ValidationException("From REJECTED → only COMPLETED allowed", "INVALID_TRANSITION");
-                }
-            }
-            case "COMPLETED" -> throw new ValidationException("Cannot change status from COMPLETED", "COMPLETED_FINAL");
-            default -> throw new ValidationException("Invalid current status: " + current, "INVALID_CURRENT_STATUS");
-        }
-
-        if (!assignment.isVisible() && !"NEW".equals(next)) {
-            throw new ValidationException("Milestone must be visible to change status", "MILESTONE_NOT_VISIBLE");
-        }
-    }
 
     private void updateProjectStatus(Project project, Long updatedById) {
         List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
                 .findByProjectIdAndIsDeletedFalse(project.getId());
 
         String newStatusName;
+
         if (assignments.isEmpty()) {
             newStatusName = "OPEN";
-        } else if (assignments.stream().allMatch(a -> "COMPLETED".equals(a.getStatus().getName()))) {
+        } else if (assignments.stream().allMatch(a ->
+                "COMPLETED".equals(a.getStatus().getName())
+        )) {
             newStatusName = "COMPLETED";
-        } else if (assignments.stream().anyMatch(a -> List.of("IN_PROGRESS", "ON_HOLD").contains(a.getStatus().getName()))) {
+        } else if (assignments.stream().anyMatch(a ->
+                List.of("IN_PROGRESS", "ON_HOLD", "REWORK").contains(a.getStatus().getName())
+        )) {
             newStatusName = "IN_PROGRESS";
         } else {
             newStatusName = "OPEN";
         }
 
         ProjectStatus status = projectStatusRepository.findByName(newStatusName)
-                .orElseThrow(() -> new ResourceNotFoundException("Project status not found: " + newStatusName, "STATUS_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project status not found: " + newStatusName,
+                        "STATUS_NOT_FOUND"
+                ));
 
         project.setStatus(status);
         project.setUpdatedBy(updatedById);
         project.setUpdatedDate(new Date());
+
+        updateProjectProgress(project);
+
         projectRepository.save(project);
     }
+
+    private void updateProjectProgress(Project project) {
+
+        List<ProjectMilestoneAssignment> assignments =
+                projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
+
+//        if (assignments.isEmpty()) {
+//            project.setProgressPercentage(0.0);
+//            return;
+//        }
+
+        long completedCount = assignments.stream()
+                .filter(a -> a.getStatus() != null)
+                .filter(a -> "COMPLETED".equalsIgnoreCase(a.getStatus().getName()))
+                .count();
+
+        double progress = (completedCount * 100.0) / assignments.size();
+
+//        project.setProgressPercentage(progress);
+    }
+
+    @Override
+    public void sendBackToPreviousMilestone(SendBackToPreviousMilestoneDto dto) {
+
+        ProjectMilestoneAssignment currentAssignment =
+                projectMilestoneAssignmentRepository.findActiveUserById(dto.getCurrentAssignmentId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Current milestone assignment not found",
+                                "MILESTONE_ASSIGNMENT_NOT_FOUND"
+                        ));
+
+        User changedBy =
+                userRepository.findActiveUserById(dto.getChangedById())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "User not found",
+                                "USER_NOT_FOUND"
+                        ));
+
+        if (currentAssignment.getAssignedUser() == null ||
+                !currentAssignment.getAssignedUser().getId().equals(dto.getChangedById())) {
+
+            throw new ValidationException(
+                    "Only current assigned user can send milestone back to previous milestone",
+                    "NOT_CURRENT_ASSIGNEE"
+            );
+        }
+
+        String currentStatus = currentAssignment.getStatus().getName();
+
+        if (!List.of("NEW", "IN_PROGRESS").contains(currentStatus)) {
+            throw new ValidationException(
+                    "Only NEW or IN_PROGRESS milestone can be sent back to previous milestone",
+                    "INVALID_CURRENT_STATUS_FOR_SEND_BACK"
+            );
+        }
+
+        Project project = currentAssignment.getProject();
+
+        List<ProjectMilestoneAssignment> assignments =
+                projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId())
+                        .stream()
+                        .sorted((a, b) -> Integer.compare(
+                                a.getProductMilestoneMap().getOrder(),
+                                b.getProductMilestoneMap().getOrder()
+                        ))
+                        .toList();
+
+        int currentOrder = currentAssignment.getProductMilestoneMap().getOrder();
+
+        ProjectMilestoneAssignment previousAssignment =
+                assignments.stream()
+                        .filter(a -> a.getProductMilestoneMap().getOrder() < currentOrder)
+                        .reduce((first, second) -> second)
+                        .orElseThrow(() -> new ValidationException(
+                                "No previous milestone found for send back",
+                                "PREVIOUS_MILESTONE_NOT_FOUND"
+                        ));
+
+        if (!"COMPLETED".equalsIgnoreCase(previousAssignment.getStatus().getName())) {
+            throw new ValidationException(
+                    "Previous milestone must be COMPLETED before it can be moved to REWORK",
+                    "PREVIOUS_MILESTONE_NOT_COMPLETED"
+            );
+        }
+
+        MilestoneStatus reworkStatus =
+                milestoneStatusRepository.findByName("REWORK")
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "REWORK status not found",
+                                "STATUS_NOT_FOUND"
+                        ));
+
+        MilestoneStatus onHoldStatus =
+                milestoneStatusRepository.findByName("ON_HOLD")
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "ON_HOLD status not found",
+                                "STATUS_NOT_FOUND"
+                        ));
+
+        DocumentStatus rejectedDocumentStatus =
+                documentStatusRepository.findByName("REJECTED")
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Document status REJECTED not found",
+                                "STATUS_NOT_FOUND"
+                        ));
+
+        /*
+         * Reject wrong documents selected by Technical user.
+         */
+        if (dto.getRejectedDocumentIds() != null && !dto.getRejectedDocumentIds().isEmpty()) {
+
+            for (Long documentId : dto.getRejectedDocumentIds()) {
+
+                ProjectDocumentUpload documentUpload =
+                        projectDocumentUploadRepository.findActiveUserById(documentId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                        "Document not found with ID: " + documentId,
+                                        "DOCUMENT_UPLOAD_NOT_FOUND"
+                                ));
+
+                if (!documentUpload.getProject().getId().equals(project.getId())) {
+                    throw new ValidationException(
+                            "Document does not belong to this project",
+                            "DOCUMENT_PROJECT_MISMATCH"
+                    );
+                }
+
+                documentUpload.setStatus(rejectedDocumentStatus);
+                documentUpload.setRemarks(dto.getReason());
+                documentUpload.setUpdatedBy(dto.getChangedById());
+                documentUpload.setUpdatedDate(new Date());
+
+                projectDocumentUploadRepository.save(documentUpload);
+            }
+        }
+
+        /*
+         * Previous milestone:
+         * Documentation COMPLETED -> REWORK
+         */
+        saveMilestoneStatusHistory(
+                previousAssignment,
+                previousAssignment.getStatus(),
+                reworkStatus,
+                dto.getReason(),
+                changedBy
+        );
+
+        previousAssignment.setStatus(reworkStatus);
+        previousAssignment.setStatusReason(dto.getReason());
+        previousAssignment.setVisible(true);
+        previousAssignment.setVisibilityReason(null);
+        previousAssignment.setCompletedDate(null);
+        previousAssignment.setUpdatedBy(dto.getChangedById());
+        previousAssignment.setUpdatedDate(new Date());
+
+        projectMilestoneAssignmentRepository.save(previousAssignment);
+
+        /*
+         * Current milestone:
+         * Filing NEW / IN_PROGRESS -> ON_HOLD
+         */
+        String holdReason = "Waiting for previous milestone rework: " + dto.getReason();
+
+        saveMilestoneStatusHistory(
+                currentAssignment,
+                currentAssignment.getStatus(),
+                onHoldStatus,
+                holdReason,
+                changedBy
+        );
+
+        currentAssignment.setStatus(onHoldStatus);
+        currentAssignment.setStatusReason(holdReason);
+        currentAssignment.setUpdatedBy(dto.getChangedById());
+        currentAssignment.setUpdatedDate(new Date());
+
+        projectMilestoneAssignmentRepository.save(currentAssignment);
+
+        updateProjectStatus(project, dto.getChangedById());
+
+        logger.info(
+                "Current milestone assignment ID {} sent back to previous milestone assignment ID {} for rework by user {}",
+                currentAssignment.getId(),
+                previousAssignment.getId(),
+                changedBy.getFullName()
+        );
+    }
+
+    private void saveMilestoneStatusHistory(
+            ProjectMilestoneAssignment assignment,
+            MilestoneStatus previousStatus,
+            MilestoneStatus newStatus,
+            String reason,
+            User changedBy
+    ) {
+        MilestoneStatusHistory history = new MilestoneStatusHistory();
+        history.setMilestoneAssignment(assignment);
+        history.setPreviousStatus(previousStatus);
+        history.setNewStatus(newStatus);
+        history.setChangeReason(reason);
+        history.setChangedBy(changedBy);
+        history.setChangeDate(new Date());
+        history.setDeleted(false);
+
+        milestoneStatusHistoryRepository.save(history);
+    }
+
+
+
+
 }

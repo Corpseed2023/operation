@@ -2,13 +2,16 @@ package com.doc.controller.project;
 
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
+import com.doc.dto.ProjectMilestoneassignment.SendBackToPreviousMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
+import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
 import com.doc.service.ProjectMilestoneAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -48,5 +51,25 @@ public class ProjectMilestoneAssignmentController {
         ReassignMilestoneResponseDto response = projectMilestoneAssignmentService.reassignMilestone(reassignDto);
         return ResponseEntity.ok(response);
     }
+
+
+    @Operation(summary = "Send current milestone back to previous milestone for rework")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Previous milestone moved to rework successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or previous milestone not found"),
+            @ApiResponse(responseCode = "404", description = "Milestone assignment or user not found")
+    })
+    @PostMapping("/{assignmentId}/send-back-to-previous")
+    public ResponseEntity<String> sendBackToPreviousMilestone(
+            @PathVariable Long assignmentId,
+            @Valid @RequestBody SendBackToPreviousMilestoneDto dto
+    ) {
+        dto.setCurrentAssignmentId(assignmentId);
+        projectMilestoneAssignmentService.sendBackToPreviousMilestone(dto);
+        return ResponseEntity.ok("Milestone sent back to previous milestone for rework successfully");
+    }
+
+
+
 
 }

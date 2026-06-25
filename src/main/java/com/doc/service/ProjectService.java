@@ -4,6 +4,7 @@ import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
+import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.entity.project.Project;
 import org.springframework.data.domain.Page;
@@ -41,5 +42,14 @@ public interface ProjectService {
 
     ProjectResponseDto getProjectByUnbilledNumber(String unbilledNumber);
     ProjectResponseDto cancelProjectByUnbilledNumber(Long userId, String unbilledNumber);
+
+    Page<SalesProjectStatusResponseDto> getSalesProjectStatusDashboard(
+            Long userId,
+            Long salesPersonId,
+            String statusName,
+            String search,
+            int page,
+            int size
+    );
 
 }

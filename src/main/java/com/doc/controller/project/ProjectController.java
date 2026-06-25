@@ -7,6 +7,7 @@ import com.doc.dto.project.ProjectRequestDto;
 import com.doc.dto.project.ProjectResponseDto;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
+import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.service.ProjectSearchService;
 import com.doc.service.ProjectService;
@@ -259,6 +260,37 @@ public class ProjectController {
     ) {
 
         ProjectResponseDto response = projectService.cancelProjectByUnbilledNumber(userId, unbilledNumber);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/sales-status-dashboard")
+    @Operation(
+            summary = "Get sales project status dashboard",
+            description = "ADMIN/OPERATION_HEAD can see all projects. Sales users can see only" +
+                    " their own projects. Response includes project status and department-wise milestone assignment details."
+    )
+    public ResponseEntity<Page<SalesProjectStatusResponseDto>> getSalesProjectStatusDashboard(
+            @RequestParam Long userId,
+            @RequestParam(required = false) Long salesPersonId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        if (page < 1 || size < 1) {
+            throw new IllegalArgumentException("Invalid pagination parameters");
+        }
+
+        Page<SalesProjectStatusResponseDto> response =
+                projectService.getSalesProjectStatusDashboard(
+                        userId,
+                        salesPersonId,
+                        status,
+                        search,
+                        page - 1,
+                        size
+                );
+
         return ResponseEntity.ok(response);
     }
 
