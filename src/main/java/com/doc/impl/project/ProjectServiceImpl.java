@@ -5,6 +5,9 @@ import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.*;
+import com.doc.dto.project.sales.DepartmentWiseMilestoneDto;
+import com.doc.dto.project.sales.MilestoneAssignmentStatusDto;
+import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
 import com.doc.dto.user.UserResponseDto;
 import com.doc.entity.client.Company;
@@ -1496,4 +1499,271 @@ public class ProjectServiceImpl implements ProjectService {
 
         return mapToResponseDto(project);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SalesProjectStatusResponseDto> getSalesProjectStatusDashboard(
+            Long userId,
+            Long salesPersonId,
+            String statusName,
+            String search,
+            int page,
+            int size
+    ) {
+        User loggedInUser = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = loggedInUser.getRoles()
+                .stream()
+                .anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getName()));
+
+        boolean isOperationHead = loggedInUser.getRoles()
+                .stream()
+                .anyMatch(r -> "OPERATION_HEAD".equalsIgnoreCase(r.getName()));
+
+        /*
+         * ADMIN / OPERATION_HEAD:
+         * - Can see all projects.
+         * - Can optionally filter by salesPersonId.
+         *
+         * Sales user:
+         * - Can see only own projects where Project.salesPersonId = userId.
+         */
+        Long effectiveSalesPersonId;
+
+        if (isAdmin || isOperationHead) {
+            effectiveSalesPersonId = salesPersonId;
+        } else {
+            effectiveSalesPersonId = userId;
+        }
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+
+        Page<Project> projectPage = projectRepository.findSalesProjectStatusDashboard(
+                effectiveSalesPersonId,
+                normalize(statusName),
+                normalize(search),
+                pageable
+        );
+
+        List<Long> projectIds = projectPage.getContent()
+                .stream()
+                .map(Project::getId)
+                .toList();
+
+        Map<Long, List<ProjectMilestoneAssignment>> assignmentMap = new HashMap<>();
+
+        if (!projectIds.isEmpty()) {
+            List<ProjectMilestoneAssignment> assignments =
+                    projectMilestoneAssignmentRepository.findDashboardAssignmentsByProjectIds(projectIds);
+
+            assignmentMap = assignments.stream()
+                    .collect(Collectors.groupingBy(a -> a.getProject().getId()));
+        }
+
+        Map<Long, List<ProjectMilestoneAssignment>> finalAssignmentMap = assignmentMap;
+
+        return projectPage.map(project ->
+                mapToSalesProjectStatusResponse(
+                        project,
+                        finalAssignmentMap.getOrDefault(project.getId(), List.of())
+                )
+        );
+    }
+
+    private SalesProjectStatusResponseDto mapToSalesProjectStatusResponse(
+            Project project,
+            List<ProjectMilestoneAssignment> assignments
+    ) {
+        long totalMilestones = assignments.size();
+
+        long completedMilestones = assignments.stream()
+                .filter(a -> isStatus(a, "COMPLETED"))
+                .count();
+
+        int completionPercentage = totalMilestones > 0
+                ? (int) ((completedMilestones * 100) / totalMilestones)
+                : 0;
+
+        return SalesProjectStatusResponseDto.builder()
+                .projectId(project.getId())
+                .projectName(project.getName())
+                .projectNo(project.getProjectNo())
+
+                .productId(project.getProduct() != null ? project.getProduct().getId() : null)
+                .productName(project.getProduct() != null ? project.getProduct().getProductName() : null)
+
+                .companyId(project.getCompany() != null ? project.getCompany().getId() : null)
+                .companyName(project.getCompany() != null ? project.getCompany().getName() : null)
+
+                .unitId(project.getUnit() != null ? project.getUnit().getId() : null)
+                .unitName(project.getUnit() != null ? project.getUnit().getUnitName() : null)
+
+                .contactId(project.getContact() != null ? project.getContact().getId() : null)
+                .contactName(project.getContact() != null ? project.getContact().getName() : null)
+
+                .unbilledNumber(project.getUnbilledNumber())
+                .estimateNumber(project.getEstimateNumber())
+
+                .salesPersonId(project.getSalesPersonId())
+                .salesPersonName(project.getSalesPersonName())
+
+                .projectStatusId(project.getStatus() != null ? project.getStatus().getId() : null)
+                .projectStatusName(project.getStatus() != null ? project.getStatus().getName() : null)
+
+                .totalAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getTotalAmount() : 0.0)
+                .dueAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getDueAmount() : 0.0)
+                .paymentTypeName(
+                        project.getPaymentDetail() != null
+                                && project.getPaymentDetail().getPaymentType() != null
+                                ? project.getPaymentDetail().getPaymentType().getName()
+                                : null
+                )
+
+                .projectDate(project.getDate())
+                .createdDate(project.getCreatedDate())
+                .updatedDate(project.getUpdatedDate())
+
+                .totalMilestones(totalMilestones)
+                .completedMilestones(completedMilestones)
+                .milestoneCompletionPercentage(completionPercentage)
+
+                .departments(mapDepartmentWiseMilestones(assignments))
+                .build();
+    }
+    private List<DepartmentWiseMilestoneDto> mapDepartmentWiseMilestones(
+            List<ProjectMilestoneAssignment> assignments
+    ) {
+        Map<String, DepartmentWiseMilestoneDto> departmentMap = new LinkedHashMap<>();
+
+        for (ProjectMilestoneAssignment assignment : assignments) {
+
+            List<Department> departments =
+                    assignment.getMilestone() != null
+                            && assignment.getMilestone().getDepartments() != null
+                            && !assignment.getMilestone().getDepartments().isEmpty()
+                            ? assignment.getMilestone().getDepartments()
+                            : List.of();
+
+            MilestoneAssignmentStatusDto milestoneDto = mapMilestoneAssignmentStatusDto(assignment);
+
+            if (departments.isEmpty()) {
+                addMilestoneToDepartmentGroup(
+                        departmentMap,
+                        null,
+                        "No Department",
+                        milestoneDto
+                );
+            } else {
+                for (Department department : departments) {
+                    addMilestoneToDepartmentGroup(
+                            departmentMap,
+                            department.getId(),
+                            department.getName(),
+                            milestoneDto
+                    );
+                }
+            }
+        }
+
+        return new ArrayList<>(departmentMap.values());
+    }
+
+
+
+
+    private MilestoneAssignmentStatusDto mapMilestoneAssignmentStatusDto(
+            ProjectMilestoneAssignment assignment
+    ) {
+        User assignedUser = assignment.getAssignedUser();
+
+        return MilestoneAssignmentStatusDto.builder()
+                .assignmentId(assignment.getId())
+
+                .milestoneId(assignment.getMilestone() != null ? assignment.getMilestone().getId() : null)
+                .milestoneName(assignment.getMilestone() != null ? assignment.getMilestone().getName() : null)
+                .milestoneOrder(
+                        assignment.getProductMilestoneMap() != null
+                                ? assignment.getProductMilestoneMap().getOrder()
+                                : null
+                )
+
+                .milestoneStatusId(assignment.getStatus() != null ? assignment.getStatus().getId() : null)
+                .milestoneStatusName(assignment.getStatus() != null ? assignment.getStatus().getName() : null)
+                .statusReason(assignment.getStatusReason())
+
+                .visible(assignment.isVisible())
+                .visibilityReason(assignment.getVisibilityReason())
+
+                .assignedUserId(assignedUser != null ? assignedUser.getId() : null)
+                .assignedUserName(assignedUser != null ? assignedUser.getFullName() : null)
+                .assignedUserEmail(assignedUser != null ? assignedUser.getEmail() : null)
+                .assignedUserMobile(assignedUser != null ? assignedUser.getContactNo() : null)
+
+                .visibleDate(assignment.getVisibleDate())
+                .startedDate(assignment.getStartedDate())
+                .completedDate(assignment.getCompletedDate())
+
+                .reworkAttempts(assignment.getReworkAttempts())
+                .build();
+    }
+
+
+    private boolean isStatus(ProjectMilestoneAssignment assignment, String statusName) {
+        return assignment.getStatus() != null
+                && assignment.getStatus().getName() != null
+                && assignment.getStatus().getName().equalsIgnoreCase(statusName);
+    }
+
+    private String normalize(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+
+    private void addMilestoneToDepartmentGroup(
+            Map<String, DepartmentWiseMilestoneDto> departmentMap,
+            Long departmentId,
+            String departmentName,
+            MilestoneAssignmentStatusDto milestoneDto
+    ) {
+        String key = departmentId != null ? String.valueOf(departmentId) : "NO_DEPARTMENT";
+
+        DepartmentWiseMilestoneDto departmentDto = departmentMap.computeIfAbsent(
+                key,
+                k -> DepartmentWiseMilestoneDto.builder()
+                        .departmentId(departmentId)
+                        .departmentName(departmentName)
+                        .totalMilestones(0)
+                        .completedMilestones(0)
+                        .inProgressMilestones(0)
+                        .pendingMilestones(0)
+                        .milestones(new ArrayList<>())
+                        .build()
+        );
+
+        departmentDto.getMilestones().add(milestoneDto);
+        departmentDto.setTotalMilestones(departmentDto.getTotalMilestones() + 1);
+
+        String status = milestoneDto.getMilestoneStatusName();
+
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            departmentDto.setCompletedMilestones(departmentDto.getCompletedMilestones() + 1);
+        } else if ("IN_PROGRESS".equalsIgnoreCase(status)) {
+            departmentDto.setInProgressMilestones(departmentDto.getInProgressMilestones() + 1);
+        } else {
+            departmentDto.setPendingMilestones(departmentDto.getPendingMilestones() + 1);
+        }
+    }
+
+
+
+
+
 }

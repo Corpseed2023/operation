@@ -188,6 +188,23 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
 
     boolean existsByProductMilestoneMapId(Long productMilestoneMapId);
 
+    @Query("""
+        SELECT DISTINCT a
+        FROM ProjectMilestoneAssignment a
+        LEFT JOIN FETCH a.project p
+        LEFT JOIN FETCH a.productMilestoneMap pmm
+        LEFT JOIN FETCH a.milestone m
+        LEFT JOIN FETCH m.departments d
+        LEFT JOIN FETCH a.assignedUser u
+        LEFT JOIN FETCH a.status s
+        WHERE p.id IN :projectIds
+          AND a.isDeleted = false
+        ORDER BY p.id ASC, pmm.order ASC, a.id ASC
+        """)
+    List<ProjectMilestoneAssignment> findDashboardAssignmentsByProjectIds(
+            @Param("projectIds") List<Long> projectIds
+    );
+
 
 
 }

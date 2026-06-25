@@ -199,4 +199,61 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                                                    @Param("statuses") List<String> statuses,
                                                    Pageable pageable);
 
+    @Query(
+            value = """
+                SELECT p
+                FROM Project p
+                LEFT JOIN FETCH p.product product
+                LEFT JOIN FETCH p.company company
+                LEFT JOIN FETCH p.unit unit
+                LEFT JOIN FETCH p.contact contact
+                LEFT JOIN FETCH p.status status
+                LEFT JOIN FETCH p.paymentDetail paymentDetail
+                LEFT JOIN FETCH paymentDetail.paymentType paymentType
+                WHERE p.isDeleted = false
+                  AND p.isCancelled = false
+                  AND (:salesPersonId IS NULL OR p.salesPersonId = :salesPersonId)
+                  AND (:statusName IS NULL OR UPPER(status.name) = UPPER(:statusName))
+                  AND (
+                        :search IS NULL
+                        OR :search = ''
+                        OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.salesPersonName) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(company.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(product.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                  )
+                """,
+            countQuery = """
+                SELECT COUNT(p)
+                FROM Project p
+                LEFT JOIN p.product product
+                LEFT JOIN p.company company
+                LEFT JOIN p.status status
+                WHERE p.isDeleted = false
+                  AND p.isCancelled = false
+                  AND (:salesPersonId IS NULL OR p.salesPersonId = :salesPersonId)
+                  AND (:statusName IS NULL OR UPPER(status.name) = UPPER(:statusName))
+                  AND (
+                        :search IS NULL
+                        OR :search = ''
+                        OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(p.salesPersonName) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(company.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(product.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                  )
+                """
+    )
+    Page<Project> findSalesProjectStatusDashboard(
+            @Param("salesPersonId") Long salesPersonId,
+            @Param("statusName") String statusName,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
 }
