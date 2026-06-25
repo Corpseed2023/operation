@@ -1,5 +1,6 @@
 package com.doc.service.vendor;
 
+import com.doc.dto.vendor.SendAgreementToVendorRequestDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
 
@@ -21,4 +22,9 @@ public interface VendorQuotationService {
 
     List<VendorQuotationResponseDto> getVendorQuotationsByVendorId(Long vendorId);
 
+    VendorQuotationResponseDto sendAgreementToVendor(
+            Long quotationId,
+            Long userId,
+            SendAgreementToVendorRequestDto requestDto
+    );
 }

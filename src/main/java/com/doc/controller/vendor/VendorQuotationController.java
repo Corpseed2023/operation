@@ -1,5 +1,6 @@
 package com.doc.controller.vendor;
 
+import com.doc.dto.vendor.SendAgreementToVendorRequestDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
 import com.doc.service.vendor.VendorQuotationService;
@@ -41,10 +42,15 @@ public class VendorQuotationController {
     @PostMapping("/{quotationId}/send-agreement-to-vendor")
     public ResponseEntity<VendorQuotationResponseDto> sendAgreementToVendor(
             @PathVariable Long quotationId,
-            @RequestParam Long userId
+            @RequestParam Long userId,
+            @Valid @RequestBody SendAgreementToVendorRequestDto requestDto
     ) {
         return ResponseEntity.ok(
-                vendorQuotationService.sendAgreementToVendor(quotationId, userId)
+                vendorQuotationService.sendAgreementToVendor(
+                        quotationId,
+                        userId,
+                        requestDto
+                )
         );
     }
 
