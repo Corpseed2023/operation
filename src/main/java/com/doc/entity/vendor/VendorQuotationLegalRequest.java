@@ -77,15 +77,10 @@ public class VendorQuotationLegalRequest {
     @Temporal(TemporalType.TIMESTAMP)
     private Date agreementPreparedDate;
 
-    private Long sentToOperationBy;
+    private Long sentToProcurementBy;
 
     @Temporal(TemporalType.TIMESTAMP)
-    private Date sentToOperationDate;
-
-    private Long sentToVendorBy;
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date sentToVendorDate;
+    private Date sentToProcurementDate;
 
     private Long decisionBy;
 

@@ -1,9 +1,6 @@
 package com.doc.service.vendor;
 
-import com.doc.dto.vendor.VendorAgreementDecisionRequestDto;
-import com.doc.dto.vendor.VendorAgreementPrepareRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalResponseDto;
+import com.doc.dto.vendor.*;
 
 import java.util.List;
 
@@ -15,14 +12,11 @@ public interface VendorQuotationLegalRequestService {
 
     List<VendorQuotationLegalResponseDto> getAllLegalRequests(Long assignedToLegal);
 
-    VendorQuotationLegalResponseDto prepareAgreement(
+    VendorQuotationLegalResponseDto sendAgreementToProcurement(
             Long id,
-            VendorAgreementPrepareRequestDto requestDto
+            Long userId,
+            SendAgreementToProcurementRequestDto requestDto
     );
-
-    VendorQuotationLegalResponseDto sendAgreementToOperation(Long id, Long userId);
-
-    VendorQuotationLegalResponseDto sendAgreementToVendor(Long id, Long userId);
 
     VendorQuotationLegalResponseDto agreementDecision(
             Long id,

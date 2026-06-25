@@ -1,9 +1,6 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.vendor.VendorAgreementDecisionRequestDto;
-import com.doc.dto.vendor.VendorAgreementPrepareRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalResponseDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.VendorQuotation;
 import com.doc.entity.vendor.VendorQuotationLegalRequest;
 import com.doc.entity.vendor.VendorQuotationLegalRequestStatus;
@@ -85,11 +82,13 @@ public class VendorQuotationLegalRequestServiceImpl
         return responseList;
     }
 
+
     @Override
     @Transactional
-    public VendorQuotationLegalResponseDto prepareAgreement(
+    public VendorQuotationLegalResponseDto sendAgreementToProcurement(
             Long id,
-            VendorAgreementPrepareRequestDto requestDto
+            Long userId,
+            SendAgreementToProcurementRequestDto requestDto
     ) {
         VendorQuotationLegalRequest legalRequest = legalRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -104,79 +103,20 @@ public class VendorQuotationLegalRequestServiceImpl
             );
         }
 
+        if (requestDto.getAgreementFileUrl() == null ||
+                requestDto.getAgreementFileUrl().trim().isEmpty()) {
+            throw new ValidationException(
+                    "Agreement PDF is required before sending to procurement",
+                    "ERR_AGREEMENT_PDF_REQUIRED"
+            );
+        }
+
         legalRequest.setAgreementFileUrl(requestDto.getAgreementFileUrl());
-        legalRequest.setAgreementPreparedBy(requestDto.getPreparedBy());
-        legalRequest.setAgreementPreparedDate(new Date());
         legalRequest.setStatusReason(requestDto.getRemarks());
-        legalRequest.setUpdatedBy(requestDto.getPreparedBy());
-        legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_PREPARED_BY_LEGAL);
-
-        VendorQuotationLegalRequest saved = legalRequestRepository.save(legalRequest);
-
-        return mapToResponse(saved);
-    }
-
-    @Override
-    @Transactional
-    public VendorQuotationLegalResponseDto sendAgreementToOperation(Long id, Long userId) {
-        VendorQuotationLegalRequest legalRequest = legalRequestRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor quotation legal request not found",
-                        "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
-                ));
-
-        if (legalRequest.isDeleted()) {
-            throw new ResourceNotFoundException(
-                    "Vendor quotation legal request not found",
-                    "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
-            );
-        }
-
-        if (legalRequest.getAgreementFileUrl() == null ||
-                legalRequest.getAgreementFileUrl().trim().isEmpty()) {
-            throw new ValidationException(
-                    "Agreement file is required before sending to operation",
-                    "ERR_AGREEMENT_FILE_REQUIRED"
-            );
-        }
-
-        legalRequest.setSentToOperationBy(userId);
-        legalRequest.setSentToOperationDate(new Date());
+        legalRequest.setSentToProcurementBy(userId);
+        legalRequest.setSentToProcurementDate(new Date());
         legalRequest.setUpdatedBy(userId);
-        legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_OPERATION);
-
-        VendorQuotationLegalRequest saved = legalRequestRepository.save(legalRequest);
-
-        return mapToResponse(saved);
-    }
-
-    @Override
-    @Transactional
-    public VendorQuotationLegalResponseDto sendAgreementToVendor(Long id, Long userId) {
-        VendorQuotationLegalRequest legalRequest = legalRequestRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor quotation legal request not found",
-                        "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
-                ));
-
-        if (legalRequest.isDeleted()) {
-            throw new ResourceNotFoundException(
-                    "Vendor quotation legal request not found",
-                    "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
-            );
-        }
-
-        if (legalRequest.getStatus() != VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_OPERATION) {
-            throw new ValidationException(
-                    "Agreement can be sent to vendor only after it is sent to operation",
-                    "ERR_AGREEMENT_NOT_SENT_TO_OPERATION"
-            );
-        }
-
-        legalRequest.setSentToVendorBy(userId);
-        legalRequest.setSentToVendorDate(new Date());
-        legalRequest.setUpdatedBy(userId);
-        legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_VENDOR);
+        legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT);
 
         VendorQuotationLegalRequest saved = legalRequestRepository.save(legalRequest);
 
@@ -202,10 +142,10 @@ public class VendorQuotationLegalRequestServiceImpl
             );
         }
 
-        if (legalRequest.getStatus() != VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_VENDOR) {
+        if (legalRequest.getStatus() != VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT) {
             throw new ValidationException(
-                    "Agreement decision can be taken only after agreement is sent to vendor",
-                    "ERR_AGREEMENT_NOT_SENT_TO_VENDOR"
+                    "Agreement decision can be taken only after agreement is sent to procurement",
+                    "ERR_AGREEMENT_NOT_SENT_TO_PROCUREMENT"
             );
         }
 
@@ -225,9 +165,7 @@ public class VendorQuotationLegalRequestServiceImpl
         legalRequest.setDecisionRemarks(requestDto.getRemarks());
         legalRequest.setUpdatedBy(requestDto.getDecisionBy());
 
-        VendorQuotationLegalRequest saved = legalRequestRepository.save(legalRequest);
-
-        return mapToResponse(saved);
+        return mapToResponse(legalRequestRepository.save(legalRequest));
     }
 
     private VendorQuotationLegalResponseDto mapToResponse(
