@@ -4,6 +4,7 @@ import com.doc.dto.vendor.VendorQuotationItemRequestDto;
 import com.doc.dto.vendor.VendorQuotationItemResponseDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
+import com.doc.dto.vendor.request.VendorQuotationDocumentRequestDto;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -76,17 +77,36 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         quotation.setPaymentTerms(requestDto.getPaymentTerms());
         quotation.setWarrantyTerms(requestDto.getWarrantyTerms());
         quotation.setRemarks(requestDto.getRemarks());
-        quotation.setQuotationAttachmentUrl(requestDto.getQuotationAttachmentUrl());
 
         quotation.setCreatedBy(requestDto.getCreatedBy());
 
+        /*
+         * Multiple quotation documents
+         */
+        if (requestDto.getDocuments() != null && !requestDto.getDocuments().isEmpty()) {
+            for (VendorQuotationDocumentRequestDto documentDto : requestDto.getDocuments()) {
+
+                VendorQuotationDocument document = new VendorQuotationDocument();
+
+                document.setFileName(documentDto.getFileName());
+                document.setFileUrl(documentDto.getFileUrl());
+                document.setFileType(documentDto.getFileType());
+                document.setFileSizeKb(documentDto.getFileSizeKb());
+                document.setCreatedBy(requestDto.getCreatedBy());
+
+                quotation.addDocument(document);
+            }
+        }
+
+        /*
+         * Quotation items
+         */
         if (requestDto.getItems() != null) {
             for (VendorQuotationItemRequestDto itemDto : requestDto.getItems()) {
 
                 VendorQuotationItem item = new VendorQuotationItem();
 
                 item.setItemType(itemDto.getItemType());
-//                item.setSequenceNo(itemDto.getSequenceNo());
                 item.setItemName(itemDto.getItemName());
                 item.setDescription(itemDto.getDescription());
                 item.setQuantity(itemDto.getQuantity());
@@ -102,7 +122,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         VendorQuotation saved = vendorQuotationRepository.save(quotation);
 
-        /**
+        /*
          * After procurement manually enters quotation,
          * vendor-wise RFQ status should become QUOTATION_RECEIVED.
          */
@@ -113,6 +133,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         return mapToResponse(saved);
     }
+
 
     @Override
     @Transactional(readOnly = true)
@@ -163,7 +184,6 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         response.setPaymentTerms(quotation.getPaymentTerms());
         response.setWarrantyTerms(quotation.getWarrantyTerms());
         response.setRemarks(quotation.getRemarks());
-        response.setQuotationAttachmentUrl(quotation.getQuotationAttachmentUrl());
         response.setAgreementFileUrl(quotation.getAgreementFileUrl());
 
         response.setStatus(quotation.getStatus() != null ? quotation.getStatus().name() : null);
@@ -303,7 +323,6 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         quotation.setPaymentTerms(requestDto.getPaymentTerms());
         quotation.setWarrantyTerms(requestDto.getWarrantyTerms());
         quotation.setRemarks(requestDto.getRemarks());
-        quotation.setQuotationAttachmentUrl(requestDto.getQuotationAttachmentUrl());
 
         quotation.setUpdatedBy(requestDto.getCreatedBy());
 

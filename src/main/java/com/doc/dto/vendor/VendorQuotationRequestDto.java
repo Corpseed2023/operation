@@ -1,5 +1,6 @@
 package com.doc.dto.vendor;
 
+import com.doc.dto.vendor.request.VendorQuotationDocumentRequestDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -40,7 +41,8 @@ public class VendorQuotationRequestDto {
 
     private String remarks;
 
-    private String quotationAttachmentUrl;
+    @Valid
+    private List<VendorQuotationDocumentRequestDto> documents;
 
     @NotNull(message = "Created by is required")
     private Long createdBy;

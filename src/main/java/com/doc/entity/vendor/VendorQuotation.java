@@ -189,8 +189,13 @@ public class  VendorQuotation {
      * Example:
      * PDF quotation sent by vendor.
      */
-    @Column(name = "quotation_attachment_url", length = 500)
-    private String quotationAttachmentUrl;
+    @OneToMany(
+            mappedBy = "quotation",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
+    private List<VendorQuotationDocument> documents = new ArrayList<>();
 
     /**
      * Status of this quotation.
@@ -327,5 +332,14 @@ public class  VendorQuotation {
         this.subtotalAmount = subtotal.setScale(2, RoundingMode.HALF_UP);
         this.taxAmount = tax.setScale(2, RoundingMode.HALF_UP);
         this.grandTotal = total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public void addDocument(VendorQuotationDocument document) {
+        if (document == null) {
+            return;
+        }
+
+        document.setQuotation(this);
+        this.documents.add(document);
     }
 }

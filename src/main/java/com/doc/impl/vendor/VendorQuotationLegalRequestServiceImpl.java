@@ -201,7 +201,7 @@ public class VendorQuotationLegalRequestServiceImpl
 
             response.setVendorQuotationId(quotation.getId());
             response.setQuotationNumber(quotation.getQuotationNumber());
-            response.setQuotationAttachmentUrl(quotation.getQuotationAttachmentUrl());
+
         }
         response.setAssignedToLegal(legalRequest.getAssignedToLegal());
         response.setCreatedBy(legalRequest.getCreatedBy());
