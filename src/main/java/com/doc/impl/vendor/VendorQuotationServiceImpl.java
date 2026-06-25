@@ -163,6 +163,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         response.setWarrantyTerms(quotation.getWarrantyTerms());
         response.setRemarks(quotation.getRemarks());
         response.setQuotationAttachmentUrl(quotation.getQuotationAttachmentUrl());
+        response.setAgreementFileUrl(quotation.getAgreementFileUrl());
 
         response.setStatus(quotation.getStatus() != null ? quotation.getStatus().name() : null);
 

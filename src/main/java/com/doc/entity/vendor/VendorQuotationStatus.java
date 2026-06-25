@@ -77,5 +77,6 @@ public enum VendorQuotationStatus {
      * RFQ cancelled, vendor withdrew quotation,
      * or quotation was entered incorrectly and cancelled.
      */
-    CANCELLED
+    CANCELLED,
+    AGREEMENT_SENT_TO_PROCUREMENT,
 }

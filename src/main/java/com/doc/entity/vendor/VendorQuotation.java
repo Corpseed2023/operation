@@ -115,6 +115,8 @@ public class  VendorQuotation {
     @Column(name = "version_no", nullable = false)
     private Integer versionNo = 1;
 
+    @Column(name = "agreement_file_url", length = 500)
+    private String agreementFileUrl;
     /**
      * Latest quotation flag.
      *

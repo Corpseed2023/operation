@@ -1,9 +1,7 @@
 package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.*;
-import com.doc.entity.vendor.VendorQuotation;
-import com.doc.entity.vendor.VendorQuotationLegalRequest;
-import com.doc.entity.vendor.VendorQuotationLegalRequestStatus;
+import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.vendor.VendorQuotationLegalRequestRepository;
@@ -103,24 +101,25 @@ public class VendorQuotationLegalRequestServiceImpl
             );
         }
 
-        if (requestDto.getAgreementFileUrl() == null ||
-                requestDto.getAgreementFileUrl().trim().isEmpty()) {
-            throw new ValidationException(
-                    "Agreement PDF is required before sending to procurement",
-                    "ERR_AGREEMENT_PDF_REQUIRED"
-            );
-        }
-
         legalRequest.setAgreementFileUrl(requestDto.getAgreementFileUrl());
         legalRequest.setStatusReason(requestDto.getRemarks());
         legalRequest.setSentToProcurementBy(userId);
         legalRequest.setSentToProcurementDate(new Date());
         legalRequest.setUpdatedBy(userId);
-        legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT);
+        legalRequest.setStatus(
+                VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT
+        );
 
-        VendorQuotationLegalRequest saved = legalRequestRepository.save(legalRequest);
+        VendorQuotation quotation = legalRequest.getVendorQuotation();
 
-        return mapToResponse(saved);
+        if (quotation != null) {
+            quotation.setAgreementFileUrl(requestDto.getAgreementFileUrl());
+            quotation.setStatus(VendorQuotationStatus.AGREEMENT_SENT_TO_PROCUREMENT);
+            quotation.setUpdatedBy(userId);
+            vendorQuotationRepository.save(quotation);
+        }
+
+        return mapToResponse(legalRequestRepository.save(legalRequest));
     }
 
     @Override
@@ -195,6 +194,15 @@ public class VendorQuotationLegalRequestServiceImpl
                 legalRequest.getStatus() != null ? legalRequest.getStatus().name() : null
         );
 
+        response.setAgreementFileUrl(legalRequest.getAgreementFileUrl());
+
+        if (legalRequest.getVendorQuotation() != null) {
+            VendorQuotation quotation = legalRequest.getVendorQuotation();
+
+            response.setVendorQuotationId(quotation.getId());
+            response.setQuotationNumber(quotation.getQuotationNumber());
+            response.setQuotationAttachmentUrl(quotation.getQuotationAttachmentUrl());
+        }
         response.setAssignedToLegal(legalRequest.getAssignedToLegal());
         response.setCreatedBy(legalRequest.getCreatedBy());
         response.setUpdatedBy(legalRequest.getUpdatedBy());
