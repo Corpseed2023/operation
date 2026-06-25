@@ -15,6 +15,8 @@ public class ProjectReopenCreateRequestDto {
     /*
      * Milestone where issue was found.
      * Example: Liaison / Certification assignment ID.
+     *
+     * Backend will also use this assignment's assignedUser as requestedBy.
      */
     @NotNull(message = "Detected at assignment ID is required")
     private Long detectedAtAssignmentId;
@@ -25,24 +27,6 @@ public class ProjectReopenCreateRequestDto {
      */
     @NotNull(message = "Responsible assignment ID is required")
     private Long responsibleAssignmentId;
-
-    @NotNull(message = "Requested by user ID is required")
-    private Long requestedById;
-
-    /*
-     * First approval manager.
-     * For now frontend sends this.
-     * Later we can auto-detect by department.
-     */
-    @NotNull(message = "Requester manager ID is required")
-    private Long requesterManagerId;
-
-    /*
-     * Second approval manager.
-     * Example: Technical Manager.
-     */
-    @NotNull(message = "Responsible manager ID is required")
-    private Long responsibleManagerId;
 
     @NotBlank(message = "Reopen reason is required")
     private String reason;

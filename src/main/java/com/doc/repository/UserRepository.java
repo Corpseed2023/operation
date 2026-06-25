@@ -35,4 +35,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE u.manager.id = :managerId AND u.isActive = true AND u.isDeleted = false")
     List<User> findByManagerIdAndIsDeletedFalse(@Param("managerId") Long managerId);
+
+    @Query("""
+            SELECT DISTINCT u
+            FROM User u
+            JOIN u.departments d
+            WHERE d.id = :departmentId
+              AND u.managerFlag = true
+              AND u.isDeleted = false
+              AND u.isActive = true
+            """)
+    List<User> findActiveManagersByDepartmentId(@Param("departmentId") Long departmentId);
 }

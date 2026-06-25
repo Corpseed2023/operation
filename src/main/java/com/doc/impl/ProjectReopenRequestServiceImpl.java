@@ -99,7 +99,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
         }
 
         /*
-         * Project reopen means mistake is found after responsible milestone was completed.
+         * Reopen is allowed only when responsible milestone was already completed.
          *
          * Example:
          * Filing / Technical = COMPLETED
@@ -113,25 +113,59 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
             );
         }
 
-        User requestedBy = userRepository.findActiveUserById(dto.getRequestedById())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Requested by user not found",
-                        "USER_NOT_FOUND"
-                ));
+        /*
+         * requestedBy will be auto-detected from detectedAtAssignment.
+         *
+         * Example:
+         * detectedAtAssignment = Liaison assignment
+         * assignedUser = Liaison user
+         */
+        User requestedBy = detectedAtAssignment.getAssignedUser();
 
-        User requesterManager = userRepository.findActiveUserById(dto.getRequesterManagerId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Requester manager not found",
-                        "REQUESTER_MANAGER_NOT_FOUND"
-                ));
+        if (requestedBy == null) {
+            throw new ValidationException(
+                    "Detected milestone does not have assigned user",
+                    "DETECTED_ASSIGNMENT_USER_NOT_FOUND"
+            );
+        }
 
-        User responsibleManager = userRepository.findActiveUserById(dto.getResponsibleManagerId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Responsible manager not found",
-                        "RESPONSIBLE_MANAGER_NOT_FOUND"
-                ));
+        if (requestedBy.isDeleted() || !requestedBy.isActive()) {
+            throw new ValidationException(
+                    "Detected milestone assigned user is not active",
+                    "REQUESTED_BY_USER_NOT_ACTIVE"
+            );
+        }
+
+        /*
+         * First approval manager:
+         * requestedBy.getManager()
+         *
+         * Example:
+         * Liaison user -> Liaison Manager
+         */
+        User requesterManager = requestedBy.getManager();
+
+        if (requesterManager == null) {
+            throw new ValidationException(
+                    "Requester user does not have manager mapped",
+                    "REQUESTER_MANAGER_NOT_MAPPED"
+            );
+        }
 
         validateManager(requesterManager, "Requester manager");
+
+        /*
+         * Second approval manager:
+         * First try responsible assignment assigned user's manager.
+         * If not found, find manager from responsible milestone department.
+         *
+         * Example:
+         * Filing / Technical assignment -> Technical user -> Technical Manager
+         * OR
+         * Filing milestone department -> Technical Department -> Technical Manager
+         */
+        User responsibleManager = resolveResponsibleManager(responsibleAssignment);
+
         validateManager(responsibleManager, "Responsible manager");
 
         Collection<ProjectReopenRequestStatus> pendingStatuses = List.of(
@@ -169,8 +203,8 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
         request.setStatus(ProjectReopenRequestStatus.PENDING_REQUESTER_MANAGER_APPROVAL);
 
         request.setRequestedAt(new Date());
-        request.setCreatedBy(dto.getRequestedById());
-        request.setUpdatedBy(dto.getRequestedById());
+        request.setCreatedBy(requestedBy.getId());
+        request.setUpdatedBy(requestedBy.getId());
         request.setCreatedDate(new Date());
         request.setUpdatedDate(new Date());
         request.setDeleted(false);
@@ -179,6 +213,66 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
 
         return mapToResponseDto(saved);
     }
+
+    private User resolveResponsibleManager(ProjectMilestoneAssignment responsibleAssignment) {
+
+        /*
+         * First priority:
+         * responsible assignment assigned user's manager.
+         *
+         * Example:
+         * Filing assigned to Technical user.
+         * Technical user's manager = Technical Manager.
+         */
+        if (responsibleAssignment.getAssignedUser() != null) {
+
+            User responsibleUser = responsibleAssignment.getAssignedUser();
+
+            if (responsibleUser.getManager() != null) {
+                User manager = responsibleUser.getManager();
+
+                if (!manager.isDeleted()
+                        && manager.isActive()
+                        && manager.isManagerFlag()) {
+                    return manager;
+                }
+            }
+        }
+
+        /*
+         * Second priority:
+         * responsible milestone department manager.
+         *
+         * Example:
+         * Filing milestone has Technical department.
+         * Find active manager from Technical department.
+         */
+        Department responsibleDepartment = getFirstDepartment(responsibleAssignment);
+
+        if (responsibleDepartment == null || responsibleDepartment.getId() == null) {
+            throw new ValidationException(
+                    "Responsible milestone department not found",
+                    "RESPONSIBLE_DEPARTMENT_NOT_FOUND"
+            );
+        }
+
+        List<User> managers =
+                userRepository.findActiveManagersByDepartmentId(responsibleDepartment.getId());
+
+        if (managers == null || managers.isEmpty()) {
+            throw new ValidationException(
+                    "No active manager found for responsible department: " + responsibleDepartment.getName(),
+                    "RESPONSIBLE_MANAGER_NOT_FOUND"
+            );
+        }
+
+        /*
+         * If multiple managers exist, first one will be selected.
+         * Later you can add priority flag if needed.
+         */
+        return managers.get(0);
+    }
+
 
     @Override
     public ProjectReopenRequestResponseDto requesterManagerDecision(
