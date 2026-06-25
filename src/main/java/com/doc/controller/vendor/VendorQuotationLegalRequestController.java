@@ -42,43 +42,5 @@ public class VendorQuotationLegalRequestController {
 
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
-    @PutMapping("/{id}/prepare-agreement")
-    public ResponseEntity<VendorQuotationLegalResponseDto> prepareAgreement(
-            @PathVariable Long id,
-            @RequestBody VendorAgreementPrepareRequestDto requestDto
-    ) {
-        return ResponseEntity.ok(
-                legalRequestService.prepareAgreement(id, requestDto)
-        );
-    }
 
-    @PutMapping("/{id}/send-to-operation")
-    public ResponseEntity<VendorQuotationLegalResponseDto> sendToOperation(
-            @PathVariable Long id,
-            @RequestParam Long userId
-    ) {
-        return ResponseEntity.ok(
-                legalRequestService.sendAgreementToOperation(id, userId)
-        );
-    }
-
-    @PutMapping("/{id}/send-to-vendor")
-    public ResponseEntity<VendorQuotationLegalResponseDto> sendToVendor(
-            @PathVariable Long id,
-            @RequestParam Long userId
-    ) {
-        return ResponseEntity.ok(
-                legalRequestService.sendAgreementToVendor(id, userId)
-        );
-    }
-
-    @PutMapping("/{id}/decision")
-    public ResponseEntity<VendorQuotationLegalResponseDto> agreementDecision(
-            @PathVariable Long id,
-            @RequestBody VendorAgreementDecisionRequestDto requestDto
-    ) {
-        return ResponseEntity.ok(
-                legalRequestService.agreementDecision(id, requestDto)
-        );
-    }
 }

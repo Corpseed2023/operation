@@ -73,25 +73,4 @@ public class VendorQuotationLegalRequest {
     private String agreementFileUrl;
 
     private Long agreementPreparedBy;
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date agreementPreparedDate;
-
-    private Long sentToOperationBy;
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date sentToOperationDate;
-
-    private Long sentToVendorBy;
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date sentToVendorDate;
-
-    private Long decisionBy;
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date decisionDate;
-
-    @Column(length = 1000)
-    private String decisionRemarks;
 }
