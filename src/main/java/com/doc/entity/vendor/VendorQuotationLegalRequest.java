@@ -39,8 +39,10 @@ public class VendorQuotationLegalRequest {
     @Column(length = 1000)
     private String statusReason;
 
-    @Column(length = 50, nullable = false)
-    private String status = "PENDING";
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private VendorQuotationLegalRequestStatus status =
+            VendorQuotationLegalRequestStatus.SERVICE_AGREEMENT_REQUESTED;
 
     private Long assignedToLegal;
 
@@ -66,4 +68,30 @@ public class VendorQuotationLegalRequest {
     public void onUpdate() {
         this.updatedDate = new Date();
     }
+
+    @Column(length = 500)
+    private String agreementFileUrl;
+
+    private Long agreementPreparedBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date agreementPreparedDate;
+
+    private Long sentToOperationBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date sentToOperationDate;
+
+    private Long sentToVendorBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date sentToVendorDate;
+
+    private Long decisionBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date decisionDate;
+
+    @Column(length = 1000)
+    private String decisionRemarks;
 }
