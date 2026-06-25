@@ -199,6 +199,34 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         response.setUpdatedDate(quotation.getUpdatedDate());
         response.setDeleted(quotation.isDeleted());
 
+        List<VendorQuotationDocumentResponseDto> documentResponses = new ArrayList<>();
+
+        if (quotation.getDocuments() != null) {
+            for (VendorQuotationDocument document : quotation.getDocuments()) {
+
+                if (document.isDeleted()) {
+                    continue;
+                }
+
+                VendorQuotationDocumentResponseDto documentResponse =
+                        new VendorQuotationDocumentResponseDto();
+
+                documentResponse.setId(document.getId());
+                documentResponse.setQuotationId(quotation.getId());
+                documentResponse.setFileName(document.getFileName());
+                documentResponse.setFileUrl(document.getFileUrl());
+                documentResponse.setFileType(document.getFileType());
+                documentResponse.setFileSizeKb(document.getFileSizeKb());
+                documentResponse.setCreatedBy(document.getCreatedBy());
+                documentResponse.setCreatedDate(document.getCreatedDate());
+                documentResponse.setDeleted(document.isDeleted());
+
+                documentResponses.add(documentResponse);
+            }
+        }
+
+        response.setDocuments(documentResponses);
+
         List<VendorQuotationItemResponseDto> itemResponses = new ArrayList<>() ;
 
         if (quotation.getItems() != null) {
@@ -209,7 +237,6 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                 itemResponse.setId(item.getId());
                 itemResponse.setQuotationId(quotation.getId());
                 itemResponse.setItemType(item.getItemType() != null ? item.getItemType().name() : null);
-//                itemResponse.setSequenceNo(item.getSequenceNo());
                 itemResponse.setItemName(item.getItemName());
                 itemResponse.setDescription(item.getDescription());
 
@@ -248,21 +275,6 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         return mapToResponse(quotation);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<VendorQuotationResponseDto> getAllVendorQuotations() {
-
-        List<VendorQuotation> quotations =
-                vendorQuotationRepository.findByIsDeletedFalseOrderByCreatedDateDesc();
-
-        List<VendorQuotationResponseDto> responseList = new ArrayList<>();
-
-        for (VendorQuotation quotation : quotations) {
-            responseList.add(mapToResponse(quotation));
-        }
-
-        return responseList;
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -370,6 +382,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         if (rfqVendor.getVendor() == null || !rfqVendor.getVendor().getId().equals(vendor.getId())) {
             throw new RuntimeException("Vendor does not match RFQ Vendor");
         }
+
         if (requestDto.getValidFrom() != null
                 && requestDto.getValidTill() != null
                 && requestDto.getValidTill().before(requestDto.getValidFrom())) {
@@ -398,6 +411,31 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         quotation.setUpdatedBy(requestDto.getCreatedBy());
 
+        /*
+         * Update quotation documents.
+         * Since this is PUT API, old documents are removed and request documents are saved again.
+         */
+        quotation.getDocuments().clear();
+
+        if (requestDto.getDocuments() != null && !requestDto.getDocuments().isEmpty()) {
+            for (VendorQuotationDocumentRequestDto documentDto : requestDto.getDocuments()) {
+
+                VendorQuotationDocument document = new VendorQuotationDocument();
+
+                document.setFileName(documentDto.getFileName());
+                document.setFileUrl(documentDto.getFileUrl());
+                document.setFileType(documentDto.getFileType());
+                document.setFileSizeKb(documentDto.getFileSizeKb());
+                document.setCreatedBy(requestDto.getCreatedBy());
+
+                quotation.addDocument(document);
+            }
+        }
+
+        /*
+         * Update quotation items.
+         * Old items are removed and new request items are saved again.
+         */
         quotation.getItems().clear();
 
         if (requestDto.getItems() != null) {
@@ -425,44 +463,8 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         return mapToResponse(saved);
     }
 
-    @Override
-    @Transactional
-    public VendorQuotationResponseDto sendAgreementToVendor(Long quotationId, Long userId) {
 
-        VendorQuotation quotation = vendorQuotationRepository.findByIdAndIsDeletedFalse(quotationId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor quotation not found",
-                        "ERR_VENDOR_QUOTATION_NOT_FOUND"
-                ));
 
-        if (quotation.getAgreementFileUrl() == null || quotation.getAgreementFileUrl().trim().isEmpty()) {
-            throw new ValidationException(
-                    "Agreement file is required before sending to vendor",
-                    "ERR_AGREEMENT_FILE_REQUIRED"
-            );
-        }
-
-        Vendor vendor = quotation.getVendor();
-
-        if (vendor == null || vendor.getEmail() == null || vendor.getEmail().trim().isEmpty()) {
-            throw new ValidationException(
-                    "Vendor email is missing",
-                    "ERR_VENDOR_EMAIL_MISSING"
-            );
-        }
-
-        // TODO: call your existing mail service here
-        // mailService.sendMail(
-        //        vendor.getEmail(),
-        //        "Final Service Agreement",
-        //        "Dear " + vendor.getName() + ", please find the final agreement: " + quotation.getAgreementFileUrl()
-        // );
-
-        quotation.setStatus(VendorQuotationStatus.AGREEMENT_SENT_TO_VENDOR);
-        quotation.setUpdatedBy(userId);
-
-        return mapToResponse(vendorQuotationRepository.save(quotation));
-    }
     private void sendFinalAgreementMail(
             String vendorEmail,
             Vendor vendor,

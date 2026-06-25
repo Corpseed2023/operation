@@ -43,7 +43,7 @@ public class VendorQuotationResponseDto {
     private String warrantyTerms;
     private String remarks;
 
-    private String quotationAttachmentUrl;
+    private List<VendorQuotationDocumentResponseDto> documents;
 
     private String status;
 
