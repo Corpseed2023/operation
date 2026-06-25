@@ -38,6 +38,16 @@ public class VendorQuotationController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{quotationId}/send-agreement-to-vendor")
+    public ResponseEntity<VendorQuotationResponseDto> sendAgreementToVendor(
+            @PathVariable Long quotationId,
+            @RequestParam Long userId
+    ) {
+        return ResponseEntity.ok(
+                vendorQuotationService.sendAgreementToVendor(quotationId, userId)
+        );
+    }
+
 
     @PostMapping
     public ResponseEntity<VendorQuotationResponseDto> createQuotation(

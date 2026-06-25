@@ -79,4 +79,5 @@ public enum VendorQuotationStatus {
      */
     CANCELLED,
     AGREEMENT_SENT_TO_PROCUREMENT,
+    AGREEMENT_SENT_TO_VENDOR
 }

@@ -5,6 +5,7 @@ import com.doc.dto.vendor.VendorQuotationItemResponseDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
 import com.doc.entity.vendor.*;
+import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.vendor.RFQVendorRepository;
 import com.doc.repository.vendor.VendorQuotationRepository;
@@ -331,5 +332,44 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         VendorQuotation saved = vendorQuotationRepository.save(quotation);
 
         return mapToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public VendorQuotationResponseDto sendAgreementToVendor(Long quotationId, Long userId) {
+
+        VendorQuotation quotation = vendorQuotationRepository.findByIdAndIsDeletedFalse(quotationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor quotation not found",
+                        "ERR_VENDOR_QUOTATION_NOT_FOUND"
+                ));
+
+        if (quotation.getAgreementFileUrl() == null || quotation.getAgreementFileUrl().trim().isEmpty()) {
+            throw new ValidationException(
+                    "Agreement file is required before sending to vendor",
+                    "ERR_AGREEMENT_FILE_REQUIRED"
+            );
+        }
+
+        Vendor vendor = quotation.getVendor();
+
+        if (vendor == null || vendor.getEmail() == null || vendor.getEmail().trim().isEmpty()) {
+            throw new ValidationException(
+                    "Vendor email is missing",
+                    "ERR_VENDOR_EMAIL_MISSING"
+            );
+        }
+
+        // TODO: call your existing mail service here
+        // mailService.sendMail(
+        //        vendor.getEmail(),
+        //        "Final Service Agreement",
+        //        "Dear " + vendor.getName() + ", please find the final agreement: " + quotation.getAgreementFileUrl()
+        // );
+
+        quotation.setStatus(VendorQuotationStatus.AGREEMENT_SENT_TO_VENDOR);
+        quotation.setUpdatedBy(userId);
+
+        return mapToResponse(vendorQuotationRepository.save(quotation));
     }
 }
