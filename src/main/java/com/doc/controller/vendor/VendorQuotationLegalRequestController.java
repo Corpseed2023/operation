@@ -1,7 +1,7 @@
 package com.doc.controller.vendor;
 
+import com.doc.dto.vendor.SendAgreementToProcurementRequestDto;
 import com.doc.dto.vendor.VendorAgreementDecisionRequestDto;
-import com.doc.dto.vendor.VendorAgreementPrepareRequestDto;
 import com.doc.dto.vendor.VendorQuotationLegalRequestDto;
 import com.doc.dto.vendor.VendorQuotationLegalResponseDto;
 import com.doc.service.vendor.VendorQuotationLegalRequestService;
@@ -26,10 +26,9 @@ public class VendorQuotationLegalRequestController {
     public ResponseEntity<List<VendorQuotationLegalResponseDto>> getAllLegalRequests(
             @RequestParam(required = false) Long assignedToLegal
     ) {
-        List<VendorQuotationLegalResponseDto> response =
-                legalRequestService.getAllLegalRequests(assignedToLegal);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                legalRequestService.getAllLegalRequests(assignedToLegal)
+        );
     }
 
     @PostMapping
@@ -37,10 +36,32 @@ public class VendorQuotationLegalRequestController {
     public ResponseEntity<VendorQuotationLegalResponseDto> createLegalRequest(
             @Valid @RequestBody VendorQuotationLegalRequestDto requestDto
     ) {
-        VendorQuotationLegalResponseDto response =
-                legalRequestService.createLegalRequest(requestDto);
-
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return new ResponseEntity<>(
+                legalRequestService.createLegalRequest(requestDto),
+                HttpStatus.CREATED
+        );
     }
 
+    @PutMapping("/{id}/send-to-procurement")
+    @Operation(summary = "Upload agreement PDF and send to procurement")
+    public ResponseEntity<VendorQuotationLegalResponseDto> sendToProcurement(
+            @PathVariable Long id,
+            @RequestParam Long userId,
+            @Valid @RequestBody SendAgreementToProcurementRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(
+                legalRequestService.sendAgreementToProcurement(id, userId, requestDto)
+        );
+    }
+
+    @PutMapping("/{id}/decision")
+    @Operation(summary = "Procurement marks agreement agreed or disagreed")
+    public ResponseEntity<VendorQuotationLegalResponseDto> agreementDecision(
+            @PathVariable Long id,
+            @Valid @RequestBody VendorAgreementDecisionRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(
+                legalRequestService.agreementDecision(id, requestDto)
+        );
+    }
 }

@@ -55,5 +55,6 @@ public class VendorQuotationResponseDto {
 
     private Boolean deleted;
 
+    private String agreementFileUrl;
     private List<VendorQuotationItemResponseDto> items;
 }

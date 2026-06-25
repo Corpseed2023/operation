@@ -1,12 +1,7 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.vendor.VendorAgreementDecisionRequestDto;
-import com.doc.dto.vendor.VendorAgreementPrepareRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalResponseDto;
-import com.doc.entity.vendor.VendorQuotation;
-import com.doc.entity.vendor.VendorQuotationLegalRequest;
-import com.doc.entity.vendor.VendorQuotationLegalRequestStatus;
+import com.doc.dto.vendor.*;
+import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.vendor.VendorQuotationLegalRequestRepository;
@@ -86,6 +81,91 @@ public class VendorQuotationLegalRequestServiceImpl
     }
 
 
+    @Override
+    @Transactional
+    public VendorQuotationLegalResponseDto sendAgreementToProcurement(
+            Long id,
+            Long userId,
+            SendAgreementToProcurementRequestDto requestDto
+    ) {
+        VendorQuotationLegalRequest legalRequest = legalRequestRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor quotation legal request not found",
+                        "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
+                ));
+
+        if (legalRequest.isDeleted()) {
+            throw new ResourceNotFoundException(
+                    "Vendor quotation legal request not found",
+                    "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
+            );
+        }
+
+        legalRequest.setAgreementFileUrl(requestDto.getAgreementFileUrl());
+        legalRequest.setStatusReason(requestDto.getRemarks());
+        legalRequest.setSentToProcurementBy(userId);
+        legalRequest.setSentToProcurementDate(new Date());
+        legalRequest.setUpdatedBy(userId);
+        legalRequest.setStatus(
+                VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT
+        );
+
+        VendorQuotation quotation = legalRequest.getVendorQuotation();
+
+        if (quotation != null) {
+            quotation.setAgreementFileUrl(requestDto.getAgreementFileUrl());
+            quotation.setStatus(VendorQuotationStatus.AGREEMENT_SENT_TO_PROCUREMENT);
+            quotation.setUpdatedBy(userId);
+            vendorQuotationRepository.save(quotation);
+        }
+
+        return mapToResponse(legalRequestRepository.save(legalRequest));
+    }
+
+    @Override
+    @Transactional
+    public VendorQuotationLegalResponseDto agreementDecision(
+            Long id,
+            VendorAgreementDecisionRequestDto requestDto
+    ) {
+        VendorQuotationLegalRequest legalRequest = legalRequestRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor quotation legal request not found",
+                        "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
+                ));
+
+        if (legalRequest.isDeleted()) {
+            throw new ResourceNotFoundException(
+                    "Vendor quotation legal request not found",
+                    "ERR_VENDOR_QUOTATION_LEGAL_REQUEST_NOT_FOUND"
+            );
+        }
+
+        if (legalRequest.getStatus() != VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT) {
+            throw new ValidationException(
+                    "Agreement decision can be taken only after agreement is sent to procurement",
+                    "ERR_AGREEMENT_NOT_SENT_TO_PROCUREMENT"
+            );
+        }
+
+        if ("AGREED".equalsIgnoreCase(requestDto.getDecision())) {
+            legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_AGREED);
+        } else if ("DISAGREED".equalsIgnoreCase(requestDto.getDecision())) {
+            legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_DISAGREED);
+        } else {
+            throw new ValidationException(
+                    "Decision must be AGREED or DISAGREED",
+                    "ERR_INVALID_AGREEMENT_DECISION"
+            );
+        }
+
+        legalRequest.setDecisionBy(requestDto.getDecisionBy());
+        legalRequest.setDecisionDate(new Date());
+        legalRequest.setDecisionRemarks(requestDto.getRemarks());
+        legalRequest.setUpdatedBy(requestDto.getDecisionBy());
+
+        return mapToResponse(legalRequestRepository.save(legalRequest));
+    }
 
     private VendorQuotationLegalResponseDto mapToResponse(
             VendorQuotationLegalRequest legalRequest
@@ -114,6 +194,15 @@ public class VendorQuotationLegalRequestServiceImpl
                 legalRequest.getStatus() != null ? legalRequest.getStatus().name() : null
         );
 
+        response.setAgreementFileUrl(legalRequest.getAgreementFileUrl());
+
+        if (legalRequest.getVendorQuotation() != null) {
+            VendorQuotation quotation = legalRequest.getVendorQuotation();
+
+            response.setVendorQuotationId(quotation.getId());
+            response.setQuotationNumber(quotation.getQuotationNumber());
+            response.setQuotationAttachmentUrl(quotation.getQuotationAttachmentUrl());
+        }
         response.setAssignedToLegal(legalRequest.getAssignedToLegal());
         response.setCreatedBy(legalRequest.getCreatedBy());
         response.setUpdatedBy(legalRequest.getUpdatedBy());

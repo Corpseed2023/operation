@@ -31,4 +31,6 @@ public class VendorQuotationLegalResponseDto {
     private Date updatedDate;
 
     private Boolean deleted;
+    private String agreementFileUrl;
+    private String quotationAttachmentUrl;
 }
