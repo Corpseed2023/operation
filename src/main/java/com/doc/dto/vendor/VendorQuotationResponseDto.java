@@ -24,6 +24,7 @@ public class VendorQuotationResponseDto {
     private String quotationNumber;
 
     private Date quotationDate;
+    private Date validFrom;
     private Date validTill;
 
     private Integer versionNo;

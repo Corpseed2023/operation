@@ -26,6 +26,8 @@ public class VendorQuotationRequestDto {
 
     private Date quotationDate;
 
+    private Date validFrom;
+
     private Date validTill;
 
     private String currency;
