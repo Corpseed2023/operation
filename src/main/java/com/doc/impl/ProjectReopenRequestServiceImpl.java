@@ -23,6 +23,8 @@ import com.doc.repository.UserRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.service.ProjectReopenRequestService;
 import com.doc.service.ProjectService;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,8 @@ import java.util.List;
 @Service
 @Transactional
 public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestService {
+
+    private static final Logger logger = LogManager.getLogger(ProjectReopenRequestServiceImpl.class);
 
     private final ProjectReopenRequestRepository projectReopenRequestRepository;
     private final ProjectRepository projectRepository;
@@ -64,107 +68,67 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
         this.projectService = projectService;
     }
 
-
     @Override
     public ProjectReopenRequestResponseDto createReopenRequest(ProjectReopenCreateRequestDto dto) {
+        logger.info("Creating reopen request for projectId: {}, detectedAtAssignmentId: {}, responsibleAssignmentId: {}",
+                dto.getProjectId(), dto.getDetectedAtAssignmentId(), dto.getResponsibleAssignmentId());
 
         Project project = projectRepository.findActiveUserById(dto.getProjectId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project not found",
-                        "PROJECT_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.error("Project not found with id: {}", dto.getProjectId());
+                    return new ResourceNotFoundException("Project not found", "PROJECT_NOT_FOUND");
+                });
 
         ProjectMilestoneAssignment detectedAtAssignment =
                 projectMilestoneAssignmentRepository.findActiveUserById(dto.getDetectedAtAssignmentId())
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Detected milestone assignment not found",
-                                "DETECTED_ASSIGNMENT_NOT_FOUND"
-                        ));
+                        .orElseThrow(() -> {
+                            logger.error("Detected milestone assignment not found with id: {}", dto.getDetectedAtAssignmentId());
+                            return new ResourceNotFoundException("Detected milestone assignment not found", "DETECTED_ASSIGNMENT_NOT_FOUND");
+                        });
 
         ProjectMilestoneAssignment responsibleAssignment =
                 projectMilestoneAssignmentRepository.findActiveUserById(dto.getResponsibleAssignmentId())
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Responsible milestone assignment not found",
-                                "RESPONSIBLE_ASSIGNMENT_NOT_FOUND"
-                        ));
+                        .orElseThrow(() -> {
+                            logger.error("Responsible milestone assignment not found with id: {}", dto.getResponsibleAssignmentId());
+                            return new ResourceNotFoundException("Responsible milestone assignment not found", "RESPONSIBLE_ASSIGNMENT_NOT_FOUND");
+                        });
 
+        logger.debug("Validating assignments belong to project");
         validateAssignmentBelongsToProject(detectedAtAssignment, project);
         validateAssignmentBelongsToProject(responsibleAssignment, project);
 
         if (detectedAtAssignment.getId().equals(responsibleAssignment.getId())) {
-            throw new ValidationException(
-                    "Detected assignment and responsible assignment cannot be same",
-                    "INVALID_REOPEN_ASSIGNMENT_SELECTION"
-            );
+            logger.warn("Detected and responsible assignment are the same for projectId: {}", dto.getProjectId());
+            throw new ValidationException("Detected assignment and responsible assignment cannot be same", "INVALID_REOPEN_ASSIGNMENT_SELECTION");
         }
 
-        /*
-         * Reopen is allowed only when responsible milestone was already completed.
-         *
-         * Example:
-         * Filing / Technical = COMPLETED
-         * Liaison / Certification finds mistake later.
-         */
-        if (responsibleAssignment.getStatus() == null ||
-                !"COMPLETED".equalsIgnoreCase(responsibleAssignment.getStatus().getName())) {
-            throw new ValidationException(
-                    "Responsible milestone must be COMPLETED before project can be reopened",
-                    "RESPONSIBLE_MILESTONE_NOT_COMPLETED"
-            );
+        if (responsibleAssignment.getStatus() == null || !"COMPLETED".equalsIgnoreCase(responsibleAssignment.getStatus().getName())) {
+            logger.warn("Responsible milestone is not COMPLETED for assignmentId: {}", responsibleAssignment.getId());
+            throw new ValidationException("Responsible milestone must be COMPLETED before project can be reopened", "RESPONSIBLE_MILESTONE_NOT_COMPLETED");
         }
 
-        /*
-         * requestedBy will be auto-detected from detectedAtAssignment.
-         *
-         * Example:
-         * detectedAtAssignment = Liaison assignment
-         * assignedUser = Liaison user
-         */
         User requestedBy = detectedAtAssignment.getAssignedUser();
-
         if (requestedBy == null) {
-            throw new ValidationException(
-                    "Detected milestone does not have assigned user",
-                    "DETECTED_ASSIGNMENT_USER_NOT_FOUND"
-            );
+            logger.error("Detected milestone has no assigned user for assignmentId: {}", detectedAtAssignment.getId());
+            throw new ValidationException("Detected milestone does not have assigned user", "DETECTED_ASSIGNMENT_USER_NOT_FOUND");
         }
 
         if (requestedBy.isDeleted() || !requestedBy.isActive()) {
-            throw new ValidationException(
-                    "Detected milestone assigned user is not active",
-                    "REQUESTED_BY_USER_NOT_ACTIVE"
-            );
+            logger.warn("RequestedBy user is not active/deleted. userId: {}", requestedBy.getId());
+            throw new ValidationException("Detected milestone assigned user is not active", "REQUESTED_BY_USER_NOT_ACTIVE");
         }
 
-        /*
-         * First approval manager:
-         * requestedBy.getManager()
-         *
-         * Example:
-         * Liaison user -> Liaison Manager
-         */
         User requesterManager = requestedBy.getManager();
-
         if (requesterManager == null) {
-            throw new ValidationException(
-                    "Requester user does not have manager mapped",
-                    "REQUESTER_MANAGER_NOT_MAPPED"
-            );
+            logger.error("Requester has no manager mapped. userId: {}", requestedBy.getId());
+            throw new ValidationException("Requester user does not have manager mapped", "REQUESTER_MANAGER_NOT_MAPPED");
         }
 
+        logger.debug("Validating requester manager");
         validateManager(requesterManager, "Requester manager");
 
-        /*
-         * Second approval manager:
-         * First try responsible assignment assigned user's manager.
-         * If not found, find manager from responsible milestone department.
-         *
-         * Example:
-         * Filing / Technical assignment -> Technical user -> Technical Manager
-         * OR
-         * Filing milestone department -> Technical Department -> Technical Manager
-         */
         User responsibleManager = resolveResponsibleManager(responsibleAssignment);
+        logger.debug("Resolved responsible manager: {}", responsibleManager.getId());
 
         validateManager(responsibleManager, "Responsible manager");
 
@@ -173,21 +137,15 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
                 ProjectReopenRequestStatus.PENDING_RESPONSIBLE_MANAGER_APPROVAL
         );
 
-        boolean pendingExists =
-                projectReopenRequestRepository.existsByProjectIdAndStatusInAndIsDeletedFalse(
-                        project.getId(),
-                        pendingStatuses
-                );
+        boolean pendingExists = projectReopenRequestRepository.existsByProjectIdAndStatusInAndIsDeletedFalse(
+                project.getId(), pendingStatuses);
 
         if (pendingExists) {
-            throw new ValidationException(
-                    "A reopen request is already pending for this project",
-                    "REOPEN_REQUEST_ALREADY_PENDING"
-            );
+            logger.warn("Pending reopen request already exists for projectId: {}", project.getId());
+            throw new ValidationException("A reopen request is already pending for this project", "REOPEN_REQUEST_ALREADY_PENDING");
         }
 
         ProjectReopenRequest request = new ProjectReopenRequest();
-
         request.setProject(project);
         request.setDetectedAtAssignment(detectedAtAssignment);
         request.setResponsibleAssignment(responsibleAssignment);
@@ -210,95 +168,61 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
         request.setDeleted(false);
 
         ProjectReopenRequest saved = projectReopenRequestRepository.save(request);
+        logger.info("Reopen request created successfully. requestId: {}", saved.getId());
 
         return mapToResponseDto(saved);
     }
 
     private User resolveResponsibleManager(ProjectMilestoneAssignment responsibleAssignment) {
+        logger.debug("Resolving responsible manager for assignmentId: {}", responsibleAssignment.getId());
 
-        /*
-         * First priority:
-         * responsible assignment assigned user's manager.
-         *
-         * Example:
-         * Filing assigned to Technical user.
-         * Technical user's manager = Technical Manager.
-         */
         if (responsibleAssignment.getAssignedUser() != null) {
-
             User responsibleUser = responsibleAssignment.getAssignedUser();
-
             if (responsibleUser.getManager() != null) {
                 User manager = responsibleUser.getManager();
-
-                if (!manager.isDeleted()
-                        && manager.isActive()
-                        && manager.isManagerFlag()) {
+                if (!manager.isDeleted() && manager.isActive() && manager.isManagerFlag()) {
+                    logger.debug("Found manager from responsible user: {}", manager.getId());
                     return manager;
                 }
             }
         }
 
-        /*
-         * Second priority:
-         * responsible milestone department manager.
-         *
-         * Example:
-         * Filing milestone has Technical department.
-         * Find active manager from Technical department.
-         */
         Department responsibleDepartment = getFirstDepartment(responsibleAssignment);
-
         if (responsibleDepartment == null || responsibleDepartment.getId() == null) {
-            throw new ValidationException(
-                    "Responsible milestone department not found",
-                    "RESPONSIBLE_DEPARTMENT_NOT_FOUND"
-            );
+            logger.error("Responsible milestone department not found for assignmentId: {}", responsibleAssignment.getId());
+            throw new ValidationException("Responsible milestone department not found", "RESPONSIBLE_DEPARTMENT_NOT_FOUND");
         }
 
-        List<User> managers =
-                userRepository.findActiveManagersByDepartmentId(responsibleDepartment.getId());
-
+        List<User> managers = userRepository.findActiveManagersByDepartmentId(responsibleDepartment.getId());
         if (managers == null || managers.isEmpty()) {
-            throw new ValidationException(
-                    "No active manager found for responsible department: " + responsibleDepartment.getName(),
-                    "RESPONSIBLE_MANAGER_NOT_FOUND"
-            );
+            logger.error("No active manager found for department: {}", responsibleDepartment.getName());
+            throw new ValidationException("No active manager found for responsible department: " + responsibleDepartment.getName(), "RESPONSIBLE_MANAGER_NOT_FOUND");
         }
 
-        /*
-         * If multiple managers exist, first one will be selected.
-         * Later you can add priority flag if needed.
-         */
+        logger.debug("Selected responsible manager from department: {}", managers.get(0).getId());
         return managers.get(0);
     }
 
-
     @Override
-    public ProjectReopenRequestResponseDto requesterManagerDecision(
-            Long requestId,
-            ProjectReopenDecisionDto dto
-    ) {
+    public ProjectReopenRequestResponseDto requesterManagerDecision(Long requestId, ProjectReopenDecisionDto dto) {
+        logger.info("Requester manager decision for requestId: {}, decision: {}", requestId, dto.getDecision());
+
         ProjectReopenRequest request = getActiveRequest(requestId);
 
         if (request.getStatus() != ProjectReopenRequestStatus.PENDING_REQUESTER_MANAGER_APPROVAL) {
-            throw new ValidationException(
-                    "Request is not pending requester manager approval",
-                    "INVALID_REOPEN_REQUEST_STATUS"
-            );
+            logger.warn("Invalid status for requester decision. Current status: {}", request.getStatus());
+            throw new ValidationException("Request is not pending requester manager approval", "INVALID_REOPEN_REQUEST_STATUS");
         }
 
         User actionBy = userRepository.findActiveUserById(dto.getActionById())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Action user not found",
-                        "USER_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.error("Action user not found: {}", dto.getActionById());
+                    return new ResourceNotFoundException("Action user not found", "USER_NOT_FOUND");
+                });
 
         if (!request.getRequesterManager().getId().equals(actionBy.getId())) {
-            throw new ValidationException(
-                    "Only requester manager can approve or reject this step",
-                    "NOT_REQUESTER_MANAGER"
-            );
+            logger.warn("Unauthorized requester manager action. actionBy: {}, requesterManager: {}", dto.getActionById(), request.getRequesterManager().getId());
+            throw new ValidationException("Only requester manager can approve or reject this step", "NOT_REQUESTER_MANAGER");
         }
 
         String decision = normalizeDecision(dto.getDecision());
@@ -310,55 +234,46 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
 
         if ("REJECT".equals(decision)) {
             request.setStatus(ProjectReopenRequestStatus.REJECTED);
+            logger.info("Reopen request rejected by requester manager. requestId: {}", requestId);
             return mapToResponseDto(projectReopenRequestRepository.save(request));
         }
 
-        /*
-         * If requester manager and responsible manager are same,
-         * do not force same user to approve twice.
-         */
         if (request.getRequesterManager().getId().equals(request.getResponsibleManager().getId())) {
-            request.setResponsibleManagerRemarks(
-                    "Auto-approved because requester manager and responsible manager are same."
-            );
+            logger.info("Auto-approving responsible manager step as managers are same. requestId: {}", requestId);
+            request.setResponsibleManagerRemarks("Auto-approved because requester manager and responsible manager are same.");
             request.setResponsibleManagerActionAt(new Date());
             request.setStatus(ProjectReopenRequestStatus.APPROVED);
 
             reopenProject(request, dto.getActionById());
-
             return mapToResponseDto(projectReopenRequestRepository.save(request));
         }
 
         request.setStatus(ProjectReopenRequestStatus.PENDING_RESPONSIBLE_MANAGER_APPROVAL);
+        logger.info("Reopen request moved to responsible manager approval. requestId: {}", requestId);
 
         return mapToResponseDto(projectReopenRequestRepository.save(request));
     }
 
     @Override
-    public ProjectReopenRequestResponseDto responsibleManagerDecision(
-            Long requestId,
-            ProjectReopenDecisionDto dto
-    ) {
+    public ProjectReopenRequestResponseDto responsibleManagerDecision(Long requestId, ProjectReopenDecisionDto dto) {
+        logger.info("Responsible manager decision for requestId: {}, decision: {}", requestId, dto.getDecision());
+
         ProjectReopenRequest request = getActiveRequest(requestId);
 
         if (request.getStatus() != ProjectReopenRequestStatus.PENDING_RESPONSIBLE_MANAGER_APPROVAL) {
-            throw new ValidationException(
-                    "Request is not pending responsible manager approval",
-                    "INVALID_REOPEN_REQUEST_STATUS"
-            );
+            logger.warn("Invalid status for responsible decision. Current status: {}", request.getStatus());
+            throw new ValidationException("Request is not pending responsible manager approval", "INVALID_REOPEN_REQUEST_STATUS");
         }
 
         User actionBy = userRepository.findActiveUserById(dto.getActionById())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Action user not found",
-                        "USER_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.error("Action user not found: {}", dto.getActionById());
+                    return new ResourceNotFoundException("Action user not found", "USER_NOT_FOUND");
+                });
 
         if (!request.getResponsibleManager().getId().equals(actionBy.getId())) {
-            throw new ValidationException(
-                    "Only responsible manager can approve or reject this step",
-                    "NOT_RESPONSIBLE_MANAGER"
-            );
+            logger.warn("Unauthorized responsible manager action. actionBy: {}, responsibleManager: {}", dto.getActionById(), request.getResponsibleManager().getId());
+            throw new ValidationException("Only responsible manager can approve or reject this step", "NOT_RESPONSIBLE_MANAGER");
         }
 
         String decision = normalizeDecision(dto.getDecision());
@@ -370,10 +285,12 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
 
         if ("REJECT".equals(decision)) {
             request.setStatus(ProjectReopenRequestStatus.REJECTED);
+            logger.info("Reopen request rejected by responsible manager. requestId: {}", requestId);
             return mapToResponseDto(projectReopenRequestRepository.save(request));
         }
 
         request.setStatus(ProjectReopenRequestStatus.APPROVED);
+        logger.info("Reopen request approved. Reopening project. requestId: {}", requestId);
 
         reopenProject(request, dto.getActionById());
 
@@ -383,6 +300,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
     @Override
     @Transactional(readOnly = true)
     public List<ProjectReopenRequestResponseDto> getRequesterManagerPendingRequests(Long managerId) {
+        logger.debug("Fetching pending requester manager requests for managerId: {}", managerId);
         return projectReopenRequestRepository
                 .findByRequesterManagerIdAndStatusAndIsDeletedFalse(
                         managerId,
@@ -396,6 +314,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
     @Override
     @Transactional(readOnly = true)
     public List<ProjectReopenRequestResponseDto> getResponsibleManagerPendingRequests(Long managerId) {
+        logger.debug("Fetching pending responsible manager requests for managerId: {}", managerId);
         return projectReopenRequestRepository
                 .findByResponsibleManagerIdAndStatusAndIsDeletedFalse(
                         managerId,
@@ -409,6 +328,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
     @Override
     @Transactional(readOnly = true)
     public List<ProjectReopenRequestResponseDto> getProjectReopenRequests(Long projectId) {
+        logger.debug("Fetching all reopen requests for projectId: {}", projectId);
         return projectReopenRequestRepository
                 .findByProjectIdAndIsDeletedFalseOrderByCreatedDateDesc(projectId)
                 .stream()
@@ -417,26 +337,27 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
     }
 
     private void reopenProject(ProjectReopenRequest request, Long actionById) {
+        logger.info("Reopening project for requestId: {}", request.getId());
 
         Project project = request.getProject();
 
         MilestoneStatus newStatus = milestoneStatusRepository.findByName("NEW")
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Milestone status NEW not found",
-                        "STATUS_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.error("Milestone status NEW not found");
+                    return new ResourceNotFoundException("Milestone status NEW not found", "STATUS_NOT_FOUND");
+                });
 
         ProjectStatus reopenedStatus = projectStatusRepository.findByName("REOPENED")
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project status REOPENED not found",
-                        "STATUS_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.error("Project status REOPENED not found");
+                    return new ResourceNotFoundException("Project status REOPENED not found", "STATUS_NOT_FOUND");
+                });
 
         User changedBy = userRepository.findActiveUserById(actionById)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Action user not found",
-                        "USER_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.error("Action user not found for reopen: {}", actionById);
+                    return new ResourceNotFoundException("Action user not found", "USER_NOT_FOUND");
+                });
 
         List<ProjectMilestoneAssignment> assignments =
                 projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
@@ -446,10 +367,10 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
                 + ". Reason: "
                 + request.getRequestReason();
 
-        for (ProjectMilestoneAssignment assignment : assignments) {
+        logger.debug("Resetting {} milestone assignments", assignments.size());
 
-            if (assignment.getStatus() != null &&
-                    "NEW".equalsIgnoreCase(assignment.getStatus().getName())) {
+        for (ProjectMilestoneAssignment assignment : assignments) {
+            if (assignment.getStatus() != null && "NEW".equalsIgnoreCase(assignment.getStatus().getName())) {
                 continue;
             }
 
@@ -463,21 +384,10 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
 
             assignment.setStatus(newStatus);
             assignment.setStatusReason(reason);
-
             assignment.setStartedDate(null);
             assignment.setCompletedDate(null);
-
-            /*
-             * Full project reopen means current progress becomes 0 dynamically
-             * because no milestone remains COMPLETED.
-             *
-             * Hide all first, then visibility calculation will open only eligible milestone.
-             */
             assignment.setVisible(false);
-            assignment.setVisibilityReason(
-                    "Hidden because project was reopened. Visibility will be recalculated."
-            );
-
+            assignment.setVisibilityReason("Hidden because project was reopened. Visibility will be recalculated.");
             assignment.setUpdatedBy(actionById);
             assignment.setUpdatedDate(new Date());
 
@@ -490,10 +400,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
 
         projectRepository.save(project);
 
-        /*
-         * Recalculate milestone visibility after reset.
-         * This should open only the eligible first milestone based on your existing logic.
-         */
+        logger.info("Project reopened successfully. projectId: {}", project.getId());
         projectService.updateMilestoneVisibilities(project, actionById);
     }
 
@@ -504,6 +411,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
             String reason,
             User changedBy
     ) {
+        logger.debug("Saving milestone status history for assignmentId: {}", assignment.getId());
         MilestoneStatusHistory history = new MilestoneStatusHistory();
         history.setMilestoneAssignment(assignment);
         history.setPreviousStatus(previousStatus);
@@ -517,50 +425,40 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
     }
 
     private ProjectReopenRequest getActiveRequest(Long requestId) {
+        logger.debug("Fetching active reopen request: {}", requestId);
         return projectReopenRequestRepository.findByIdAndIsDeletedFalse(requestId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project reopen request not found",
-                        "PROJECT_REOPEN_REQUEST_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.error("Project reopen request not found: {}", requestId);
+                    return new ResourceNotFoundException("Project reopen request not found", "PROJECT_REOPEN_REQUEST_NOT_FOUND");
+                });
     }
 
-    private void validateAssignmentBelongsToProject(
-            ProjectMilestoneAssignment assignment,
-            Project project
-    ) {
-        if (assignment.getProject() == null ||
-                !assignment.getProject().getId().equals(project.getId())) {
-            throw new ValidationException(
-                    "Milestone assignment does not belong to this project",
-                    "ASSIGNMENT_PROJECT_MISMATCH"
-            );
+    private void validateAssignmentBelongsToProject(ProjectMilestoneAssignment assignment, Project project) {
+        if (assignment.getProject() == null || !assignment.getProject().getId().equals(project.getId())) {
+            logger.error("Assignment project mismatch. assignmentProjectId: {}, expectedProjectId: {}",
+                    assignment.getProject() != null ? assignment.getProject().getId() : null, project.getId());
+            throw new ValidationException("Milestone assignment does not belong to this project", "ASSIGNMENT_PROJECT_MISMATCH");
         }
     }
 
     private void validateManager(User manager, String label) {
         if (!manager.isManagerFlag()) {
-            throw new ValidationException(
-                    label + " must be a manager",
-                    "USER_IS_NOT_MANAGER"
-            );
+            logger.error("{} is not a manager. userId: {}", label, manager.getId());
+            throw new ValidationException(label + " must be a manager", "USER_IS_NOT_MANAGER");
         }
     }
 
     private String normalizeDecision(String decision) {
         if (decision == null || decision.trim().isEmpty()) {
-            throw new ValidationException(
-                    "Decision is required",
-                    "INVALID_DECISION"
-            );
+            logger.error("Decision is empty or null");
+            throw new ValidationException("Decision is required", "INVALID_DECISION");
         }
 
         String value = decision.trim().toUpperCase();
 
         if (!List.of("APPROVE", "REJECT").contains(value)) {
-            throw new ValidationException(
-                    "Decision must be APPROVE or REJECT",
-                    "INVALID_DECISION"
-            );
+            logger.error("Invalid decision value: {}", decision);
+            throw new ValidationException("Decision must be APPROVE or REJECT", "INVALID_DECISION");
         }
 
         return value;
@@ -572,6 +470,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
                 assignment.getProductMilestoneMap().getMilestone() == null ||
                 assignment.getProductMilestoneMap().getMilestone().getDepartments() == null ||
                 assignment.getProductMilestoneMap().getMilestone().getDepartments().isEmpty()) {
+            logger.debug("No department found for assignmentId: {}", assignment != null ? assignment.getId() : null);
             return null;
         }
 
@@ -582,7 +481,7 @@ public class ProjectReopenRequestServiceImpl implements ProjectReopenRequestServ
     }
 
     private ProjectReopenRequestResponseDto mapToResponseDto(ProjectReopenRequest request) {
-
+        logger.debug("Mapping reopen request to response DTO. requestId: {}", request.getId());
         ProjectReopenRequestResponseDto dto = new ProjectReopenRequestResponseDto();
 
         dto.setId(request.getId());
