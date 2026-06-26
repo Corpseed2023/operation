@@ -29,4 +29,6 @@ public interface VendorQuotationRepository extends JpaRepository<VendorQuotation
             ORDER BY q.createdDate DESC
             """)
     List<VendorQuotation> getQuotationsByVendorId(@Param("vendorId") Long vendorId);
+
+
 }

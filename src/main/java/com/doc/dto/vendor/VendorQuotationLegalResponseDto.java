@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Date;
+import java.util.List;
 
 @Getter
 @Setter
@@ -31,6 +32,8 @@ public class VendorQuotationLegalResponseDto {
     private Date updatedDate;
 
     private Boolean deleted;
+
     private String agreementFileUrl;
-    private String quotationAttachmentUrl;
+
+    private List<VendorQuotationDocumentResponseDto> documents;
 }
