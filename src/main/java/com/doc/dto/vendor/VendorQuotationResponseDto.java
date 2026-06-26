@@ -27,7 +27,7 @@ public class VendorQuotationResponseDto {
     private Date validFrom;
     private Date validTill;
 
-    private Integer versionNo;
+//    private Integer versionNo;
     private Boolean latest;
 
     private String currency;

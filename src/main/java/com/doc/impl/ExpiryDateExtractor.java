@@ -60,19 +60,25 @@ public class ExpiryDateExtractor {
 
         while (keywordMatcher.find()) {
 
-            int start = Math.max(0, keywordMatcher.start() - 30);
-            int end = Math.min(normalizedText.length(), keywordMatcher.end() + 150);
+            int contextStart = Math.max(0, keywordMatcher.start() - 30);
+            int contextEnd = Math.min(normalizedText.length(), keywordMatcher.end() + 150);
 
-            String nearbyText = normalizedText.substring(start, end);
+            /*
+             * Important:
+             * Search date only AFTER expiry keyword.
+             * Otherwise Issue Date before "Valid Till Date" can be wrongly selected.
+             */
+            String textAfterKeyword = normalizedText.substring(keywordMatcher.end(), contextEnd);
+            String matchedContext = normalizedText.substring(contextStart, contextEnd);
 
-            Matcher dateMatcher = DATE_PATTERN.matcher(nearbyText);
+            Matcher dateMatcher = DATE_PATTERN.matcher(textAfterKeyword);
 
             while (dateMatcher.find()) {
                 String dateText = dateMatcher.group();
                 LocalDate date = parseDate(dateText);
 
                 if (date != null) {
-                    return new ExpiryDateMatch(date, nearbyText.trim());
+                    return new ExpiryDateMatch(date, matchedContext.trim());
                 }
             }
         }
