@@ -175,9 +175,9 @@ public class VendorQuotationLegalRequestServiceImpl
 
         response.setId(legalRequest.getId());
 
-        if (legalRequest.getVendorQuotation() != null) {
-            VendorQuotation quotation = legalRequest.getVendorQuotation();
+        VendorQuotation quotation = legalRequest.getVendorQuotation();
 
+        if (quotation != null) {
             response.setVendorQuotationId(quotation.getId());
             response.setQuotationNumber(quotation.getQuotationNumber());
 
@@ -185,24 +185,45 @@ public class VendorQuotationLegalRequestServiceImpl
                 response.setVendorId(quotation.getVendor().getId());
                 response.setVendorName(quotation.getVendor().getName());
             }
+
+            if (quotation.getDocuments() != null) {
+                List<VendorQuotationDocumentResponseDto> documentDtos =
+                        quotation.getDocuments()
+                                .stream()
+                                .filter(document -> !document.isDeleted())
+                                .map(document -> {
+                                    VendorQuotationDocumentResponseDto dto =
+                                            new VendorQuotationDocumentResponseDto();
+
+                                    dto.setId(document.getId());
+                                    dto.setQuotationId(quotation.getId());
+                                    dto.setFileName(document.getFileName());
+                                    dto.setFileUrl(document.getFileUrl());
+                                    dto.setFileType(document.getFileType());
+                                    dto.setFileSizeKb(document.getFileSizeKb());
+                                    dto.setCreatedDate(document.getCreatedDate());
+                                    dto.setDeleted(document.isDeleted());
+
+                                    return dto;
+                                })
+                                .toList();
+
+                response.setDocuments(documentDtos);
+            }
         }
 
         response.setLegalRequestTitle(legalRequest.getLegalRequestTitle());
         response.setNotes(legalRequest.getNotes());
         response.setStatusReason(legalRequest.getStatusReason());
+
         response.setStatus(
-                legalRequest.getStatus() != null ? legalRequest.getStatus().name() : null
+                legalRequest.getStatus() != null
+                        ? legalRequest.getStatus().name()
+                        : null
         );
 
         response.setAgreementFileUrl(legalRequest.getAgreementFileUrl());
 
-        if (legalRequest.getVendorQuotation() != null) {
-            VendorQuotation quotation = legalRequest.getVendorQuotation();
-
-            response.setVendorQuotationId(quotation.getId());
-            response.setQuotationNumber(quotation.getQuotationNumber());
-
-        }
         response.setAssignedToLegal(legalRequest.getAssignedToLegal());
         response.setCreatedBy(legalRequest.getCreatedBy());
         response.setUpdatedBy(legalRequest.getUpdatedBy());
