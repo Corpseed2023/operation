@@ -177,7 +177,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         response.setQuotationDate(quotation.getQuotationDate());
         response.setValidFrom(quotation.getValidFrom());
         response.setValidTill(quotation.getValidTill());
-        response.setVersionNo(quotation.getVersionNo());
+//        response.setVersionNo(quotation.getVersionNo());
         response.setLatest(quotation.isLatest());
         response.setCurrency(quotation.getCurrency());
 

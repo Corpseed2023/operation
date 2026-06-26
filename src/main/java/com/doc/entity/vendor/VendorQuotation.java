@@ -20,10 +20,6 @@ import java.util.List;
 @Table(
         name = "vendor_quotations",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_rfq_vendor_quotation_version",
-                        columnNames = {"rfq_vendor_id", "version_no"}
-                )
         },
         indexes = {
                 @Index(name = "idx_quotation_number", columnList = "quotation_number", unique = true),
@@ -105,15 +101,15 @@ public class  VendorQuotation {
     @Column(name = "valid_till")
     private Date validTill;
 
-    /**
-     * Quotation version number.
-     *
-     * Example:
-     * Vendor first submitted V1.
-     * Later revised quotation becomes V2.
-     */
-    @Column(name = "version_no", nullable = false)
-    private Integer versionNo = 1;
+//    /**
+//     * Quotation version number.
+//     *
+//     * Example:
+//     * Vendor first submitted V1.
+//     * Later revised quotation becomes V2.
+//     */
+//    @Column(name = "version_no", nullable = false)
+//    private Integer versionNo = 1;
 
     @Column(name = "agreement_file_url", length = 500)
     private String agreementFileUrl;
