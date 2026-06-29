@@ -24,6 +24,7 @@ public class VendorQuotationLegalRequestServiceImpl
     private final VendorQuotationRepository vendorQuotationRepository;
     private final VendorQuotationLegalRequestRepository legalRequestRepository;
 
+
     @Override
     @Transactional
     public VendorQuotationLegalResponseDto createLegalRequest(
@@ -102,7 +103,7 @@ public class VendorQuotationLegalRequestServiceImpl
         }
 
         legalRequest.setAgreementFileUrl(requestDto.getAgreementFileUrl());
-        legalRequest.setStatusReason(requestDto.getRemarks());
+        legalRequest.setStatusReason(requestDto.getRemarks()) ;
         legalRequest.setSentToProcurementBy(userId);
         legalRequest.setSentToProcurementDate(new Date());
         legalRequest.setUpdatedBy(userId);
