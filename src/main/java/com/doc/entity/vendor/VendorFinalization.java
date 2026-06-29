@@ -194,6 +194,16 @@
         private Date updatedDate;
     
         private boolean isDeleted = false;
+
+        @Column(name = "accounts_remark", length = 1000)
+        private String accountsRemark;
+
+        @Column(name = "accounts_verified_by")
+        private Long accountsVerifiedBy;
+
+        @Temporal(TemporalType.TIMESTAMP)
+        @Column(name = "accounts_verified_date")
+        private Date accountsVerifiedDate;
     
         @PrePersist
         public void onCreate() {

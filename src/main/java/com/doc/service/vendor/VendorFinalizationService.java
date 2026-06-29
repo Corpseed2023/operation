@@ -1,5 +1,6 @@
 package com.doc.service.vendor;
 
+import com.doc.dto.vendor.AccountsVendorFinalizationRequestDto;
 import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
 import com.doc.dto.vendor.VendorFinalizationRequestDto;
 import com.doc.dto.vendor.VendorFinalizationResponseDto;
@@ -22,4 +23,15 @@ public interface VendorFinalizationService {
     );
 
     List<VendorFinalizationResponseDto> getAllSentToAccounts();
+
+    VendorFinalizationResponseDto approveByAccounts(
+            Long finalizationId,
+            AccountsVendorFinalizationRequestDto requestDto
+    );
+
+    VendorFinalizationResponseDto rejectByAccounts(
+            Long finalizationId,
+            AccountsVendorFinalizationRequestDto requestDto
+    );
+
 }

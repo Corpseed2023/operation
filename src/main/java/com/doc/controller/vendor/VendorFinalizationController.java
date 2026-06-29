@@ -1,5 +1,6 @@
 package com.doc.controller.vendor;
 
+import com.doc.dto.vendor.AccountsVendorFinalizationRequestDto;
 import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
 import com.doc.dto.vendor.VendorFinalizationRequestDto;
 import com.doc.dto.vendor.VendorFinalizationResponseDto;
@@ -64,8 +65,34 @@ public class VendorFinalizationController {
             @PathVariable Long finalizationId,
             @Valid @RequestBody SendFinalVendorToAccountsRequestDto requestDto
     ) {
+
         return ResponseEntity.ok(
                 vendorFinalizationService.sendToAccounts(finalizationId, requestDto)
         );
     }
+
+    @PutMapping("/{finalizationId}/accounts/approve")
+    @Operation(summary = "Approve final vendor by Accounts")
+    public ResponseEntity<VendorFinalizationResponseDto> approveByAccounts(
+            @PathVariable Long finalizationId,
+            @Valid @RequestBody AccountsVendorFinalizationRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(
+                vendorFinalizationService.approveByAccounts(finalizationId, requestDto)
+        );
+    }
+
+    @PutMapping("/{finalizationId}/accounts/reject")
+    @Operation(summary = "Reject final vendor by Accounts")
+    public ResponseEntity<VendorFinalizationResponseDto> rejectByAccounts(
+            @PathVariable Long finalizationId,
+            @Valid @RequestBody AccountsVendorFinalizationRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(
+                vendorFinalizationService.rejectByAccounts(finalizationId, requestDto)
+        );
+    }
+
+
+
 }

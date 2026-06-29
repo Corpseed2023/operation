@@ -1,5 +1,6 @@
 package com.doc.impl.vendor;
 
+import com.doc.dto.vendor.AccountsVendorFinalizationRequestDto;
 import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
 import com.doc.dto.vendor.VendorFinalizationRequestDto;
 import com.doc.dto.vendor.VendorFinalizationResponseDto;
@@ -274,4 +275,111 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
 
         return response;
     }
+
+    @Override
+    @Transactional
+    public VendorFinalizationResponseDto approveByAccounts(
+            Long finalizationId,
+            AccountsVendorFinalizationRequestDto requestDto
+    ) {
+        VendorFinalization finalization = vendorFinalizationRepository
+                .findByIdAndIsDeletedFalse(finalizationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor finalization not found",
+                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
+                ));
+
+        if (!finalization.isSentToAccounts()) {
+            throw new ValidationException(
+                    "Final vendor details are not sent to accounts yet",
+                    "ERR_NOT_SENT_TO_ACCOUNTS"
+            );
+        }
+
+        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_APPROVED) {
+            throw new ValidationException(
+                    "Final vendor already approved by accounts",
+                    "ERR_ALREADY_APPROVED_BY_ACCOUNTS"
+            );
+        }
+
+        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_REJECTED) {
+            throw new ValidationException(
+                    "Rejected final vendor cannot be approved directly",
+                    "ERR_ALREADY_REJECTED_BY_ACCOUNTS"
+            );
+        }
+
+        if (finalization.getStatus() != VendorFinalizationStatus.SENT_TO_ACCOUNTS) {
+            throw new ValidationException(
+                    "Only vendor sent to accounts can be approved",
+                    "ERR_INVALID_FINALIZATION_STATUS"
+            );
+        }
+
+        finalization.setStatus(VendorFinalizationStatus.ACCOUNTS_APPROVED);
+        finalization.setAccountsRemark(requestDto.getAccountsRemark());
+        finalization.setAccountsVerifiedBy(requestDto.getUserId());
+        finalization.setAccountsVerifiedDate(new Date());
+        finalization.setUpdatedBy(requestDto.getUserId());
+
+        VendorFinalization saved = vendorFinalizationRepository.save(finalization);
+
+        return mapToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public VendorFinalizationResponseDto rejectByAccounts(
+            Long finalizationId,
+            AccountsVendorFinalizationRequestDto requestDto
+    ) {
+        VendorFinalization finalization = vendorFinalizationRepository
+                .findByIdAndIsDeletedFalse(finalizationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor finalization not found",
+                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
+                ));
+
+        if (!finalization.isSentToAccounts()) {
+            throw new ValidationException(
+                    "Final vendor details are not sent to accounts yet",
+                    "ERR_NOT_SENT_TO_ACCOUNTS"
+            );
+        }
+
+        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_APPROVED) {
+            throw new ValidationException(
+                    "Approved final vendor cannot be rejected",
+                    "ERR_ALREADY_APPROVED_BY_ACCOUNTS"
+            );
+        }
+
+        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_REJECTED) {
+            throw new ValidationException(
+                    "Final vendor already rejected by accounts",
+                    "ERR_ALREADY_REJECTED_BY_ACCOUNTS"
+            );
+        }
+
+        if (finalization.getStatus() != VendorFinalizationStatus.SENT_TO_ACCOUNTS) {
+            throw new ValidationException(
+                    "Only vendor sent to accounts can be rejected",
+                    "ERR_INVALID_FINALIZATION_STATUS"
+            );
+        }
+
+        finalization.setStatus(VendorFinalizationStatus.ACCOUNTS_REJECTED);
+        finalization.setAccountsRemark(requestDto.getAccountsRemark());
+        finalization.setAccountsVerifiedBy(requestDto.getUserId());
+        finalization.setAccountsVerifiedDate(new Date());
+        finalization.setUpdatedBy(requestDto.getUserId());
+
+        VendorFinalization saved = vendorFinalizationRepository.save(finalization);
+
+        return mapToResponse(saved);
+    }
+
+
+
 }

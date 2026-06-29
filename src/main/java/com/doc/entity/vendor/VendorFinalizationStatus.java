@@ -25,5 +25,20 @@ public enum VendorFinalizationStatus {
     /**
      * Finalization cancelled before onboarding.
      */
-    CANCELLED
+    CANCELLED,
+
+    /**
+     * Finalized vendor details sent to Accounts Department for verification.
+     */
+    SENT_TO_ACCOUNTS,
+
+    /**
+     * Accounts Department verified and approved finalized vendor details.
+     */
+    ACCOUNTS_APPROVED,
+
+    /**
+     * Accounts Department rejected finalized vendor details.
+     */
+    ACCOUNTS_REJECTED
 }
