@@ -1,7 +1,6 @@
 package com.doc.repository.vendor;
 
-import com.doc.entity.vendor.Vendor;
-import com.doc.entity.vendor.VendorStatus;
+import com.doc.entity.vendor.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -47,6 +46,12 @@ public interface VendorRepository extends JpaRepository<Vendor, Long> {
 
     boolean existsByPanNumberAndIsDeletedFalse(String panNumber);
 
-
+//    List<RFQVendor> findByVendorIdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
+//
+//    List<VendorQuotation> findByVendorIdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
+//
+//    List<VendorFinalization> findByVendorIdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
+//
+//    List<VendorOnboarding > findByVendorIdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
 
 }

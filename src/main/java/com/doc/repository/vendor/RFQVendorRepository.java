@@ -51,4 +51,5 @@ public interface RFQVendorRepository extends JpaRepository<RFQVendor, Long> {
             @Param("rfqId") Long rfqId,
             @Param("vendorId") Long vendorId
     );
+    List<RFQVendor> findByVendor_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
 }

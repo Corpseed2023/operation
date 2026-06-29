@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Date;
+import java.util.List;
 
 @Getter
 @Setter
@@ -33,4 +34,9 @@ public class VendorResponseDto {
     private Date updatedDate;
 
     private boolean isDeleted;
+
+    private List<RFQVendorResponseDto> rfqs;
+    private List<VendorQuotationResponseDto> quotations;
+    private List<VendorFinalizationResponseDto> finalizations;
+    private List<VendorOnboardingResponseDto> onboardingForms;
 }

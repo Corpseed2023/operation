@@ -1,8 +1,11 @@
 package com.doc.impl.vendor;
 
+import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
 import com.doc.dto.vendor.VendorFinalizationRequestDto;
 import com.doc.dto.vendor.VendorFinalizationResponseDto;
 import com.doc.entity.vendor.*;
+import com.doc.exception.ResourceNotFoundException;
+import com.doc.exception.ValidationException;
 import com.doc.repository.vendor.*;
 import com.doc.service.vendor.VendorFinalizationService;
 import lombok.RequiredArgsConstructor;
@@ -163,6 +166,50 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         return responseList;
     }
 
+    @Override
+    @Transactional
+    public VendorFinalizationResponseDto sendToAccounts(
+            Long finalizationId,
+            SendFinalVendorToAccountsRequestDto requestDto
+    ) {
+        VendorFinalization finalization = vendorFinalizationRepository
+                .findByIdAndIsDeletedFalse(finalizationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor finalization not found",
+                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
+                ));
+
+        if (finalization.isSentToAccounts()) {
+            throw new ValidationException(
+                    "Final vendor details already sent to accounts",
+                    "ERR_ALREADY_SENT_TO_ACCOUNTS"
+            );
+        }
+
+        finalization.setFinalVendorAttachmentUrl(
+                requestDto.getFinalVendorAttachmentUrl()
+        );
+        finalization.setFinalVendorRemarks(requestDto.getFinalVendorRemarks());
+        finalization.setSentToAccounts(true);
+        finalization.setSentToAccountsBy(requestDto.getUserId());
+        finalization.setSentToAccountsDate(new Date());
+        finalization.setUpdatedBy(requestDto.getUserId());
+
+        VendorFinalization saved = vendorFinalizationRepository.save(finalization);
+
+        return mapToResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorFinalizationResponseDto> getAllSentToAccounts() {
+        return vendorFinalizationRepository
+                .findBySentToAccountsTrueAndIsDeletedFalseOrderBySentToAccountsDateDesc()
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
     private VendorFinalizationResponseDto mapToResponse(VendorFinalization finalization) {
         VendorFinalizationResponseDto response = new VendorFinalizationResponseDto();
 
@@ -218,6 +265,12 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         response.setCreatedDate(finalization.getCreatedDate());
         response.setUpdatedDate(finalization.getUpdatedDate());
         response.setDeleted(finalization.isDeleted());
+
+        response.setFinalVendorAttachmentUrl(finalization.getFinalVendorAttachmentUrl());
+        response.setFinalVendorRemarks(finalization.getFinalVendorRemarks());
+        response.setSentToAccounts(finalization.isSentToAccounts());
+        response.setSentToAccountsBy(finalization.getSentToAccountsBy());
+        response.setSentToAccountsDate(finalization.getSentToAccountsDate());
 
         return response;
     }

@@ -53,4 +53,10 @@ public class VendorFinalizationResponseDto {
     private Date updatedDate;
 
     private Boolean deleted;
+
+    private String finalVendorAttachmentUrl;
+    private String finalVendorRemarks;
+    private Boolean sentToAccounts;
+    private Long sentToAccountsBy;
+    private Date sentToAccountsDate;
 }

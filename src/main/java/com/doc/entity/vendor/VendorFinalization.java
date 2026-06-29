@@ -149,6 +149,22 @@
          */
         @Column(length = 1000)
         private String remarks;
+
+        @Column(name = "final_vendor_attachment_url", length = 500)
+        private String finalVendorAttachmentUrl;
+
+        @Column(name = "final_vendor_remarks", length = 1000)
+        private String finalVendorRemarks;
+
+        @Column(name = "sent_to_accounts", nullable = false)
+        private boolean sentToAccounts = false;
+
+        @Column(name = "sent_to_accounts_by")
+        private Long sentToAccountsBy;
+
+        @Temporal(TemporalType.TIMESTAMP)
+        @Column(name = "sent_to_accounts_date")
+        private Date sentToAccountsDate;
     
         /**
          * Finalization status.

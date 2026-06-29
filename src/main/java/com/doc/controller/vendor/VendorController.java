@@ -40,10 +40,18 @@ public class VendorController {
         return ResponseEntity.ok(response);
     }
 
+
     @GetMapping("/{id}")
     @Operation(summary = "Get Vendor by ID")
     public ResponseEntity<VendorResponseDto> getVendorById(@PathVariable Long id) {
         return ResponseEntity.ok(vendorService.getVendorById(id));
+    }
+
+
+    @GetMapping("/{id}/details")
+    @Operation(summary = "Get Vendor Details, RFQs, Forms Etc By id")
+    public ResponseEntity<VendorResponseDto> getVendorDetailsById(@PathVariable Long id) {
+        return ResponseEntity.ok(vendorService.getVendorDetailsById(id));
     }
 
     @GetMapping

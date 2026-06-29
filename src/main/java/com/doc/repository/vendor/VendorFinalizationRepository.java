@@ -18,4 +18,9 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
             Long rfqVendorId,
             Long quotationItemId
     );
+
+    List<VendorFinalization>
+    findBySentToAccountsTrueAndIsDeletedFalseOrderBySentToAccountsDateDesc();
+
+    List<VendorFinalization> findByVendor_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
 }

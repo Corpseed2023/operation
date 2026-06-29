@@ -1,5 +1,6 @@
 package com.doc.controller.vendor;
 
+import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
 import com.doc.dto.vendor.VendorFinalizationRequestDto;
 import com.doc.dto.vendor.VendorFinalizationResponseDto;
 import com.doc.service.vendor.VendorFinalizationService;
@@ -18,6 +19,12 @@ import java.util.List;
 public class VendorFinalizationController {
 
     private final VendorFinalizationService vendorFinalizationService;
+    @GetMapping("/accounts")
+    public ResponseEntity<List<VendorFinalizationResponseDto>> getAllSentToAccounts() {
+        return ResponseEntity.ok(
+                vendorFinalizationService.getAllSentToAccounts()
+        );
+    }
 
     @PostMapping
     @Operation(summary = "Finalize vendor for RFQ quotation item")
@@ -50,5 +57,15 @@ public class VendorFinalizationController {
                 vendorFinalizationService.getVendorFinalizationsByRfqId(rfqId);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{finalizationId}/send-to-accounts")
+    public ResponseEntity<VendorFinalizationResponseDto> sendToAccounts(
+            @PathVariable Long finalizationId,
+            @Valid @RequestBody SendFinalVendorToAccountsRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(
+                vendorFinalizationService.sendToAccounts(finalizationId, requestDto)
+        );
     }
 }

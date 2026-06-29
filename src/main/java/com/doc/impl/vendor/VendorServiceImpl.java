@@ -1,5 +1,7 @@
 package com.doc.impl.vendor;
-
+import com.doc.dto.vendor.*;
+import com.doc.entity.vendor.*;
+import com.doc.dto.vendor.RFQVendorResponseDto;
 import com.doc.dto.vendor.VendorRequestDto;
 import com.doc.dto.vendor.VendorResponseDto;
 import com.doc.entity.user.User;
@@ -11,6 +13,7 @@ import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.vendor.VendorMailService;
 import com.doc.service.vendor.VendorService;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +28,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.doc.repository.vendor.RFQVendorRepository;
+import com.doc.repository.vendor.VendorQuotationRepository;
+import com.doc.repository.vendor.VendorFinalizationRepository;
+import com.doc.repository.vendor.VendorOnboardingRepository;
 @Service
 public class VendorServiceImpl implements VendorService {
 
@@ -34,14 +41,27 @@ public class VendorServiceImpl implements VendorService {
     private final VendorMailService vendorMailService;
     private final UserRepository userRepository;
 
+    private final RFQVendorRepository rfqVendorRepository;
+    private final VendorQuotationRepository vendorQuotationRepository;
+    private final VendorFinalizationRepository vendorFinalizationRepository;
+    private final VendorOnboardingRepository vendorOnboardingRepository;
+
     public VendorServiceImpl(
             VendorRepository vendorRepository,
             VendorMailService vendorMailService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            RFQVendorRepository rfqVendorRepository,
+            VendorQuotationRepository vendorQuotationRepository,
+            VendorFinalizationRepository vendorFinalizationRepository,
+            VendorOnboardingRepository vendorOnboardingRepository
     ) {
         this.vendorRepository = vendorRepository;
         this.vendorMailService = vendorMailService;
         this.userRepository = userRepository;
+        this.rfqVendorRepository = rfqVendorRepository;
+        this.vendorQuotationRepository = vendorQuotationRepository;
+        this.vendorFinalizationRepository = vendorFinalizationRepository;
+        this.vendorOnboardingRepository = vendorOnboardingRepository;
     }
 
     @Override
@@ -137,6 +157,72 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public VendorResponseDto getVendorDetailsById(Long id) {
+
+        Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor not found",
+                        "ERR_VENDOR_NOT_FOUND"
+                ));
+
+        VendorResponseDto response = mapEntityToDto(vendor);
+
+        response.setRfqs(
+                rfqVendorRepository
+                        .findByVendor_IdAndIsDeletedFalseOrderByCreatedDateDesc(id)
+                        .stream()
+                        .map(rfqVendor -> {
+                            RFQVendorResponseDto dto = new RFQVendorResponseDto();
+                            dto.setRfqVendorId(rfqVendor.getId());
+
+                            if (rfqVendor.getVendor() != null) {
+                                dto.setVendorId(rfqVendor.getVendor().getId());
+                                dto.setVendorName(rfqVendor.getVendor().getName());
+                                dto.setVendorEmail(rfqVendor.getVendor().getEmail());
+                                dto.setVendorMobile(rfqVendor.getVendor().getMobile());
+                                dto.setGstNumber(rfqVendor.getVendor().getGstNumber());
+                                dto.setPanNumber(rfqVendor.getVendor().getPanNumber());
+                                dto.setVendorStatus(
+                                        rfqVendor.getVendor().getStatus() != null
+                                                ? rfqVendor.getVendor().getStatus().name()
+                                                : null
+                                );
+                            }
+
+                            return dto;
+                        })
+                        .toList()
+        );
+
+        response.setQuotations(
+                vendorQuotationRepository
+                        .getQuotationsByVendorId(id)
+                        .stream()
+                        .map(this::mapQuotationToResponse)
+                        .toList()
+        );
+
+        response.setFinalizations(
+                vendorFinalizationRepository
+                        .findByVendor_IdAndIsDeletedFalseOrderByCreatedDateDesc(id)
+                        .stream()
+                        .map(this::mapFinalizationToResponse)
+                        .toList()
+        );
+
+        response.setOnboardingForms(
+                vendorOnboardingRepository
+                        .findByVendorFinalization_Vendor_IdAndIsDeletedFalseOrderByCreatedDateDesc(id)
+                        .stream()
+                        .map(this::mapOnboardingToResponse)
+                        .toList()
+        );
+
+        return response;
+    }
+
+    @Override
     public Page<VendorResponseDto> getAllVendors(Long userId, int page, int size, String keyword) {
 
         // Validate user
@@ -213,5 +299,133 @@ public class VendorServiceImpl implements VendorService {
         return dto;
     }
 
+    private VendorQuotationResponseDto mapQuotationToResponse(VendorQuotation quotation) {
+        VendorQuotationResponseDto dto = new VendorQuotationResponseDto();
 
+        dto.setId(quotation.getId());
+
+        if (quotation.getRfq() != null) {
+            dto.setRfqId(quotation.getRfq().getId());
+        }
+
+        if (quotation.getRfqVendor() != null) {
+            dto.setRfqVendorId(quotation.getRfqVendor().getId());
+        }
+
+        if (quotation.getVendor() != null) {
+            dto.setVendorId(quotation.getVendor().getId());
+            dto.setVendorName(quotation.getVendor().getName());
+            dto.setVendorEmail(quotation.getVendor().getEmail());
+            dto.setVendorMobile(quotation.getVendor().getMobile());
+        }
+
+        dto.setQuotationNumber(quotation.getQuotationNumber());
+        dto.setQuotationDate(quotation.getQuotationDate());
+        dto.setValidFrom(quotation.getValidFrom());
+        dto.setValidTill(quotation.getValidTill());
+        dto.setLatest(quotation.isLatest());
+        dto.setCurrency(quotation.getCurrency());
+        dto.setSubtotalAmount(quotation.getSubtotalAmount());
+        dto.setTaxAmount(quotation.getTaxAmount());
+        dto.setGrandTotal(quotation.getGrandTotal());
+        dto.setDeliveryDays(quotation.getDeliveryDays());
+        dto.setPaymentTerms(quotation.getPaymentTerms());
+        dto.setWarrantyTerms(quotation.getWarrantyTerms());
+        dto.setRemarks(quotation.getRemarks());
+        dto.setStatus(quotation.getStatus() != null ? quotation.getStatus().name() : null);
+        dto.setCreatedBy(quotation.getCreatedBy());
+        dto.setUpdatedBy(quotation.getUpdatedBy());
+        dto.setCreatedDate(quotation.getCreatedDate());
+        dto.setUpdatedDate(quotation.getUpdatedDate());
+        dto.setDeleted(quotation.isDeleted());
+        dto.setAgreementFileUrl(quotation.getAgreementFileUrl());
+
+        return dto;
+    }
+
+    private VendorFinalizationResponseDto mapFinalizationToResponse(VendorFinalization finalization) {
+        VendorFinalizationResponseDto dto = new VendorFinalizationResponseDto();
+
+        dto.setId(finalization.getId());
+
+        if (finalization.getRfq() != null) {
+            dto.setRfqId(finalization.getRfq().getId());
+            dto.setRfqNumber(finalization.getRfq().getRfqNumber());
+        }
+
+        if (finalization.getRfqVendor() != null) {
+            dto.setRfqVendorId(finalization.getRfqVendor().getId());
+        }
+
+        if (finalization.getVendor() != null) {
+            dto.setVendorId(finalization.getVendor().getId());
+            dto.setVendorName(finalization.getVendor().getName());
+            dto.setVendorEmail(finalization.getVendor().getEmail());
+            dto.setVendorMobile(finalization.getVendor().getMobile());
+        }
+
+        if (finalization.getQuotation() != null) {
+            dto.setQuotationId(finalization.getQuotation().getId());
+            dto.setQuotationNumber(finalization.getQuotation().getQuotationNumber());
+        }
+
+        if (finalization.getQuotationItem() != null) {
+            dto.setQuotationItemId(finalization.getQuotationItem().getId());
+            dto.setQuotationItemName(finalization.getQuotationItem().getItemName());
+        }
+
+        dto.setDescription(finalization.getDescription());
+        dto.setFinalizedQuantity(finalization.getFinalizedQuantity());
+        dto.setUnit(finalization.getUnit());
+        dto.setFinalizedUnitRate(finalization.getFinalizedUnitRate());
+        dto.setFinalizedAmount(finalization.getFinalizedAmount());
+        dto.setTaxPercent(finalization.getTaxPercent());
+        dto.setTaxAmount(finalization.getTaxAmount());
+        dto.setTotalFinalizedAmount(finalization.getTotalFinalizedAmount());
+        dto.setFinalizationReason(finalization.getFinalizationReason());
+        dto.setRemarks(finalization.getRemarks());
+        dto.setStatus(finalization.getStatus() != null ? finalization.getStatus().name() : null);
+        dto.setFinalizedBy(finalization.getFinalizedBy());
+        dto.setFinalizedDate(finalization.getFinalizedDate());
+        dto.setCreatedBy(finalization.getCreatedBy());
+        dto.setUpdatedBy(finalization.getUpdatedBy());
+        dto.setCreatedDate(finalization.getCreatedDate());
+        dto.setUpdatedDate(finalization.getUpdatedDate());
+        dto.setDeleted(finalization.isDeleted());
+
+        dto.setFinalVendorAttachmentUrl(finalization.getFinalVendorAttachmentUrl());
+        dto.setFinalVendorRemarks(finalization.getFinalVendorRemarks());
+        dto.setSentToAccounts(finalization.isSentToAccounts());
+        dto.setSentToAccountsBy(finalization.getSentToAccountsBy());
+        dto.setSentToAccountsDate(finalization.getSentToAccountsDate());
+
+        return dto;
+    }
+
+    private VendorOnboardingResponseDto mapOnboardingToResponse(VendorOnboarding onboarding) {
+        VendorOnboardingResponseDto dto = new VendorOnboardingResponseDto();
+
+        dto.setId(onboarding.getId());
+        dto.setOnboardingNumber(onboarding.getOnboardingNumber());
+        dto.setServiceCategory(onboarding.getServiceCategory());
+        dto.setOnboardedFor(onboarding.getOnboardedFor());
+        dto.setRemarks(onboarding.getRemarks());
+        dto.setStatus(onboarding.getStatus() != null ? onboarding.getStatus().name() : null);
+        dto.setCreatedBy(onboarding.getCreatedBy());
+        dto.setUpdatedBy(onboarding.getUpdatedBy());
+        dto.setCreatedDate(onboarding.getCreatedDate());
+        dto.setUpdatedDate(onboarding.getUpdatedDate());
+        dto.setDeleted(onboarding.isDeleted());
+
+        if (onboarding.getVendorFinalization() != null) {
+            dto.setVendorFinalizationId(onboarding.getVendorFinalization().getId());
+
+            if (onboarding.getVendorFinalization().getVendor() != null) {
+                dto.setVendorId(onboarding.getVendorFinalization().getVendor().getId());
+                dto.setVendorName(onboarding.getVendorFinalization().getVendor().getName());
+            }
+        }
+
+        return dto;
+    }
 }

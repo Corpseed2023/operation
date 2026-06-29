@@ -10,6 +10,9 @@ public interface VendorService {
 
     VendorResponseDto getVendorById(Long id);
 
+    VendorResponseDto getVendorDetailsById(Long id);
+
+
     VendorResponseDto updateVendor(Long id, Long userId, VendorRequestDto dto);
 
     void deleteVendor(Long id);
