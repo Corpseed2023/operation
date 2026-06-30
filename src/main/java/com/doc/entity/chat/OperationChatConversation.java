@@ -74,4 +74,9 @@ public class OperationChatConversation {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    private Long closedBy;
+    private LocalDateTime closedAt;
+    private Long reopenedBy;
+    private LocalDateTime reopenedAt;
 }

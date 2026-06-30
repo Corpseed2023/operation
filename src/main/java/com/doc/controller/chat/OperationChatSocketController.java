@@ -21,4 +21,15 @@ public class OperationChatSocketController {
 
 
     }
+
+    @MessageMapping("/operation-chat/{conversationId}/close")
+    public void closeChat(@DestinationVariable Long conversationId, @Payload Long userId) {
+        operationChatService.closeChat(conversationId, userId);
+    }
+
+    @MessageMapping("/operation-chat/{conversationId}/reopen")
+    public void reopenChat(@DestinationVariable Long conversationId, @Payload Long userId) {
+        operationChatService.reopenChat(conversationId, userId);
+    }
+
 }

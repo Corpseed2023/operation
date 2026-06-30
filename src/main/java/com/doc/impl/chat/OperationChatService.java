@@ -144,26 +144,32 @@ public class OperationChatService {
             throw new RuntimeException("Sender id is required");
         }
 
+        // Fetch conversation
         OperationChatConversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Chat conversation not found"));
 
+        // Validation checks
         if (conversation.isDeleted()) {
             throw new RuntimeException("Chat conversation is deleted");
         }
 
         if (conversation.getStatus() == OperationChatConversationStatus.CLOSED) {
-            throw new RuntimeException("Chat conversation is closed");
+            throw new RuntimeException("Chat conversation is closed. Please reopen the chat to send messages.");
         }
 
         User sender = userRepository.findActiveUserById(requestDto.getSenderId())
                 .orElseThrow(() -> new RuntimeException("Sender user not found or inactive"));
 
+        // Validate that sender is a participant
         validateParticipant(conversationId, sender.getId());
 
+        // Determine message type (text, attachment, or both)
         OperationChatMessageType finalMessageType = resolveMessageType(requestDto);
 
+        // Validate content based on message type
         validateMessageContent(requestDto, finalMessageType);
 
+        // Build and save message
         OperationChatMessage message = OperationChatMessage.builder()
                 .conversation(conversation)
                 .sender(sender)
@@ -176,14 +182,18 @@ public class OperationChatService {
 
         OperationChatMessage savedMessage = messageRepository.save(message);
 
+        // Save attachments if any
         saveAttachments(savedMessage, requestDto.getAttachments());
 
+        // Update conversation's last message info
         conversation.setLastMessage(buildLastMessage(requestDto, finalMessageType));
         conversation.setLastMessageAt(LocalDateTime.now());
         conversationRepository.save(conversation);
 
+        // Convert to response DTO
         OperationChatMessageResponseDto responseDto = toMessageDto(savedMessage);
 
+        // Real-time broadcast to all participants
         messagingTemplate.convertAndSend(
                 "/topic/operation-chat/conversation/" + conversationId,
                 responseDto
@@ -191,6 +201,7 @@ public class OperationChatService {
 
         return responseDto;
     }
+
 
     private OperationChatMessageType resolveMessageType(SendOperationChatMessageRequestDto requestDto) {
 
@@ -423,4 +434,64 @@ public class OperationChatService {
                 .createdAt(message.getCreatedAt())
                 .build();
     }
+
+    @Transactional
+    public OperationChatConversationResponseDto closeChat(Long conversationId, Long userId) {
+        validateParticipant(conversationId, userId);
+
+        OperationChatConversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new RuntimeException("Chat conversation not found"));
+
+        if (conversation.isDeleted()) {
+            throw new RuntimeException("Chat conversation is deleted");
+        }
+
+        if (conversation.getStatus() == OperationChatConversationStatus.CLOSED) {
+            throw new RuntimeException("Chat is already closed");
+        }
+
+        conversation.setStatus(OperationChatConversationStatus.CLOSED);
+        conversation.setLastMessage("Chat closed");
+        conversation.setLastMessageAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+
+        // Optional: Notify participants
+        messagingTemplate.convertAndSend(
+                "/topic/operation-chat/conversation/" + conversationId,
+                "Chat has been closed"
+        );
+
+        return toConversationDto(conversation, userId);
+    }
+    @Transactional
+    public OperationChatConversationResponseDto reopenChat(Long conversationId, Long userId) {
+        validateParticipant(conversationId, userId);
+
+        OperationChatConversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new RuntimeException("Chat conversation not found"));
+
+        if (conversation.isDeleted()) {
+            throw new RuntimeException("Chat conversation is deleted");
+        }
+
+        if (conversation.getStatus() == OperationChatConversationStatus.OPEN) {
+            throw new RuntimeException("Chat is already open");
+        }
+
+        conversation.setStatus(OperationChatConversationStatus.OPEN);
+        conversation.setLastMessage("Chat reopened");
+        conversation.setLastMessageAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+
+        // Optional: Notify participants
+        messagingTemplate.convertAndSend(
+                "/topic/operation-chat/conversation/" + conversationId,
+                "Chat has been reopened"
+        );
+
+        return toConversationDto(conversation, userId);
+    }
+
+
+
 }
