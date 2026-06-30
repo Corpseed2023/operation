@@ -34,6 +34,7 @@ public class    Company {
     @Comment("Detailed / mapped industry code or name")
     private String industries;
 
+
     @Column(length = 100)
     @Comment("Sub-industry")
     private String subIndustry;
@@ -55,6 +56,7 @@ public class    Company {
     @Column(name = "updated_date")
     @Comment("Last update timestamp")
     private Date updatedDate = new Date();
+
 
     @Comment("Created by user ID")
     @NotNull(message = "Created by user ID cannot be null")

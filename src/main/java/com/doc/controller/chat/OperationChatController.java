@@ -51,4 +51,22 @@ public class OperationChatController {
         operationChatService.markAsRead(conversationId, userId);
         return ResponseEntity.ok("Chat marked as read");
     }
+
+    @PatchMapping("/{conversationId}/close")
+    public ResponseEntity<OperationChatConversationResponseDto> closeChat(
+            @PathVariable Long conversationId,
+            @RequestParam Long userId
+    ) {
+        return ResponseEntity.ok(operationChatService.closeChat(conversationId, userId));
+    }
+
+    @PatchMapping("/{conversationId}/reopen")
+    public ResponseEntity<OperationChatConversationResponseDto> reopenChat(
+            @PathVariable Long conversationId,
+            @RequestParam Long userId
+    ) {
+        return ResponseEntity.ok(operationChatService.reopenChat(conversationId, userId));
+    }
+
+
 }
