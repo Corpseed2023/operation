@@ -7,13 +7,7 @@ import java.util.Date;
 
 @Entity
 @Table(
-        name = "vendor_accounts_submissions",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_vendor_finalization_accounts_submission",
-                        columnNames = "vendor_finalization_id"
-                )
-        }
+        name = "vendor_accounts_submissions"
 )
 @Getter
 @Setter
@@ -25,7 +19,7 @@ public class VendorAccountsSubmission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vendor_finalization_id", nullable = false)
     private VendorFinalization vendorFinalization;
 
