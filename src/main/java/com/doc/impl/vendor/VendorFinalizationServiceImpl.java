@@ -178,8 +178,17 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
                         "ERR_VENDOR_FINALIZATION_NOT_FOUND"
                 ));
 
-        if (vendorAccountsSubmissionRepository
-                .existsByVendorFinalization_IdAndIsDeletedFalse(finalizationId)) {
+        boolean alreadyActiveSubmission =
+                vendorAccountsSubmissionRepository
+                        .existsByVendorFinalization_IdAndStatusInAndIsDeletedFalse(
+                                finalizationId,
+                                List.of(
+                                        VendorAccountsSubmissionStatus.PENDING,
+                                        VendorAccountsSubmissionStatus.APPROVED
+                                )
+                        );
+
+        if (alreadyActiveSubmission) {
             throw new ValidationException(
                     "Vendor already sent to accounts",
                     "ERR_VENDOR_ALREADY_SENT_TO_ACCOUNTS"
@@ -334,6 +343,22 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         submission.setAccountsVerifiedDate(new Date());
         submission.setUpdatedBy(requestDto.getUserId());
 
+        VendorQuotation quotation = submission.getQuotation();
+
+        if (quotation != null) {
+            quotation.setStatus(VendorQuotationStatus.REJECTED_BY_ACCOUNTS);
+            quotation.setUpdatedBy(requestDto.getUserId());
+            vendorQuotationRepository.save(quotation);
+        }
+
+        VendorFinalization finalization = submission.getVendorFinalization();
+
+        if (finalization != null) {
+            finalization.setSentToAccounts(false);
+            finalization.setUpdatedBy(requestDto.getUserId());
+            vendorFinalizationRepository.save(finalization);
+        }
+
         VendorAccountsSubmission saved =
                 vendorAccountsSubmissionRepository.save(submission);
 
@@ -421,6 +446,7 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         VendorFinalizationResponseDto response = new VendorFinalizationResponseDto();
 
         response.setId(finalization.getId());
+
 
         if (finalization.getRfq() != null) {
             response.setRfqId(finalization.getRfq().getId());

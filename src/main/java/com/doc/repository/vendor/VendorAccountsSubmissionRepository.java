@@ -1,6 +1,7 @@
 package com.doc.repository.vendor;
 
 import com.doc.entity.vendor.VendorAccountsSubmission;
+import com.doc.entity.vendor.VendorAccountsSubmissionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -20,4 +21,9 @@ public interface VendorAccountsSubmissionRepository
 
     List<VendorAccountsSubmission>
     findByIsDeletedFalseOrderBySentToAccountsDateDesc();
+
+    boolean existsByVendorFinalization_IdAndStatusInAndIsDeletedFalse(
+            Long finalizationId,
+            List<VendorAccountsSubmissionStatus> statuses
+    );
 }
