@@ -1,9 +1,6 @@
 package com.doc.service.vendor;
 
-import com.doc.dto.vendor.AccountsVendorFinalizationRequestDto;
-import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
-import com.doc.dto.vendor.VendorFinalizationRequestDto;
-import com.doc.dto.vendor.VendorFinalizationResponseDto;
+import com.doc.dto.vendor.*;
 
 import java.util.List;
 
@@ -17,20 +14,20 @@ public interface VendorFinalizationService {
 
     List<VendorFinalizationResponseDto> getVendorFinalizationsByRfqId(Long rfqId);
 
-    VendorFinalizationResponseDto sendToAccounts(
+    VendorAccountsSubmissionResponseDto sendToAccounts(
             Long finalizationId,
-            SendFinalVendorToAccountsRequestDto requestDto
+            VendorAccountsSubmissionRequestDto requestDto
     );
 
-    List<VendorFinalizationResponseDto> getAllSentToAccounts();
+    List<VendorAccountsSubmissionResponseDto> getAllSentToAccounts();
 
-    VendorFinalizationResponseDto approveByAccounts(
-            Long finalizationId,
+    VendorAccountsSubmissionResponseDto approveByAccounts(
+            Long submissionId,
             AccountsVendorFinalizationRequestDto requestDto
     );
 
-    VendorFinalizationResponseDto rejectByAccounts(
-            Long finalizationId,
+    VendorAccountsSubmissionResponseDto rejectByAccounts(
+            Long submissionId,
             AccountsVendorFinalizationRequestDto requestDto
     );
 

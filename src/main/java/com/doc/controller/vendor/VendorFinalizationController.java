@@ -1,9 +1,6 @@
 package com.doc.controller.vendor;
 
-import com.doc.dto.vendor.AccountsVendorFinalizationRequestDto;
-import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
-import com.doc.dto.vendor.VendorFinalizationRequestDto;
-import com.doc.dto.vendor.VendorFinalizationResponseDto;
+import com.doc.dto.vendor.*;
 import com.doc.service.vendor.VendorFinalizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -20,11 +17,11 @@ import java.util.List;
 public class VendorFinalizationController {
 
     private final VendorFinalizationService vendorFinalizationService;
+
     @GetMapping("/accounts")
-    public ResponseEntity<List<VendorFinalizationResponseDto>> getAllSentToAccounts() {
-        return ResponseEntity.ok(
-                vendorFinalizationService.getAllSentToAccounts()
-        );
+    @Operation(summary = "Get all vendor accounts submissions")
+    public ResponseEntity<List<VendorAccountsSubmissionResponseDto>> getAllSentToAccounts() {
+        return ResponseEntity.ok(vendorFinalizationService.getAllSentToAccounts());
     }
 
     @PostMapping
@@ -32,10 +29,10 @@ public class VendorFinalizationController {
     public ResponseEntity<VendorFinalizationResponseDto> createVendorFinalization(
             @Valid @RequestBody VendorFinalizationRequestDto requestDto
     ) {
-        VendorFinalizationResponseDto response =
-                vendorFinalizationService.createVendorFinalization(requestDto);
-
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return new ResponseEntity<>(
+                vendorFinalizationService.createVendorFinalization(requestDto),
+                HttpStatus.CREATED
+        );
     }
 
     @GetMapping("/{id}")
@@ -43,10 +40,9 @@ public class VendorFinalizationController {
     public ResponseEntity<VendorFinalizationResponseDto> getVendorFinalizationById(
             @PathVariable Long id
     ) {
-        VendorFinalizationResponseDto response =
-                vendorFinalizationService.getVendorFinalizationById(id);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                vendorFinalizationService.getVendorFinalizationById(id)
+        );
     }
 
     @GetMapping("/rfq/{rfqId}")
@@ -54,45 +50,41 @@ public class VendorFinalizationController {
     public ResponseEntity<List<VendorFinalizationResponseDto>> getVendorFinalizationsByRfqId(
             @PathVariable Long rfqId
     ) {
-        List<VendorFinalizationResponseDto> response =
-                vendorFinalizationService.getVendorFinalizationsByRfqId(rfqId);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                vendorFinalizationService.getVendorFinalizationsByRfqId(rfqId)
+        );
     }
 
     @PutMapping("/{finalizationId}/send-to-accounts")
-    public ResponseEntity<VendorFinalizationResponseDto> sendToAccounts(
+    @Operation(summary = "Send finalized vendor documents to Accounts")
+    public ResponseEntity<VendorAccountsSubmissionResponseDto> sendToAccounts(
             @PathVariable Long finalizationId,
-            @Valid @RequestBody SendFinalVendorToAccountsRequestDto requestDto
+            @Valid @RequestBody VendorAccountsSubmissionRequestDto requestDto
     ) {
-
         return ResponseEntity.ok(
                 vendorFinalizationService.sendToAccounts(finalizationId, requestDto)
         );
     }
 
-    @PutMapping("/{finalizationId}/accounts/approve")
-    @Operation(summary = "Approve final vendor by Accounts")
-    public ResponseEntity<VendorFinalizationResponseDto> approveByAccounts(
-            @PathVariable Long finalizationId,
+    @PutMapping("/accounts/{submissionId}/approve")
+    @Operation(summary = "Approve vendor accounts submission")
+    public ResponseEntity<VendorAccountsSubmissionResponseDto> approveByAccounts(
+            @PathVariable Long submissionId,
             @Valid @RequestBody AccountsVendorFinalizationRequestDto requestDto
     ) {
         return ResponseEntity.ok(
-                vendorFinalizationService.approveByAccounts(finalizationId, requestDto)
+                vendorFinalizationService.approveByAccounts(submissionId, requestDto)
         );
     }
 
-    @PutMapping("/{finalizationId}/accounts/reject")
-    @Operation(summary = "Reject final vendor by Accounts")
-    public ResponseEntity<VendorFinalizationResponseDto> rejectByAccounts(
-            @PathVariable Long finalizationId,
+    @PutMapping("/accounts/{submissionId}/reject")
+    @Operation(summary = "Reject vendor accounts submission")
+    public ResponseEntity<VendorAccountsSubmissionResponseDto> rejectByAccounts(
+            @PathVariable Long submissionId,
             @Valid @RequestBody AccountsVendorFinalizationRequestDto requestDto
     ) {
         return ResponseEntity.ok(
-                vendorFinalizationService.rejectByAccounts(finalizationId, requestDto)
+                vendorFinalizationService.rejectByAccounts(submissionId, requestDto)
         );
     }
-
-
-
 }

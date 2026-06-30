@@ -1,9 +1,6 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.vendor.AccountsVendorFinalizationRequestDto;
-import com.doc.dto.vendor.SendFinalVendorToAccountsRequestDto;
-import com.doc.dto.vendor.VendorFinalizationRequestDto;
-import com.doc.dto.vendor.VendorFinalizationResponseDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -29,6 +26,7 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
     private final VendorRepository vendorRepository;
     private final VendorQuotationRepository vendorQuotationRepository;
     private final VendorQuotationItemRepository vendorQuotationItemRepository;
+    private final VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository;
 
     @Override
     @Transactional
@@ -169,9 +167,9 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
 
     @Override
     @Transactional
-    public VendorFinalizationResponseDto sendToAccounts(
+    public VendorAccountsSubmissionResponseDto sendToAccounts(
             Long finalizationId,
-            SendFinalVendorToAccountsRequestDto requestDto
+            VendorAccountsSubmissionRequestDto requestDto
     ) {
         VendorFinalization finalization = vendorFinalizationRepository
                 .findByIdAndIsDeletedFalse(finalizationId)
@@ -180,35 +178,218 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
                         "ERR_VENDOR_FINALIZATION_NOT_FOUND"
                 ));
 
-        if (finalization.isSentToAccounts()) {
+        if (vendorAccountsSubmissionRepository
+                .existsByVendorFinalization_IdAndIsDeletedFalse(finalizationId)) {
             throw new ValidationException(
-                    "Final vendor details already sent to accounts",
-                    "ERR_ALREADY_SENT_TO_ACCOUNTS"
+                    "Vendor already sent to accounts",
+                    "ERR_VENDOR_ALREADY_SENT_TO_ACCOUNTS"
             );
         }
 
-        finalization.setFinalVendorAttachmentUrl(
-                requestDto.getFinalVendorAttachmentUrl()
-        );
-        finalization.setFinalVendorRemarks(requestDto.getFinalVendorRemarks());
+        VendorAccountsSubmission submission = new VendorAccountsSubmission();
+
+        submission.setVendorFinalization(finalization);
+        submission.setVendor(finalization.getVendor());
+        submission.setRfq(finalization.getRfq());
+        submission.setQuotation(finalization.getQuotation());
+
+        submission.setName(requestDto.getName());
+        submission.setNumber(requestDto.getNumber());
+        submission.setEmail(requestDto.getEmail());
+        submission.setAadhar(requestDto.getAadhar());
+
+        submission.setAccountHolderName(requestDto.getAccountHolderName());
+        submission.setAccountNumber(requestDto.getAccountNumber());
+        submission.setIfsc(requestDto.getIfsc());
+        submission.setSwiftCode(requestDto.getSwiftCode());
+        submission.setBranchAddress(requestDto.getBranchAddress());
+
+        submission.setGstDetailsUrl(requestDto.getGstDetailsUrl());
+        submission.setVendorSetupFormUrl(requestDto.getVendorSetupFormUrl());
+        submission.setCancelChequeUrl(requestDto.getCancelChequeUrl());
+        submission.setItrLastFinancialYearUrl(requestDto.getItrLastFinancialYearUrl());
+        submission.setPanDetailsUrl(requestDto.getPanDetailsUrl());
+        submission.setPartnershipOrCoiUrl(requestDto.getPartnershipOrCoiUrl());
+        submission.setDeedOrMsmeUrl(requestDto.getDeedOrMsmeUrl());
+        submission.setBalanceSheetUrl(requestDto.getBalanceSheetUrl());
+
+        submission.setRemarks(requestDto.getRemarks());
+        submission.setStatus(VendorAccountsSubmissionStatus.PENDING);
+        submission.setSentToAccountsBy(requestDto.getSentToAccountsBy());
+        submission.setCreatedBy(requestDto.getSentToAccountsBy());
+        submission.setUpdatedBy(requestDto.getSentToAccountsBy());
+
+        VendorAccountsSubmission saved =
+                vendorAccountsSubmissionRepository.save(submission);
+
         finalization.setSentToAccounts(true);
-        finalization.setSentToAccountsBy(requestDto.getUserId());
+        finalization.setSentToAccountsBy(requestDto.getSentToAccountsBy());
         finalization.setSentToAccountsDate(new Date());
-        finalization.setUpdatedBy(requestDto.getUserId());
+        finalization.setUpdatedBy(requestDto.getSentToAccountsBy());
 
-        VendorFinalization saved = vendorFinalizationRepository.save(finalization);
+        vendorFinalizationRepository.save(finalization);
 
-        return mapToResponse(saved);
+        return mapAccountsSubmissionToResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<VendorFinalizationResponseDto> getAllSentToAccounts() {
-        return vendorFinalizationRepository
-                .findBySentToAccountsTrueAndIsDeletedFalseOrderBySentToAccountsDateDesc()
+    public List<VendorAccountsSubmissionResponseDto> getAllSentToAccounts() {
+        return vendorAccountsSubmissionRepository
+                .findByIsDeletedFalseOrderBySentToAccountsDateDesc()
                 .stream()
-                .map(this::mapToResponse)
+                .map(this::mapAccountsSubmissionToResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public VendorAccountsSubmissionResponseDto approveByAccounts(
+            Long submissionId,
+            AccountsVendorFinalizationRequestDto requestDto
+    ) {
+        VendorAccountsSubmission submission = vendorAccountsSubmissionRepository
+                .findByIdAndIsDeletedFalse(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor accounts submission not found",
+                        "ERR_VENDOR_ACCOUNTS_SUBMISSION_NOT_FOUND"
+                ));
+
+        if (submission.getStatus() == VendorAccountsSubmissionStatus.APPROVED) {
+            throw new ValidationException(
+                    "Vendor accounts submission already approved",
+                    "ERR_VENDOR_ACCOUNTS_ALREADY_APPROVED"
+            );
+        }
+
+        if (submission.getStatus() == VendorAccountsSubmissionStatus.REJECTED) {
+            throw new ValidationException(
+                    "Rejected vendor accounts submission cannot be approved directly",
+                    "ERR_VENDOR_ACCOUNTS_ALREADY_REJECTED"
+            );
+        }
+
+        submission.setStatus(VendorAccountsSubmissionStatus.APPROVED);
+        submission.setAccountsRemark(requestDto.getAccountsRemark());
+        submission.setAccountsVerifiedBy(requestDto.getUserId());
+        submission.setAccountsVerifiedDate(new Date());
+        submission.setUpdatedBy(requestDto.getUserId());
+
+        VendorAccountsSubmission saved =
+                vendorAccountsSubmissionRepository.save(submission);
+
+        return mapAccountsSubmissionToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public VendorAccountsSubmissionResponseDto rejectByAccounts(
+            Long submissionId,
+            AccountsVendorFinalizationRequestDto requestDto
+    ) {
+        VendorAccountsSubmission submission = vendorAccountsSubmissionRepository
+                .findByIdAndIsDeletedFalse(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor accounts submission not found",
+                        "ERR_VENDOR_ACCOUNTS_SUBMISSION_NOT_FOUND"
+                ));
+
+        if (submission.getStatus() == VendorAccountsSubmissionStatus.APPROVED) {
+            throw new ValidationException(
+                    "Approved vendor accounts submission cannot be rejected",
+                    "ERR_VENDOR_ACCOUNTS_ALREADY_APPROVED"
+            );
+        }
+
+        if (submission.getStatus() == VendorAccountsSubmissionStatus.REJECTED) {
+            throw new ValidationException(
+                    "Vendor accounts submission already rejected",
+                    "ERR_VENDOR_ACCOUNTS_ALREADY_REJECTED"
+            );
+        }
+
+        submission.setStatus(VendorAccountsSubmissionStatus.REJECTED);
+        submission.setAccountsRemark(requestDto.getAccountsRemark());
+        submission.setAccountsVerifiedBy(requestDto.getUserId());
+        submission.setAccountsVerifiedDate(new Date());
+        submission.setUpdatedBy(requestDto.getUserId());
+
+        VendorAccountsSubmission saved =
+                vendorAccountsSubmissionRepository.save(submission);
+
+        return mapAccountsSubmissionToResponse(saved);
+    }
+
+    private VendorAccountsSubmissionResponseDto mapAccountsSubmissionToResponse(
+            VendorAccountsSubmission submission
+    ) {
+        VendorAccountsSubmissionResponseDto response =
+                new VendorAccountsSubmissionResponseDto();
+
+        response.setId(submission.getId());
+
+        if (submission.getVendorFinalization() != null) {
+            response.setVendorFinalizationId(
+                    submission.getVendorFinalization().getId()
+            );
+        }
+
+        if (submission.getVendor() != null) {
+            response.setVendorId(submission.getVendor().getId());
+            response.setVendorName(submission.getVendor().getName());
+            response.setVendorEmail(submission.getVendor().getEmail());
+            response.setVendorMobile(submission.getVendor().getMobile());
+        }
+
+        if (submission.getRfq() != null) {
+            response.setRfqId(submission.getRfq().getId());
+            response.setRfqNumber(submission.getRfq().getRfqNumber());
+        }
+
+        if (submission.getQuotation() != null) {
+            response.setQuotationId(submission.getQuotation().getId());
+            response.setQuotationNumber(submission.getQuotation().getQuotationNumber());
+        }
+
+        response.setName(submission.getName());
+        response.setNumber(submission.getNumber());
+        response.setEmail(submission.getEmail());
+        response.setAadhar(submission.getAadhar());
+
+        response.setAccountHolderName(submission.getAccountHolderName());
+        response.setAccountNumber(submission.getAccountNumber());
+        response.setIfsc(submission.getIfsc());
+        response.setSwiftCode(submission.getSwiftCode());
+        response.setBranchAddress(submission.getBranchAddress());
+
+        response.setGstDetailsUrl(submission.getGstDetailsUrl());
+        response.setVendorSetupFormUrl(submission.getVendorSetupFormUrl());
+        response.setCancelChequeUrl(submission.getCancelChequeUrl());
+        response.setItrLastFinancialYearUrl(submission.getItrLastFinancialYearUrl());
+        response.setPanDetailsUrl(submission.getPanDetailsUrl());
+        response.setPartnershipOrCoiUrl(submission.getPartnershipOrCoiUrl());
+        response.setDeedOrMsmeUrl(submission.getDeedOrMsmeUrl());
+        response.setBalanceSheetUrl(submission.getBalanceSheetUrl());
+
+        response.setRemarks(submission.getRemarks());
+        response.setStatus(
+                submission.getStatus() != null ? submission.getStatus().name() : null
+        );
+
+        response.setSentToAccountsBy(submission.getSentToAccountsBy());
+        response.setSentToAccountsDate(submission.getSentToAccountsDate());
+
+        response.setAccountsVerifiedBy(submission.getAccountsVerifiedBy());
+        response.setAccountsVerifiedDate(submission.getAccountsVerifiedDate());
+        response.setAccountsRemark(submission.getAccountsRemark());
+
+        response.setCreatedBy(submission.getCreatedBy());
+        response.setUpdatedBy(submission.getUpdatedBy());
+        response.setCreatedDate(submission.getCreatedDate());
+        response.setUpdatedDate(submission.getUpdatedDate());
+        response.setDeleted(submission.isDeleted());
+
+        return response;
     }
 
     private VendorFinalizationResponseDto mapToResponse(VendorFinalization finalization) {
@@ -267,117 +448,11 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         response.setUpdatedDate(finalization.getUpdatedDate());
         response.setDeleted(finalization.isDeleted());
 
-        response.setFinalVendorAttachmentUrl(finalization.getFinalVendorAttachmentUrl());
-        response.setFinalVendorRemarks(finalization.getFinalVendorRemarks());
         response.setSentToAccounts(finalization.isSentToAccounts());
         response.setSentToAccountsBy(finalization.getSentToAccountsBy());
         response.setSentToAccountsDate(finalization.getSentToAccountsDate());
 
         return response;
-    }
-
-    @Override
-    @Transactional
-    public VendorFinalizationResponseDto approveByAccounts(
-            Long finalizationId,
-            AccountsVendorFinalizationRequestDto requestDto
-    ) {
-        VendorFinalization finalization = vendorFinalizationRepository
-                .findByIdAndIsDeletedFalse(finalizationId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor finalization not found",
-                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
-                ));
-
-        if (!finalization.isSentToAccounts()) {
-            throw new ValidationException(
-                    "Final vendor details are not sent to accounts yet",
-                    "ERR_NOT_SENT_TO_ACCOUNTS"
-            );
-        }
-
-        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_APPROVED) {
-            throw new ValidationException(
-                    "Final vendor already approved by accounts",
-                    "ERR_ALREADY_APPROVED_BY_ACCOUNTS"
-            );
-        }
-
-        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_REJECTED) {
-            throw new ValidationException(
-                    "Rejected final vendor cannot be approved directly",
-                    "ERR_ALREADY_REJECTED_BY_ACCOUNTS"
-            );
-        }
-
-        if (finalization.getStatus() != VendorFinalizationStatus.SENT_TO_ACCOUNTS) {
-            throw new ValidationException(
-                    "Only vendor sent to accounts can be approved",
-                    "ERR_INVALID_FINALIZATION_STATUS"
-            );
-        }
-
-        finalization.setStatus(VendorFinalizationStatus.ACCOUNTS_APPROVED);
-        finalization.setAccountsRemark(requestDto.getAccountsRemark());
-        finalization.setAccountsVerifiedBy(requestDto.getUserId());
-        finalization.setAccountsVerifiedDate(new Date());
-        finalization.setUpdatedBy(requestDto.getUserId());
-
-        VendorFinalization saved = vendorFinalizationRepository.save(finalization);
-
-        return mapToResponse(saved);
-    }
-
-    @Override
-    @Transactional
-    public VendorFinalizationResponseDto rejectByAccounts(
-            Long finalizationId,
-            AccountsVendorFinalizationRequestDto requestDto
-    ) {
-        VendorFinalization finalization = vendorFinalizationRepository
-                .findByIdAndIsDeletedFalse(finalizationId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor finalization not found",
-                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
-                ));
-
-        if (!finalization.isSentToAccounts()) {
-            throw new ValidationException(
-                    "Final vendor details are not sent to accounts yet",
-                    "ERR_NOT_SENT_TO_ACCOUNTS"
-            );
-        }
-
-        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_APPROVED) {
-            throw new ValidationException(
-                    "Approved final vendor cannot be rejected",
-                    "ERR_ALREADY_APPROVED_BY_ACCOUNTS"
-            );
-        }
-
-        if (finalization.getStatus() == VendorFinalizationStatus.ACCOUNTS_REJECTED) {
-            throw new ValidationException(
-                    "Final vendor already rejected by accounts",
-                    "ERR_ALREADY_REJECTED_BY_ACCOUNTS"
-            );
-        }
-
-        if (finalization.getStatus() != VendorFinalizationStatus.SENT_TO_ACCOUNTS) {
-            throw new ValidationException(
-                    "Only vendor sent to accounts can be rejected",
-                    "ERR_INVALID_FINALIZATION_STATUS"
-            );
-        }
-
-        finalization.setStatus(VendorFinalizationStatus.ACCOUNTS_REJECTED);
-        finalization.setAccountsRemark(requestDto.getAccountsRemark());
-        finalization.setAccountsVerifiedBy(requestDto.getUserId());
-        finalization.setAccountsVerifiedDate(new Date());
-        finalization.setUpdatedBy(requestDto.getUserId());
-
-        VendorFinalization saved = vendorFinalizationRepository.save(finalization);
-
-        return mapToResponse(saved);
     }
 
 

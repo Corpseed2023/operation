@@ -393,8 +393,6 @@ public class VendorServiceImpl implements VendorService {
         dto.setUpdatedDate(finalization.getUpdatedDate());
         dto.setDeleted(finalization.isDeleted());
 
-        dto.setFinalVendorAttachmentUrl(finalization.getFinalVendorAttachmentUrl());
-        dto.setFinalVendorRemarks(finalization.getFinalVendorRemarks());
         dto.setSentToAccounts(finalization.isSentToAccounts());
         dto.setSentToAccountsBy(finalization.getSentToAccountsBy());
         dto.setSentToAccountsDate(finalization.getSentToAccountsDate());
