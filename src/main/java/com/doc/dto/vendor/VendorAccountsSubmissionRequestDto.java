@@ -18,7 +18,20 @@ public class VendorAccountsSubmissionRequestDto {
     @NotBlank
     private String email;
 
+    @NotBlank
     private String aadhar;
+
+    @NotBlank
+    private String authorizedSignatoryName;
+
+    @NotBlank
+    private String authorizedSignatoryNumber;
+
+    @NotBlank
+    private String authorizedSignatoryEmail;
+
+    @NotBlank
+    private String authorizedSignatoryAadhar;
 
     @NotBlank
     private String accountHolderName;
@@ -43,16 +56,13 @@ public class VendorAccountsSubmissionRequestDto {
     @NotBlank
     private String cancelChequeUrl;
 
-    @NotBlank
     private String itrLastFinancialYearUrl;
 
     @NotBlank
     private String panDetailsUrl;
 
-    @NotBlank
     private String partnershipOrCoiUrl;
 
-    @NotBlank
     private String deedOrMsmeUrl;
 
     private String balanceSheetUrl;

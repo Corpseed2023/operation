@@ -198,6 +198,11 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         submission.setEmail(requestDto.getEmail());
         submission.setAadhar(requestDto.getAadhar());
 
+        submission.setAuthorizedSignatoryName(requestDto.getAuthorizedSignatoryName());
+        submission.setAuthorizedSignatoryNumber(requestDto.getAuthorizedSignatoryNumber());
+        submission.setAuthorizedSignatoryEmail(requestDto.getAuthorizedSignatoryEmail());
+        submission.setAuthorizedSignatoryAadhar(requestDto.getAuthorizedSignatoryAadhar());
+
         submission.setAccountHolderName(requestDto.getAccountHolderName());
         submission.setAccountNumber(requestDto.getAccountNumber());
         submission.setIfsc(requestDto.getIfsc());
@@ -370,6 +375,11 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         response.setNumber(submission.getNumber());
         response.setEmail(submission.getEmail());
         response.setAadhar(submission.getAadhar());
+
+        response.setAuthorizedSignatoryName(submission.getAuthorizedSignatoryName());
+        response.setAuthorizedSignatoryNumber(submission.getAuthorizedSignatoryNumber());
+        response.setAuthorizedSignatoryEmail(submission.getAuthorizedSignatoryEmail());
+        response.setAuthorizedSignatoryAadhar(submission.getAuthorizedSignatoryAadhar());
 
         response.setAccountHolderName(submission.getAccountHolderName());
         response.setAccountNumber(submission.getAccountNumber());

@@ -46,6 +46,11 @@ public class VendorAccountsSubmission {
     private String email;
     private String aadhar;
 
+    private String authorizedSignatoryName;
+    private String authorizedSignatoryNumber;
+    private String authorizedSignatoryEmail;
+    private String authorizedSignatoryAadhar;
+
     private String accountHolderName;
     private String accountNumber;
     private String ifsc;
@@ -63,16 +68,16 @@ public class VendorAccountsSubmission {
     @Column(length = 500, nullable = false)
     private String cancelChequeUrl;
 
-    @Column(length = 500, nullable = false)
+    @Column(length = 500)
     private String itrLastFinancialYearUrl;
 
     @Column(length = 500, nullable = false)
     private String panDetailsUrl;
 
-    @Column(length = 500, nullable = false)
+    @Column(length = 500 )
     private String partnershipOrCoiUrl;
 
-    @Column(length = 500, nullable = false)
+    @Column(length = 500)
     private String deedOrMsmeUrl;
 
     @Column(length = 500)

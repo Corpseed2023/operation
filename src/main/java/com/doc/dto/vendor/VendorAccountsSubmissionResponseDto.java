@@ -29,6 +29,11 @@ public class VendorAccountsSubmissionResponseDto {
     private String email;
     private String aadhar;
 
+    private String authorizedSignatoryName;
+    private String authorizedSignatoryNumber;
+    private String authorizedSignatoryEmail;
+    private String authorizedSignatoryAadhar;
+
     private String accountHolderName;
     private String accountNumber;
     private String ifsc;

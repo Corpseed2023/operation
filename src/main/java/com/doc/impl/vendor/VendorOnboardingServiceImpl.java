@@ -51,7 +51,6 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
             vendorRepository.save(vendor);
         }
 
-
         RFQ rfq = finalization.getRfq();
         RFQVendor rfqVendor = finalization.getRfqVendor();
 
