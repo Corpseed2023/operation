@@ -8,6 +8,7 @@ import com.doc.entity.vendor.*;
 import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorOnboardingDocumentRepository;
 import com.doc.repository.vendor.VendorOnboardingRepository;
+import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.mail.MailService;
 import com.doc.service.vendor.VendorOnboardingService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
     private final VendorFinalizationRepository vendorFinalizationRepository;
     private final VendorOnboardingRepository vendorOnboardingRepository;
     private final VendorOnboardingDocumentRepository vendorOnboardingDocumentRepository;
+    private final VendorRepository vendorRepository;
     private final MailService mailService;
 
     @Override
@@ -42,6 +44,14 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
         }
 
         Vendor vendor = finalization.getVendor();
+        if(vendor.getStatus() == VendorStatus.PROSPECTIVE){
+            vendor.setStatus(VendorStatus.ONBOARDING);
+            vendor.setUpdatedBy(requestDto.getCreatedBy());
+            vendor.setUpdatedDate(new Date());
+            vendorRepository.save(vendor);
+        }
+
+
         RFQ rfq = finalization.getRfq();
         RFQVendor rfqVendor = finalization.getRfqVendor();
 

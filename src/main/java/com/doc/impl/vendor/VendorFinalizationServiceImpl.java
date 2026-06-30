@@ -275,6 +275,21 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         submission.setAccountsVerifiedDate(new Date());
         submission.setUpdatedBy(requestDto.getUserId());
 
+        Vendor vendor = submission.getVendor();
+
+        if (vendor == null) {
+            throw new ResourceNotFoundException(
+                    "Vendor not found for accounts submission",
+                    "ERR_VENDOR_NOT_FOUND"
+            );
+        }
+
+        vendor.setStatus(VendorStatus.ACTIVE);
+        vendor.setUpdatedBy(requestDto.getUserId());
+        vendor.setUpdatedDate(new Date());
+
+        vendorRepository.save(vendor);
+
         VendorAccountsSubmission saved =
                 vendorAccountsSubmissionRepository.save(submission);
 
