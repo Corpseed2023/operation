@@ -38,4 +38,19 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
             @Param("rfqId") Long rfqId,
             @Param("itemName") String itemName
     );
+
+    @Query("""
+        SELECT vf
+        FROM VendorFinalization vf
+        JOIN vf.rfq r
+        JOIN vf.vendor v
+        WHERE r.productId = :productId
+          AND v.id = :vendorId
+          AND vf.isDeleted = false
+        ORDER BY vf.createdDate DESC
+        """)
+    List<VendorFinalization> findLatestFinalizationByProductAndVendor(
+            @Param("productId") Long productId,
+            @Param("vendorId") Long vendorId
+    );
 }

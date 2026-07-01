@@ -8,12 +8,14 @@ import com.doc.entity.product.Product;
 import com.doc.entity.user.User;
 import com.doc.entity.vendor.ProductVendorMapping;
 import com.doc.entity.vendor.Vendor;
+import com.doc.entity.vendor.VendorFinalization;
 import com.doc.entity.vendor.VendorStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.ProductRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.ProductVendorMappingRepository;
+import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.vendor.ProductVendorService;
 import org.springframework.data.domain.Page;
@@ -35,16 +37,20 @@ public class ProductVendorServiceImpl implements ProductVendorService {
     private final ProductVendorMappingRepository productVendorMappingRepository;
     private final UserRepository userRepository;
 
+    private final VendorFinalizationRepository vendorFinalizationRepository;
+
     public ProductVendorServiceImpl(
             ProductRepository productRepository,
             VendorRepository vendorRepository,
             ProductVendorMappingRepository productVendorMappingRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            VendorFinalizationRepository vendorFinalizationRepository
     ) {
         this.productRepository = productRepository;
         this.vendorRepository = vendorRepository;
         this.productVendorMappingRepository = productVendorMappingRepository;
         this.userRepository = userRepository;
+        this.vendorFinalizationRepository = vendorFinalizationRepository;
     }
 
     @Override
@@ -371,6 +377,49 @@ public class ProductVendorServiceImpl implements ProductVendorService {
         dto.setUpdatedBy(mapping.getUpdatedBy());
         dto.setCreatedDate(mapping.getCreatedDate());
         dto.setUpdatedDate(mapping.getUpdatedDate());
+
+        dto.setFinalized(false);
+
+        if (product != null && vendor != null) {
+            List<VendorFinalization> finalizations =
+                    vendorFinalizationRepository.findLatestFinalizationByProductAndVendor(
+                            product.getId(),
+                            vendor.getId()
+                    );
+
+            if (!finalizations.isEmpty()) {
+                VendorFinalization finalization = finalizations.get(0);
+
+                dto.setFinalized(true);
+                dto.setFinalizationId(finalization.getId());
+
+                if (finalization.getRfq() != null) {
+                    dto.setRfqId(finalization.getRfq().getId());
+                    dto.setRfqNumber(finalization.getRfq().getRfqNumber());
+                }
+
+                if (finalization.getQuotation() != null) {
+                    dto.setQuotationId(finalization.getQuotation().getId());
+                    dto.setQuotationNumber(finalization.getQuotation().getQuotationNumber());
+                }
+
+                if (finalization.getQuotationItem() != null) {
+                    dto.setQuotationItemId(finalization.getQuotationItem().getId());
+                    dto.setQuotationItemName(finalization.getQuotationItem().getItemName());
+                }
+
+                dto.setFinalizedQuantity(finalization.getFinalizedQuantity());
+                dto.setUnit(finalization.getUnit());
+                dto.setFinalizedUnitRate(finalization.getFinalizedUnitRate());
+                dto.setFinalizedAmount(finalization.getFinalizedAmount());
+                dto.setTaxPercent(finalization.getTaxPercent());
+                dto.setTaxAmount(finalization.getTaxAmount());
+                dto.setTotalFinalizedAmount(finalization.getTotalFinalizedAmount());
+
+                dto.setPriceRank(finalization.getPriceRank());
+                dto.setPriceLevel(finalization.getPriceLevel());
+            }
+        }
 
         return dto;
     }

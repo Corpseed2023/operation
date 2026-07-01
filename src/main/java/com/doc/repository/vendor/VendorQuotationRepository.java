@@ -12,10 +12,51 @@ public interface VendorQuotationRepository extends JpaRepository<VendorQuotation
 
     Optional<VendorQuotation> findByIdAndIsDeletedFalse(Long id);
 
-    List<VendorQuotation> findByRfq_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long rfqId);
+    /**
+     * Recommended query for quotation list by RFQ.
+     *
+     * Fetches only ManyToOne relations:
+     * quotation -> rfq
+     * quotation -> vendor
+     * quotation -> rfqVendor
+     *
+     * Do not fetch items + documents together here,
+     * because both are List collections and Hibernate can throw MultipleBagFetchException.
+     */
+    @Query("""
+            SELECT DISTINCT q
+            FROM VendorQuotation q
+            LEFT JOIN FETCH q.rfq r
+            LEFT JOIN FETCH q.vendor v
+            LEFT JOIN FETCH q.rfqVendor rv
+            WHERE r.id = :rfqId
+              AND q.isDeleted = false
+            ORDER BY q.createdDate DESC
+            """)
+    List<VendorQuotation> findByRfqIdAndIsDeletedFalseOrderByCreatedDateDesc(
+            @Param("rfqId") Long rfqId
+    );
+
 
     /**
      * Fetch all non-deleted quotations for a specific vendor.
+     */
+    @Query("""
+            SELECT DISTINCT q
+            FROM VendorQuotation q
+            LEFT JOIN FETCH q.vendor v
+            LEFT JOIN FETCH q.rfq r
+            LEFT JOIN FETCH q.rfqVendor rv
+            WHERE v.id = :vendorId
+              AND q.isDeleted = false
+            ORDER BY q.createdDate DESC
+            """)
+    List<VendorQuotation> getQuotationsByVendorId(
+            @Param("vendorId") Long vendorId
+    );
+
+    /**
+     * If you need vendor quotations with items also.
      */
     @Query("""
             SELECT DISTINCT q
@@ -28,7 +69,7 @@ public interface VendorQuotationRepository extends JpaRepository<VendorQuotation
               AND q.isDeleted = false
             ORDER BY q.createdDate DESC
             """)
-    List<VendorQuotation> getQuotationsByVendorId(@Param("vendorId") Long vendorId);
-
-
+    List<VendorQuotation> getQuotationsByVendorIdWithItems(
+            @Param("vendorId") Long vendorId
+    );
 }
