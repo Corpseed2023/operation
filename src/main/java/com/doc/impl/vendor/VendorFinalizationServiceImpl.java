@@ -219,48 +219,32 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
                 .findByIdAndIsDeletedFalse(finalizationId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Vendor finalization not found",
-                        "VENDOR_FINALIZATION_NOT_FOUND"
+                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
                 ));
 
-        VendorAccountsSubmission submission = vendorAccountsSubmissionRepository
-                .findByVendorFinalization_IdAndIsDeletedFalse(finalizationId)
-                .orElseGet(VendorAccountsSubmission::new);
+        boolean alreadyActiveSubmission =
+                vendorAccountsSubmissionRepository
+                        .existsByVendorFinalization_IdAndStatusInAndIsDeletedFalse(
+                                finalizationId,
+                                List.of(
+                                        VendorAccountsSubmissionStatus.PENDING,
+                                        VendorAccountsSubmissionStatus.APPROVED
+                                )
+                        );
 
-        boolean isNewSubmission = submission.getId() == null;
-
-        if (!isNewSubmission
-                && VendorAccountsSubmissionStatus.APPROVED.equals(submission.getStatus())) {
+        if (alreadyActiveSubmission) {
             throw new ValidationException(
-                    "Vendor accounts submission is already approved by accounts",
-                    "VENDOR_ACCOUNTS_ALREADY_APPROVED"
+                    "Vendor already sent to accounts",
+                    "ERR_VENDOR_ALREADY_SENT_TO_ACCOUNTS"
             );
         }
 
-        /*
-         * Optional strict check:
-         * If already pending with Accounts, do not allow repeated resend.
-         */
-        if (!isNewSubmission
-                && VendorAccountsSubmissionStatus.PENDING.equals(submission.getStatus())) {
-            throw new ValidationException(
-                    "Vendor accounts submission is already pending with accounts",
-                    "VENDOR_ACCOUNTS_ALREADY_PENDING"
-            );
-        }
+        VendorAccountsSubmission submission = new VendorAccountsSubmission();
 
         submission.setVendorFinalization(finalization);
-
-        if (finalization.getVendor() != null) {
-            submission.setVendor(finalization.getVendor());
-        }
-
-        if (finalization.getRfq() != null) {
-            submission.setRfq(finalization.getRfq());
-        }
-
-        if (finalization.getQuotation() != null) {
-            submission.setQuotation(finalization.getQuotation());
-        }
+        submission.setVendor(finalization.getVendor());
+        submission.setRfq(finalization.getRfq());
+        submission.setQuotation(finalization.getQuotation());
 
         submission.setName(requestDto.getName());
         submission.setNumber(requestDto.getNumber());
@@ -288,44 +272,24 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         submission.setBalanceSheetUrl(requestDto.getBalanceSheetUrl());
 
         submission.setRemarks(requestDto.getRemarks());
-
-        /*
-         * PENDING = sent to accounts / waiting for accounts action
-         */
         submission.setStatus(VendorAccountsSubmissionStatus.PENDING);
         submission.setSentToAccountsBy(requestDto.getSentToAccountsBy());
-        submission.setSentToAccountsDate(new Date());
+        submission.setCreatedBy(requestDto.getSentToAccountsBy());
+        submission.setUpdatedBy(requestDto.getSentToAccountsBy());
 
-        /*
-         * Important for resend after rejection:
-         * clear old rejection data.
-         */
-        submission.setAccountsVerifiedBy(null);
-        submission.setAccountsVerifiedDate(null);
-        submission.setAccountsRemark(null);
-
-        if (isNewSubmission) {
-            submission.setCreatedBy(requestDto.getSentToAccountsBy());
-            submission.setCreatedDate(new Date());
-            submission.setDeleted(false);
-        } else {
-            submission.setUpdatedBy(requestDto.getSentToAccountsBy());
-            submission.setUpdatedDate(new Date());
-        }
+        VendorAccountsSubmission saved =
+                vendorAccountsSubmissionRepository.save(submission);
 
         finalization.setSentToAccounts(true);
         finalization.setSentToAccountsBy(requestDto.getSentToAccountsBy());
         finalization.setSentToAccountsDate(new Date());
         finalization.setUpdatedBy(requestDto.getSentToAccountsBy());
-        finalization.setUpdatedDate(new Date());
-
-        VendorAccountsSubmission saved =
-                vendorAccountsSubmissionRepository.save(submission);
 
         vendorFinalizationRepository.save(finalization);
 
         return mapAccountsSubmissionToResponse(saved);
     }
+
 
     @Override
     @Transactional(readOnly = true)
