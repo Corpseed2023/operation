@@ -65,4 +65,20 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
             @Param("productId") Long productId,
             Pageable pageable
     );
+
+    @Query("""
+        SELECT COUNT(DISTINCT v.id)
+        FROM ProductVendorMapping m
+        JOIN m.product p
+        JOIN m.vendor v
+        WHERE p.id = :productId
+          AND m.isDeleted = false
+          AND m.isActive = true
+          AND p.isDeleted = false
+          AND p.isActive = true
+          AND v.isDeleted = false
+        """)
+    Long countActiveVendorsByProductId(@Param("productId") Long productId);
+
+
 }

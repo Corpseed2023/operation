@@ -1,6 +1,7 @@
 package com.doc.repository.vendor;
 
 import com.doc.entity.vendor.VendorQuotation;
+import com.doc.entity.vendor.VendorQuotationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -71,5 +72,18 @@ public interface VendorQuotationRepository extends JpaRepository<VendorQuotation
             """)
     List<VendorQuotation> getQuotationsByVendorIdWithItems(
             @Param("vendorId") Long vendorId
+    );
+
+    @Query("""
+        SELECT COUNT(vq)
+        FROM VendorQuotation vq
+        WHERE vq.rfq.product.id = :productId
+          AND vq.isDeleted = false
+          AND vq.rfq.isDeleted = false
+          AND vq.status IN :statuses
+        """)
+    Long countReceivedQuotationsByProductId(
+            @Param("productId") Long productId,
+            @Param("statuses") List<VendorQuotationStatus> statuses
     );
 }
