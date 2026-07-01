@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.List;
 
 @Service
 @Transactional
@@ -65,6 +66,7 @@ public class ProductVendorServiceImpl implements ProductVendorService {
                 ));
 
         Vendor vendor;
+
 
         /*
          * CASE 1: Existing vendor selected from dropdown.
@@ -304,6 +306,31 @@ public class ProductVendorServiceImpl implements ProductVendorService {
         mapping.setUpdatedDate(new Date());
 
         productVendorMappingRepository.save(mapping);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductVendorResponseDto> getVendorListByProduct(
+            Long productId,
+            Long userId
+    ) {
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
+
+        productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(productId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Product not found",
+                        "ERR_PRODUCT_NOT_FOUND"
+                ));
+
+        return productVendorMappingRepository
+                .findActiveVendorListByProductId(productId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
 

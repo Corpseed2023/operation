@@ -5,6 +5,8 @@ import com.doc.dto.vendor.ProductVendorResponseDto;
 import com.doc.dto.vendor.ProductVendorUpdateRequestDto;
 import org.springframework.data.domain.Page;
 
+import java.util.List;
+
 public interface ProductVendorService {
 
     ProductVendorResponseDto createVendorAgainstProduct(
@@ -20,9 +22,16 @@ public interface ProductVendorService {
             int size
     );
 
-
+    List<ProductVendorResponseDto> getVendorListByProduct(
+            Long productId,
+            Long userId
+    );
 
     void removeVendorFromProduct(Long mappingId, Long userId);
 
-    ProductVendorResponseDto updateProductVendorMapping(Long mappingId, Long userId, ProductVendorUpdateRequestDto dto);
+    ProductVendorResponseDto updateProductVendorMapping(
+            Long mappingId,
+            Long userId,
+            ProductVendorUpdateRequestDto dto
+    );
 }

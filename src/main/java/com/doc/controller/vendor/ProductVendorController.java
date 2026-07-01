@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/operationService/api/products")
 public class ProductVendorController {
@@ -71,6 +73,17 @@ public class ProductVendorController {
     }
 
 
+    @GetMapping("/{productId}/vendors/list")
+    @Operation(summary = "Get non-deleted vendors mapped with non-deleted product")
+    public ResponseEntity<List<ProductVendorResponseDto>> getVendorListByProduct(
+            @PathVariable Long productId,
+            @RequestParam Long userId
+    ) {
+        List<ProductVendorResponseDto> response =
+                productVendorService.getVendorListByProduct(productId, userId);
+
+        return ResponseEntity.ok(response);
+    }
 
 
 
