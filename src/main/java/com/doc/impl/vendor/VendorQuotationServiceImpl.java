@@ -10,10 +10,7 @@ import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-import com.doc.repository.vendor.RFQVendorRepository;
-import com.doc.repository.vendor.VendorQuotationRepository;
-import com.doc.repository.vendor.VendorRFQRepository;
-import com.doc.repository.vendor.VendorRepository;
+import com.doc.repository.vendor.*;
 import com.doc.service.mail.MailService;
 import com.doc.service.vendor.VendorQuotationService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +27,7 @@ import java.util.List;
 public class VendorQuotationServiceImpl implements VendorQuotationService {
 
     private final VendorQuotationRepository vendorQuotationRepository;
+    private final VendorQuotationLegalRequestRepository vendorQuotationLegalRequestRepository;
     private final VendorRFQRepository rfqRepository;
     private final RFQVendorRepository rfqVendorRepository;
     private final VendorRepository vendorRepository;
@@ -166,6 +164,12 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         response.setRfqId(quotation.getRfq() != null ? quotation.getRfq().getId() : null);
         response.setRfqVendorId(quotation.getRfqVendor() != null ? quotation.getRfqVendor().getId() : null);
+
+        vendorQuotationLegalRequestRepository
+                .findTopByVendorQuotation_IdAndIsDeletedFalseOrderByCreatedDateDesc(quotation.getId())
+                .ifPresent(legalRequest ->
+                        response.setVendorQuotationLegalRequestId(legalRequest.getId())
+                );
 
         if (quotation.getVendor() != null) {
             response.setVendorId(quotation.getVendor().getId());
