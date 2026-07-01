@@ -342,6 +342,15 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
 
         vendorRepository.save(vendor);
 
+        VendorQuotation quotation = submission.getQuotation();
+
+        if (quotation != null) {
+            quotation.setStatus(VendorQuotationStatus.ACCEPTED);
+            quotation.setUpdatedBy(requestDto.getUserId());
+            quotation.setUpdatedDate(new Date());
+            vendorQuotationRepository.save(quotation);
+        }
+
         VendorAccountsSubmission saved =
                 vendorAccountsSubmissionRepository.save(submission);
 
