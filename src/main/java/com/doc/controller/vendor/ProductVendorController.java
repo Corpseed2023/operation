@@ -73,7 +73,6 @@ public class ProductVendorController {
     }
 
 
-
     @GetMapping("/{productId}/vendors/list")
     @Operation(summary = "Get non-deleted vendors mapped with non-deleted product")
     public ResponseEntity<List<ProductVendorResponseDto>> getVendorListByProduct(

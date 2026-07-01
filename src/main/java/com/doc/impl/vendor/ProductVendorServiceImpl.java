@@ -12,6 +12,7 @@ import com.doc.exception.ValidationException;
 import com.doc.repository.ProductRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.ProductVendorMappingRepository;
+import com.doc.repository.vendor.VendorAccountsSubmissionRepository;
 import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.vendor.ProductVendorService;
@@ -36,20 +37,23 @@ public class ProductVendorServiceImpl implements ProductVendorService {
 
     private final VendorFinalizationRepository vendorFinalizationRepository;
 
+    private final VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository;
+
     public ProductVendorServiceImpl(
             ProductRepository productRepository,
             VendorRepository vendorRepository,
             ProductVendorMappingRepository productVendorMappingRepository,
             UserRepository userRepository,
-            VendorFinalizationRepository vendorFinalizationRepository
+            VendorFinalizationRepository vendorFinalizationRepository,
+            VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository
     ) {
         this.productRepository = productRepository;
         this.vendorRepository = vendorRepository;
         this.productVendorMappingRepository = productVendorMappingRepository;
         this.userRepository = userRepository;
         this.vendorFinalizationRepository = vendorFinalizationRepository;
+        this.vendorAccountsSubmissionRepository = vendorAccountsSubmissionRepository;
     }
-
     @Override
     public ProductVendorResponseDto createVendorAgainstProduct(
             Long productId,
@@ -330,14 +334,14 @@ public class ProductVendorServiceImpl implements ProductVendorService {
                 ));
 
         return productVendorMappingRepository
-                .findVendorListByProductIdAndFinalizationStatus(
+                .findVendorListByProductIdAndAccountsSubmissionStatus(
                         productId,
-                        VendorFinalizationStatus.ACCOUNTS_APPROVED
+                        VendorAccountsSubmissionStatus.APPROVED
                 )
                 .stream()
                 .map(mapping -> mapToResponse(
                         mapping,
-                        VendorFinalizationStatus.ACCOUNTS_APPROVED
+                        VendorAccountsSubmissionStatus.APPROVED
                 ))
                 .toList();
     }
@@ -364,7 +368,7 @@ public class ProductVendorServiceImpl implements ProductVendorService {
      */
     private ProductVendorResponseDto mapToResponse(
             ProductVendorMapping mapping,
-            VendorFinalizationStatus finalizationStatus
+            VendorAccountsSubmissionStatus accountsSubmissionStatus
     ) {
         ProductVendorResponseDto dto = new ProductVendorResponseDto();
 
@@ -400,28 +404,32 @@ public class ProductVendorServiceImpl implements ProductVendorService {
         dto.setFinalized(false);
 
         if (product != null && vendor != null) {
-            List<VendorFinalization> finalizations;
+            VendorFinalization finalization = null;
 
-            if (finalizationStatus != null) {
-                finalizations =
-                        vendorFinalizationRepository
-                                .findLatestFinalizationByProductAndVendorAndStatus(
-                                        product.getId(),
-                                        vendor.getId(),
-                                        finalizationStatus
-                                );
+            if (accountsSubmissionStatus != null) {
+                List<VendorAccountsSubmission> submissions =
+                        vendorAccountsSubmissionRepository.findLatestByProductAndVendorAndStatus(
+                                product.getId(),
+                                vendor.getId(),
+                                accountsSubmissionStatus
+                        );
+
+                if (!submissions.isEmpty()) {
+                    finalization = submissions.get(0).getVendorFinalization();
+                }
             } else {
-                finalizations =
-                        vendorFinalizationRepository
-                                .findLatestFinalizationByProductAndVendor(
-                                        product.getId(),
-                                        vendor.getId()
-                                );
+                List<VendorFinalization> finalizations =
+                        vendorFinalizationRepository.findLatestFinalizationByProductAndVendor(
+                                product.getId(),
+                                vendor.getId()
+                        );
+
+                if (!finalizations.isEmpty()) {
+                    finalization = finalizations.get(0);
+                }
             }
 
-            if (!finalizations.isEmpty()) {
-                VendorFinalization finalization = finalizations.get(0);
-
+            if (finalization != null) {
                 dto.setFinalized(true);
                 dto.setFinalizationId(finalization.getId());
 
@@ -455,7 +463,6 @@ public class ProductVendorServiceImpl implements ProductVendorService {
 
         return dto;
     }
-
 
 
 }
