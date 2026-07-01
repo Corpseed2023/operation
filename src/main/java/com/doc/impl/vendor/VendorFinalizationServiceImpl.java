@@ -1,11 +1,13 @@
 package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.*;
+import com.doc.entity.product.Product;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.vendor.*;
 import com.doc.service.vendor.VendorFinalizationService;
+import jakarta.ws.rs.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +23,13 @@ import java.util.List;
 public class VendorFinalizationServiceImpl implements VendorFinalizationService {
 
     private final VendorFinalizationRepository vendorFinalizationRepository;
-    private final VendorRFQRepository vendorRFQRepository;
     private final RFQVendorRepository rfqVendorRepository;
+    private final VendorRFQRepository vendorRFQRepository;
     private final VendorRepository vendorRepository;
     private final VendorQuotationRepository vendorQuotationRepository;
     private final VendorQuotationItemRepository vendorQuotationItemRepository;
     private final VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository;
+    private final ProductVendorMappingRepository productVendorMappingRepository;
 
     @Override
     @Transactional
@@ -287,6 +290,7 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         return mapAccountsSubmissionToResponse(saved);
     }
 
+
     @Override
     @Transactional(readOnly = true)
     public List<VendorAccountsSubmissionResponseDto> getAllSentToAccounts() {
@@ -345,6 +349,43 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
 
         vendorRepository.save(vendor);
 
+        VendorQuotation quotation = submission.getQuotation();
+
+        if (quotation != null) {
+            quotation.setStatus(VendorQuotationStatus.ACCEPTED);
+            quotation.setUpdatedBy(requestDto.getUserId());
+            quotation.setUpdatedDate(new Date());
+            vendorQuotationRepository.save(quotation);
+        }
+
+        RFQ rfq = submission.getRfq();
+        if(rfq != null){
+            rfq.setStatus(RFQStatus.VENDOR_FINALIZED);
+            rfq.setUpdatedBy(requestDto.getUserId());
+            rfq.setUpdatedDate(new Date());
+            vendorRFQRepository.save(rfq);
+        }
+        if (rfq != null && rfq.getProduct() != null) {
+            Product product = rfq.getProduct();
+
+            ProductVendorMapping mapping =
+                    productVendorMappingRepository
+                            .findByProductIdAndVendorId(product.getId(), vendor.getId())
+                            .orElseGet(ProductVendorMapping::new);
+
+            mapping.setProduct(product);
+            mapping.setVendor(vendor);
+            mapping.setActive(true);
+            mapping.setDeleted(false);
+            mapping.setUpdatedBy(requestDto.getUserId());
+
+            if (mapping.getId() == null) {
+                mapping.setCreatedBy(requestDto.getUserId());
+            }
+
+            productVendorMappingRepository.save(mapping);
+        }
+
         VendorAccountsSubmission saved =
                 vendorAccountsSubmissionRepository.save(submission);
 
@@ -371,10 +412,10 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             );
         }
 
-        if (submission.getStatus() == VendorAccountsSubmissionStatus.REJECTED) {
+        if (submission.getStatus() != VendorAccountsSubmissionStatus.PENDING) {
             throw new ValidationException(
-                    "Vendor accounts submission already rejected",
-                    "ERR_VENDOR_ACCOUNTS_ALREADY_REJECTED"
+                    "Only pending vendor accounts submission can be rejected",
+                    "ERR_VENDOR_ACCOUNTS_INVALID_STATUS"
             );
         }
 

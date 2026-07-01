@@ -15,6 +15,7 @@ public class VendorQuotationResponseDto {
 
     private Long rfqId;
     private Long rfqVendorId;
+    private Long vendorQuotationLegalRequestId;
 
     private Long vendorId;
     private String vendorName;
