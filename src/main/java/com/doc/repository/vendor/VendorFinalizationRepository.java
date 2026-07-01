@@ -101,4 +101,21 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
             @Param("statuses") List<VendorFinalizationStatus> statuses,
             Pageable pageable
     );
+
+    @Query("""
+        SELECT vf
+        FROM VendorFinalization vf
+        WHERE vf.rfq.product.id = :productId
+          AND vf.vendor.id = :vendorId
+          AND vf.status = :status
+          AND vf.isDeleted = false
+        ORDER BY vf.createdDate DESC
+        """)
+    List<VendorFinalization> findLatestFinalizationByProductAndVendorAndStatus(
+            @Param("productId") Long productId,
+            @Param("vendorId") Long vendorId,
+            @Param("status") VendorFinalizationStatus status
+    );
+
+
 }

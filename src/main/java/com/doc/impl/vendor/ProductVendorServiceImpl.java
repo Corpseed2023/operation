@@ -6,10 +6,7 @@ import com.doc.dto.vendor.ProductVendorResponseDto;
 import com.doc.dto.vendor.ProductVendorUpdateRequestDto;
 import com.doc.entity.product.Product;
 import com.doc.entity.user.User;
-import com.doc.entity.vendor.ProductVendorMapping;
-import com.doc.entity.vendor.Vendor;
-import com.doc.entity.vendor.VendorFinalization;
-import com.doc.entity.vendor.VendorStatus;
+import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.ProductRepository;
@@ -333,9 +330,15 @@ public class ProductVendorServiceImpl implements ProductVendorService {
                 ));
 
         return productVendorMappingRepository
-                .findActiveVendorListByProductId(productId)
+                .findVendorListByProductIdAndFinalizationStatus(
+                        productId,
+                        VendorFinalizationStatus.ACCOUNTS_APPROVED
+                )
                 .stream()
-                .map(this::mapToResponse)
+                .map(mapping -> mapToResponse(
+                        mapping,
+                        VendorFinalizationStatus.ACCOUNTS_APPROVED
+                ))
                 .toList();
     }
 
@@ -346,7 +349,23 @@ public class ProductVendorServiceImpl implements ProductVendorService {
                 : null;
     }
 
+
+    /**
+     * Keep this method for other APIs where all finalizations are allowed.
+     */
     private ProductVendorResponseDto mapToResponse(ProductVendorMapping mapping) {
+        return mapToResponse(mapping, null);
+    }
+
+
+    /**
+     * If finalizationStatus is passed, response will map only that status.
+     * Example: ACCOUNTS_APPROVED.
+     */
+    private ProductVendorResponseDto mapToResponse(
+            ProductVendorMapping mapping,
+            VendorFinalizationStatus finalizationStatus
+    ) {
         ProductVendorResponseDto dto = new ProductVendorResponseDto();
 
         Product product = mapping.getProduct();
@@ -381,11 +400,24 @@ public class ProductVendorServiceImpl implements ProductVendorService {
         dto.setFinalized(false);
 
         if (product != null && vendor != null) {
-            List<VendorFinalization> finalizations =
-                    vendorFinalizationRepository.findLatestFinalizationByProductAndVendor(
-                            product.getId(),
-                            vendor.getId()
-                    );
+            List<VendorFinalization> finalizations;
+
+            if (finalizationStatus != null) {
+                finalizations =
+                        vendorFinalizationRepository
+                                .findLatestFinalizationByProductAndVendorAndStatus(
+                                        product.getId(),
+                                        vendor.getId(),
+                                        finalizationStatus
+                                );
+            } else {
+                finalizations =
+                        vendorFinalizationRepository
+                                .findLatestFinalizationByProductAndVendor(
+                                        product.getId(),
+                                        vendor.getId()
+                                );
+            }
 
             if (!finalizations.isEmpty()) {
                 VendorFinalization finalization = finalizations.get(0);
@@ -423,4 +455,7 @@ public class ProductVendorServiceImpl implements ProductVendorService {
 
         return dto;
     }
+
+
+
 }
