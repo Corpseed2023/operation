@@ -379,6 +379,16 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             );
         }
 
+        VendorFinalization finalization = submission.getVendorFinalization();
+
+        if (finalization != null) {
+            finalization.setStatus(VendorFinalizationStatus.ACCOUNTS_APPROVED);
+            finalization.setUpdatedBy(requestDto.getUserId());
+            finalization.setUpdatedDate(new Date());
+
+            vendorFinalizationRepository.save(finalization);
+        }
+
         vendor.setStatus(VendorStatus.ACTIVE);
         vendor.setUpdatedBy(requestDto.getUserId());
         vendor.setUpdatedDate(new Date());
@@ -409,14 +419,18 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
                             .findByProductIdAndVendorId(product.getId(), vendor.getId())
                             .orElseGet(ProductVendorMapping::new);
 
+            Date now = new Date();
+
             mapping.setProduct(product);
             mapping.setVendor(vendor);
             mapping.setActive(true);
             mapping.setDeleted(false);
             mapping.setUpdatedBy(requestDto.getUserId());
+            mapping.setUpdatedDate(now);
 
             if (mapping.getId() == null) {
                 mapping.setCreatedBy(requestDto.getUserId());
+                mapping.setCreatedDate(now);
             }
 
             productVendorMappingRepository.save(mapping);
