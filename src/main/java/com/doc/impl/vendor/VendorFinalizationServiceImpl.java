@@ -22,8 +22,8 @@ import java.util.List;
 public class VendorFinalizationServiceImpl implements VendorFinalizationService {
 
     private final VendorFinalizationRepository vendorFinalizationRepository;
-    private final VendorRFQRepository vendorRFQRepository;
     private final RFQVendorRepository rfqVendorRepository;
+    private final VendorRFQRepository vendorRFQRepository;
     private final VendorRepository vendorRepository;
     private final VendorQuotationRepository vendorQuotationRepository;
     private final VendorQuotationItemRepository vendorQuotationItemRepository;
@@ -349,6 +349,14 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             quotation.setUpdatedBy(requestDto.getUserId());
             quotation.setUpdatedDate(new Date());
             vendorQuotationRepository.save(quotation);
+        }
+
+        RFQ rfq = submission.getRfq();
+        if(rfq != null){
+            rfq.setStatus(RFQStatus.VENDOR_FINALIZED);
+            rfq.setUpdatedBy(requestDto.getUserId());
+            rfq.setUpdatedDate(new Date());
+            vendorRFQRepository.save(rfq);
         }
 
         VendorAccountsSubmission saved =

@@ -5,10 +5,7 @@ import com.doc.dto.vendor.VendorOnboardingDocumentRequestDto;
 import com.doc.dto.vendor.VendorOnboardingResponseDto;
 import com.doc.dto.vendor.VendorOnboardingSendFormRequestDto;
 import com.doc.entity.vendor.*;
-import com.doc.repository.vendor.VendorFinalizationRepository;
-import com.doc.repository.vendor.VendorOnboardingDocumentRepository;
-import com.doc.repository.vendor.VendorOnboardingRepository;
-import com.doc.repository.vendor.VendorRepository;
+import com.doc.repository.vendor.*;
 import com.doc.service.mail.MailService;
 import com.doc.service.vendor.VendorOnboardingService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +22,7 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
 
     private final VendorFinalizationRepository vendorFinalizationRepository;
     private final VendorOnboardingRepository vendorOnboardingRepository;
+    private final VendorRFQRepository vendorRFQRepository;
     private final VendorOnboardingDocumentRepository vendorOnboardingDocumentRepository;
     private final VendorRepository vendorRepository;
     private final MailService mailService;
@@ -52,6 +50,7 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
         }
 
         RFQ rfq = finalization.getRfq();
+
         RFQVendor rfqVendor = finalization.getRfqVendor();
 
         String vendorEmail = resolveVendorEmail(rfqVendor, vendor);
@@ -110,6 +109,12 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
                 finalization,
                 requestDto
         );
+        if(rfq != null){
+            rfq.setStatus(RFQStatus.ONBOARDING_STARTED);
+            rfq.setUpdatedBy(requestDto.getCreatedBy());
+            rfq.setUpdatedDate(new Date());
+            vendorRFQRepository.save(rfq);
+        }
 
         finalization.setStatus(VendorFinalizationStatus.ONBOARDING_STARTED);
         finalization.setUpdatedBy(requestDto.getCreatedBy());
