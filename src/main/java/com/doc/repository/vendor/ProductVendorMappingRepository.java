@@ -14,6 +14,11 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
 
     boolean existsByProductIdAndVendorIdAndIsDeletedFalse(Long productId, Long vendorId);
 
+    Optional<ProductVendorMapping> findByProductIdAndVendorId(
+            Long productId,
+            Long vendorId
+    );
+
     Optional<ProductVendorMapping> findByIdAndIsDeletedFalse(Long id);
 
     Page<ProductVendorMapping> findByProductIdAndIsDeletedFalse(Long productId, Pageable pageable);
@@ -65,4 +70,5 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
             @Param("productId") Long productId,
             Pageable pageable
     );
+
 }

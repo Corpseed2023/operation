@@ -1,6 +1,7 @@
 package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.*;
+import com.doc.entity.product.Product;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -28,6 +29,7 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
     private final VendorQuotationRepository vendorQuotationRepository;
     private final VendorQuotationItemRepository vendorQuotationItemRepository;
     private final VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository;
+    private final ProductVendorMappingRepository productVendorMappingRepository;
 
     @Override
     @Transactional
@@ -357,6 +359,26 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             rfq.setUpdatedBy(requestDto.getUserId());
             rfq.setUpdatedDate(new Date());
             vendorRFQRepository.save(rfq);
+        }
+        if (rfq != null && rfq.getProduct() != null) {
+            Product product = rfq.getProduct();
+
+            ProductVendorMapping mapping =
+                    productVendorMappingRepository
+                            .findByProductIdAndVendorId(product.getId(), vendor.getId())
+                            .orElseGet(ProductVendorMapping::new);
+
+            mapping.setProduct(product);
+            mapping.setVendor(vendor);
+            mapping.setActive(true);
+            mapping.setDeleted(false);
+            mapping.setUpdatedBy(requestDto.getUserId());
+
+            if (mapping.getId() == null) {
+                mapping.setCreatedBy(requestDto.getUserId());
+            }
+
+            productVendorMappingRepository.save(mapping);
         }
 
         VendorAccountsSubmission saved =
