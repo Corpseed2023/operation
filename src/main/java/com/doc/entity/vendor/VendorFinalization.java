@@ -198,6 +198,12 @@
         @Temporal(TemporalType.TIMESTAMP)
         @Column(name = "accounts_verified_date")
         private Date accountsVerifiedDate;
+
+        @Column(name = "price_rank")
+        private Integer priceRank;
+
+        @Column(name = "price_level", length = 10)
+        private String priceLevel;
     
         @PrePersist
         public void onCreate() {

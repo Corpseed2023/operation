@@ -138,10 +138,51 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         rfqVendor.setUpdatedBy(requestDto.getCreatedBy());
         rfqVendor.setRemarks("Vendor finalized for quotation item");
 
-        VendorFinalization saved = vendorFinalizationRepository.save(finalization);
+        VendorFinalization saved = vendorFinalizationRepository.saveAndFlush(finalization);
+
+        recalculateLRankingForFinalizations(
+                rfq.getId(),
+                quotationItem.getItemName()
+        );
 
         return mapToResponse(saved);
     }
+
+
+    private void recalculateLRankingForFinalizations(Long rfqId, String itemName) {
+        if (rfqId == null || itemName == null || itemName.trim().isEmpty()) {
+            return;
+        }
+
+        List<VendorFinalization> finalizations =
+                vendorFinalizationRepository.findComparableFinalizationsForLRanking(
+                        rfqId,
+                        itemName
+                );
+
+        int rank = 0;
+        BigDecimal previousRate = null;
+
+        for (VendorFinalization finalization : finalizations) {
+            BigDecimal currentRate = finalization.getFinalizedUnitRate() != null
+                    ? finalization.getFinalizedUnitRate()
+                    : BigDecimal.ZERO;
+
+            if (previousRate == null || currentRate.compareTo(previousRate) != 0) {
+                rank++;
+            }
+
+            finalization.setPriceRank(rank);
+            finalization.setPriceLevel("L" + rank);
+
+            previousRate = currentRate;
+            finalization.setUpdatedDate(new Date());
+        }
+
+        vendorFinalizationRepository.saveAll(finalizations);
+    }
+
+
 
     @Override
     @Transactional(readOnly = true)
@@ -579,6 +620,8 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         response.setSentToAccounts(finalization.isSentToAccounts());
         response.setSentToAccountsBy(finalization.getSentToAccountsBy());
         response.setSentToAccountsDate(finalization.getSentToAccountsDate());
+        response.setPriceRank(finalization.getPriceRank());
+        response.setPriceLevel(finalization.getPriceLevel());
 
         return response;
     }

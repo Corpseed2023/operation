@@ -59,4 +59,7 @@ public class VendorFinalizationResponseDto {
     private Boolean sentToAccounts;
     private Long sentToAccountsBy;
     private Date sentToAccountsDate;
+
+    private Integer priceRank;
+    private String priceLevel;
 }

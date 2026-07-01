@@ -143,7 +143,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
     public List<VendorQuotationResponseDto> getVendorQuotationsByRfqId(Long rfqId) {
 
         List<VendorQuotation> quotations =
-                vendorQuotationRepository.findByRfq_IdAndIsDeletedFalseOrderByCreatedDateDesc(rfqId);
+                vendorQuotationRepository.findByRfqIdAndIsDeletedFalseOrderByCreatedDateDesc(rfqId);
 
         List<VendorQuotationResponseDto> responseList = new ArrayList<>();
 
