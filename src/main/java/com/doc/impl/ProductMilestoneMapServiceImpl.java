@@ -55,17 +55,51 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
         logger.info("Creating product-milestone mapping for product ID: {} and milestone ID: {}",
                 requestDto.getProductId(), requestDto.getMilestoneId());
 
-        // Validate product and milestone existence
         Product product = productRepository.findActiveUserById(requestDto.getProductId())
-                .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + requestDto.getProductId()));
-        Milestone milestone = milestoneRepository.findById(requestDto.getMilestoneId())
-                .orElseThrow(() -> new EntityNotFoundException("Milestone not found with ID: " + requestDto.getMilestoneId()));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Product not found with ID: " + requestDto.getProductId()
+                ));
 
-        // Check for duplicate order for the product
-        if (productMilestoneMapRepository.existsByProductIdAndOrder(requestDto.getProductId(), requestDto.getOrder())) {
-            throw new IllegalArgumentException("Order " + requestDto.getOrder() + " already exists for product ID: " + requestDto.getProductId());
+        Milestone milestone = milestoneRepository.findById(requestDto.getMilestoneId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Milestone not found with ID: " + requestDto.getMilestoneId()
+                ));
+
+        /*
+         * Check duplicate step order for same product.
+         */
+        if (productMilestoneMapRepository.existsByProductIdAndOrder(
+                requestDto.getProductId(),
+                requestDto.getOrder()
+        )) {
+            throw new IllegalArgumentException(
+                    "Order " + requestDto.getOrder()
+                            + " already exists for product ID: " + requestDto.getProductId()
+            );
         }
 
+        /*
+         * Check duplicate product + milestone.
+         * This protects uk_product_milestone constraint.
+         */
+        boolean duplicateProductMilestoneExists = productMilestoneMapRepository
+                .findByProductId(requestDto.getProductId())
+                .stream()
+                .anyMatch(mapping ->
+                        mapping.getMilestone() != null
+                                && mapping.getMilestone().getId().equals(requestDto.getMilestoneId())
+                );
+
+        if (duplicateProductMilestoneExists) {
+            throw new IllegalArgumentException(
+                    "Milestone ID " + requestDto.getMilestoneId()
+                            + " already exists for product ID: " + requestDto.getProductId()
+            );
+        }
+
+        /*
+         * Validate total payment percentage.
+         */
         double currentSum = productMilestoneMapRepository
                 .findByProductId(requestDto.getProductId())
                 .stream()
@@ -76,54 +110,165 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
 
         if (newTotal > 100.0) {
             throw new IllegalArgumentException(
-                    String.format("Cannot create milestone: total payment percentage would be %.1f%% (maximum allowed is 100%%). " +
-                                    "Current sum for product %d is %.1f%%.",
-                            newTotal, requestDto.getProductId(), currentSum));
+                    String.format(
+                            "Cannot create milestone: total payment percentage would be %.1f%% (maximum allowed is 100%%). Current sum for product %d is %.1f%%.",
+                            newTotal,
+                            requestDto.getProductId(),
+                            currentSum
+                    )
+            );
         }
+
         ProductMilestoneMap mapping = new ProductMilestoneMap();
+
+        /*
+         * Basic mapping
+         */
         mapping.setProduct(product);
         mapping.setMilestone(milestone);
         mapping.setOrder(requestDto.getOrder());
         mapping.setTatInDays(requestDto.getTatInDays());
+
+        /*
+         * Execution TAT - user-wise
+         */
+        mapping.setExecutionTatApplicable(requestDto.isExecutionTatApplicable());
+        mapping.setExecutionTatInDays(requestDto.getExecutionTatInDays());
+        mapping.setExecutionTatHours(requestDto.getExecutionTatHours());
+
+        /*
+         * Department TAT
+         */
+        mapping.setDepartmentTatApplicable(requestDto.isDepartmentTatApplicable());
+        mapping.setDepartmentTatHours(requestDto.getDepartmentTatHours());
+
+        /*
+         * Performance TAT
+         */
+        mapping.setPerformanceTatApplicable(requestDto.isPerformanceTatApplicable());
+        mapping.setPerformanceTatHours(requestDto.getPerformanceTatHours());
+
+        /*
+         * Customer / project SLA TAT
+         */
+        mapping.setCustomerTatApplicable(requestDto.isCustomerTatApplicable());
+        mapping.setCustomerTatHours(requestDto.getCustomerTatHours());
+
+        /*
+         * Rollback TAT
+         */
+        mapping.setRollbackTatApplicable(requestDto.isRollbackTatApplicable());
         mapping.setRollbackTatInDays(requestDto.getRollbackTatInDays());
+        mapping.setRollbackTatHours(requestDto.getRollbackTatHours());
+
+        /*
+         * Workflow rules
+         */
         mapping.setStrictApproval(requestDto.isStrictApproval());
         mapping.setAllowRollback(requestDto.isAllowRollback());
         mapping.setMaxAttempts(requestDto.getMaxAttempts());
         mapping.setMandatory(requestDto.isMandatory());
         mapping.setPaymentPercentage(requestDto.getPaymentPercentage());
         mapping.setAutoGenerated(requestDto.isAutoGenerated());
+        mapping.setRequiresPortalDetails(requestDto.isRequiresPortalDetails());
+
+        /*
+         * TAT behaviour
+         */
+        mapping.setAllowTatResetOnReassign(requestDto.isAllowTatResetOnReassign());
+        mapping.setBusinessDaysEnabled(requestDto.isBusinessDaysEnabled());
+
+        /*
+         * Reminder / escalation
+         */
+        mapping.setReminderBeforeDueHours(requestDto.getReminderBeforeDueHours());
+        mapping.setManagerEscalationAfterDueHours(requestDto.getManagerEscalationAfterDueHours());
+        mapping.setHodEscalationAfterDueHours(requestDto.getHodEscalationAfterDueHours());
+
+        /*
+         * Common fields
+         */
+        mapping.setActive(requestDto.isActive());
+        mapping.setDeleted(false);
         mapping.setCreatedDate(new Date());
         mapping.setUpdatedDate(new Date());
         mapping.setDate(LocalDate.now());
 
         ProductMilestoneMap savedMapping = productMilestoneMapRepository.save(mapping);
+
         logger.info("Product-milestone mapping created with ID: {}", savedMapping.getId());
+
         return mapToResponseDto(savedMapping);
     }
+
+
 
     @Override
     public ProductMilestoneMapResponseDto updateProductMilestoneMap(Long id, ProductMilestoneMapRequestDto requestDto) {
         logger.info("Updating product-milestone mapping with ID: {}", id);
 
         ProductMilestoneMap existingMapping = productMilestoneMapRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Product-milestone mapping not found with ID: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Product-milestone mapping not found with ID: " + id
+                ));
 
-        // Validate product and milestone existence
         Product product = productRepository.findActiveUserById(requestDto.getProductId())
-                .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + requestDto.getProductId()));
-        Milestone milestone = milestoneRepository.findById(requestDto.getMilestoneId())
-                .orElseThrow(() -> new EntityNotFoundException("Milestone not found with ID: " + requestDto.getMilestoneId()));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Product not found with ID: " + requestDto.getProductId()
+                ));
 
-        // Check for duplicate order for the product (excluding this mapping)
-        if (existingMapping.getOrder() != requestDto.getOrder() &&
-                productMilestoneMapRepository.existsByProductIdAndOrder(requestDto.getProductId(), requestDto.getOrder())) {
-            throw new IllegalArgumentException("Order " + requestDto.getOrder() + " already exists for product ID: " + requestDto.getProductId());
+        Milestone milestone = milestoneRepository.findById(requestDto.getMilestoneId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Milestone not found with ID: " + requestDto.getMilestoneId()
+                ));
+
+        /*
+         * Check duplicate step order for same product excluding current mapping.
+         */
+        boolean duplicateOrderExists = productMilestoneMapRepository
+                .findByProductId(requestDto.getProductId())
+                .stream()
+                .anyMatch(mapping ->
+                        !mapping.getId().equals(id)
+                                && mapping.getOrder() == requestDto.getOrder()
+                );
+
+        if (duplicateOrderExists) {
+            throw new IllegalArgumentException(
+                    "Order " + requestDto.getOrder()
+                            + " already exists for product ID: " + requestDto.getProductId()
+            );
         }
 
-        double currentSumExcludingThis = productMilestoneMapRepository
-                .findByProductId(existingMapping.getProduct().getId())
+        /*
+         * Check duplicate product + milestone excluding current mapping.
+         * This protects your uk_product_milestone constraint.
+         */
+        boolean duplicateProductMilestoneExists = productMilestoneMapRepository
+                .findByProductId(requestDto.getProductId())
                 .stream()
-                .filter(m -> !m.getId().equals(id))           // exclude self
+                .anyMatch(mapping ->
+                        !mapping.getId().equals(id)
+                                && mapping.getMilestone() != null
+                                && mapping.getMilestone().getId().equals(requestDto.getMilestoneId())
+                );
+
+        if (duplicateProductMilestoneExists) {
+            throw new IllegalArgumentException(
+                    "Milestone ID " + requestDto.getMilestoneId()
+                            + " already exists for product ID: " + requestDto.getProductId()
+            );
+        }
+
+        /*
+         * Validate total payment percentage for selected product excluding current mapping.
+         * Important: use requestDto.getProductId(), not existingMapping.getProduct().getId(),
+         * because product may also be changed during update.
+         */
+        double currentSumExcludingThis = productMilestoneMapRepository
+                .findByProductId(requestDto.getProductId())
+                .stream()
+                .filter(mapping -> !mapping.getId().equals(id))
                 .mapToDouble(ProductMilestoneMap::getPaymentPercentage)
                 .sum();
 
@@ -131,30 +276,90 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
 
         if (newTotal > 100.0) {
             throw new IllegalArgumentException(
-                    String.format("Update would make total payment percentage %.1f%% (max 100%%). " +
-                                    "Current sum excluding this milestone: %.1f%%",
-                            newTotal, currentSumExcludingThis));
+                    String.format(
+                            "Update would make total payment percentage %.1f%% (max 100%%). Current sum excluding this milestone: %.1f%%",
+                            newTotal,
+                            currentSumExcludingThis
+                    )
+            );
         }
 
-
+        /*
+         * Basic mapping
+         */
         existingMapping.setProduct(product);
         existingMapping.setMilestone(milestone);
         existingMapping.setOrder(requestDto.getOrder());
         existingMapping.setTatInDays(requestDto.getTatInDays());
+
+        /*
+         * Execution TAT - user-wise
+         */
+        existingMapping.setExecutionTatApplicable(requestDto.isExecutionTatApplicable());
+        existingMapping.setExecutionTatInDays(requestDto.getExecutionTatInDays());
+        existingMapping.setExecutionTatHours(requestDto.getExecutionTatHours());
+
+        /*
+         * Department TAT
+         */
+        existingMapping.setDepartmentTatApplicable(requestDto.isDepartmentTatApplicable());
+        existingMapping.setDepartmentTatHours(requestDto.getDepartmentTatHours());
+
+        /*
+         * Performance TAT
+         */
+        existingMapping.setPerformanceTatApplicable(requestDto.isPerformanceTatApplicable());
+        existingMapping.setPerformanceTatHours(requestDto.getPerformanceTatHours());
+
+        /*
+         * Customer / project SLA TAT
+         */
+        existingMapping.setCustomerTatApplicable(requestDto.isCustomerTatApplicable());
+        existingMapping.setCustomerTatHours(requestDto.getCustomerTatHours());
+
+        /*
+         * Rollback TAT
+         */
+        existingMapping.setRollbackTatApplicable(requestDto.isRollbackTatApplicable());
         existingMapping.setRollbackTatInDays(requestDto.getRollbackTatInDays());
+        existingMapping.setRollbackTatHours(requestDto.getRollbackTatHours());
+
+        /*
+         * Workflow rules
+         */
         existingMapping.setStrictApproval(requestDto.isStrictApproval());
         existingMapping.setAllowRollback(requestDto.isAllowRollback());
         existingMapping.setMaxAttempts(requestDto.getMaxAttempts());
         existingMapping.setMandatory(requestDto.isMandatory());
         existingMapping.setPaymentPercentage(requestDto.getPaymentPercentage());
         existingMapping.setAutoGenerated(requestDto.isAutoGenerated());
+        existingMapping.setRequiresPortalDetails(requestDto.isRequiresPortalDetails());
+
+        /*
+         * TAT behaviour
+         */
+        existingMapping.setAllowTatResetOnReassign(requestDto.isAllowTatResetOnReassign());
+        existingMapping.setBusinessDaysEnabled(requestDto.isBusinessDaysEnabled());
+
+        /*
+         * Reminder / escalation
+         */
+        existingMapping.setReminderBeforeDueHours(requestDto.getReminderBeforeDueHours());
+        existingMapping.setManagerEscalationAfterDueHours(requestDto.getManagerEscalationAfterDueHours());
+        existingMapping.setHodEscalationAfterDueHours(requestDto.getHodEscalationAfterDueHours());
+
+        /*
+         * Common fields
+         */
+        existingMapping.setActive(requestDto.isActive());
         existingMapping.setUpdatedDate(new Date());
 
         ProductMilestoneMap updatedMapping = productMilestoneMapRepository.save(existingMapping);
+
         logger.info("Product-milestone mapping updated with ID: {}", updatedMapping.getId());
+
         return mapToResponseDto(updatedMapping);
     }
-
     @Override
     public ProductMilestoneMapResponseDto getProductMilestoneMapById(Long id) {
         logger.info("Fetching product-milestone mapping with ID: {}", id);
@@ -218,19 +423,90 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
 
     private ProductMilestoneMapResponseDto mapToResponseDto(ProductMilestoneMap mapping) {
         ProductMilestoneMapResponseDto dto = new ProductMilestoneMapResponseDto();
+
         dto.setId(mapping.getId());
-        dto.setProductId(mapping.getProduct().getId());
-        dto.setMilestoneId(mapping.getMilestone().getId());
-        dto.setMilestoneName(mapping.getMilestone().getName());
+
+        if (mapping.getProduct() != null) {
+            dto.setProductId(mapping.getProduct().getId());
+            dto.setProductName(mapping.getProduct().getProductName());
+        }
+
+        if (mapping.getMilestone() != null) {
+            dto.setMilestoneId(mapping.getMilestone().getId());
+            dto.setMilestoneName(mapping.getMilestone().getName());
+        }
+
         dto.setOrder(mapping.getOrder());
+
         dto.setTatInDays(mapping.getTatInDays());
+
+        // =====================================================================
+        // EXECUTION TAT
+        // =====================================================================
+
+        dto.setExecutionTatApplicable(mapping.isExecutionTatApplicable());
+        dto.setExecutionTatInDays(mapping.getExecutionTatInDays());
+        dto.setExecutionTatHours(mapping.getExecutionTatHours());
+
+        // =====================================================================
+        // DEPARTMENT TAT
+        // =====================================================================
+
+        dto.setDepartmentTatApplicable(mapping.isDepartmentTatApplicable());
+        dto.setDepartmentTatHours(mapping.getDepartmentTatHours());
+
+        // =====================================================================
+        // PERFORMANCE TAT
+        // =====================================================================
+
+        dto.setPerformanceTatApplicable(mapping.isPerformanceTatApplicable());
+        dto.setPerformanceTatHours(mapping.getPerformanceTatHours());
+
+        // =====================================================================
+        // CUSTOMER / PROJECT SLA TAT
+        // =====================================================================
+
+        dto.setCustomerTatApplicable(mapping.isCustomerTatApplicable());
+        dto.setCustomerTatHours(mapping.getCustomerTatHours());
+
+        // =====================================================================
+        // ROLLBACK TAT
+        // =====================================================================
+
+        dto.setRollbackTatApplicable(mapping.isRollbackTatApplicable());
         dto.setRollbackTatInDays(mapping.getRollbackTatInDays());
+        dto.setRollbackTatHours(mapping.getRollbackTatHours());
+
+        // =====================================================================
+        // WORKFLOW RULES
+        // =====================================================================
+
         dto.setStrictApproval(mapping.isStrictApproval());
         dto.setAllowRollback(mapping.isAllowRollback());
         dto.setMaxAttempts(mapping.getMaxAttempts());
         dto.setMandatory(mapping.isMandatory());
         dto.setPaymentPercentage(mapping.getPaymentPercentage());
         dto.setAutoGenerated(mapping.isAutoGenerated());
+        dto.setRequiresPortalDetails(mapping.isRequiresPortalDetails());
+
+        dto.setAllowTatResetOnReassign(mapping.isAllowTatResetOnReassign());
+        dto.setBusinessDaysEnabled(mapping.isBusinessDaysEnabled());
+
+        // =====================================================================
+        // REMINDER / ESCALATION
+        // =====================================================================
+
+        dto.setReminderBeforeDueHours(mapping.getReminderBeforeDueHours());
+        dto.setManagerEscalationAfterDueHours(mapping.getManagerEscalationAfterDueHours());
+        dto.setHodEscalationAfterDueHours(mapping.getHodEscalationAfterDueHours());
+
+        // =====================================================================
+        // COMMON FLAGS
+        // =====================================================================
+
+        dto.setActive(mapping.isActive());
+        dto.setDeleted(mapping.isDeleted());
+
         return dto;
     }
 }
