@@ -7,13 +7,17 @@ import com.doc.entity.project.Project;
 import com.doc.repository.CompanyDocumentRepository;
 import com.doc.repository.ProductDocumentMappingRepository;
 import com.doc.service.ProjectMailService;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.thymeleaf.context.Context;
+import org.thymeleaf.spring6.SpringTemplateEngine;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -23,6 +27,7 @@ import java.util.stream.Collectors;
 public class ProjectMailServiceImpl implements ProjectMailService {
 
     private final JavaMailSender javaMailSender;
+    private final SpringTemplateEngine templateEngine;
     private final ProductDocumentMappingRepository productDocumentMappingRepository;
     private final CompanyDocumentRepository companyDocumentRepository;
 
@@ -42,6 +47,7 @@ public class ProjectMailServiceImpl implements ProjectMailService {
 
         if (mappings == null || mappings.isEmpty()) {
             log.info("No required documents mapped for productId: {}", project.getProduct().getId());
+            sendProjectCreatedHtmlMail(project, contact, Collections.emptyList());
             return;
         }
 
@@ -60,6 +66,7 @@ public class ProjectMailServiceImpl implements ProjectMailService {
         }
 
         if (requiredDocMap.isEmpty()) {
+            sendProjectCreatedHtmlMail(project, contact, Collections.emptyList());
             return;
         }
 
@@ -71,7 +78,9 @@ public class ProjectMailServiceImpl implements ProjectMailService {
                         requiredDocumentIds
                 );
 
-        Set<Long> alreadyAvailableSet = new HashSet<>(alreadyAvailableDocIds);
+        Set<Long> alreadyAvailableSet = new HashSet<>(
+                alreadyAvailableDocIds != null ? alreadyAvailableDocIds : Collections.emptyList()
+        );
 
         List<ProductRequiredDocuments> pendingDocuments =
                 requiredDocMap.values()
@@ -81,78 +90,59 @@ public class ProjectMailServiceImpl implements ProjectMailService {
 
         if (pendingDocuments.isEmpty()) {
             log.info("All required documents are already available for companyId: {}", project.getCompany().getId());
-            sendProjectCreatedMailWithoutPendingDocs(project, contact);
-            return;
         }
 
-        sendProjectCreatedMailWithPendingDocs(project, contact, pendingDocuments);
+        sendProjectCreatedHtmlMail(project, contact, pendingDocuments);
     }
 
-    private void sendProjectCreatedMailWithPendingDocs(
+    private void sendProjectCreatedHtmlMail(
             Project project,
             Contact contact,
             List<ProductRequiredDocuments> pendingDocuments
     ) {
-        String clientEmail = contact.getEmail().split("[,;]")[0].trim();
+        try {
+            String clientEmail = contact.getEmail().split("[,;]")[0].trim();
 
-        StringBuilder documentList = new StringBuilder();
-
-        for (int i = 0; i < pendingDocuments.size(); i++) {
-            ProductRequiredDocuments doc = pendingDocuments.get(i);
-
-            documentList.append(i + 1)
-                    .append(". ")
-                    .append(doc.getName());
-
-            if (StringUtils.hasText(doc.getAllowedFormats())) {
-                documentList.append(" (Allowed formats: ")
-                        .append(doc.getAllowedFormats())
-                        .append(")");
+            if (!StringUtils.hasText(clientEmail)) {
+                return;
             }
 
-            documentList.append("\n");
+            Context context = new Context();
+            context.setVariable("clientName", StringUtils.hasText(contact.getName()) ? contact.getName() : "Client");
+            context.setVariable("projectNo", project.getProjectNo());
+            context.setVariable("projectName", project.getName());
+            context.setVariable("productName", project.getProduct().getProductName());
+            context.setVariable("pendingDocuments", pendingDocuments);
+            context.setVariable("hasPendingDocuments", pendingDocuments != null && !pendingDocuments.isEmpty());
+
+            String htmlContent = templateEngine.process("mail/project-created-mail", context);
+
+            MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+
+            MimeMessageHelper helper = new MimeMessageHelper(
+                    mimeMessage,
+                    MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED,
+                    StandardCharsets.UTF_8.name()
+            );
+
+            helper.setFrom("erp@corpseed.com");
+            helper.setTo(clientEmail);
+
+            if (pendingDocuments != null && !pendingDocuments.isEmpty()) {
+                helper.setSubject("Required Documents for Project - " + project.getProjectNo());
+            } else {
+                helper.setSubject("Project Created - " + project.getProjectNo());
+            }
+
+            helper.setText(htmlContent, true);
+
+            javaMailSender.send(mimeMessage);
+
+            log.info("Project created HTML mail sent successfully to: {}", clientEmail);
+
+        } catch (Exception e) {
+            log.error("Failed to send project created HTML mail for projectId: {}",
+                    project.getId(), e);
         }
-
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("erp@corpseed.com");
-        message.setTo(clientEmail);
-        message.setSubject("Required Documents for Project - " + project.getProjectNo());
-
-        message.setText(
-                "Dear " + contact.getName() + ",\n\n" +
-                        "Your project has been created successfully.\n\n" +
-                        "Project No: " + project.getProjectNo() + "\n" +
-                        "Project Name: " + project.getName() + "\n" +
-                        "Product: " + project.getProduct().getProductName() + "\n\n" +
-                        "Please share the following pending documents:\n\n" +
-                        documentList +
-                        "\nNote: Documents already available and verified in our records are not included above.\n\n" +
-                        "Regards,\n" +
-                        "Corpseed Team"
-        );
-
-        javaMailSender.send(message);
-    }
-
-    private void sendProjectCreatedMailWithoutPendingDocs(Project project, Contact contact) {
-        String clientEmail = contact.getEmail().split("[,;]")[0].trim();
-
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("erp@corpseed.com");
-        message.setTo(clientEmail);
-        message.setSubject("Project Created - " + project.getProjectNo());
-
-        message.setText(
-                "Dear " + contact.getName() + ",\n\n" +
-                        "Your project has been created successfully.\n\n" +
-                        "Project No: " + project.getProjectNo() + "\n" +
-                        "Project Name: " + project.getName() + "\n" +
-                        "Product: " + project.getProduct().getProductName() + "\n\n" +
-                        "All required documents are already available in our records.\n\n" +
-                        "Regards,\n" +
-                        "Corpseed Team"
-        );
-
-        javaMailSender.send(message);
     }
 }

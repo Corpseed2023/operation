@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Project Created</title>
+</head>
+
+<body style="font-family: Arial, sans-serif; font-size: 14px; color: #222; margin: 0; padding: 0; background-color: #f4f6f8;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f6f8; padding: 24px;">
+  <tr>
+    <td align="center">
+
+      <table width="700" cellpadding="0" cellspacing="0"
+             style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+
+        <!-- Header -->
+        <tr>
+          <td style="padding: 22px 26px; background-color: #1f2937; color: #ffffff;">
+            <h2 style="margin: 0; font-size: 21px; font-weight: 700;">
+              Project Created Successfully
+            </h2>
+            <p style="margin: 7px 0 0; font-size: 13px; color: #d1d5db;" th:text="${projectNo}">
+              PRJ-2026-0001
+            </p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding: 26px;">
+
+            <p style="margin-top: 0; margin-bottom: 14px;">
+              Dear <b th:text="${clientName}">Client Name</b>,
+            </p>
+
+            <p style="line-height: 1.6; margin-bottom: 18px;">
+              Your project has been created successfully. Please find the project details below.
+            </p>
+
+            <!-- Project Details -->
+            <table cellpadding="9" cellspacing="0" width="100%"
+                   style="border-collapse: collapse; border: 1px solid #e5e7eb; margin-bottom: 22px;">
+
+              <tr>
+                <td style="border: 1px solid #e5e7eb; width: 35%; background-color: #f9fafb;">
+                  <b>Project No</b>
+                </td>
+                <td style="border: 1px solid #e5e7eb;" th:text="${projectNo}">
+                  PRJ-2026-0001
+                </td>
+              </tr>
+
+              <tr>
+                <td style="border: 1px solid #e5e7eb; background-color: #f9fafb;">
+                  <b>Project Name</b>
+                </td>
+                <td style="border: 1px solid #e5e7eb;" th:text="${projectName}">
+                  Project Name
+                </td>
+              </tr>
+
+              <tr>
+                <td style="border: 1px solid #e5e7eb; background-color: #f9fafb;">
+                  <b>Product / Service</b>
+                </td>
+                <td style="border: 1px solid #e5e7eb;" th:text="${productName}">
+                  Product Name
+                </td>
+              </tr>
+            </table>
+
+            <!-- Pending Documents -->
+            <div th:if="${hasPendingDocuments}">
+
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; margin-bottom: 18px;">
+                <tr>
+                  <td style="padding: 14px 16px;">
+                    <p style="margin: 0; color: #9a3412; font-weight: 700;">
+                      Pending Documents Required
+                    </p>
+                    <p style="margin: 6px 0 0; color: #7c2d12; line-height: 1.5;">
+                      Please share the following documents so that our team can proceed further.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <table cellpadding="9" cellspacing="0" width="100%"
+                     style="border-collapse: collapse; border: 1px solid #e5e7eb; margin-bottom: 18px;">
+
+                <tr style="background-color: #f9fafb;">
+                  <th align="left" style="border: 1px solid #e5e7eb; width: 8%;">#</th>
+                  <th align="left" style="border: 1px solid #e5e7eb;">Document Name</th>
+                  <th align="left" style="border: 1px solid #e5e7eb; width: 28%;">Allowed Formats</th>
+                </tr>
+
+                <tr th:each="doc, stat : ${pendingDocuments}">
+                  <td style="border: 1px solid #e5e7eb;" th:text="${stat.count}">
+                    1
+                  </td>
+                  <td style="border: 1px solid #e5e7eb;">
+                    <b th:text="${doc.name}">Document Name</b>
+
+                    <div th:if="${doc.description != null and doc.description != ''}"
+                         th:text="${doc.description}"
+                         style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                      Description
+                    </div>
+                  </td>
+                  <td style="border: 1px solid #e5e7eb;"
+                      th:text="${doc.allowedFormats != null and doc.allowedFormats != '' ? doc.allowedFormats : 'As applicable'}">
+                    pdf,jpg,png
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                Note: Documents already available and verified in our records are not included above.
+              </p>
+
+            </div>
+
+            <!-- No Pending Documents -->
+            <div th:unless="${hasPendingDocuments}">
+
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; margin-bottom: 18px;">
+                <tr>
+                  <td style="padding: 14px 16px;">
+                    <p style="margin: 0; color: #047857; font-weight: 700;">
+                      No Pending Documents
+                    </p>
+                    <p style="margin: 6px 0 0; color: #065f46; line-height: 1.5;">
+                      All required documents are already available in our records.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </div>
+
+            <p style="margin-top: 22px; line-height: 1.6;">
+              Our team will review the available documents and connect with you if anything else is required.
+            </p>
+
+            <p style="margin-top: 24px;">
+              Regards,<br/>
+              <b>Corpseed Team</b>
+            </p>
+
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
