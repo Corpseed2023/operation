@@ -49,7 +49,7 @@ public class ProjectController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    // add condition that if rating of company is
+
 
 
     @GetMapping
