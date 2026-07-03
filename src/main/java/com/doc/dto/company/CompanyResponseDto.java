@@ -16,6 +16,7 @@ public class CompanyResponseDto {
     private String name;
     private String panNo;
     private String industry;
+    private String rating;
     // private String industries;   // ← removed if duplicate/not needed
 
     private String subIndustry;
@@ -24,6 +25,7 @@ public class CompanyResponseDto {
     private Date createdDate;
     private Date updatedDate;
     private boolean deleted;
+
 
     private int unitCount;
     private List<UnitSummary> units;           // ← now resolves correctly

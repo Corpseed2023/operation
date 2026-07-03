@@ -130,16 +130,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                             );
                         });
 
-        boolean isAdmin = changedBy.getRoles()
-                .stream()
-                .anyMatch(r -> "ADMIN".equals(r.getName()));
-
-        boolean isOperationHead = changedBy.getRoles()
-                .stream()
-                .anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
-
-
-
         MilestoneStatus newStatus =
                 milestoneStatusRepository.findByName(updateDto.getNewStatusName())
                         .orElseThrow(() -> {
@@ -151,10 +141,39 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                             );
                         });
 
+        String currentStatusName = assignment.getStatus() != null
+                ? assignment.getStatus().getName()
+                : null;
+
+        String requestedStatusName = newStatus.getName();
+
         /*
-         * Business validation before starting Filing milestone
-         *
-         * Requirement:
+         * Final-state validation:
+         * Once milestone is COMPLETED, no further status change is allowed.
+         * This prevents COMPLETED -> NEW / IN_PROGRESS / ON_HOLD / REJECTED / REWORK etc.
+         */
+        if ("COMPLETED".equalsIgnoreCase(currentStatusName)) {
+            throw new ValidationException(
+                    "Completed milestone status cannot be changed again",
+                    "COMPLETED_MILESTONE_STATUS_CHANGE_NOT_ALLOWED"
+            );
+        }
+
+        /*
+         * Prevent duplicate same-status update.
+         * Important because COMPLETED -> COMPLETED can duplicate performance count,
+         * time spent, history, and visibility recalculation.
+         */
+        if (currentStatusName != null
+                && currentStatusName.equalsIgnoreCase(requestedStatusName)) {
+            throw new ValidationException(
+                    "Milestone is already in " + requestedStatusName + " status",
+                    "MILESTONE_ALREADY_IN_REQUESTED_STATUS"
+            );
+        }
+
+        /*
+         * Business validation before starting Filing/Filling milestone.
          * Before user changes Filing/Filling milestone to IN_PROGRESS,
          * portal details must already be added.
          */
@@ -166,9 +185,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             milestoneValidator.validateFillingMilestone(assignment);
         }
 
-
         /*
-         * Business validation before marking COMPLETED
+         * Business validation before marking COMPLETED.
          */
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
 
@@ -176,15 +194,12 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 milestoneValidator.validateDocumentMilestone(assignment);
             }
 
-            if ("Legal Verfication".equalsIgnoreCase(milestoneName)) {
+            if ("Legal Verification".equalsIgnoreCase(milestoneName)
+                    || "Legal Verfication".equalsIgnoreCase(milestoneName)) {
                 milestoneValidator.validateLegalMilestone(assignment);
             }
 
-            if ("Documentation".equalsIgnoreCase(milestoneName)) {
-                milestoneValidator.validateDocumentMilestone(assignment);
-            }
-
-            if ("Filling".equalsIgnoreCase(milestoneName)) {
+            if (isFilingMilestone(milestoneName)) {
                 milestoneValidator.validateFillingMilestone(assignment);
             }
 
@@ -194,7 +209,32 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * If milestone is completed:
+         * Rollback handling: REJECTED -> NEW.
+         * This is allowed only when rollback is enabled in ProductMilestoneMap.
+         */
+        if ("NEW".equalsIgnoreCase(newStatus.getName())
+                && "REJECTED".equalsIgnoreCase(currentStatusName)) {
+
+            if (!assignment.getProductMilestoneMap().isAllowRollback()) {
+                throw new ValidationException(
+                        "Rollback not allowed for this milestone",
+                        "ROLLBACK_NOT_ALLOWED"
+                );
+            }
+
+            if (assignment.getReworkAttempts()
+                    >= assignment.getProductMilestoneMap().getMaxAttempts()) {
+                throw new ValidationException(
+                        "Maximum rework attempts reached",
+                        "MAX_REWORK_ATTEMPTS_REACHED"
+                );
+            }
+
+            assignment.setReworkAttempts(assignment.getReworkAttempts() + 1);
+        }
+
+        /*
+         * If milestone is getting completed:
          * 1. Reduce old user's active assignment count
          * 2. Add time spent
          * 3. Mark user-product map as unassigned
@@ -236,37 +276,15 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
                 if (userMap != null) {
                     userMap.setAssigned(false);
+                    userMap.setUpdatedDate(new Date());
+                    userMap.setUpdatedBy(updateDto.getChangedById());
                     userProductMapRepository.save(userMap);
                 }
             }
         }
 
         /*
-         * Rollback handling: REJECTED -> NEW
-         */
-        if ("NEW".equalsIgnoreCase(newStatus.getName())
-                && "REJECTED".equalsIgnoreCase(assignment.getStatus().getName())) {
-
-            if (!assignment.getProductMilestoneMap().isAllowRollback()) {
-                throw new ValidationException(
-                        "Rollback not allowed for this milestone",
-                        "ROLLBACK_NOT_ALLOWED"
-                );
-            }
-
-            if (assignment.getReworkAttempts()
-                    >= assignment.getProductMilestoneMap().getMaxAttempts()) {
-                throw new ValidationException(
-                        "Maximum rework attempts reached",
-                        "MAX_REWORK_ATTEMPTS_REACHED"
-                );
-            }
-
-            assignment.setReworkAttempts(assignment.getReworkAttempts() + 1);
-        }
-
-        /*
-         * Save status history before changing assignment status
+         * Save status history before changing assignment status.
          */
         MilestoneStatusHistory history = new MilestoneStatusHistory();
         history.setMilestoneAssignment(assignment);
@@ -280,7 +298,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         milestoneStatusHistoryRepository.save(history);
 
         /*
-         * Update assignment status
+         * Update assignment status.
          */
         assignment.setStatus(newStatus);
         assignment.setStatusReason(updateDto.getStatusReason());
@@ -298,15 +316,15 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         assignment = projectMilestoneAssignmentRepository.save(assignment);
 
-        logger.info("Milestone assignment ID {} status updated to {} by user {}",
+        logger.info("Milestone assignment ID {} status updated from {} to {} by user {}",
                 updateDto.getAssignmentId(),
+                currentStatusName,
                 newStatus.getName(),
                 changedBy.getFullName());
 
         Project project = assignment.getProject();
 
         /*
-         * IMPORTANT FIX:
          * After completing one milestone, recalculate visibility of all project milestones.
          * This will make the next milestone visible if payment and previous milestone conditions are satisfied.
          */
@@ -321,10 +339,12 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * Update project status after milestone status/visibility update
+         * Update project status after milestone status/visibility update.
          */
         updateProjectStatus(project, updateDto.getChangedById());
     }
+
+
 
     private boolean isFilingMilestone(String milestoneName) {
         return "Filing".equalsIgnoreCase(milestoneName)

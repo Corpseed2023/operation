@@ -18,6 +18,7 @@ public class CompanyRequestDto {
     private String industries;
     private String subIndustry;
     private String subSubIndustry;
+    private String rating;
 
     private Long createdBy;
 
