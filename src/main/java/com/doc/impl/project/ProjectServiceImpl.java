@@ -44,6 +44,7 @@ import com.doc.service.ProjectMailService;
 import com.doc.service.ProjectMilestoneAssignmentService;
 import com.doc.service.ProjectService;
 import com.doc.validator.request.ProjectRequestValidator;
+import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -254,9 +255,9 @@ public class ProjectServiceImpl implements ProjectService {
 
         double professionalFee = extractProfessionalFee(solutionDetails);
 
-        ProjectPriority priority = calculateProjectPriorityByCompanyRating(
+        ProjectPriority priority = calculateProjectPrioritySafely(
+                product.getId(),
                 company.getRating(),
-                professionalFee,
                 totalAmount
         );
 
@@ -312,6 +313,43 @@ public class ProjectServiceImpl implements ProjectService {
         updateMilestoneVisibilities(project, createdBy.getId());
         return mapToResponseDto(project);
     }
+    private ProjectPriority calculateProjectPrioritySafely(
+            Long solutionId,
+            String companyRating,
+            double projectTotalAmount
+    ) {
+        try {
+            Map<String, Object> solutionDetails = leadFeignClient.getSolutionByIdOnly(solutionId);
+
+            double professionalFee = extractProfessionalFee(solutionDetails);
+
+            return calculateProjectPriorityByCompanyRating(
+                    companyRating,
+                    professionalFee,
+                    projectTotalAmount
+            );
+
+        } catch (FeignException ex) {
+            logger.error(
+                    "Lead Service API failed while calculating project priority. solutionId={}, status={}, message={}. Defaulting priority to STANDARD",
+                    solutionId,
+                    ex.status(),
+                    ex.getMessage(),
+                    ex
+            );
+            return ProjectPriority.STANDARD;
+
+        } catch (Exception ex) {
+            logger.error(
+                    "Unexpected error while calculating project priority. solutionId={}, message={}. Defaulting priority to STANDARD",
+                    solutionId,
+                    ex.getMessage(),
+                    ex
+            );
+            return ProjectPriority.STANDARD;
+        }
+    }
+
 
     private ProjectPriority calculateProjectPriorityByCompanyRating(
             String companyRating,
