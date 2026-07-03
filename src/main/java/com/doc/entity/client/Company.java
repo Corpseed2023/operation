@@ -69,5 +69,7 @@ public class    Company {
     @Comment("All units / branches / outlets belonging to this company")
     private List<CompanyUnit> units = new ArrayList<>();
 
+    private String rating;
+
 
 }
