@@ -30,6 +30,7 @@ import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.vendor.VendorStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.feign.LeadFeignClient;
 import com.doc.repository.*;
 import com.doc.repository.department.DepartmentAutoConfigRepository;
 import com.doc.repository.documentRepo.ApplicantTypeRepository;
@@ -94,6 +95,8 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final ProjectMailService projectMailService;
 
+    private final LeadFeignClient leadFeignClient;
+
 
     public ProjectServiceImpl(
             ProjectRepository projectRepository,
@@ -124,7 +127,8 @@ public class ProjectServiceImpl implements ProjectService {
             ProjectMilestoneAssignmentService projectMilestoneAssignmentService,
             ApplicantTypeRepository applicantTypeRepository,
             ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
-            ProjectMailService projectMailService
+            ProjectMailService projectMailService,
+            LeadFeignClient leadFeignClient
     ) {
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
@@ -155,6 +159,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.applicantTypeRepository = applicantTypeRepository;
         this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
         this.projectMailService = projectMailService;
+        this.leadFeignClient = leadFeignClient;
     }
 
     @Override
@@ -244,6 +249,30 @@ public class ProjectServiceImpl implements ProjectService {
         paymentDetail.setDeleted(false);
 
         project.setPaymentDetail(paymentDetail);
+
+        Map<String, Object> solutionDetails = leadFeignClient.getSolutionByIdOnly(product.getId());
+
+        double professionalFee = extractProfessionalFee(solutionDetails);
+
+        ProjectPriority priority = calculateProjectPriorityByCompanyRating(
+                company.getRating(),
+                professionalFee,
+                totalAmount
+        );
+
+        project.setPriority(priority);
+
+        logger.info(
+                "Project priority calculated. companyId={}, rating={}, solutionId={}, professionalFee={}, totalAmount={}, priority={}",
+                company.getId(),
+                company.getRating(),
+                product.getId(),
+                professionalFee,
+                totalAmount,
+                priority
+        );
+
+
         project = projectRepository.save(project);
 
         try {
@@ -284,6 +313,101 @@ public class ProjectServiceImpl implements ProjectService {
         return mapToResponseDto(project);
     }
 
+    private ProjectPriority calculateProjectPriorityByCompanyRating(
+            String companyRating,
+            double solutionProfessionalFee,
+            double projectTotalAmount
+    ) {
+        if (solutionProfessionalFee <= 0) {
+            throw new ValidationException(
+                    "Professional fee is required to calculate project priority",
+                    "ERR_PROFESSIONAL_FEE_REQUIRED"
+            );
+        }
+
+        double amountPercentage = (projectTotalAmount / solutionProfessionalFee) * 100.0;
+
+        String rating = companyRating != null
+                ? companyRating.trim().toUpperCase()
+                : "";
+
+        switch (rating) {
+            case "BRONZE":
+                // Less than 130% = STANDARD
+                // 130% to less than 150% = HIGH
+                // 150% and above = SEVERE
+                if (amountPercentage < 130.0) {
+                    return ProjectPriority.STANDARD;
+                } else if (amountPercentage < 150.0) {
+                    return ProjectPriority.HIGH;
+                } else {
+                    return ProjectPriority.SEVERE;
+                }
+
+            case "SILVER":
+                // Less than 120% = STANDARD
+                // 120% to less than 140% = HIGH
+                // 140% and above = SEVERE
+                if (amountPercentage < 120.0) {
+                    return ProjectPriority.STANDARD;
+                } else if (amountPercentage < 140.0) {
+                    return ProjectPriority.HIGH;
+                } else {
+                    return ProjectPriority.SEVERE;
+                }
+
+            case "GOLD":
+                // Less than 110% = STANDARD
+                // 110% to less than 130% = HIGH
+                // 130% and above = SEVERE
+                if (amountPercentage < 110.0) {
+                    return ProjectPriority.STANDARD;
+                } else if (amountPercentage < 130.0) {
+                    return ProjectPriority.HIGH;
+                } else {
+                    return ProjectPriority.SEVERE;
+                }
+
+            default:
+                return ProjectPriority.STANDARD;
+        }
+    }
+
+    private double extractProfessionalFee(Map<String, Object> solutionMap) {
+        if (solutionMap == null || solutionMap.isEmpty()) {
+            throw new ValidationException(
+                    "Solution details not found from Lead Service",
+                    "ERR_SOLUTION_DETAILS_NOT_FOUND"
+            );
+        }
+
+        Object feeValue = solutionMap.get("professionalFee");
+
+        if (feeValue == null) {
+            // fallback if Lead API sends price instead of professionalFee
+            feeValue = solutionMap.get("price");
+        }
+
+        if (feeValue == null) {
+            throw new ValidationException(
+                    "Professional fee not found in Lead Service response",
+                    "ERR_PROFESSIONAL_FEE_NOT_FOUND"
+            );
+        }
+
+        if (feeValue instanceof Number) {
+            return ((Number) feeValue).doubleValue();
+        }
+
+        try {
+            return Double.parseDouble(feeValue.toString());
+        } catch (NumberFormatException ex) {
+            throw new ValidationException(
+                    "Invalid professional fee value from Lead Service",
+                    "ERR_INVALID_PROFESSIONAL_FEE"
+            );
+        }
+    }
     private void validatePaymentRules(String paymentTypeName, double paidAmount, double totalAmount) {
         if ("FULL".equalsIgnoreCase(paymentTypeName) || "Full Payment".equalsIgnoreCase(paymentTypeName)) {
             if (paidAmount != totalAmount) {
@@ -858,6 +982,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setActive(project.isActive());
         dto.setUnbilledNumber(project.getUnbilledNumber());
         dto.setEstimateNumber(project.getEstimateNumber());
+        dto.setPriority(project.getPriority() != null ? project.getPriority().name() : null);
         dto.setSalesPersonId(project.getSalesPersonId());
         dto.setSalesPersonName(project.getSalesPersonName());
         dto.setStatusId(project.getStatus() != null ? project.getStatus().getId() : null);

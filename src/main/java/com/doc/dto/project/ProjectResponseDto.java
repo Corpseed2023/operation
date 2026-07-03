@@ -15,6 +15,7 @@ public class ProjectResponseDto {
     private String projectNo;
     private String unbilledNumber;
     private String estimateNumber;
+    private String priority;
 
     // Sales Person
     private Long salesPersonId;
