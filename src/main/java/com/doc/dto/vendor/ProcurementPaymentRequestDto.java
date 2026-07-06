@@ -19,4 +19,18 @@ public class ProcurementPaymentRequestDto {
     private List<String> proofAttachmentUrls;
 
     private Long createdBy;
+
+
+    private String tdsActive;
+    private BigDecimal tdsPercentage;
+
+    private String gstActive;
+    private String gstStateCode;
+    private BigDecimal gstPercentage;
+
+    private BigDecimal cgstAmount;
+    private BigDecimal sgstAmount;
+    private BigDecimal igstAmount;
+    private BigDecimal totalGstAmount;
+
 }

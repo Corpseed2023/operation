@@ -72,4 +72,31 @@ public class ProcurementPaymentRequest {
     private Date updatedDate;
 
     private boolean isDeleted = false;
+    @Column(name = "tds_active")
+    private String tdsActive;
+
+    @Column(name = "tds_percentage")
+    private BigDecimal tdsPercentage;
+
+    @Column(name = "gst_active")
+    private String gstActive;
+
+    @Column(name = "gst_state_code")
+    private String gstStateCode;
+
+    @Column(name = "gst_percentage")
+    private BigDecimal gstPercentage;
+
+    @Column(name = "cgst_amount")
+    private BigDecimal cgstAmount;
+
+    @Column(name = "sgst_amount")
+    private BigDecimal sgstAmount;
+
+    @Column(name = "igst_amount")
+    private BigDecimal igstAmount;
+
+    @Column(name = "total_gst_amount")
+    private BigDecimal totalGstAmount;
+
 }

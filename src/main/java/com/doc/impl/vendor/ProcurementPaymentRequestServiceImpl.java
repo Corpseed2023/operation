@@ -77,14 +77,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        if (order.getStatus() != ProcurementOrderStatus.COMPLETED
-                && order.getStatus() != ProcurementOrderStatus.PARTIALLY_COMPLETED) {
-            throw new ValidationException(
-                    "Payment request can be created only for COMPLETED or PARTIALLY_COMPLETED procurement order. Current status: "
-                            + order.getStatus(),
-                    "ERR_INVALID_PROCUREMENT_ORDER_STATUS"
-            );
-        }
+
 
         paymentRequestRepository.findByProcurementOrderAndIsDeletedFalse(order)
                 .ifPresent(existing -> {
@@ -137,6 +130,18 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         paymentRequest.setCreatedDate(new Date());
         paymentRequest.setUpdatedDate(new Date());
         paymentRequest.setDeleted(false);
+
+        paymentRequest.setTdsActive(requestDto.getTdsActive());
+        paymentRequest.setTdsPercentage(requestDto.getTdsPercentage());
+
+        paymentRequest.setGstActive(requestDto.getGstActive());
+        paymentRequest.setGstStateCode(requestDto.getGstStateCode());
+        paymentRequest.setGstPercentage(requestDto.getGstPercentage());
+
+        paymentRequest.setCgstAmount(requestDto.getCgstAmount());
+        paymentRequest.setSgstAmount(requestDto.getSgstAmount());
+        paymentRequest.setIgstAmount(requestDto.getIgstAmount());
+        paymentRequest.setTotalGstAmount(requestDto.getTotalGstAmount());
 
         ProcurementPaymentRequest saved = paymentRequestRepository.save(paymentRequest);
 
@@ -398,7 +403,17 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
 
                 .createdDate(request.getCreatedDate())
                 .updatedDate(request.getUpdatedDate())
+                .tdsActive(request.getTdsActive())
+                .tdsPercentage(request.getTdsPercentage())
 
+                .gstActive(request.getGstActive())
+                .gstStateCode(request.getGstStateCode())
+                .gstPercentage(request.getGstPercentage())
+
+                .cgstAmount(request.getCgstAmount())
+                .sgstAmount(request.getSgstAmount())
+                .igstAmount(request.getIgstAmount())
+                .totalGstAmount(request.getTotalGstAmount())
                 .build();
     }
 }
