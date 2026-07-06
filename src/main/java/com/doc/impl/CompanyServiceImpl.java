@@ -218,6 +218,7 @@ public class CompanyServiceImpl implements CompanyService {
             company.setCreatedById(creator.getId());
             company.setDeleted(false);
 
+
         } else {
 
             logger.info(
@@ -235,6 +236,11 @@ public class CompanyServiceImpl implements CompanyService {
 
         company.setName(requestDto.getName() != null ? requestDto.getName().trim() : company.getName());
         company.setPanNo(requestDto.getPanNo() != null ? requestDto.getPanNo().trim() : company.getPanNo());
+
+        if (StringUtils.hasText(requestDto.getRating())) {
+            company.setRating(requestDto.getRating().trim());
+        }
+
         company.setIndustry(requestDto.getIndustry());
         company.setIndustries(requestDto.getIndustries());
         company.setSubIndustry(requestDto.getSubIndustry());
@@ -528,6 +534,7 @@ public class CompanyServiceImpl implements CompanyService {
         dto.setCreatedDate(company.getCreatedDate());
         dto.setUpdatedDate(company.getUpdatedDate());
         dto.setDeleted(company.isDeleted());
+        dto.setRating(company.getRating());
 
         // Units summary
         dto.setUnitCount(createdUnits.size());
