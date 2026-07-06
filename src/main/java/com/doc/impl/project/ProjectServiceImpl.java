@@ -1270,6 +1270,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
         dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
+        dto.setRating(project.getCompany() != null ? project.getCompany().getRating() : null);
 
         if (project.getUnit() != null) {
             dto.setCompanyUnitId(project.getUnit().getId());
