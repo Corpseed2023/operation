@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -372,6 +373,130 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             """)
     List<com.doc.dto.project.dashboard.ProjectStatusCountDto> getStatusCountsForDashboardUser(
             @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+        SELECT COUNT(DISTINCT p)
+        FROM Project p
+        WHERE p.isDeleted = false
+        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+        AND (:toDate IS NULL OR p.createdDate < :toDate)
+        """)
+    long countOverviewTotalAdmin(
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+        SELECT COUNT(DISTINCT p)
+        FROM Project p
+        WHERE p.isDeleted = false
+        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+        AND (:toDate IS NULL OR p.createdDate < :toDate)
+        AND EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+        """)
+    long countOverviewTotalUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+        SELECT COUNT(DISTINCT p)
+        FROM Project p
+        WHERE p.isDeleted = false
+        AND p.isCancelled = false
+        AND UPPER(p.status.name) IN :statuses
+        AND (p.date IS NULL OR p.date >= :today)
+        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+        AND (:toDate IS NULL OR p.createdDate < :toDate)
+        """)
+    long countOverviewNonDelayedByStatusesAdmin(
+            @Param("statuses") List<String> statuses,
+            @Param("today") LocalDate today,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+        SELECT COUNT(DISTINCT p)
+        FROM Project p
+        WHERE p.isDeleted = false
+        AND p.isCancelled = false
+        AND UPPER(p.status.name) IN :statuses
+        AND (p.date IS NULL OR p.date >= :today)
+        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+        AND (:toDate IS NULL OR p.createdDate < :toDate)
+        AND EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+        """)
+    long countOverviewNonDelayedByStatusesUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("statuses") List<String> statuses,
+            @Param("today") LocalDate today,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+        SELECT COUNT(DISTINCT p)
+        FROM Project p
+        WHERE p.isDeleted = false
+        AND p.isCancelled = false
+        AND UPPER(p.status.name) IN :runningStatuses
+        AND p.date IS NOT NULL
+        AND p.date < :today
+        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+        AND (:toDate IS NULL OR p.createdDate < :toDate)
+        """)
+    long countOverviewDelayedAdmin(
+            @Param("runningStatuses") List<String> runningStatuses,
+            @Param("today") LocalDate today,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+        SELECT COUNT(DISTINCT p)
+        FROM Project p
+        WHERE p.isDeleted = false
+        AND p.isCancelled = false
+        AND UPPER(p.status.name) IN :runningStatuses
+        AND p.date IS NOT NULL
+        AND p.date < :today
+        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+        AND (:toDate IS NULL OR p.createdDate < :toDate)
+        AND EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+        """)
+    long countOverviewDelayedUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("runningStatuses") List<String> runningStatuses,
+            @Param("today") LocalDate today,
             @Param("fromDate") Date fromDate,
             @Param("toDate") Date toDate
     );
