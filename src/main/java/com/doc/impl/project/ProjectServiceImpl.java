@@ -1263,6 +1263,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setId(project.getId());
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
+        dto.setPriority(project.getPriority() != null ? project.getPriority().name() : null);
         dto.setDate(project.getDate());
 
         dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
