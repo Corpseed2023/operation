@@ -19,6 +19,7 @@ import java.util.Optional;
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, Long> {
 
+
     /**
      * Checks if a project with the given project number exists and is not deleted.
      *

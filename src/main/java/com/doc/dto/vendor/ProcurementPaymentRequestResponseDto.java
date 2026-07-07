@@ -45,4 +45,18 @@ public class ProcurementPaymentRequestResponseDto {
 
     private Date createdDate;
     private Date updatedDate;
+
+    private String tdsActive;
+    private BigDecimal tdsPercentage;
+
+    private String gstActive;
+    private String gstStateCode;
+    private BigDecimal gstPercentage;
+
+    private BigDecimal cgstAmount;
+    private BigDecimal sgstAmount;
+    private BigDecimal igstAmount;
+    private BigDecimal totalGstAmount;
+
+
 }

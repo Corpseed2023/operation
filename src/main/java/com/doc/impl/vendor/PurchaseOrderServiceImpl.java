@@ -4,10 +4,9 @@ import com.doc.dto.vendor.ProcurementOrderResponseDto;
 import com.doc.dto.vendor.PurchaseOrderRequestDto;
 import com.doc.dto.vendor.PurchaseOrderResponseDto;
 import com.doc.entity.client.PaymentType;
-import com.doc.entity.vendor.ProcurementMilestoneAssignment;
-
 import com.doc.entity.project.ProcurementStatus;
 import com.doc.entity.user.User;
+import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.vendor.ProcurementOrder;
 import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.entity.vendor.Vendor;
@@ -39,35 +38,62 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private static final Logger logger = LoggerFactory.getLogger(PurchaseOrderServiceImpl.class);
 
-    @Autowired private PurchaseOrderRepository purchaseOrderRepository;
-    @Autowired private ProcurementMilestoneAssignmentRepository procurementRepository;
-    @Autowired private VendorRepository vendorRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private PaymentTypeRepository paymentTypeRepository;
+    @Autowired
+    private PurchaseOrderRepository purchaseOrderRepository;
+
+    @Autowired
+    private ProcurementMilestoneAssignmentRepository procurementRepository;
+
+    @Autowired
+    private VendorRepository vendorRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PaymentTypeRepository paymentTypeRepository;
 
     @Override
     public PurchaseOrderResponseDto createPurchaseOrder(PurchaseOrderRequestDto dto) {
+
         logger.info("Creating Purchase Order for procurementAssignmentId: {}", dto.getProcurementAssignmentId());
 
         ProcurementMilestoneAssignment procurement = procurementRepository
                 .findById(dto.getProcurementAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Procurement assignment not found", "ERR_PROCUREMENT_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Procurement assignment not found",
+                        "ERR_PROCUREMENT_NOT_FOUND"
+                ));
 
         Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
-                .orElseThrow(() -> new ResourceNotFoundException("Vendor not found", "ERR_VENDOR_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor not found",
+                        "ERR_VENDOR_NOT_FOUND"
+                ));
 
         User createdByUser = userRepository.findActiveUserById(dto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("CreatedBy user not found", "ERR_USER_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "CreatedBy user not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
 
-        // Validation
         if (dto.getFinalAmount() == null || dto.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ValidationException("Final amount must be greater than zero", "ERR_INVALID_AMOUNT");
+            throw new ValidationException(
+                    "Final amount must be greater than zero",
+                    "ERR_INVALID_AMOUNT"
+            );
         }
+
+        validatePoValueNotGreaterThanProjectValue(
+                dto.getGrandTotal(),
+                dto.getFinalAmount(),
+                procurement
+        );
 
         String poNumber = generatePoNumber();
 
-        // Create ProcurementOrder
         ProcurementOrder po = new ProcurementOrder();
+
         po.setProcurementAssignment(procurement);
         po.setProject(procurement.getProject());
         po.setVendor(vendor);
@@ -77,7 +103,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         po.setFinalAmount(dto.getFinalAmount());
 
-        // GST Fields
         po.setGstRate(dto.getGstRate());
         po.setCgstAmount(dto.getCgstAmount());
         po.setSgstAmount(dto.getSgstAmount());
@@ -90,79 +115,100 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setRemarks(dto.getRemarks());
         po.setAttachmentUrls(dto.getAttachmentUrls());
 
-        po.setStatus(ProcurementOrderStatus.PENDING_APPROVAL);
+        /*
+         * New PO flow:
+         * PO starts as DRAFT.
+         * No PENDING_APPROVAL / REJECTED / RELEASED flow.
+         */
+        po.setStatus(ProcurementOrderStatus.DRAFT);
         po.setPoCreatedDate(new Date());
 
         po.setCreatedBy(createdByUser.getId());
+        po.setUpdatedBy(createdByUser.getId());
         po.setCreatedDate(new Date());
         po.setUpdatedDate(new Date());
 
-        // Payment Type
         if (dto.getPaymentTypeName() != null && !dto.getPaymentTypeName().trim().isEmpty()) {
             PaymentType paymentType = paymentTypeRepository.findByName(dto.getPaymentTypeName())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Payment type not found: " + dto.getPaymentTypeName(), "ERR_PAYMENT_TYPE_NOT_FOUND"));
+                            "Payment type not found: " + dto.getPaymentTypeName(),
+                            "ERR_PAYMENT_TYPE_NOT_FOUND"
+                    ));
+
             po.setPaymentType(paymentType);
         }
 
-        po = purchaseOrderRepository.save(po);
+        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
 
-        logger.info("Purchase Order created successfully: {} | Project: {} | Vendor: {}",
-                poNumber, procurement.getProject().getProjectNo(), vendor.getName());
+        procurement.setStatus(ProcurementStatus.PO_CREATED);
+        procurement.setSelectedVendor(vendor);
+        procurement.setPoCreatedDate(new Date());
+        procurement.setUpdatedBy(createdByUser.getId());
+        procurement.setUpdatedDate(new Date());
 
-        return mapToResponseDto(po);
+        logger.info(
+                "Purchase Order created successfully: {} | Project: {} | Vendor: {}",
+                poNumber,
+                procurement.getProject() != null ? procurement.getProject().getProjectNo() : null,
+                vendor.getName()
+        );
+
+        return mapToResponseDto(savedPo);
     }
 
+    /*
+     * Keeping method name because controller currently uses /release.
+     * Internally this now means APPROVE PO.
+     */
     @Override
     public PurchaseOrderResponseDto releasePurchaseOrder(Long poId, Long userId) {
-        ProcurementOrder po = purchaseOrderRepository.findById(poId)
-                .orElseThrow(() -> new ResourceNotFoundException("Purchase Order not found", "ERR_PO_NOT_FOUND"));
-
-        if (po.getStatus() != ProcurementOrderStatus.DRAFT && po.getStatus() != ProcurementOrderStatus.PENDING_APPROVAL) {
-            throw new ValidationException("Only DRAFT or PENDING_APPROVAL PO can be released", "ERR_INVALID_PO_STATUS");
-        }
-
-        User approvedBy = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
-
-        po.setStatus(ProcurementOrderStatus.RELEASED);
-        po.setApprovedBy(approvedBy.getId());
-        po.setPoReleasedDate(new Date());
-        po.setUpdatedBy(userId);
-        po.setUpdatedDate(new Date());
-
-        po = purchaseOrderRepository.save(po);
-
-        // Optional: Update parent procurement status
-        ProcurementMilestoneAssignment procurement = po.getProcurementAssignment();
-        procurement.setStatus(ProcurementStatus.PO_RELEASED);
-        procurement.setPoReleasedDate(new Date());
-
-        logger.info("Purchase Order {} released successfully by user {}", po.getPoNumber(), userId);
-
-        return mapToResponseDto(po);
+        return approvePurchaseOrderInternal(poId, userId, null);
     }
 
     @Override
     public PurchaseOrderResponseDto getPurchaseOrderById(Long id) {
+
         ProcurementOrder po = purchaseOrderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Purchase Order not found", "ERR_PO_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Purchase Order not found",
+                        "ERR_PO_NOT_FOUND"
+                ));
+
+        if (po.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted Purchase Order cannot be fetched",
+                    "ERR_DELETED_PO"
+            );
+        }
+
         return mapToResponseDto(po);
     }
 
     @Override
     public PurchaseOrderResponseDto getByProcurementAssignmentId(Long procurementAssignmentId) {
+
         if (procurementAssignmentId == null) {
-            throw new ValidationException("Procurement Assignment ID is required", "ERR_NULL_ID");
+            throw new ValidationException(
+                    "Procurement Assignment ID is required",
+                    "ERR_NULL_ID"
+            );
         }
 
         ProcurementOrder po = purchaseOrderRepository.findByProcurementAssignmentId(procurementAssignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "No Purchase Order found for this procurement assignment", "ERR_PO_NOT_FOUND"));
+                        "No Purchase Order found for this procurement assignment",
+                        "ERR_PO_NOT_FOUND"
+                ));
+
+        if (po.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted Purchase Order cannot be fetched",
+                    "ERR_DELETED_PO"
+            );
+        }
 
         return mapToResponseDto(po);
     }
-
 
     @Override
     @Transactional(readOnly = true)
@@ -171,6 +217,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             int page,
             int size
     ) {
+
         if (projectId == null) {
             throw new ValidationException(
                     "Project ID is required",
@@ -190,7 +237,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return purchaseOrders.map(this::mapToResponseDto);
     }
 
-
     @Override
     @Transactional(readOnly = true)
     public Page<ProcurementOrderResponseDto> getProcurementOrdersByStatus(
@@ -198,6 +244,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             int page,
             int size
     ) {
+
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -215,6 +262,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return orders.map(this::mapToResponse);
     }
 
+    /*
+     * Kept only for compatibility if your interface/controller still calls this.
+     * This now approves DRAFT PO directly.
+     */
     @Override
     @Transactional
     public ProcurementOrderResponseDto approveProcurementOrder(
@@ -222,37 +273,26 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             Long userId,
             String comment
     ) {
-        ProcurementOrder order = purchaseOrderRepository.findById(procurementOrderId)
-                .orElseThrow(() -> new RuntimeException(
-                        "Procurement order not found with id: " + procurementOrderId
+
+        PurchaseOrderResponseDto approved = approvePurchaseOrderInternal(
+                procurementOrderId,
+                userId,
+                comment
+        );
+
+        ProcurementOrder order = purchaseOrderRepository.findById(approved.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Purchase Order not found",
+                        "ERR_PO_NOT_FOUND"
                 ));
 
-        if (order.isDeleted()) {
-            throw new RuntimeException("Procurement order is deleted and cannot be approved");
-        }
-
-        if (order.getStatus() != ProcurementOrderStatus.PENDING_APPROVAL) {
-            throw new RuntimeException(
-                    "Only PENDING_APPROVAL procurement orders can be approved. Current status: "
-                            + order.getStatus()
-            );
-        }
-
-        order.setStatus(ProcurementOrderStatus.APPROVED);
-        order.setApprovedBy(userId);
-        order.setPoApprovedDate(new Date());
-        order.setUpdatedBy(userId);
-        order.setUpdatedDate(new Date());
-
-        if (comment != null && !comment.trim().isEmpty()) {
-            order.setRemarks(comment.trim());
-        }
-
-        ProcurementOrder savedOrder = purchaseOrderRepository.save(order);
-
-        return mapToResponse(savedOrder);
+        return mapToResponse(order);
     }
 
+    /*
+     * Rejection flow removed.
+     * Keep this only if PurchaseOrderService interface still declares it.
+     */
     @Override
     @Transactional
     public ProcurementOrderResponseDto rejectProcurementOrder(
@@ -260,36 +300,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             Long userId,
             String reason
     ) {
-        ProcurementOrder order = purchaseOrderRepository.findById(procurementOrderId)
-                .orElseThrow(() -> new RuntimeException(
-                        "Procurement order not found with id: " + procurementOrderId
-                ));
-
-        if (order.isDeleted()) {
-            throw new RuntimeException("Procurement order is deleted and cannot be rejected");
-        }
-
-        if (order.getStatus() != ProcurementOrderStatus.PENDING_APPROVAL) {
-            throw new RuntimeException(
-                    "Only PENDING_APPROVAL procurement orders can be rejected. Current status: "
-                            + order.getStatus()
-            );
-        }
-
-        if (reason == null || reason.trim().isEmpty()) {
-            throw new RuntimeException("Rejection reason is required");
-        }
-
-        order.setStatus(ProcurementOrderStatus.REJECTED);
-        order.setUpdatedBy(userId);
-        order.setUpdatedDate(new Date());
-        order.setRemarks(reason.trim());
-
-        ProcurementOrder savedOrder = purchaseOrderRepository.save(order);
-
-        return mapToResponse(savedOrder);
+        throw new ValidationException(
+                "PO rejection flow is removed. Purchase Order supports only DRAFT and APPROVED status.",
+                "ERR_PO_REJECTION_FLOW_REMOVED"
+        );
     }
-
 
     @Override
     @Transactional
@@ -298,7 +313,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         logger.info("Updating Purchase Order id: {}", poId);
 
         if (poId == null) {
-            throw new ValidationException("Purchase Order ID is required", "ERR_PO_ID_REQUIRED");
+            throw new ValidationException(
+                    "Purchase Order ID is required",
+                    "ERR_PO_ID_REQUIRED"
+            );
         }
 
         ProcurementOrder po = purchaseOrderRepository.findById(poId)
@@ -315,14 +333,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         /*
-         * Safe workflow:
-         * Only DRAFT or REJECTED PO can be edited.
-         * APPROVED / RELEASED / COMPLETED should not be edited because accounts/vendor flow may already depend on it.
+         * New flow:
+         * Only DRAFT PO can be edited.
+         * APPROVED PO cannot be changed.
          */
-        if (po.getStatus() != ProcurementOrderStatus.DRAFT
-                && po.getStatus() != ProcurementOrderStatus.REJECTED) {
+        if (po.getStatus() != ProcurementOrderStatus.DRAFT) {
             throw new ValidationException(
-                    "Only DRAFT or REJECTED Purchase Order can be updated. Current status: " + po.getStatus(),
+                    "Only DRAFT Purchase Order can be updated. Current status: " + po.getStatus(),
                     "ERR_INVALID_PO_STATUS_FOR_UPDATE"
             );
         }
@@ -334,20 +351,28 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        // Optional: update procurement assignment only if sent
+        ProcurementMilestoneAssignment procurementForValidation = po.getProcurementAssignment();
+
         if (dto.getProcurementAssignmentId() != null) {
-            ProcurementMilestoneAssignment procurement = procurementRepository
+            procurementForValidation = procurementRepository
                     .findById(dto.getProcurementAssignmentId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Procurement assignment not found",
                             "ERR_PROCUREMENT_NOT_FOUND"
                     ));
-
-            po.setProcurementAssignment(procurement);
-            po.setProject(procurement.getProject());
         }
 
-        // Optional: update vendor only if sent
+        validatePoValueNotGreaterThanProjectValue(
+                dto.getGrandTotal(),
+                dto.getFinalAmount(),
+                procurementForValidation
+        );
+
+        if (dto.getProcurementAssignmentId() != null) {
+            po.setProcurementAssignment(procurementForValidation);
+            po.setProject(procurementForValidation.getProject());
+        }
+
         if (dto.getVendorId() != null) {
             Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
                     .orElseThrow(() -> new ResourceNotFoundException(
@@ -377,8 +402,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             po.setAttachmentUrls(dto.getAttachmentUrls());
         }
 
-        if (dto.getUserId() != null) {
-            User updatedByUser = userRepository.findActiveUserById(dto.getUserId())
+        Long updatedBy = dto.getUserId() != null ? dto.getUserId() : dto.getCreatedBy();
+
+        if (updatedBy != null) {
+            User updatedByUser = userRepository.findActiveUserById(updatedBy)
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "UpdatedBy user not found",
                             "ERR_USER_NOT_FOUND"
@@ -414,8 +441,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             Long userId,
             String remarks
     ) {
-        logger.info("Updating Purchase Order status | poId={}, newStatus={}, userId={}",
-                poId, newStatus, userId);
+
+        logger.info(
+                "Updating Purchase Order status | poId={}, newStatus={}, userId={}",
+                poId,
+                newStatus,
+                userId
+        );
 
         if (poId == null) {
             throw new ValidationException(
@@ -428,6 +460,29 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new ValidationException(
                     "Purchase Order status is required",
                     "ERR_PO_STATUS_REQUIRED"
+            );
+        }
+
+        if (newStatus != ProcurementOrderStatus.APPROVED) {
+            throw new ValidationException(
+                    "Only APPROVED status update is allowed. Purchase Order supports only DRAFT and APPROVED.",
+                    "ERR_INVALID_PO_STATUS"
+            );
+        }
+
+        return approvePurchaseOrderInternal(poId, userId, remarks);
+    }
+
+    private PurchaseOrderResponseDto approvePurchaseOrderInternal(
+            Long poId,
+            Long userId,
+            String remarks
+    ) {
+
+        if (poId == null) {
+            throw new ValidationException(
+                    "Purchase Order ID is required",
+                    "ERR_PO_ID_REQUIRED"
             );
         }
 
@@ -446,23 +501,28 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         if (po.isDeleted()) {
             throw new ValidationException(
-                    "Deleted Purchase Order status cannot be updated",
-                    "ERR_DELETED_PO_STATUS_CANNOT_BE_UPDATED"
+                    "Deleted Purchase Order cannot be approved",
+                    "ERR_DELETED_PO"
             );
         }
 
-        User updatedByUser = userRepository.findActiveUserById(userId)
+        if (po.getStatus() != ProcurementOrderStatus.DRAFT) {
+            throw new ValidationException(
+                    "Only DRAFT Purchase Order can be approved. Current status: " + po.getStatus(),
+                    "ERR_INVALID_PO_STATUS"
+            );
+        }
+
+        User approvedByUser = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "User not found",
                         "ERR_USER_NOT_FOUND"
                 ));
 
-        ProcurementOrderStatus currentStatus = po.getStatus();
-
-        validatePurchaseOrderStatusTransition(currentStatus, newStatus);
-
-        po.setStatus(newStatus);
-        po.setUpdatedBy(updatedByUser.getId());
+        po.setStatus(ProcurementOrderStatus.APPROVED);
+        po.setApprovedBy(approvedByUser.getId());
+        po.setPoApprovedDate(new Date());
+        po.setUpdatedBy(approvedByUser.getId());
         po.setUpdatedDate(new Date());
 
         if (remarks != null && !remarks.trim().isEmpty()) {
@@ -471,56 +531,70 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         ProcurementOrder savedPo = purchaseOrderRepository.save(po);
 
-        logger.info("Purchase Order status updated successfully | poNumber={} | oldStatus={} | newStatus={}",
-                savedPo.getPoNumber(), currentStatus, newStatus);
+        ProcurementMilestoneAssignment procurement = savedPo.getProcurementAssignment();
+
+        if (procurement != null) {
+            procurement.setStatus(ProcurementStatus.PO_APPROVED);
+            procurement.setUpdatedBy(approvedByUser.getId());
+            procurement.setUpdatedDate(new Date());
+        }
+
+        logger.info(
+                "Purchase Order approved successfully | poNumber={} | approvedBy={}",
+                savedPo.getPoNumber(),
+                approvedByUser.getId()
+        );
 
         return mapToResponseDto(savedPo);
     }
 
-    private void validatePurchaseOrderStatusTransition(
-            ProcurementOrderStatus currentStatus,
-            ProcurementOrderStatus newStatus
+    private void validatePoValueNotGreaterThanProjectValue(
+            BigDecimal grandTotal,
+            BigDecimal finalAmount,
+            ProcurementMilestoneAssignment procurement
     ) {
-        if (currentStatus == null) {
+
+        if (procurement == null) {
             throw new ValidationException(
-                    "Current Purchase Order status is missing",
-                    "ERR_CURRENT_PO_STATUS_MISSING"
+                    "Procurement assignment is required",
+                    "ERR_PROCUREMENT_ASSIGNMENT_REQUIRED"
             );
         }
 
-        if (currentStatus == newStatus) {
+        if (procurement.getProject() == null) {
             throw new ValidationException(
-                    "Purchase Order is already in status: " + newStatus,
-                    "ERR_PO_ALREADY_IN_SAME_STATUS"
+                    "Project not found for procurement assignment",
+                    "ERR_PROJECT_NOT_FOUND"
             );
         }
 
-        /*
-         * Allowed transitions:
-         * APPROVED  -> PARTIALLY_COMPLETED / COMPLETED
-         * RELEASED  -> PARTIALLY_COMPLETED / COMPLETED
-         * PARTIALLY_COMPLETED -> COMPLETED
-         */
-        boolean validTransition =
-                (currentStatus == ProcurementOrderStatus.APPROVED
-                        && (newStatus == ProcurementOrderStatus.PARTIALLY_COMPLETED
-                        || newStatus == ProcurementOrderStatus.COMPLETED))
-
-                        || (currentStatus == ProcurementOrderStatus.RELEASED
-                        && (newStatus == ProcurementOrderStatus.PARTIALLY_COMPLETED
-                        || newStatus == ProcurementOrderStatus.COMPLETED))
-
-                        || (currentStatus == ProcurementOrderStatus.PARTIALLY_COMPLETED
-                        && newStatus == ProcurementOrderStatus.COMPLETED);
-
-        if (!validTransition) {
+        if (procurement.getProject().getPaymentDetail() == null) {
             throw new ValidationException(
-                    "Invalid Purchase Order status change from "
-                            + currentStatus
-                            + " to "
-                            + newStatus
-                            + ". Allowed transitions are: APPROVED/RELEASED -> PARTIALLY_COMPLETED, APPROVED/RELEASED -> COMPLETED, PARTIALLY_COMPLETED -> COMPLETED",
-                    "ERR_INVALID_PO_STATUS_TRANSITION"
+                    "Project payment detail not found",
+                    "ERR_PROJECT_PAYMENT_DETAIL_NOT_FOUND"
+            );
+        }
+
+        BigDecimal poValue = grandTotal != null ? grandTotal : finalAmount;
+
+        if (poValue == null || poValue.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException(
+                    "PO value must be greater than zero",
+                    "ERR_INVALID_PO_VALUE"
+            );
+        }
+
+        BigDecimal projectValue = BigDecimal.valueOf(
+                procurement.getProject().getPaymentDetail().getTotalAmount()
+        );
+
+        if (poValue.compareTo(projectValue) > 0) {
+            throw new ValidationException(
+                    "PO value cannot be greater than project value. Project value: "
+                            + projectValue
+                            + ", PO value: "
+                            + poValue,
+                    "ERR_PO_VALUE_EXCEEDS_PROJECT_VALUE"
             );
         }
     }
@@ -621,8 +695,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return dto;
     }
 
-    // ==================== Helper Methods ====================
-
     private String generatePoNumber() {
         int year = LocalDate.now().getYear();
         long count = purchaseOrderRepository.count() + 1;
@@ -630,26 +702,57 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private PurchaseOrderResponseDto mapToResponseDto(ProcurementOrder po) {
+
         PurchaseOrderResponseDto dto = new PurchaseOrderResponseDto();
 
         dto.setId(po.getId());
         dto.setPoNumber(po.getPoNumber());
         dto.setPoReferenceNumber(po.getPoReferenceNumber());
 
-        dto.setProcurementAssignmentId(po.getProcurementAssignment().getId());
-        dto.setProjectId(po.getProject() != null ? po.getProject().getId() : null);
-        dto.setProjectName(po.getProject() != null ? po.getProject().getName() : null);
-        dto.setProjectNo(po.getProject() != null ? po.getProject().getProjectNo() : null);
+        dto.setProcurementAssignmentId(
+                po.getProcurementAssignment() != null
+                        ? po.getProcurementAssignment().getId()
+                        : null
+        );
 
-        dto.setVendorId(po.getVendor().getId());
-        dto.setVendorName(po.getVendor().getName());
+        dto.setProjectId(
+                po.getProject() != null
+                        ? po.getProject().getId()
+                        : null
+        );
+
+        dto.setProjectName(
+                po.getProject() != null
+                        ? po.getProject().getName()
+                        : null
+        );
+
+        dto.setProjectNo(
+                po.getProject() != null
+                        ? po.getProject().getProjectNo()
+                        : null
+        );
+
+        dto.setVendorId(
+                po.getVendor() != null
+                        ? po.getVendor().getId()
+                        : null
+        );
+
+        dto.setVendorName(
+                po.getVendor() != null
+                        ? po.getVendor().getName()
+                        : null
+        );
+
         dto.setFinalAmount(po.getFinalAmount());
+
+        dto.setGstRate(po.getGstRate());
         dto.setCgstAmount(po.getCgstAmount());
         dto.setSgstAmount(po.getSgstAmount());
         dto.setIgstAmount(po.getIgstAmount());
         dto.setTotalTaxAmount(po.getTotalTaxAmount());
         dto.setGrandTotal(po.getGrandTotal());
-        dto.setGstRate(po.getGstRate());
 
         dto.setScopeOfWork(po.getScopeOfWork());
         dto.setTermsAndConditions(po.getTermsAndConditions());

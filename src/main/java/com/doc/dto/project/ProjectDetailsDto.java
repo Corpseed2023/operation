@@ -27,6 +27,7 @@ public class ProjectDetailsDto {
 
     private Long companyId;
     private String companyName;
+    private String rating;
 
     private Long companyUnitId;
     private String companyUnitName;
