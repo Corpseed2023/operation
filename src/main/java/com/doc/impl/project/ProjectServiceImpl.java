@@ -373,37 +373,37 @@ public class ProjectServiceImpl implements ProjectService {
             case "BRONZE":
                 // Less than 130% = STANDARD
                 // 130% to less than 150% = HIGH
-                // 150% and above = SEVERE
+                // 150% and above = CRITICAL
                 if (amountPercentage < 130.0) {
                     return ProjectPriority.STANDARD;
                 } else if (amountPercentage < 150.0) {
                     return ProjectPriority.HIGH;
                 } else {
-                    return ProjectPriority.SEVERE;
+                    return ProjectPriority.CRITICAL;
                 }
 
             case "SILVER":
                 // Less than 120% = STANDARD
                 // 120% to less than 140% = HIGH
-                // 140% and above = SEVERE
+                // 140% and above = CRITICAL
                 if (amountPercentage < 120.0) {
                     return ProjectPriority.STANDARD;
                 } else if (amountPercentage < 140.0) {
                     return ProjectPriority.HIGH;
                 } else {
-                    return ProjectPriority.SEVERE;
+                    return ProjectPriority.CRITICAL;
                 }
 
             case "GOLD":
                 // Less than 110% = STANDARD
                 // 110% to less than 130% = HIGH
-                // 130% and above = SEVERE
+                // 130% and above = CRITICAL
                 if (amountPercentage < 110.0) {
                     return ProjectPriority.STANDARD;
                 } else if (amountPercentage < 130.0) {
                     return ProjectPriority.HIGH;
                 } else {
-                    return ProjectPriority.SEVERE;
+                    return ProjectPriority.CRITICAL;
                 }
 
             default:
@@ -1263,6 +1263,7 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setId(project.getId());
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
+        dto.setPriority(project.getPriority() != null ? project.getPriority().name() : null);
         dto.setDate(project.getDate());
 
         dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -72,7 +73,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * Finds projects by company name (case-insensitive partial match) for specific assigned users and not deleted.
      *
      * @param companyName the company name to search
-     * @param userIds the list of user IDs
+     * @param userIds     the list of user IDs
      * @return a list of matching projects
      */
     @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.company.name) LIKE LOWER(CONCAT('%', :companyName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
@@ -91,7 +92,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * Finds projects by project number (case-insensitive partial match) for specific assigned users and not deleted.
      *
      * @param projectNo the project number to search
-     * @param userIds the list of user IDs
+     * @param userIds   the list of user IDs
      * @return a list of matching projects
      */
     @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND  LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :projectNo, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
@@ -111,7 +112,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * Finds projects by contact name (case-insensitive partial match) for specific assigned users and not deleted.
      *
      * @param contactName the contact name to search
-     * @param userIds the list of user IDs
+     * @param userIds     the list of user IDs
      * @return a list of matching projects
      */
     @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
@@ -129,7 +130,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     /**
      * Finds projects by project name (case-insensitive partial match) for specific assigned users and not deleted.
      *
-     * @param name the project name to search
+     * @param name    the project name to search
      * @param userIds the list of user IDs
      * @return a list of matching projects
      */
@@ -202,55 +203,55 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     @Query(
             value = """
-            SELECT p
-            FROM Project p
-            LEFT JOIN FETCH p.product product
-            LEFT JOIN FETCH p.company company
-            LEFT JOIN FETCH p.unit unit
-            LEFT JOIN FETCH p.contact contact
-            LEFT JOIN FETCH p.status status
-            LEFT JOIN FETCH p.paymentDetail paymentDetail
-            LEFT JOIN FETCH paymentDetail.paymentType paymentType
-            WHERE p.isDeleted = false
-              AND p.isCancelled = false
-              AND (:salesPersonId IS NULL OR p.salesPersonId = :salesPersonId)
-              AND (:statusName IS NULL OR UPPER(status.name) = UPPER(:statusName))
-              AND (
-                    :search IS NULL
-                    OR :search = ''
-                    OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.salesPersonName) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(company.name) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(product.productName) LIKE LOWER(CONCAT('%', :search, '%'))
-              )
-            """,
+                    SELECT p
+                    FROM Project p
+                    LEFT JOIN FETCH p.product product
+                    LEFT JOIN FETCH p.company company
+                    LEFT JOIN FETCH p.unit unit
+                    LEFT JOIN FETCH p.contact contact
+                    LEFT JOIN FETCH p.status status
+                    LEFT JOIN FETCH p.paymentDetail paymentDetail
+                    LEFT JOIN FETCH paymentDetail.paymentType paymentType
+                    WHERE p.isDeleted = false
+                      AND p.isCancelled = false
+                      AND (:salesPersonId IS NULL OR p.salesPersonId = :salesPersonId)
+                      AND (:statusName IS NULL OR UPPER(status.name) = UPPER(:statusName))
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.salesPersonName) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(company.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(product.productName) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """,
             countQuery = """
-            SELECT COUNT(p)
-            FROM Project p
-            LEFT JOIN p.product product
-            LEFT JOIN p.company company
-            LEFT JOIN p.status status
-            WHERE p.isDeleted = false
-              AND p.isCancelled = false
-              AND (:salesPersonId IS NULL OR p.salesPersonId = :salesPersonId)
-              AND (:statusName IS NULL OR UPPER(status.name) = UPPER(:statusName))
-              AND (
-                    :search IS NULL
-                    OR :search = ''
-                    OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(p.salesPersonName) LIKE LOWER(CONCAT('%', :search, '%'))
-                    
-                    
-                    OR LOWER(company.name) LIKE LOWER(CONCAT('%', :search, '%'))
-                    OR LOWER(product.productName) LIKE LOWER(CONCAT('%', :search, '%'))
-              )
-            """
+                    SELECT COUNT(p)
+                    FROM Project p
+                    LEFT JOIN p.product product
+                    LEFT JOIN p.company company
+                    LEFT JOIN p.status status
+                    WHERE p.isDeleted = false
+                      AND p.isCancelled = false
+                      AND (:salesPersonId IS NULL OR p.salesPersonId = :salesPersonId)
+                      AND (:statusName IS NULL OR UPPER(status.name) = UPPER(:statusName))
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.projectNo) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.unbilledNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.estimateNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(p.salesPersonName) LIKE LOWER(CONCAT('%', :search, '%'))
+                            
+                            
+                            OR LOWER(company.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(product.productName) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """
     )
     Page<Project> findSalesProjectStatusDashboard(
             @Param("salesPersonId") Long salesPersonId,
@@ -258,5 +259,122 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("search") String search,
             Pageable pageable
     );
+
+
+    @Query("""
+            SELECT COUNT(DISTINCT p)
+            FROM Project p
+            WHERE p.isDeleted = false
+            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+            AND (:toDate IS NULL OR p.createdDate < :toDate)
+            """)
+    long countAllProjectsForDashboardAdmin(
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+            SELECT COUNT(DISTINCT p)
+            FROM Project p
+            WHERE p.isDeleted = false
+            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+            AND (:toDate IS NULL OR p.createdDate < :toDate)
+            AND EXISTS (
+                SELECT 1
+                FROM ProjectMilestoneAssignment a
+                WHERE a.project = p
+                AND a.assignedUser.id IN :userIds
+                AND a.isDeleted = false
+            )
+            """)
+    long countAllProjectsForDashboardUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+            SELECT COUNT(DISTINCT p)
+            FROM Project p
+            WHERE p.isDeleted = false
+            AND p.isCancelled = false
+            AND UPPER(p.status.name) IN :statuses
+            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+            AND (:toDate IS NULL OR p.createdDate < :toDate)
+            """)
+    long countRunningProjectsForDashboardAdmin(
+            @Param("statuses") List<String> statuses,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+            SELECT COUNT(DISTINCT p)
+            FROM Project p
+            WHERE p.isDeleted = false
+            AND p.isCancelled = false
+            AND UPPER(p.status.name) IN :statuses
+            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+            AND (:toDate IS NULL OR p.createdDate < :toDate)
+            AND EXISTS (
+                SELECT 1
+                FROM ProjectMilestoneAssignment a
+                WHERE a.project = p
+                AND a.assignedUser.id IN :userIds
+                AND a.isDeleted = false
+            )
+            """)
+    long countRunningProjectsForDashboardUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("statuses") List<String> statuses,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+            SELECT new com.doc.dto.project.dashboard.ProjectStatusCountDto(
+                UPPER(p.status.name),
+                COUNT(DISTINCT p)
+            )
+            FROM Project p
+            WHERE p.isDeleted = false
+            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+            AND (:toDate IS NULL OR p.createdDate < :toDate)
+            GROUP BY UPPER(p.status.name)
+            """)
+    List<com.doc.dto.project.dashboard.ProjectStatusCountDto> getStatusCountsForDashboardAdmin(
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+            SELECT new com.doc.dto.project.dashboard.ProjectStatusCountDto(
+                UPPER(p.status.name),
+                COUNT(DISTINCT p)
+            )
+            FROM Project p
+            WHERE p.isDeleted = false
+            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+            AND (:toDate IS NULL OR p.createdDate < :toDate)
+            AND EXISTS (
+                SELECT 1
+                FROM ProjectMilestoneAssignment a
+                WHERE a.project = p
+                AND a.assignedUser.id IN :userIds
+                AND a.isDeleted = false
+            )
+            GROUP BY UPPER(p.status.name)
+            """)
+    List<com.doc.dto.project.dashboard.ProjectStatusCountDto> getStatusCountsForDashboardUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
 
 }

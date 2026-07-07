@@ -16,6 +16,8 @@ public class ProjectDetailsDto {
     private Long id;
     private String name;
     private String projectNo;
+    private String priority;
+
     private LocalDate date;
 
     private Long productId;
