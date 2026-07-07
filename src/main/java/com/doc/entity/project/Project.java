@@ -132,7 +132,7 @@ public class Project {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false, length = 20)
-    @Comment("Project priority: STANDARD, HIGH, SEVERE")
+    @Comment("Project priority: STANDARD, HIGH, CRITICAL")
     private ProjectPriority priority = ProjectPriority.STANDARD;
 
 
