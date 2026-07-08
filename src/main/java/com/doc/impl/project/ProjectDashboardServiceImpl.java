@@ -115,6 +115,8 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                     dateRange.toDateTimeExclusive()
             );
 
+
+
             rawStatusCounts = projectRepository.getStatusCountsForDashboardUser(
                     userIds,
                     dateRange.fromDateTime(),

@@ -275,26 +275,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
 
-    @Query("""
-            SELECT COUNT(DISTINCT p)
-            FROM Project p
-            WHERE p.isDeleted = false
-            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-            AND (:toDate IS NULL OR p.createdDate < :toDate)
-            AND EXISTS (
-                SELECT 1
-                FROM ProjectMilestoneAssignment a
-                WHERE a.project = p
-                AND a.assignedUser.id IN :userIds
-                AND a.isDeleted = false
-            )
-            """)
-    long countAllProjectsForDashboardUser(
-            @Param("userIds") List<Long> userIds,
-            @Param("fromDate") Date fromDate,
-            @Param("toDate") Date toDate
-    );
-
 
     @Query("""
             SELECT COUNT(DISTINCT p)
@@ -311,29 +291,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("toDate") Date toDate
     );
 
-
-    @Query("""
-            SELECT COUNT(DISTINCT p)
-            FROM Project p
-            WHERE p.isDeleted = false
-            AND p.isCancelled = false
-            AND UPPER(p.status.name) IN :statuses
-            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-            AND (:toDate IS NULL OR p.createdDate < :toDate)
-            AND EXISTS (
-                SELECT 1
-                FROM ProjectMilestoneAssignment a
-                WHERE a.project = p
-                AND a.assignedUser.id IN :userIds
-                AND a.isDeleted = false
-            )
-            """)
-    long countRunningProjectsForDashboardUser(
-            @Param("userIds") List<Long> userIds,
-            @Param("statuses") List<String> statuses,
-            @Param("fromDate") Date fromDate,
-            @Param("toDate") Date toDate
-    );
 
 
     @Query("""
@@ -353,29 +310,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
 
-    @Query("""
-            SELECT new com.doc.dto.project.dashboard.ProjectStatusCountDto(
-                UPPER(p.status.name),
-                COUNT(DISTINCT p)
-            )
-            FROM Project p
-            WHERE p.isDeleted = false
-            AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-            AND (:toDate IS NULL OR p.createdDate < :toDate)
-            AND EXISTS (
-                SELECT 1
-                FROM ProjectMilestoneAssignment a
-                WHERE a.project = p
-                AND a.assignedUser.id IN :userIds
-                AND a.isDeleted = false
-            )
-            GROUP BY UPPER(p.status.name)
-            """)
-    List<com.doc.dto.project.dashboard.ProjectStatusCountDto> getStatusCountsForDashboardUser(
-            @Param("userIds") List<Long> userIds,
-            @Param("fromDate") Date fromDate,
-            @Param("toDate") Date toDate
-    );
 
 
     @Query("""
@@ -390,26 +324,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("toDate") Date toDate
     );
 
-
-    @Query("""
-        SELECT COUNT(DISTINCT p)
-        FROM Project p
-        WHERE p.isDeleted = false
-        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-        AND (:toDate IS NULL OR p.createdDate < :toDate)
-        AND EXISTS (
-            SELECT 1
-            FROM ProjectMilestoneAssignment a
-            WHERE a.project = p
-            AND a.assignedUser.id IN :userIds
-            AND a.isDeleted = false
-        )
-        """)
-    long countOverviewTotalUser(
-            @Param("userIds") List<Long> userIds,
-            @Param("fromDate") Date fromDate,
-            @Param("toDate") Date toDate
-    );
 
 
     @Query("""
@@ -430,30 +344,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
 
-    @Query("""
-        SELECT COUNT(DISTINCT p)
-        FROM Project p
-        WHERE p.isDeleted = false
-        AND p.isCancelled = false
-        AND UPPER(p.status.name) IN :statuses
-        AND (p.date IS NULL OR p.date >= :today)
-        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-        AND (:toDate IS NULL OR p.createdDate < :toDate)
-        AND EXISTS (
-            SELECT 1
-            FROM ProjectMilestoneAssignment a
-            WHERE a.project = p
-            AND a.assignedUser.id IN :userIds
-            AND a.isDeleted = false
-        )
-        """)
-    long countOverviewNonDelayedByStatusesUser(
-            @Param("userIds") List<Long> userIds,
-            @Param("statuses") List<String> statuses,
-            @Param("today") LocalDate today,
-            @Param("fromDate") Date fromDate,
-            @Param("toDate") Date toDate
-    );
 
 
     @Query("""
@@ -475,24 +365,81 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
 
+
+
     @Query("""
-        SELECT COUNT(DISTINCT p)
-        FROM Project p
-        WHERE p.isDeleted = false
-        AND p.isCancelled = false
-        AND UPPER(p.status.name) IN :runningStatuses
-        AND p.date IS NOT NULL
-        AND p.date < :today
-        AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-        AND (:toDate IS NULL OR p.createdDate < :toDate)
-        AND EXISTS (
+    SELECT COUNT(DISTINCT p)
+    FROM Project p
+    WHERE p.isDeleted = false
+    AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+    AND (:toDate IS NULL OR p.createdDate < :toDate)
+    AND (
+        p.salesPersonId IN :userIds
+        OR EXISTS (
             SELECT 1
             FROM ProjectMilestoneAssignment a
             WHERE a.project = p
             AND a.assignedUser.id IN :userIds
             AND a.isDeleted = false
         )
-        """)
+    )
+    """)
+    long countOverviewTotalUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+    @Query("""
+    SELECT COUNT(DISTINCT p)
+    FROM Project p
+    WHERE p.isDeleted = false
+    AND p.isCancelled = false
+    AND UPPER(p.status.name) IN :statuses
+    AND (p.date IS NULL OR p.date >= :today)
+    AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+    AND (:toDate IS NULL OR p.createdDate < :toDate)
+    AND (
+        p.salesPersonId IN :userIds
+        OR EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+    )
+    """)
+    long countOverviewNonDelayedByStatusesUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("statuses") List<String> statuses,
+            @Param("today") LocalDate today,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+    SELECT COUNT(DISTINCT p)
+    FROM Project p
+    WHERE p.isDeleted = false
+    AND p.isCancelled = false
+    AND UPPER(p.status.name) IN :runningStatuses
+    AND p.date IS NOT NULL
+    AND p.date < :today
+    AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+    AND (:toDate IS NULL OR p.createdDate < :toDate)
+    AND (
+        p.salesPersonId IN :userIds
+        OR EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+    )
+    """)
     long countOverviewDelayedUser(
             @Param("userIds") List<Long> userIds,
             @Param("runningStatuses") List<String> runningStatuses,
@@ -500,6 +447,89 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("fromDate") Date fromDate,
             @Param("toDate") Date toDate
     );
+
+
+    @Query("""
+    SELECT COUNT(DISTINCT p)
+    FROM Project p
+    WHERE p.isDeleted = false
+    AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+    AND (:toDate IS NULL OR p.createdDate < :toDate)
+    AND (
+        p.salesPersonId IN :userIds
+        OR EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+    )
+    """)
+    long countAllProjectsForDashboardUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+
+
+    @Query("""
+    SELECT COUNT(DISTINCT p)
+    FROM Project p
+    WHERE p.isDeleted = false
+    AND p.isCancelled = false
+    AND UPPER(p.status.name) IN :statuses
+    AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+    AND (:toDate IS NULL OR p.createdDate < :toDate)
+    AND (
+        p.salesPersonId IN :userIds
+        OR EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+    )
+    """)
+    long countRunningProjectsForDashboardUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("statuses") List<String> statuses,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query("""
+    SELECT new com.doc.dto.project.dashboard.ProjectStatusCountDto(
+        UPPER(p.status.name),
+        COUNT(DISTINCT p)
+    )
+    FROM Project p
+    WHERE p.isDeleted = false
+    AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+    AND (:toDate IS NULL OR p.createdDate < :toDate)
+    AND (
+        p.salesPersonId IN :userIds
+        OR EXISTS (
+            SELECT 1
+            FROM ProjectMilestoneAssignment a
+            WHERE a.project = p
+            AND a.assignedUser.id IN :userIds
+            AND a.isDeleted = false
+        )
+    )
+    GROUP BY UPPER(p.status.name)
+    """)
+    List<com.doc.dto.project.dashboard.ProjectStatusCountDto> getStatusCountsForDashboardUser(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
 
 
 }
