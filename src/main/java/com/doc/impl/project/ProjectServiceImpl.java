@@ -1026,6 +1026,26 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setStatusId(project.getStatus() != null ? project.getStatus().getId() : null);
         dto.setStatusName(project.getStatus() != null ? project.getStatus().getName() : null);
 
+        boolean poBillingEligible = false;
+
+        if (project.getPaymentDetail() != null
+                && project.getPaymentDetail().getPaymentType() != null
+                && "Purchase Order Payment".equalsIgnoreCase(project.getPaymentDetail().getPaymentType().getName())) {
+
+            List<ProjectMilestoneAssignment> assignments =
+                    projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
+
+            poBillingEligible = assignments.stream()
+                    .filter(a -> a.getMilestone() != null)
+                    .filter(a -> !"Certification".equalsIgnoreCase(a.getMilestone().getName()))
+                    .allMatch(a ->
+                            a.getStatus() != null
+                                    && "COMPLETED".equalsIgnoreCase(a.getStatus().getName())
+                    );
+        }
+
+        dto.setPoBillingEligible(poBillingEligible);
+
         long totalMilestones =
                 projectMilestoneAssignmentRepository
                         .countByProject_IdAndIsDeletedFalse(project.getId());

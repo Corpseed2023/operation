@@ -51,4 +51,6 @@ public class ProjectResponseDto {
 
     private Integer milestoneCompletionPercentage;
 
+    private Boolean poBillingEligible;
+
 }
