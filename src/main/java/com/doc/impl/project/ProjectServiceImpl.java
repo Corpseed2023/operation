@@ -998,40 +998,87 @@ public class ProjectServiceImpl implements ProjectService {
 
     private ProjectResponseDto mapToResponseDto(Project project) {
         ProjectResponseDto dto = new ProjectResponseDto();
+
         dto.setId(project.getId());
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
+
         dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
+
         dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
         dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
+
         dto.setContactId(project.getContact() != null ? project.getContact().getId() : null);
+        dto.setContactName(project.getContact() != null ? project.getContact().getName() : null);
+
+        if (project.getUnit() != null) {
+            dto.setUnitId(project.getUnit().getId());
+            dto.setUnitName(project.getUnit().getUnitName());
+        }
+
         dto.setLeadId(project.getLeadId());
         dto.setDate(project.getDate());
 
-        dto.setTotalAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getTotalAmount() : 0.0);
-        dto.setDueAmount(project.getPaymentDetail() != null ? project.getPaymentDetail().getDueAmount() : 0.0);
-        dto.setPaymentTypeId(project.getPaymentDetail() != null && project.getPaymentDetail().getPaymentType() != null
-                ? project.getPaymentDetail().getPaymentType().getId() : null);
-        dto.setApprovedById(project.getPaymentDetail() != null && project.getPaymentDetail().getApprovedBy() != null
-                ? project.getPaymentDetail().getApprovedBy().getId() : null);
+        dto.setTotalAmount(
+                project.getPaymentDetail() != null
+                        ? project.getPaymentDetail().getTotalAmount()
+                        : 0.0
+        );
+
+        dto.setDueAmount(
+                project.getPaymentDetail() != null
+                        ? project.getPaymentDetail().getDueAmount()
+                        : 0.0
+        );
+
+        dto.setPaymentTypeId(
+                project.getPaymentDetail() != null
+                        && project.getPaymentDetail().getPaymentType() != null
+                        ? project.getPaymentDetail().getPaymentType().getId()
+                        : null
+        );
+
+        dto.setApprovedById(
+                project.getPaymentDetail() != null
+                        && project.getPaymentDetail().getApprovedBy() != null
+                        ? project.getPaymentDetail().getApprovedBy().getId()
+                        : null
+        );
+
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
         dto.setDeleted(project.isDeleted());
         dto.setActive(project.isActive());
+
         dto.setUnbilledNumber(project.getUnbilledNumber());
         dto.setEstimateNumber(project.getEstimateNumber());
+
         dto.setPriority(project.getPriority() != null ? project.getPriority().name() : null);
+
         dto.setSalesPersonId(project.getSalesPersonId());
         dto.setSalesPersonName(project.getSalesPersonName());
+
         dto.setStatusId(project.getStatus() != null ? project.getStatus().getId() : null);
         dto.setStatusName(project.getStatus() != null ? project.getStatus().getName() : null);
 
+        /*
+         * PO Billing Eligibility:
+         *
+         * For Purchase Order projects, tax invoice can be raised only after
+         * all non-Certification milestones are completed.
+         */
         boolean poBillingEligible = false;
 
-        if (project.getPaymentDetail() != null
+        String paymentTypeName = project.getPaymentDetail() != null
                 && project.getPaymentDetail().getPaymentType() != null
-                && "Purchase Order Payment".equalsIgnoreCase(project.getPaymentDetail().getPaymentType().getName())) {
+                ? project.getPaymentDetail().getPaymentType().getName()
+                : null;
 
+        boolean isPurchaseOrderPayment =
+                "PURCHASE_ORDER".equalsIgnoreCase(paymentTypeName)
+                        || "Purchase Order Payment".equalsIgnoreCase(paymentTypeName);
+
+        if (isPurchaseOrderPayment) {
             List<ProjectMilestoneAssignment> assignments =
                     projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
 
