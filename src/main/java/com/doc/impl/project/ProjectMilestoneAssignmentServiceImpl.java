@@ -405,6 +405,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         logger.info("Reassigning milestone {} → user {} by {}",
                 reassignDto.getAssignmentId(), reassignDto.getNewUserId(), reassignDto.getChangedById());
 
+
         ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository.findActiveUserById(reassignDto.getAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone assignment not found", "MILESTONE_ASSIGNMENT_NOT_FOUND"));
 

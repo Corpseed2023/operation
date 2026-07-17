@@ -135,6 +135,20 @@ public class Project {
     @Comment("Project priority: STANDARD, HIGH, CRITICAL")
     private ProjectPriority priority = ProjectPriority.STANDARD;
 
+    @Column(name = "estimate_id", unique = true)
+    @Comment("Estimate ID received from Account Service")
+    private Long estimateId;
+
+    @Column(name = "source_invoice_id")
+    @Comment("Advance tax invoice ID that triggered project creation")
+    private Long sourceInvoiceId;
+
+    @Column(name = "source_invoice_number", length = 50)
+    @Comment("Advance tax invoice number that triggered project creation")
+    private String sourceInvoiceNumber;
+
+    @Column(name = "created_from_advance_invoice", nullable = false)
+    private boolean createdFromAdvanceInvoice = false;
 
 
 
