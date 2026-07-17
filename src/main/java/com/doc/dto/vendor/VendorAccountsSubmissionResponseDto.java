@@ -1,5 +1,6 @@
 package com.doc.dto.vendor;
 
+import com.doc.entity.vendor.VendorGSTRegistrationType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -59,6 +60,9 @@ public class VendorAccountsSubmissionResponseDto {
     private Long accountsVerifiedBy;
     private Date accountsVerifiedDate;
     private String accountsRemark;
+
+    private VendorGSTRegistrationType gstRegistrationType;
+    private String gstNumber;
 
     private Long createdBy;
     private Long updatedBy;

@@ -239,6 +239,23 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             );
         }
 
+        VendorGSTRegistrationType gstRegistrationType =
+                requestDto.getGstRegistrationType();
+
+        boolean gstNumberRequired =
+                gstRegistrationType == VendorGSTRegistrationType.REGISTERED
+                        || gstRegistrationType == VendorGSTRegistrationType.SEZ;
+
+        if (gstNumberRequired
+                && (requestDto.getGstNumber() == null
+                || requestDto.getGstNumber().trim().isEmpty())) {
+
+            throw new ValidationException(
+                    "GST number is required for REGISTERED and SEZ vendors",
+                    "ERR_VENDOR_GST_NUMBER_REQUIRED"
+            );
+        }
+
         VendorAccountsSubmission submission = new VendorAccountsSubmission();
 
         submission.setVendorFinalization(finalization);
@@ -270,6 +287,8 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         submission.setPartnershipOrCoiUrl(requestDto.getPartnershipOrCoiUrl());
         submission.setDeedOrMsmeUrl(requestDto.getDeedOrMsmeUrl());
         submission.setBalanceSheetUrl(requestDto.getBalanceSheetUrl());
+        submission.setGstRegistrationType(requestDto.getGstRegistrationType());
+        submission.setGstNumber(requestDto.getGstNumber());
 
         submission.setRemarks(requestDto.getRemarks());
         submission.setStatus(VendorAccountsSubmissionStatus.PENDING);
@@ -516,6 +535,9 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         response.setPartnershipOrCoiUrl(submission.getPartnershipOrCoiUrl());
         response.setDeedOrMsmeUrl(submission.getDeedOrMsmeUrl());
         response.setBalanceSheetUrl(submission.getBalanceSheetUrl());
+
+        response.setGstRegistrationType(submission.getGstRegistrationType());
+        response.setGstNumber(submission.getGstNumber());
 
         response.setRemarks(submission.getRemarks());
         response.setStatus(

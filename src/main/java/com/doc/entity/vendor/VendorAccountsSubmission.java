@@ -77,6 +77,13 @@ public class VendorAccountsSubmission {
     @Column(length = 500)
     private String balanceSheetUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gst_registration_type", nullable = false, length = 30)
+    private VendorGSTRegistrationType gstRegistrationType;
+
+    @Column(name = "gst_number", length = 15)
+    private String gstNumber;
+
     @Column(length = 1000)
     private String remarks;
 

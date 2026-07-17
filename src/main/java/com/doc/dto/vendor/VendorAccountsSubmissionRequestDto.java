@@ -1,5 +1,6 @@
 package com.doc.dto.vendor;
 
+import com.doc.entity.vendor.VendorGSTRegistrationType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -66,6 +67,11 @@ public class VendorAccountsSubmissionRequestDto {
     private String deedOrMsmeUrl;
 
     private String balanceSheetUrl;
+
+    @NotNull(message = "GST registration type is required")
+    private VendorGSTRegistrationType gstRegistrationType;
+
+    private String gstNumber;
 
     private String remarks;
 
