@@ -48,6 +48,9 @@ public class ProcurementOrder {
     @Column(length = 50)
     private String poReferenceNumber;
 
+    @Column(length = 50)
+    private VendorGSTRegistrationType vendorGSTRegistrationType;
+
     // ==================== AMOUNT & TAX BREAKUP ====================
 
     private BigDecimal finalAmount;           // Base amount before tax
@@ -57,6 +60,10 @@ public class ProcurementOrder {
     private BigDecimal cgstAmount;
     private BigDecimal sgstAmount;
     private BigDecimal igstAmount;
+
+    private BigDecimal tdsPercentage;
+
+    private BigDecimal tdsAmount;
 
     private BigDecimal totalTaxAmount;
     private BigDecimal grandTotal;            // Final payable amount

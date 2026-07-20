@@ -1,5 +1,6 @@
 package com.doc.dto.vendor;
 
+import com.doc.entity.vendor.VendorGSTRegistrationType;
 import com.doc.entity.vendor.VendorStatus;
 import lombok.Getter;
 import lombok.Setter;
@@ -32,6 +33,8 @@ public class VendorResponseDto {
 
     private Date createdDate;
     private Date updatedDate;
+
+    private VendorGSTRegistrationType gstRegistrationType;
 
     private boolean isDeleted;
 

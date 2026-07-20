@@ -1,6 +1,7 @@
 package com.doc.dto.vendor;
 
 import com.doc.entity.vendor.ProcurementOrderStatus;
+import com.doc.entity.vendor.VendorGSTRegistrationType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -23,11 +24,14 @@ public class PurchaseOrderResponseDto {
 
     private Long vendorId;
     private String vendorName;
+    private VendorGSTRegistrationType vendorGSTRegistrationType;
     private BigDecimal finalAmount;
 
     private BigDecimal cgstAmount;
     private BigDecimal sgstAmount;
     private BigDecimal igstAmount;
+    private BigDecimal tdsPercentage;
+    private BigDecimal tdsAmount;
     private BigDecimal totalTaxAmount;
     private BigDecimal grandTotal;
     private BigDecimal gstRate;

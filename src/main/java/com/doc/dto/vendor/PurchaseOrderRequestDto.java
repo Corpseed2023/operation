@@ -33,6 +33,8 @@ public class PurchaseOrderRequestDto {
     private BigDecimal sgstAmount;
     private BigDecimal igstAmount;
 
+    private BigDecimal tdsPercentage;
+
     private BigDecimal totalTaxAmount;
     private BigDecimal grandTotal;              // Most important - final payable amount
 

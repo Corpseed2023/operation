@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Date;
 
@@ -54,9 +55,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private PaymentTypeRepository paymentTypeRepository;
 
     @Override
-    public PurchaseOrderResponseDto createPurchaseOrder(PurchaseOrderRequestDto dto) {
+    @Transactional
+    public PurchaseOrderResponseDto createPurchaseOrder(
+            PurchaseOrderRequestDto dto
+    ) {
 
-        logger.info("Creating Purchase Order for procurementAssignmentId: {}", dto.getProcurementAssignmentId());
+        logger.info(
+                "Creating Purchase Order for procurementAssignmentId: {}",
+                dto.getProcurementAssignmentId()
+        );
 
         ProcurementMilestoneAssignment procurement = procurementRepository
                 .findById(dto.getProcurementAssignmentId())
@@ -65,32 +72,88 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         "ERR_PROCUREMENT_NOT_FOUND"
                 ));
 
-        Vendor vendor = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
+        Vendor vendor = vendorRepository
+                .findByIdAndIsDeletedFalse(dto.getVendorId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Vendor not found",
                         "ERR_VENDOR_NOT_FOUND"
                 ));
 
-        User createdByUser = userRepository.findActiveUserById(dto.getCreatedBy())
+        User createdByUser = userRepository
+                .findActiveUserById(dto.getCreatedBy())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "CreatedBy user not found",
                         "ERR_USER_NOT_FOUND"
                 ));
 
-        if (dto.getFinalAmount() == null || dto.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        if (dto.getFinalAmount() == null
+                || dto.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+
             throw new ValidationException(
                     "Final amount must be greater than zero",
                     "ERR_INVALID_AMOUNT"
             );
         }
 
+        BigDecimal finalAmount = dto.getFinalAmount()
+                .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal tdsPercentage = dto.getTdsPercentage();
+
+        if (tdsPercentage == null) {
+            throw new ValidationException(
+                    "TDS percentage is required",
+                    "ERR_TDS_PERCENTAGE_REQUIRED"
+            );
+        }
+
+        if (tdsPercentage.compareTo(BigDecimal.ZERO) < 0
+                || tdsPercentage.compareTo(new BigDecimal("100")) > 0) {
+
+            throw new ValidationException(
+                    "TDS percentage must be between 0 and 100",
+                    "ERR_INVALID_TDS_PERCENTAGE"
+            );
+        }
+
+        tdsPercentage = tdsPercentage.setScale(
+                2,
+                RoundingMode.HALF_UP
+        );
+
+        BigDecimal tdsAmount = finalAmount
+                .multiply(tdsPercentage)
+                .divide(
+                        new BigDecimal("100"),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+
+        BigDecimal totalTaxAmount = dto.getTotalTaxAmount() != null
+                ? dto.getTotalTaxAmount().setScale(
+                2,
+                RoundingMode.HALF_UP
+        )
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
+        /*
+         * Existing GST calculation and breakup remain unchanged.
+         *
+         * Grand Total = Final Amount + GST - TDS
+         */
+        BigDecimal grandTotal = finalAmount
+                .add(totalTaxAmount)
+                .subtract(tdsAmount)
+                .setScale(2, RoundingMode.HALF_UP);
+
         validatePoValueNotGreaterThanProjectValue(
-                dto.getGrandTotal(),
-                dto.getFinalAmount(),
+                grandTotal,
+                finalAmount,
                 procurement
         );
 
         String poNumber = generatePoNumber();
+        Date currentDate = new Date();
 
         ProcurementOrder po = new ProcurementOrder();
 
@@ -101,56 +164,74 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setPoNumber(poNumber);
         po.setPoReferenceNumber(dto.getPoReferenceNumber());
 
-        po.setFinalAmount(dto.getFinalAmount());
+        po.setFinalAmount(finalAmount);
 
+        po.setTdsPercentage(tdsPercentage);
+        po.setTdsAmount(tdsAmount);
+
+        /*
+         * Existing CGST, SGST and IGST logic remains unchanged.
+         */
         po.setGstRate(dto.getGstRate());
         po.setCgstAmount(dto.getCgstAmount());
         po.setSgstAmount(dto.getSgstAmount());
         po.setIgstAmount(dto.getIgstAmount());
-        po.setTotalTaxAmount(dto.getTotalTaxAmount());
-        po.setGrandTotal(dto.getGrandTotal());
+        po.setTotalTaxAmount(totalTaxAmount);
+
+        po.setGrandTotal(grandTotal);
 
         po.setScopeOfWork(dto.getScopeOfWork());
         po.setTermsAndConditions(dto.getTermsAndConditions());
         po.setRemarks(dto.getRemarks());
         po.setAttachmentUrls(dto.getAttachmentUrls());
 
-        /*
-         * New PO flow:
-         * PO starts as DRAFT.
-         * No PENDING_APPROVAL / REJECTED / RELEASED flow.
-         */
         po.setStatus(ProcurementOrderStatus.DRAFT);
-        po.setPoCreatedDate(new Date());
+        po.setPoCreatedDate(currentDate);
+        po.setVendorGSTRegistrationType(vendor.getGstRegistrationType());
 
         po.setCreatedBy(createdByUser.getId());
         po.setUpdatedBy(createdByUser.getId());
-        po.setCreatedDate(new Date());
-        po.setUpdatedDate(new Date());
+        po.setCreatedDate(currentDate);
+        po.setUpdatedDate(currentDate);
 
-        if (dto.getPaymentTypeName() != null && !dto.getPaymentTypeName().trim().isEmpty()) {
-            PaymentType paymentType = paymentTypeRepository.findByName(dto.getPaymentTypeName())
+        if (dto.getPaymentTypeName() != null
+                && !dto.getPaymentTypeName().trim().isEmpty()) {
+
+            PaymentType paymentType = paymentTypeRepository
+                    .findByName(dto.getPaymentTypeName().trim())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Payment type not found: " + dto.getPaymentTypeName(),
+                            "Payment type not found: "
+                                    + dto.getPaymentTypeName(),
                             "ERR_PAYMENT_TYPE_NOT_FOUND"
                     ));
 
             po.setPaymentType(paymentType);
         }
 
-        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
+        ProcurementOrder savedPo =
+                purchaseOrderRepository.save(po);
 
         procurement.setStatus(ProcurementStatus.PO_CREATED);
         procurement.setSelectedVendor(vendor);
-        procurement.setPoCreatedDate(new Date());
+        procurement.setPoCreatedDate(currentDate);
         procurement.setUpdatedBy(createdByUser.getId());
-        procurement.setUpdatedDate(new Date());
+        procurement.setUpdatedDate(currentDate);
+
+        procurementRepository.save(procurement);
 
         logger.info(
-                "Purchase Order created successfully: {} | Project: {} | Vendor: {}",
+                "Purchase Order created successfully: {} | Project: {} | "
+                        + "Vendor: {} | Final Amount: {} | TDS: {} | "
+                        + "GST: {} | Grand Total: {}",
                 poNumber,
-                procurement.getProject() != null ? procurement.getProject().getProjectNo() : null,
-                vendor.getName()
+                procurement.getProject() != null
+                        ? procurement.getProject().getProjectNo()
+                        : null,
+                vendor.getName(),
+                finalAmount,
+                tdsAmount,
+                totalTaxAmount,
+                grandTotal
         );
 
         return mapToResponseDto(savedPo);
@@ -764,6 +845,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         dto.setPoCreatedDate(po.getPoCreatedDate());
         dto.setPoApprovedDate(po.getPoApprovedDate());
         dto.setPoReleasedDate(po.getPoReleasedDate());
+
+        dto.setTdsAmount(po.getTdsAmount());
+        dto.setTdsPercentage(po.getTdsPercentage());
+
+        dto.setVendorGSTRegistrationType(po.getVendorGSTRegistrationType());
 
         dto.setCreatedDate(po.getCreatedDate());
         dto.setUpdatedDate(po.getUpdatedDate());

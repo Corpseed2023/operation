@@ -69,20 +69,50 @@ public class VendorServiceImpl implements VendorService {
     public VendorResponseDto createVendor(Long userId, VendorRequestDto dto) {
 
         if (dto.getName() == null || dto.getName().trim().isEmpty()) {
-            throw new ValidationException("Vendor name is required", "ERR_VENDOR_NAME_REQUIRED");
+            throw new ValidationException(
+                    "Vendor name is required",
+                    "ERR_VENDOR_NAME_REQUIRED"
+            );
         }
+
+        VendorGSTRegistrationType gstRegistrationType =
+                dto.getGstRegistrationType();
 
         String gstNumber = normalize(dto.getGstNumber());
         String panNumber = normalize(dto.getPanNumber());
 
+        boolean gstNumberRequired =
+                gstRegistrationType == VendorGSTRegistrationType.REGISTERED ||
+                        gstRegistrationType == VendorGSTRegistrationType.SEZ;
+
+        if (gstNumberRequired && gstNumber == null) {
+            throw new ValidationException(
+                    "GST number is mandatory for Registered and SEZ vendors",
+                    "ERR_GST_NUMBER_REQUIRED"
+            );
+        }
+
+        if (gstNumber != null && gstNumber.length() != 15) {
+            throw new ValidationException(
+                    "GST number must contain exactly 15 characters",
+                    "ERR_INVALID_GST_NUMBER"
+            );
+        }
+
         if (gstNumber != null &&
                 vendorRepository.existsByGstNumberAndIsDeletedFalse(gstNumber)) {
-            throw new ValidationException("GST number already exists", "ERR_DUPLICATE_GST");
+            throw new ValidationException(
+                    "GST number already exists",
+                    "ERR_DUPLICATE_GST"
+            );
         }
 
         if (panNumber != null &&
                 vendorRepository.existsByPanNumberAndIsDeletedFalse(panNumber)) {
-            throw new ValidationException("PAN number already exists", "ERR_DUPLICATE_PAN");
+            throw new ValidationException(
+                    "PAN number already exists",
+                    "ERR_DUPLICATE_PAN"
+            );
         }
 
         User createdByUser = userRepository.findActiveUserById(userId)
@@ -97,7 +127,10 @@ public class VendorServiceImpl implements VendorService {
         vendor.setDescription(dto.getDescription());
         vendor.setEmail(normalize(dto.getEmail()));
         vendor.setMobile(normalize(dto.getMobile()));
+
+        vendor.setGstRegistrationType(gstRegistrationType);
         vendor.setGstNumber(gstNumber);
+
         vendor.setPanNumber(panNumber);
         vendor.setStatus(VendorStatus.PROSPECTIVE);
         vendor.setCreatedBy(createdByUser.getId());
@@ -106,7 +139,10 @@ public class VendorServiceImpl implements VendorService {
 
         vendor = vendorRepository.save(vendor);
 
-        logger.info("Vendor created successfully with ID: {}", vendor.getId());
+        logger.info(
+                "Vendor created successfully with ID: {}",
+                vendor.getId()
+        );
 
         return mapEntityToDto(vendor);
     }
@@ -287,6 +323,7 @@ public class VendorServiceImpl implements VendorService {
         dto.setEmail(vendor.getEmail());
         dto.setMobile(vendor.getMobile());
         dto.setGstNumber(vendor.getGstNumber());
+        dto.setGstRegistrationType(vendor.getGstRegistrationType());
         dto.setPanNumber(vendor.getPanNumber());
         dto.setStatus(vendor.getStatus());
 

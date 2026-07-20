@@ -48,6 +48,9 @@ public class Vendor {
     @Comment("Vendor GST number")
     private String gstNumber;
 
+    @Enumerated(EnumType.STRING)
+    private VendorGSTRegistrationType gstRegistrationType;
+
     /**
      * PAN is not mandatory during basic vendor creation.
      * It can be collected during onboarding.
