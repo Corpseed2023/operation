@@ -2031,6 +2031,31 @@ public class ProjectServiceImpl implements ProjectService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public String getProjectStatusByProjectNumber(String projectNumber) {
+
+        if (projectNumber == null || projectNumber.trim().isEmpty()) {
+            throw new ValidationException(
+                    "Project number is required",
+                    "PROJECT_NUMBER_REQUIRED"
+            );
+        }
+
+        Project project = projectRepository
+                .findByProjectNoIgnoreCaseAndIsDeletedFalse(projectNumber.trim())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found with project number: " + projectNumber,
+                        "PROJECT_NOT_FOUND"
+                ));
+
+        if (project.getStatus() == null) {
+            return "STATUS_NOT_AVAILABLE";
+        }
+
+        return project.getStatus().getName();
+    }
+
     private String getProjectMilestoneName(ProjectMilestoneAssignment assignment) {
 
         if (assignment == null) {

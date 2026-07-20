@@ -254,7 +254,6 @@ public class ProjectController {
         return ResponseEntity.ok(response);
     }
 
-
     @PutMapping("/cancel/{userId}/{unbilledNumber}")
     public ResponseEntity<ProjectResponseDto> cancelProjectByUnbilledNumber(
             @PathVariable Long userId,
@@ -308,6 +307,17 @@ public class ProjectController {
                 projectService.getProjectMilestoneAssignmentOptions(projectId);
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/status/{projectNumber}")
+    @Operation(summary = "Get project status by project number")
+    public ResponseEntity<String> getProjectStatusByProjectNumber(
+            @PathVariable String projectNumber
+    ) {
+        String status =
+                projectService.getProjectStatusByProjectNumber(projectNumber);
+
+        return ResponseEntity.ok(status);
     }
 
 

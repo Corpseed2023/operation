@@ -54,4 +54,6 @@ public interface ProjectService {
     );
 
     List<Map<String, Object>> getProjectMilestoneAssignmentOptions(Long projectId);
+
+    String getProjectStatusByProjectNumber(String projectNumber);
 }

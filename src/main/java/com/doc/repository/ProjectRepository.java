@@ -529,6 +529,16 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("toDate") Date toDate
     );
 
+    @Query("""
+        SELECT p
+        FROM Project p
+        LEFT JOIN FETCH p.status
+        WHERE LOWER(p.projectNo) = LOWER(:projectNo)
+          AND p.isDeleted = false
+        """)
+    Optional<Project> findByProjectNoIgnoreCaseAndIsDeletedFalse(
+            @Param("projectNo") String projectNo
+    );
 
 
 
