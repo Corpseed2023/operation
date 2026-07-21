@@ -2,6 +2,8 @@ package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
 import com.doc.entity.vendor.*;
+import com.doc.repository.ProcurementMilestoneAssignmentRepository;
+import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.repository.vendor.ProductVendorMappingRepository;
 import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorQuotationRepository;
@@ -33,6 +35,7 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     private final VendorFinalizationRepository vendorFinalizationRepository;
     private final VendorRFQRepository vendorRFQRepository;
     private final VendorQuotationRepository vendorQuotationRepository;
+    private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
 
     /**
      * Fetches all dashboard count data for a given product.
@@ -179,7 +182,11 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
         );
     }
 
-
+    @Override
+    public List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts() {
+        return procurementMilestoneAssignmentRepository
+                .getVendorWiseAssignmentCounts();
+    }
 
 
 }

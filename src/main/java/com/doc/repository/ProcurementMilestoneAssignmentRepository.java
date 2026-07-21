@@ -2,6 +2,7 @@ package com.doc.repository;
 
 import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.project.ProcurementStatus;
+import com.doc.repository.projection.VendorAssignmentCountProjection;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -46,7 +47,46 @@ public interface ProcurementMilestoneAssignmentRepository extends JpaRepository<
     WHERE pma.id = :id AND pma.isDeleted = false
 """)
     Optional<ProcurementMilestoneAssignment> findByIdAndIsDeletedFalse(@Param("id") Long id);
+    @Query("""
+    SELECT
+        v.id AS vendorId,
+        v.name AS vendorName,
 
+        COUNT(pma.id) AS totalAssignmentCount,
+
+        SUM(
+            CASE
+                WHEN ps.id IN (2, 6)
+                THEN 1
+                ELSE 0
+            END
+        ) AS activeCount,
+
+        SUM(
+            CASE
+                WHEN ps.id = 3
+                THEN 1
+                ELSE 0
+            END
+        ) AS completedCount,
+
+        SUM(
+            CASE
+                WHEN ps.id = 1
+                THEN 1
+                ELSE 0
+            END
+        ) AS pendingCount
+
+    FROM ProcurementMilestoneAssignment pma
+    JOIN pma.selectedVendor v
+    JOIN pma.project p
+    JOIN p.status ps
+    WHERE pma.isDeleted = false
+    GROUP BY v.id, v.name
+    ORDER BY v.name ASC
+""")
+    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts();
 
 
 }

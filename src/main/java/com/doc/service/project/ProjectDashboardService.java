@@ -2,8 +2,10 @@ package com.doc.service.project;
 
 import com.doc.dto.project.dashboard.ProjectOverviewResponseDto;
 import com.doc.dto.project.dashboard.UserProjectDashboardResponseDto;
+import com.doc.repository.projection.VendorAssignmentCountProjection;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public interface ProjectDashboardService {
 
@@ -20,4 +22,6 @@ public interface ProjectDashboardService {
             LocalDate fromDate,
             LocalDate toDate
     );
+
+
 }

@@ -1,11 +1,14 @@
 package com.doc.controller.vendor;
 
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
+import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/operationService/api/product-vendor-dashboard")
@@ -24,5 +27,13 @@ public class ProductVendorDashboardController {
         );
     }
 
+    @GetMapping("/vendor-wise-assignment-count")
+    public ResponseEntity<List<VendorAssignmentCountProjection>>
+    getVendorWiseAssignmentCounts() {
+
+        return ResponseEntity.ok(
+                productVendorDashboardService.getVendorWiseAssignmentCounts()
+        );
+    }
 
 }
