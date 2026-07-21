@@ -8,5 +8,5 @@ import java.util.List;
 public interface ProductVendorDashboardService {
 
     ProductVendorDashboardCountDto getProductVendorDashboardCounts(Long productId);
-    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts();
+    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts(Long productId);
 }

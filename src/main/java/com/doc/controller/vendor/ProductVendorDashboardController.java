@@ -27,12 +27,12 @@ public class ProductVendorDashboardController {
         );
     }
 
-    @GetMapping("/vendor-wise-assignment-count")
+    @GetMapping("/{productId}/vendor-wise-assignment-count")
     public ResponseEntity<List<VendorAssignmentCountProjection>>
-    getVendorWiseAssignmentCounts() {
+    getVendorWiseAssignmentCounts(@PathVariable Long productId) {
 
         return ResponseEntity.ok(
-                productVendorDashboardService.getVendorWiseAssignmentCounts()
+                productVendorDashboardService.getVendorWiseAssignmentCounts(productId)
         );
     }
 
