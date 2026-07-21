@@ -8,6 +8,7 @@ import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
+import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.service.project.ProjectDashboardService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -274,6 +275,8 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 cards
         );
     }
+
+
 
     private User getActiveUser(Long userId) {
         return userRepository.findActiveUserById(userId)
