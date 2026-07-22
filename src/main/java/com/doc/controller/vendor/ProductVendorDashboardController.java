@@ -2,6 +2,7 @@ package com.doc.controller.vendor;
 
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
 import com.doc.dto.vendor.ProductVendorDashboardResponse;
+import com.doc.dto.vendor.VendorPaymentSummaryResponse;
 import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,5 +49,21 @@ public class ProductVendorDashboardController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping(
+            "/product/{productId}/vendor/{vendorId}/payment-summary"
+    )
+    public ResponseEntity<VendorPaymentSummaryResponse>
+    getVendorPaymentSummary(
+            @RequestParam(required = false) Long productId,
+            @RequestParam(required = false) Long vendorId
+    ) {
+        return ResponseEntity.ok(
+                productVendorDashboardService
+                        .getVendorPaymentSummary(
+                                productId,
+                                vendorId
+                        )
+        );
 
-}
+
+}}
