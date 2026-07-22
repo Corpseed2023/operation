@@ -1,5 +1,6 @@
 package com.doc.controller.vendor;
 
+import com.doc.dto.vendor.ProductRfqDashboardResponse;
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
 import com.doc.dto.vendor.ProductVendorDashboardResponse;
 import com.doc.dto.vendor.VendorPaymentSummaryResponse;
@@ -50,7 +51,7 @@ public class ProductVendorDashboardController {
     }
 
     @GetMapping(
-            "/product/{productId}/vendor/{vendorId}/payment-summary"
+            "/product/vendor/payment-summary"
     )
     public ResponseEntity<VendorPaymentSummaryResponse>
     getVendorPaymentSummary(
@@ -62,8 +63,18 @@ public class ProductVendorDashboardController {
                         .getVendorPaymentSummary(
                                 productId,
                                 vendorId
-                        )
-        );
+                        ));
+    }
 
 
-}}
+
+    @GetMapping(value = "/rfqs")
+    public ResponseEntity<List<ProductRfqDashboardResponse>> getRfqDashboard(
+            @RequestParam(required = false) Long productId){
+        List<ProductRfqDashboardResponse> response =
+                productVendorDashboardService
+                        .getRfqDashboard(productId);
+
+        return ResponseEntity.ok(response);
+    }
+}

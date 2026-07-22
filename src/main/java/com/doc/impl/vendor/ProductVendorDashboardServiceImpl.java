@@ -1,10 +1,13 @@
 package com.doc.impl.vendor;
 
+import com.doc.dto.vendor.ProductRfqDashboardResponse;
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
 import com.doc.dto.vendor.ProductVendorDashboardResponse;
 import com.doc.dto.vendor.VendorPaymentSummaryResponse;
+import com.doc.dto.vendor.ProductRfqDashboardRequestDto;
 import com.doc.entity.vendor.*;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
+import com.doc.repository.projection.ProductRfqDashboardProjection;
 import com.doc.repository.projection.ProductVendorDashboardProjection;
 import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.repository.projection.VendorPaymentSummaryProjection;
@@ -39,6 +42,7 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final ProductVendorDashboardRepository productVendorDashboardRepository;
     private final ProcurementPaymentRequestRepository procurementPaymentRequestRepository;
+    private final RFQVendorRepository rfqVendorRepository;
 
     /**
      * Fetches all dashboard count data for a given product.
@@ -263,9 +267,39 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
                 .build();
     }
 
+    @Override
+    public List<ProductRfqDashboardResponse> getRfqDashboard(Long productId) {
+        return rfqVendorRepository
+                .findRfqDashboardByProductId(productId)
+                .stream()
+                .map(this::mapRfqDashboardResponse)
+                .toList();
+    }
+
+    private ProductRfqDashboardResponse mapRfqDashboardResponse(
+            ProductRfqDashboardProjection projection
+    ) {
+        return ProductRfqDashboardResponse.builder()
+                .rfqId(projection.getRfqId())
+                .rfqNumber(projection.getRfqNumber())
+                .title(projection.getTitle())
+                .quotationSubmissionDeadline(
+                        projection.getQuotationSubmissionDeadline()
+                )
+                .vendorsInvited(
+                        valueOrZero(projection.getVendorsInvited())
+                )
+                .quotationsReceived(
+                        valueOrZero(projection.getQuotationsReceived())
+                )
+                .status(projection.getStatus())
+                .build();
+    }
+
     private Long valueOrZero(Long value) {
         return value != null ? value : 0L;
     }
+
     private BigDecimal decimalOrZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
