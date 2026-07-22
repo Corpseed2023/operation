@@ -48,45 +48,42 @@ public interface ProcurementMilestoneAssignmentRepository extends JpaRepository<
 """)
     Optional<ProcurementMilestoneAssignment> findByIdAndIsDeletedFalse(@Param("id") Long id);
     @Query("""
-    SELECT
-        v.id AS vendorId,
-        v.name AS vendorName,
+        SELECT
+            pvm.vendor.id AS vendorId,
+            pvm.vendor.name AS vendorName,
 
-        COUNT(pma.id) AS totalAssignmentCount,
+            COUNT(DISTINCT pma.id) AS totalAssignmentCount,
 
-        SUM(
-            CASE
-                WHEN ps.id IN (2, 6)
-                THEN 1
-                ELSE 0
-            END
-        ) AS activeCount,
+            COUNT(DISTINCT CASE
+                WHEN p.status.id IN (2, 6)
+                THEN pma.id
+            END) AS activeCount,
 
-        SUM(
-            CASE
-                WHEN ps.id = 3
-                THEN 1
-                ELSE 0
-            END
-        ) AS completedCount,
+            COUNT(DISTINCT CASE
+                WHEN p.status.id = 3
+                THEN pma.id
+            END) AS completedCount,
 
-        SUM(
-            CASE
-                WHEN ps.id = 1
-                THEN 1
-                ELSE 0
-            END
-        ) AS pendingCount
+            COUNT(DISTINCT CASE
+                WHEN p.status.id = 1
+                THEN pma.id
+            END) AS pendingCount
 
-    FROM ProcurementMilestoneAssignment pma
-    JOIN pma.selectedVendor v
-    JOIN pma.project p
-    JOIN p.status ps
-    WHERE pma.isDeleted = false
-    GROUP BY v.id, v.name
-    ORDER BY v.name ASC
-""")
-    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts();
+        FROM ProcurementMilestoneAssignment pma
+        JOIN pma.project p
+
+        JOIN ProductVendorMapping pvm
+            ON pvm.product.id = p.product.id
+
+        WHERE pma.isDeleted = false
+          AND p.product.id = :productId
+
+        GROUP BY pvm.vendor.id, pvm.vendor.name
+        ORDER BY pvm.vendor.name ASC
+    """)
+    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCountsByProductId(
+            @Param("productId") Long productId
+    );
 
 
 }

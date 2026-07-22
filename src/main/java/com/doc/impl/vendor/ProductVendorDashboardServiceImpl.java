@@ -183,9 +183,9 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     }
 
     @Override
-    public List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts() {
+    public List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts(Long productId) {
         return procurementMilestoneAssignmentRepository
-                .getVendorWiseAssignmentCounts();
+                .getVendorWiseAssignmentCountsByProductId(productId);
     }
 
 
