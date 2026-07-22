@@ -1,13 +1,12 @@
 package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
+import com.doc.dto.vendor.ProductVendorDashboardResponse;
 import com.doc.entity.vendor.*;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
+import com.doc.repository.projection.ProductVendorDashboardProjection;
 import com.doc.repository.projection.VendorAssignmentCountProjection;
-import com.doc.repository.vendor.ProductVendorMappingRepository;
-import com.doc.repository.vendor.VendorFinalizationRepository;
-import com.doc.repository.vendor.VendorQuotationRepository;
-import com.doc.repository.vendor.VendorRFQRepository;
+import com.doc.repository.vendor.*;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +35,7 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     private final VendorRFQRepository vendorRFQRepository;
     private final VendorQuotationRepository vendorQuotationRepository;
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    private final ProductVendorDashboardRepository productVendorDashboardRepository;
 
     /**
      * Fetches all dashboard count data for a given product.
@@ -188,5 +188,43 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
                 .getVendorWiseAssignmentCountsByProductId(productId);
     }
 
+    @Override
+    public ProductVendorDashboardResponse getDashboardByProductId(Long productId) {
+        ProductVendorDashboardProjection projection =
+                productVendorDashboardRepository
+                        .getDashboardByProductId(productId);
+
+        return ProductVendorDashboardResponse.builder()
+                .productId(productId)
+                .registeredVendorCount(
+                        valueOrZero(
+                                projection.getRegisteredVendorCount()
+                        )
+                )
+                .activeRfqCount(
+                        valueOrZero(
+                                projection.getActiveRfqCount()
+                        )
+                )
+                .quotationReceivedCount(
+                        valueOrZero(
+                                projection.getQuotationReceivedCount()
+                        )
+                )
+                .priceComparisonCount(
+                        valueOrZero(
+                                projection.getPriceComparisonCount()
+                        )
+                )
+                .vendorSelectedCount(
+                        valueOrZero(
+                                projection.getVendorSelectedCount()
+                        )
+                )
+                .build();
+    }
+    private Long valueOrZero(Long value) {
+        return value != null ? value : 0L;
+    }
 
 }

@@ -1,6 +1,7 @@
 package com.doc.controller.vendor;
 
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
+import com.doc.dto.vendor.ProductVendorDashboardResponse;
 import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,5 +36,17 @@ public class ProductVendorDashboardController {
                 productVendorDashboardService.getVendorWiseAssignmentCounts(productId)
         );
     }
+    @GetMapping("/product/{productId}")
+    public ResponseEntity<ProductVendorDashboardResponse>
+    getDashboardByProductId(
+            @PathVariable Long productId
+    ) {
+        ProductVendorDashboardResponse response =
+                productVendorDashboardService
+                        .getDashboardByProductId(productId);
+
+        return ResponseEntity.ok(response);
+    }
+
 
 }
