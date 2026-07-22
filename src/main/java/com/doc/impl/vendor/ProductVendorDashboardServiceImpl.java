@@ -2,10 +2,12 @@ package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.ProductVendorDashboardCountDto;
 import com.doc.dto.vendor.ProductVendorDashboardResponse;
+import com.doc.dto.vendor.VendorPaymentSummaryResponse;
 import com.doc.entity.vendor.*;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
 import com.doc.repository.projection.ProductVendorDashboardProjection;
 import com.doc.repository.projection.VendorAssignmentCountProjection;
+import com.doc.repository.projection.VendorPaymentSummaryProjection;
 import com.doc.repository.vendor.*;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     private final VendorQuotationRepository vendorQuotationRepository;
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final ProductVendorDashboardRepository productVendorDashboardRepository;
+    private final ProcurementPaymentRequestRepository procurementPaymentRequestRepository;
 
     /**
      * Fetches all dashboard count data for a given product.
@@ -223,8 +226,51 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
                 )
                 .build();
     }
+
+    @Override
+    public VendorPaymentSummaryResponse getVendorPaymentSummary(Long productId, Long vendorId) {
+        VendorPaymentSummaryProjection projection =
+                procurementPaymentRequestRepository
+                        .getVendorPaymentSummary(
+                                vendorId,
+                                productId
+
+                        );
+
+        return VendorPaymentSummaryResponse.builder()
+                .productId(productId)
+                .vendorId(vendorId)
+                .paymentGivenAmount(
+                        decimalOrZero(
+                                projection.getPaymentGivenAmount()
+                        )
+                )
+                .pendingPaymentAmount(
+                        decimalOrZero(
+                                projection.getPendingPaymentAmount()
+                        )
+                )
+                .paymentReleasedCount(
+                        longOrZero(
+                                projection.getPaymentReleasedCount()
+                        )
+                )
+                .pendingPaymentCount(
+                        longOrZero(
+                                projection.getPendingPaymentCount()
+                        )
+                )
+                .build();
+    }
+
     private Long valueOrZero(Long value) {
         return value != null ? value : 0L;
     }
+    private BigDecimal decimalOrZero(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
 
+    private Long longOrZero(Long value) {
+        return value != null ? value : 0L;
+    }
 }
