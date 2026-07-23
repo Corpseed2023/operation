@@ -1,10 +1,6 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.vendor.ProductRfqDashboardResponse;
-import com.doc.dto.vendor.ProductVendorDashboardCountDto;
-import com.doc.dto.vendor.ProductVendorDashboardResponse;
-import com.doc.dto.vendor.VendorPaymentSummaryResponse;
-import com.doc.dto.vendor.ProductRfqDashboardRequestDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.*;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
 import com.doc.repository.projection.ProductRfqDashboardProjection;
@@ -274,6 +270,48 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
                 .stream()
                 .map(this::mapRfqDashboardResponse)
                 .toList();
+    }
+
+    @Override
+    public ProductVendorVerificationResponse getVendorVerificationByProductId(
+            Long productId
+    ) {
+
+        List<Vendor> vendors =
+                productVendorMappingRepository.findAllVendorsByProductId(productId);
+
+        List<VendorVerificationResponse> verifiedVendors = vendors.stream()
+                .filter(vendor -> vendor.getStatus() == VendorStatus.ACTIVE)
+                .map(this::mapToResponse)
+                .toList();
+
+        List<VendorVerificationResponse> notVerifiedVendors = vendors.stream()
+                .filter(vendor ->
+                        vendor.getStatus() == VendorStatus.PROSPECTIVE
+                                || vendor.getStatus() == VendorStatus.ONBOARDING
+                )
+                .map(this::mapToResponse)
+                .toList();
+
+        return new ProductVendorVerificationResponse(
+                productId,
+                verifiedVendors,
+                notVerifiedVendors
+        );
+    }
+
+    private VendorVerificationResponse mapToResponse(Vendor vendor) {
+
+        return new VendorVerificationResponse(
+                vendor.getId(),
+                vendor.getName(),
+                vendor.getEmail(),
+                vendor.getMobile(),
+                vendor.getGstNumber(),
+                vendor.getPanNumber(),
+                vendor.getStatus(),
+                vendor.getStatus() == VendorStatus.ACTIVE
+        );
     }
 
     private ProductRfqDashboardResponse mapRfqDashboardResponse(

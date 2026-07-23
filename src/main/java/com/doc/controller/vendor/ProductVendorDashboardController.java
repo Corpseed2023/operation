@@ -1,9 +1,6 @@
 package com.doc.controller.vendor;
 
-import com.doc.dto.vendor.ProductRfqDashboardResponse;
-import com.doc.dto.vendor.ProductVendorDashboardCountDto;
-import com.doc.dto.vendor.ProductVendorDashboardResponse;
-import com.doc.dto.vendor.VendorPaymentSummaryResponse;
+import com.doc.dto.vendor.*;
 import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -76,5 +73,17 @@ public class ProductVendorDashboardController {
                         .getRfqDashboard(productId);
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/verification/by-product/{productId}")
+    public ResponseEntity<ProductVendorVerificationResponse>
+    getVendorVerificationByProductId(
+            @PathVariable Long productId
+    ) {
+
+        return ResponseEntity.ok(
+                productVendorDashboardService
+                        .getVendorVerificationByProductId(productId)
+        );
     }
 }
