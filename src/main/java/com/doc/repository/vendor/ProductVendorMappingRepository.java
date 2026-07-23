@@ -1,6 +1,7 @@
 package com.doc.repository.vendor;
 
 import com.doc.entity.vendor.ProductVendorMapping;
+import com.doc.entity.vendor.Vendor;
 import com.doc.entity.vendor.VendorAccountsSubmissionStatus;
 import com.doc.entity.vendor.VendorFinalizationStatus;
 import org.springframework.data.domain.Page;
@@ -134,6 +135,19 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
     List<ProductVendorMapping> findVendorListByProductIdAndAccountsSubmissionStatus(
             @Param("productId") Long productId,
             @Param("status") VendorAccountsSubmissionStatus status
+    );
+
+    @Query("""
+        SELECT DISTINCT pvm.vendor
+        FROM ProductVendorMapping pvm
+        JOIN pvm.vendor v
+        WHERE pvm.product.id = :productId
+          AND pvm.isDeleted = false
+          AND v.isDeleted = false
+        ORDER BY v.name ASC
+        """)
+    List<Vendor> findAllVendorsByProductId(
+            @Param("productId") Long productId
     );
 
 

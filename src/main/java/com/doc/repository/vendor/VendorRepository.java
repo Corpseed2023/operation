@@ -54,4 +54,16 @@ public interface VendorRepository extends JpaRepository<Vendor, Long> {
 //
 //    List<VendorOnboarding > findByVendorIdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
 
+    @Query("""
+        SELECT DISTINCT pvm.vendor
+        FROM ProductVendorMapping pvm
+        JOIN pvm.vendor v
+        WHERE pvm.product.id = :productId
+          AND pvm.isDeleted = false
+          AND v.isDeleted = false
+        ORDER BY v.name ASC
+        """)
+    List<Vendor> findAllVendorsByProductId(
+            @Param("productId") Long productId
+    );
 }
