@@ -92,6 +92,7 @@ public class ProductVendorDashboardController {
     getQuotationResponseRate(
             @PathVariable Long productId
     ) {
+
         return ResponseEntity.ok(
                 productVendorDashboardService
                         .getQuotationResponseRate(productId)

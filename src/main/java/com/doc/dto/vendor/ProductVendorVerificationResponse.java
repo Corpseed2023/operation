@@ -13,7 +13,13 @@ import java.util.List;
 @AllArgsConstructor
 public class ProductVendorVerificationResponse {
 
-    private Long productId;
+   /* private Long productId;
     private List<VendorVerificationResponse> verifiedVendors;
-    private List<VendorVerificationResponse> notVerifiedVendors;
+    private List<VendorVerificationResponse> notVerifiedVendors;*/
+
+    private Long productId;
+
+    private Integer verified;
+
+    private Integer notVerified;
 }

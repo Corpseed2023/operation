@@ -278,23 +278,23 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
         List<Vendor> vendors =
                 productVendorMappingRepository.findAllVendorsByProductId(productId);
 
-        List<VendorVerificationResponse> verifiedVendors = vendors.stream()
-                .filter(vendor -> vendor.getStatus() == VendorStatus.ACTIVE)
-                .map(this::mapToResponse)
-                .toList();
+        int verified = 0;
+        int notVerified = 0;
 
-        List<VendorVerificationResponse> notVerifiedVendors = vendors.stream()
-                .filter(vendor ->
-                        vendor.getStatus() == VendorStatus.PROSPECTIVE
-                                || vendor.getStatus() == VendorStatus.ONBOARDING
-                )
-                .map(this::mapToResponse)
-                .toList();
+        for (Vendor vendor : vendors) {
+
+            if (vendor.getStatus() == VendorStatus.ACTIVE) {
+                verified++;
+            } else if (vendor.getStatus() == VendorStatus.PROSPECTIVE
+                    || vendor.getStatus() == VendorStatus.ONBOARDING) {
+                notVerified++;
+            }
+        }
 
         return new ProductVendorVerificationResponse(
                 productId,
-                verifiedVendors,
-                notVerifiedVendors
+                verified,
+                notVerified
         );
     }
 
