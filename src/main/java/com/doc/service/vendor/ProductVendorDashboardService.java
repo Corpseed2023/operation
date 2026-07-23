@@ -8,23 +8,23 @@ import java.util.List;
 public interface ProductVendorDashboardService {
 
     ProductVendorDashboardCountDto getProductVendorDashboardCounts(Long productId);
-    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts(Long productId);
+    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts(Long productId, Long userId);
     ProductVendorDashboardResponse getDashboardByProductId(
-            Long productId
+            Long productId,Long userId
     );
     VendorPaymentSummaryResponse getVendorPaymentSummary(
             Long productId,
-            Long vendorId
+            Long vendorId,Long userId
     );
     List<ProductRfqDashboardResponse> getRfqDashboard(
-            Long productId
+            Long productId,Long userId
     );
 
     ProductVendorVerificationResponse getVendorVerificationByProductId(
-            Long productId
+            Long productId,Long userId
     );
 
     ProductQuotationResponseRate getQuotationResponseRate(
-            Long productId
+            Long productId, Long userId
     );
 }

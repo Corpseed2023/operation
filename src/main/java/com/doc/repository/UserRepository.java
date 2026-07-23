@@ -46,4 +46,29 @@ public interface UserRepository extends JpaRepository<User, Long> {
               AND u.isActive = true
             """)
     List<User> findActiveManagersByDepartmentId(@Param("departmentId") Long departmentId);
+
+    @Query("""
+        SELECT DISTINCT u
+        FROM User u
+        LEFT JOIN FETCH u.departments d
+        WHERE u.id = :userId
+          AND u.isDeleted = false
+          AND u.isActive = true
+        """)
+    Optional<User> findActiveUserWithDepartments(
+            @Param("userId") Long userId
+    );
+    @Query(value = """
+        SELECT CASE
+                 WHEN COUNT(*) > 0 THEN TRUE
+                 ELSE FALSE
+               END
+        FROM users u
+        INNER JOIN user_department_map udm
+                ON u.id = udm.user_id
+        WHERE u.id = :userId
+          AND u.is_active = true
+          AND u.is_deleted = false
+        """, nativeQuery = true)
+    boolean existsActiveUserWithDepartment(@Param("userId") Long userId);
 }

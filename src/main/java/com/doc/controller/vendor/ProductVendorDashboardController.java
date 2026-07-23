@@ -1,12 +1,16 @@
 package com.doc.controller.vendor;
 
 import com.doc.dto.vendor.*;
+import com.doc.entity.user.User;
+import com.doc.repository.UserRepository;
 import com.doc.repository.projection.VendorAssignmentCountProjection;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -16,6 +20,7 @@ import java.util.List;
 public class ProductVendorDashboardController {
 
     private final ProductVendorDashboardService productVendorDashboardService;
+
 
     @GetMapping("/{productId}/summary")
     @Operation(summary = "Get product based vendor dashboard counts")
@@ -29,20 +34,22 @@ public class ProductVendorDashboardController {
 
     @GetMapping("/{productId}/vendor-wise-assignment-count")
     public ResponseEntity<List<VendorAssignmentCountProjection>>
-    getVendorWiseAssignmentCounts(@PathVariable Long productId) {
+    getVendorWiseAssignmentCounts(@RequestParam("productId") Long productId,
+                                  @RequestParam(name = "userId", required = true) Long userId) {
 
         return ResponseEntity.ok(
-                productVendorDashboardService.getVendorWiseAssignmentCounts(productId)
+                productVendorDashboardService.getVendorWiseAssignmentCounts(productId,userId)
         );
     }
     @GetMapping("/product/{productId}")
     public ResponseEntity<ProductVendorDashboardResponse>
     getDashboardByProductId(
-            @PathVariable Long productId
+            @RequestParam("productId") Long productId,
+            @RequestParam(name = "userId", required = true) Long userId
     ) {
         ProductVendorDashboardResponse response =
                 productVendorDashboardService
-                        .getDashboardByProductId(productId);
+                        .getDashboardByProductId(productId,userId);
 
         return ResponseEntity.ok(response);
     }
@@ -53,13 +60,14 @@ public class ProductVendorDashboardController {
     public ResponseEntity<VendorPaymentSummaryResponse>
     getVendorPaymentSummary(
             @RequestParam(required = false) Long productId,
-            @RequestParam(required = false) Long vendorId
+            @RequestParam(required = false) Long vendorId,
+            @RequestParam(name = "userId", required = true) Long userId
     ) {
         return ResponseEntity.ok(
                 productVendorDashboardService
                         .getVendorPaymentSummary(
                                 productId,
-                                vendorId
+                                vendorId,userId
                         ));
     }
 
@@ -67,10 +75,11 @@ public class ProductVendorDashboardController {
 
     @GetMapping(value = "/rfqs")
     public ResponseEntity<List<ProductRfqDashboardResponse>> getRfqDashboard(
-            @RequestParam(required = false) Long productId){
+            @RequestParam(required = false) Long productId ,
+            @RequestParam(name = "userId", required = true) Long userId){
         List<ProductRfqDashboardResponse> response =
                 productVendorDashboardService
-                        .getRfqDashboard(productId);
+                        .getRfqDashboard(productId,userId);
 
         return ResponseEntity.ok(response);
     }
@@ -78,24 +87,26 @@ public class ProductVendorDashboardController {
     @GetMapping("/verification/by-product/{productId}")
     public ResponseEntity<ProductVendorVerificationResponse>
     getVendorVerificationByProductId(
-            @PathVariable Long productId
+            @RequestParam(required = false) Long productId ,
+            @RequestParam(name = "userId", required = true) Long userId
     ) {
 
         return ResponseEntity.ok(
                 productVendorDashboardService
-                        .getVendorVerificationByProductId(productId)
+                        .getVendorVerificationByProductId(productId,userId)
         );
     }
 
-    @GetMapping("/quotation-response-rate/{productId}")
+    @GetMapping("/quotation-response-rate")
     public ResponseEntity<ProductQuotationResponseRate>
     getQuotationResponseRate(
-            @PathVariable Long productId
+            @RequestParam("productId") Long productId,
+            @RequestParam(name = "userId", required = true) Long userId
     ) {
 
         return ResponseEntity.ok(
                 productVendorDashboardService
-                        .getQuotationResponseRate(productId)
+                        .getQuotationResponseRate(productId,userId)
         );
     }
 }

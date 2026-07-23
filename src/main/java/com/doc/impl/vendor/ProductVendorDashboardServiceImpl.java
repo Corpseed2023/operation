@@ -1,19 +1,27 @@
 package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.*;
+import com.doc.entity.department.Department;
+import com.doc.entity.user.User;
 import com.doc.entity.vendor.*;
+import com.doc.exception.ResourceNotFoundException;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
+import com.doc.repository.UserRepository;
 import com.doc.repository.projection.*;
 import com.doc.repository.vendor.*;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Service implementation for Product Vendor Dashboard.
@@ -37,6 +45,7 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     private final ProductVendorDashboardRepository productVendorDashboardRepository;
     private final ProcurementPaymentRequestRepository procurementPaymentRequestRepository;
     private final RFQVendorRepository rfqVendorRepository;
+    private final UserRepository userRepository;
 
     /**
      * Fetches all dashboard count data for a given product.
@@ -184,13 +193,37 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     }
 
     @Override
-    public List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts(Long productId) {
+    public List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts(Long productId,Long userId) {
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User ID is required"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
         return procurementMilestoneAssignmentRepository
                 .getVendorWiseAssignmentCountsByProductId(productId);
     }
 
     @Override
-    public ProductVendorDashboardResponse getDashboardByProductId(Long productId) {
+    public ProductVendorDashboardResponse getDashboardByProductId(Long productId,Long userId) {
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User ID is required"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
         ProductVendorDashboardProjection projection =
                 productVendorDashboardRepository
                         .getDashboardByProductId(productId);
@@ -226,7 +259,19 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     }
 
     @Override
-    public VendorPaymentSummaryResponse getVendorPaymentSummary(Long productId, Long vendorId) {
+    public VendorPaymentSummaryResponse getVendorPaymentSummary(Long productId, Long vendorId,Long userId) {
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User ID is required"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
         VendorPaymentSummaryProjection projection =
                 procurementPaymentRequestRepository
                         .getVendorPaymentSummary(
@@ -262,7 +307,20 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     }
 
     @Override
-    public List<ProductRfqDashboardResponse> getRfqDashboard(Long productId) {
+    public List<ProductRfqDashboardResponse> getRfqDashboard(Long productId,Long userId) {
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User ID is required"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
+
         return rfqVendorRepository
                 .findRfqDashboardByProductId(productId)
                 .stream()
@@ -272,9 +330,20 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
 
     @Override
     public ProductVendorVerificationResponse getVendorVerificationByProductId(
-            Long productId
+            Long productId, Long userId
     ) {
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User ID is required"
+            );
+        }
 
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
         List<Vendor> vendors =
                 productVendorMappingRepository.findAllVendorsByProductId(productId);
 
@@ -300,19 +369,23 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
 
     @Override
     public ProductQuotationResponseRate getQuotationResponseRate(
-            Long productId
+            Long productId, Long userId
     ) {
-      /*  if (productId == null) {
-            throw new IllegalArgumentException(
-                    "Product ID is required"
+
+
+        if (userId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "User ID is required"
             );
         }
 
-        if (!productRepository.existsById(productId)) {
-            throw new RuntimeException(
-                    "Product not found with ID: " + productId
-            );
-        }*/
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
+
 
         QuotationResponseRateProjection projection =
                 rfqVendorRepository.getQuotationResponseRate(productId);
