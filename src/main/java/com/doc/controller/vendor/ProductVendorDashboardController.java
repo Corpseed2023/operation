@@ -86,4 +86,15 @@ public class ProductVendorDashboardController {
                         .getVendorVerificationByProductId(productId)
         );
     }
+
+    @GetMapping("/quotation-response-rate/{productId}")
+    public ResponseEntity<ProductQuotationResponseRate>
+    getQuotationResponseRate(
+            @PathVariable Long productId
+    ) {
+        return ResponseEntity.ok(
+                productVendorDashboardService
+                        .getQuotationResponseRate(productId)
+        );
+    }
 }

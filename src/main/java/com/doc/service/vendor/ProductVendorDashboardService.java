@@ -23,4 +23,8 @@ public interface ProductVendorDashboardService {
     ProductVendorVerificationResponse getVendorVerificationByProductId(
             Long productId
     );
+
+    ProductQuotationResponseRate getQuotationResponseRate(
+            Long productId
+    );
 }
