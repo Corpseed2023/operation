@@ -3,10 +3,7 @@ package com.doc.impl.vendor;
 import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.*;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
-import com.doc.repository.projection.ProductRfqDashboardProjection;
-import com.doc.repository.projection.ProductVendorDashboardProjection;
-import com.doc.repository.projection.VendorAssignmentCountProjection;
-import com.doc.repository.projection.VendorPaymentSummaryProjection;
+import com.doc.repository.projection.*;
 import com.doc.repository.vendor.*;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 /**
@@ -298,6 +296,58 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
                 verifiedVendors,
                 notVerifiedVendors
         );
+    }
+
+    @Override
+    public ProductQuotationResponseRate getQuotationResponseRate(
+            Long productId
+    ) {
+      /*  if (productId == null) {
+            throw new IllegalArgumentException(
+                    "Product ID is required"
+            );
+        }
+
+        if (!productRepository.existsById(productId)) {
+            throw new RuntimeException(
+                    "Product not found with ID: " + productId
+            );
+        }*/
+
+        QuotationResponseRateProjection projection =
+                rfqVendorRepository.getQuotationResponseRate(productId);
+
+        long totalInvited = projection != null
+                && projection.getTotalInvited() != null
+                ? projection.getTotalInvited()
+                : 0L;
+
+        long responded = projection != null
+                && projection.getResponded() != null
+                ? projection.getResponded()
+                : 0L;
+
+        long pending = Math.max(totalInvited - responded, 0L);
+
+        BigDecimal responseRate = BigDecimal.ZERO;
+
+        if (totalInvited > 0) {
+            responseRate = BigDecimal.valueOf(responded)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(
+                            BigDecimal.valueOf(totalInvited),
+                            2,
+                            RoundingMode.HALF_UP
+                    );
+        }
+
+        return ProductQuotationResponseRate.builder()
+                .productId(productId)
+                .totalInvited(totalInvited)
+                .responded(responded)
+                .pending(pending)
+                .responseRate(responseRate)
+                .build();
     }
 
     private VendorVerificationResponse mapToResponse(Vendor vendor) {
