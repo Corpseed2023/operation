@@ -1,13 +1,16 @@
 package com.doc.service;
 
 import com.doc.dto.project.activity.CreateCommentRequestDto;
-import com.doc.dto.project.activity.expense.ApproveExpenseRequestDto;
-import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.CreateNoteRequestDto;
 import com.doc.dto.project.activity.ProjectActivityResponseDto;
+import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
+import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
+import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
 import com.doc.em.ApprovalStatus;
+import com.doc.em.ExpenseApprovalStage;
+import com.doc.em.ExpensePaymentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -16,15 +19,31 @@ import java.util.List;
 
 public interface ProjectActivityService {
 
-    ProjectActivityResponseDto addNote(Long projectId, CreateNoteRequestDto request);
+    ProjectActivityResponseDto addNote(
+            Long projectId,
+            CreateNoteRequestDto request
+    );
 
-    ProjectActivityResponseDto addComment(Long projectId, CreateCommentRequestDto request);
+    ProjectActivityResponseDto addComment(
+            Long projectId,
+            CreateCommentRequestDto request
+    );
 
-    ProjectActivityResponseDto addExpense(Long projectId, CreateExpenseRequestDto request);
+    ProjectActivityResponseDto addExpense(
+            Long projectId,
+            CreateExpenseRequestDto request
+    );
 
-    Page<ProjectActivityResponseDto> getAllActivities(Long projectId, Pageable pageable);
+    Page<ProjectActivityResponseDto> getAllActivities(
+            Long projectId,
+            Pageable pageable
+    );
 
-    Page<ProjectActivityResponseDto> getActivitiesByType(Long projectId, ActivityType type, Pageable pageable);
+    Page<ProjectActivityResponseDto> getActivitiesByType(
+            Long projectId,
+            ActivityType type,
+            Pageable pageable
+    );
 
     Page<ProjectActivityResponseDto> getActivitiesByDateRange(
             Long projectId,
@@ -33,14 +52,38 @@ public interface ProjectActivityService {
             Pageable pageable
     );
 
+    ProjectExpenseResponseDto takeCrtExpenseDecision(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            CrtExpenseDecisionRequestDto request
+    );
 
+    ProjectExpenseResponseDto takeAccountsExpenseDecision(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            AccountsExpenseDecisionRequestDto request
+    );
 
-    List<ProjectExpenseResponseDto> getExpenseList(Long userId, ApprovalStatus approvalStatus);
+    List<ProjectExpenseResponseDto> getExpenseApprovalQueue(
+            Long userId,
+            ExpenseApprovalStage approvalStage,
+            ApprovalStatus approvalStatus
+    );
 
+    List<ProjectExpenseResponseDto> getExpensePaymentQueue(
+            Long userId,
+            ExpensePaymentStatus paymentStatus
+    );
 
-    List<ProjectExpenseResponseDto> getExpensesByProject(Long projectId, Long userId);
+    List<ProjectExpenseResponseDto> getExpensesByProject(
+            Long projectId,
+            Long userId
+    );
 
-    void approveExpense(Long projectId, Long userId, Long expenseId, ApproveExpenseRequestDto request);
-
-
+    ProjectExpenseResponseDto getExpenseById(
+            Long expenseId,
+            Long userId
+    );
 }

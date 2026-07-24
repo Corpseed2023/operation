@@ -1,151 +1,250 @@
 package com.doc.controller.project;
 
 import com.doc.dto.project.activity.ProjectActivityResponseDto;
-import com.doc.dto.project.activity.expense.ApproveExpenseRequestDto;
+import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
+import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ApprovalStatus;
-import com.doc.exception.ResourceNotFoundException;
-import com.doc.exception.ValidationException;
+import com.doc.em.ExpenseApprovalStage;
+import com.doc.em.ExpensePaymentStatus;
 import com.doc.service.ProjectActivityService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * Dedicated Controller for Project Expense Management
+ * Project expense management APIs.
+ *
+ * Workflow:
+ *
+ * Technical/Originating Department
+ *          ↓
+ * CRT_REVIEW
+ *          ↓
+ * ACCOUNTS_REVIEW
+ *          ↓
+ * APPROVED / PAYMENT PENDING
  */
 @RestController
 @RequestMapping("/operationService/api/projects/expenses")
 @RequiredArgsConstructor
+@Validated
 public class ProjectExpenseController {
 
     private final ProjectActivityService activityService;
 
     /**
-     * Create a new expense for a project
-     * POST /operationService/api/projects/expenses?projectId=123
+     * Create expense request.
+     *
+     * POST:
+     * /operationService/api/projects/expenses?projectId=123
      */
     @PostMapping
-    public ResponseEntity<?> createExpense(
-            @RequestParam Long projectId,
-            @RequestBody CreateExpenseRequestDto request) {
+    public ResponseEntity<ProjectActivityResponseDto> createExpense(
+            @RequestParam
+            @Positive(message = "Project ID must be greater than zero")
+            Long projectId,
 
-        try {
-            ProjectActivityResponseDto response = activityService.addExpense(projectId, request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            @Valid
+            @RequestBody
+            CreateExpenseRequestDto request
+    ) {
 
-        } catch (ResourceNotFoundException | ValidationException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body("Failed to create expense: " + e.getMessage());
-        }
+        ProjectActivityResponseDto response =
+                activityService.addExpense(projectId, request);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
     }
 
     /**
-     * Approve / Reject / On-Hold an expense
-     * PUT /operationService/api/projects/expenses/approve?projectId=123&userId=456&expenseId=789
+     * CRT approves, rejects or places an expense on hold.
+     *
+     * PUT:
+     * /operationService/api/projects/expenses/{expenseId}/crt-decision
+     * ?projectId=123&userId=456
      */
-    @PutMapping("/approve")
-    public ResponseEntity<?> approveExpense(
-            @RequestParam Long projectId,
-            @RequestParam Long userId,
-            @RequestParam Long expenseId,
-            @RequestBody ApproveExpenseRequestDto request) {
+    @PutMapping("/{expenseId}/crt-decision")
+    public ResponseEntity<ProjectExpenseResponseDto> takeCrtDecision(
+            @PathVariable
+            @Positive(message = "Expense ID must be greater than zero")
+            Long expenseId,
 
-        try {
-            activityService.approveExpense(projectId, userId, expenseId, request);
+            @RequestParam
+            @Positive(message = "Project ID must be greater than zero")
+            Long projectId,
 
-            String message = "Expense " + request.getStatus().toUpperCase() + " successfully";
-            return ResponseEntity.ok(message);
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId,
 
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (ValidationException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
-        }
-    }
+            @Valid
+            @RequestBody
+            CrtExpenseDecisionRequestDto request
+    ) {
 
-    /**
-     * Get expenses list for a user with optional approval status filter
-     * GET /operationService/api/projects/expenses/getExpensesList?userId=123&approvalStatus=PENDING
-     * Default approvalStatus = PENDING
-     */
-    @GetMapping("/getExpensesList")
-    public ResponseEntity<?> getProjectExpensesList(
-            @RequestParam Long userId,
-            @RequestParam(required = false) String approvalStatus) {
-
-        ApprovalStatus status = null;
-
-        if (approvalStatus != null && !approvalStatus.equalsIgnoreCase("ALL")) {
-            try {
-                status = ApprovalStatus.valueOf(approvalStatus.toUpperCase());
-            } catch (Exception e) {
-                return ResponseEntity.badRequest().body("Invalid approvalStatus");
-            }
-        }
-
-        System.out.println("Raw approvalStatus: " + approvalStatus);
-        System.out.println("Mapped status: " + status);
-
-        List<ProjectExpenseResponseDto> response =
-                activityService.getExpenseList(userId, status);
+        ProjectExpenseResponseDto response =
+                activityService.takeCrtExpenseDecision(
+                        projectId,
+                        expenseId,
+                        userId,
+                        request
+                );
 
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Get all expenses for a specific project (filtered by viewing user)
-     * GET /operationService/api/projects/expenses/getProjectExpenses?projectId=123&userId=456
+     * Accounts approves, rejects or places an expense on hold.
+     *
+     * PUT:
+     * /operationService/api/projects/expenses/{expenseId}/accounts-decision
+     * ?projectId=123&userId=456
      */
-    @GetMapping("/getProjectExpenses")
-    public ResponseEntity<?> getProjectExpenses(
-            @RequestParam Long projectId,
-            @RequestParam Long userId) {
+    @PutMapping("/{expenseId}/accounts-decision")
+    public ResponseEntity<ProjectExpenseResponseDto> takeAccountsDecision(
+            @PathVariable
+            @Positive(message = "Expense ID must be greater than zero")
+            Long expenseId,
 
-        try {
-            List<ProjectExpenseResponseDto> response =
-                    activityService.getExpensesByProject(projectId, userId);
+            @RequestParam
+            @Positive(message = "Project ID must be greater than zero")
+            Long projectId,
 
-            return ResponseEntity.ok(response);
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId,
 
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (ValidationException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
-        }
+            @Valid
+            @RequestBody
+            AccountsExpenseDecisionRequestDto request
+    ) {
+
+        ProjectExpenseResponseDto response =
+                activityService.takeAccountsExpenseDecision(
+                        projectId,
+                        expenseId,
+                        userId,
+                        request
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     /**
-     * Alternative clean endpoint (Recommended)
-     * GET /operationService/api/projects/expenses?projectId=123&userId=456
+     * Get expenses requiring action at a specific approval stage.
+     *
+     * CRT queue:
+     * GET /operationService/api/projects/expenses/approval-queue
+     * ?userId=10&approvalStage=CRT_REVIEW&approvalStatus=PENDING
+     *
+     * Accounts queue:
+     * GET /operationService/api/projects/expenses/approval-queue
+     * ?userId=20&approvalStage=ACCOUNTS_REVIEW&approvalStatus=PENDING
      */
-    @GetMapping
-    public ResponseEntity<?> getProjectExpensesByProject(
-            @RequestParam Long projectId,
-            @RequestParam Long userId) {
+    @GetMapping("/approval-queue")
+    public ResponseEntity<List<ProjectExpenseResponseDto>> getApprovalQueue(
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId,
 
-        try {
-            List<ProjectExpenseResponseDto> response =
-                    activityService.getExpensesByProject(projectId, userId);
+            @RequestParam
+            ExpenseApprovalStage approvalStage,
 
-            return ResponseEntity.ok(response);
+            @RequestParam(required = false)
+            ApprovalStatus approvalStatus
+    ) {
 
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (ValidationException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
-        }
+        List<ProjectExpenseResponseDto> response =
+                activityService.getExpenseApprovalQueue(
+                        userId,
+                        approvalStage,
+                        approvalStatus
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get payment queue.
+     *
+     * Example:
+     * GET /operationService/api/projects/expenses/payment-queue
+     * ?userId=20&paymentStatus=PENDING
+     */
+    @GetMapping("/payment-queue")
+    public ResponseEntity<List<ProjectExpenseResponseDto>> getPaymentQueue(
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId,
+
+            @RequestParam(required = false)
+            ExpensePaymentStatus paymentStatus
+    ) {
+
+        List<ProjectExpenseResponseDto> response =
+                activityService.getExpensePaymentQueue(
+                        userId,
+                        paymentStatus
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get all project expenses.
+     *
+     * GET:
+     * /operationService/api/projects/expenses/project/123?userId=456
+     */
+    @GetMapping("/project/{projectId}")
+    public ResponseEntity<List<ProjectExpenseResponseDto>> getProjectExpenses(
+            @PathVariable
+            @Positive(message = "Project ID must be greater than zero")
+            Long projectId,
+
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId
+    ) {
+
+        List<ProjectExpenseResponseDto> response =
+                activityService.getExpensesByProject(
+                        projectId,
+                        userId
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get a single expense.
+     *
+     * GET:
+     * /operationService/api/projects/expenses/789?userId=456
+     */
+    @GetMapping("/{expenseId}")
+    public ResponseEntity<ProjectExpenseResponseDto> getExpenseById(
+            @PathVariable
+            @Positive(message = "Expense ID must be greater than zero")
+            Long expenseId,
+
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId
+    ) {
+
+        ProjectExpenseResponseDto response =
+                activityService.getExpenseById(expenseId, userId);
+
+        return ResponseEntity.ok(response);
     }
 }
