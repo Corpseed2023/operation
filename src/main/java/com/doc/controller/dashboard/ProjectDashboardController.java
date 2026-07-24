@@ -3,6 +3,7 @@ package com.doc.controller.dashboard;
 import com.doc.dto.project.dashboard.*;
 import com.doc.service.project.ProjectDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -123,5 +124,68 @@ public class ProjectDashboardController {
         return ResponseEntity.ok(
                 projectDashboardService.getTeamWorkload(userId)
         );
+    }
+
+    @GetMapping("/due-risk-queue")
+    public ResponseEntity<List<DueRiskQueueResponseDto>> getDueRiskQueue(
+            @RequestParam Long userId,
+
+            @RequestParam(
+                    required = false,
+                    defaultValue = "7"
+            )
+            Integer upcomingDays,
+
+            @RequestParam(
+                    required = false,
+                    defaultValue = "5"
+            )
+            Integer limit
+    ) {
+
+        return ResponseEntity.ok(
+                projectDashboardService.getDueRiskQueue(
+                        userId,
+                        upcomingDays,
+                        limit
+                )
+        );
+    }
+
+
+    @GetMapping("/milestone-tracker")
+    public ResponseEntity<
+            Page<ProjectMilestoneTrackerResponseDto>
+            > getMilestoneTracker(
+
+            @RequestParam Long userId,
+
+            @RequestParam Long departmentId,
+
+            @RequestParam(required = false)
+            Long stageId,
+
+            @RequestParam(required = false)
+            String search,
+
+            @RequestParam(defaultValue = "0")
+            int page,
+
+            @RequestParam(defaultValue = "10")
+            int size
+    ) {
+
+        Page<ProjectMilestoneTrackerResponseDto> response =
+                projectDashboardService
+                        .getMilestoneTracker(
+                                userId,
+                                departmentId,
+                                stageId,
+                                search,
+                                page,
+                                size
+                        );
+
+        return ResponseEntity.ok(response);
     }
 }

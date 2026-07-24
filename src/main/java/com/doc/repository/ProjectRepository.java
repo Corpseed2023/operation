@@ -574,7 +574,101 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             """)
     List<ProjectStatusCountProjection> getProjectStatusWiseCount();
 
+    @Query(
+            value = """
+                    SELECT
+                        p.id AS projectId,
+                        p.project_no AS projectNumber,
+                        p.project_value AS projectValue,
 
+                        c.id AS companyId,
+                        c.name AS companyName,
+
+                        pr.id AS productId,
+                        pr.name AS serviceName,
+
+                        ps.id AS stageId,
+                        ps.name AS stage,
+
+                        p.priority AS priority,
+
+                        (
+                            SELECT MIN(pma2.date)
+                            FROM project_milestone_assignment pma2
+                            WHERE pma2.project_id = p.id
+                              AND pma2.is_deleted = 0
+                              AND pma2.is_visible = 1
+                              AND pma2.status_id <> 3
+                              AND pma2.date IS NOT NULL
+                        ) AS dueDate
+
+                    FROM project p
+
+                    INNER JOIN company c
+                            ON c.id = p.company_id
+
+                    INNER JOIN product pr
+                            ON pr.id = p.product_id
+
+                    LEFT JOIN project_status ps
+                           ON ps.id = p.status_id
+
+                    WHERE p.is_deleted = 0
+
+                      AND (
+                            :stageId IS NULL
+                            OR p.status_id = :stageId
+                      )
+
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(p.project_no)
+                               LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(c.name)
+                               LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(pr.name)
+                               LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+
+                    ORDER BY p.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(DISTINCT p.id)
+
+                    FROM project p
+
+                    INNER JOIN company c
+                            ON c.id = p.company_id
+
+                    INNER JOIN product pr
+                            ON pr.id = p.product_id
+
+                    WHERE p.is_deleted = 0
+
+                      AND (
+                            :stageId IS NULL
+                            OR p.status_id = :stageId
+                      )
+
+                      AND (
+                            :search IS NULL
+                            OR :search = ''
+                            OR LOWER(p.project_no)
+                               LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(c.name)
+                               LIKE LOWER(CONCAT('%', :search, '%'))
+                            OR LOWER(pr.name)
+                               LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """,
+            nativeQuery = true
+    )
+    Page<ProjectTrackerSummaryProjection> findProjectMilestoneTrackerProjects(
+            @Param("stageId") Long stageId,
+            @Param("search") String search,
+            Pageable pageable
+    );
 
 
 

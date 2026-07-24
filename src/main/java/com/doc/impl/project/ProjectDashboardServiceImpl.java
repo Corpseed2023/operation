@@ -2,11 +2,14 @@ package com.doc.impl.project;
 
 import com.doc.constants.DepartmentConstants;
 import com.doc.dto.project.dashboard.*;
+import com.doc.entity.project.ProjectPriority;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
+import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.service.project.ProjectDashboardService;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +17,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,6 +26,13 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+
+    private final ProjectMilestoneAssignmentRepository
+            milestoneAssignmentRepository;
+
+    private final ProjectDocumentUploadRepository
+            projectDocumentUploadRepository;
+
 
     private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
 
@@ -53,10 +64,12 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
 
     public ProjectDashboardServiceImpl(
             ProjectRepository projectRepository,
-            UserRepository userRepository, ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository
+            UserRepository userRepository, ProjectMilestoneAssignmentRepository milestoneAssignmentRepository, ProjectDocumentUploadRepository projectDocumentUploadRepository, ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository
     ) {
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
+        this.milestoneAssignmentRepository = milestoneAssignmentRepository;
+        this.projectDocumentUploadRepository = projectDocumentUploadRepository;
         this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
     }
 
@@ -431,6 +444,75 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 .toList();
     }
 
+    @Override
+    public List<DueRiskQueueResponseDto> getDueRiskQueue(
+            Long userId,
+            Integer upcomingDays,
+            Integer limit
+    ) {
+
+        validateDepartmentAccess(userId);
+
+        int days = upcomingDays == null || upcomingDays < 0
+                ? 7
+                : upcomingDays;
+
+        int recordLimit = limit == null || limit <= 0
+                ? 5
+                : Math.min(limit, 100);
+
+        LocalDate today = LocalDate.now();
+
+        List<DueRiskQueueProjection> projections =
+                projectMilestoneAssignmentRepository.findDueRiskQueue(
+                        days,
+                        recordLimit
+                );
+
+        return projections.stream()
+                .map(record -> {
+
+                    LocalDate dueDate = record.getDueDate();
+
+                    boolean overdue =
+                            dueDate != null && dueDate.isBefore(today);
+
+                    long overdueDays =
+                            overdue
+                                    ? ChronoUnit.DAYS.between(dueDate, today)
+                                    : 0L;
+
+                    ProjectPriority priority = null;
+
+                    if (record.getPriority() != null) {
+                        priority = ProjectPriority.valueOf(
+                                String.valueOf(record.getPriority())
+                        );
+                    }
+
+                    return DueRiskQueueResponseDto.builder()
+                            .projectId(record.getProjectId())
+                            .companyName(record.getCompanyName())
+                            .projectNumber(record.getProjectNumber())
+                            .milestoneId(record.getMilestoneId())
+                            .milestoneName(record.getMilestoneName())
+                            .dueDate(dueDate)
+                            .ownerId(record.getOwnerId())
+                            .ownerName(
+                                    record.getOwnerName() != null
+                                            ? record.getOwnerName()
+                                            : "Unassigned"
+                            )
+                            .priority(priority)
+                            .overdue(overdue)
+                            .overdueDays(overdueDays)
+                            .build();
+                })
+                .toList();
+    }
+
+
+
     private BigDecimal calculateTeamCompletionPercentage(
             long completedCount,
             long assignedCount
@@ -638,7 +720,410 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     ) {
     }
 
+    @Override
+    public Page<ProjectMilestoneTrackerResponseDto> getMilestoneTracker(
+            Long userId,
+            Long departmentId,
+            Long stageId,
+            String search,
+            int page,
+            int size
+    ) {
 
+        validateRequest(userId, departmentId, page, size);
+
+        validateDepartmentAccess(userId, departmentId);
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(
+                        Sort.Direction.DESC,
+                        "id"
+                )
+        );
+
+        String normalizedSearch =
+                search == null
+                        ? null
+                        : search.trim();
+
+        Page<ProjectTrackerSummaryProjection> projectPage =
+                projectRepository.findProjectMilestoneTrackerProjects(
+                        stageId,
+                        normalizedSearch,
+                        pageable
+                );
+
+        if (projectPage.isEmpty()) {
+            return new PageImpl<>(
+                    Collections.emptyList(),
+                    pageable,
+                    0
+            );
+        }
+
+        List<Long> projectIds =
+                projectPage.getContent()
+                        .stream()
+                        .map(
+                                ProjectTrackerSummaryProjection::getProjectId
+                        )
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList();
+
+        Map<Long, List<ProjectMilestoneTrackerProjection>>
+                milestoneMap =
+                fetchMilestoneMap(projectIds);
+
+        Map<Long, Long> pendingDocumentMap =
+                fetchPendingDocumentMap(projectIds);
+
+        List<ProjectMilestoneTrackerResponseDto> response =
+                projectPage.getContent()
+                        .stream()
+                        .map(project -> buildResponse(
+                                project,
+                                milestoneMap.getOrDefault(
+                                        project.getProjectId(),
+                                        Collections.emptyList()
+                                ),
+                                pendingDocumentMap.getOrDefault(
+                                        project.getProjectId(),
+                                        0L
+                                )
+                        ))
+                        .toList();
+
+        return new PageImpl<>(
+                response,
+                pageable,
+                projectPage.getTotalElements()
+        );
+    }
+
+    private void validateRequest(
+            Long userId,
+            Long departmentId,
+            int page,
+            int size
+    ) {
+
+        if (userId == null) {
+            throw new IllegalArgumentException(
+                    "User ID is required"
+            );
+        }
+
+        if (departmentId == null) {
+            throw new IllegalArgumentException(
+                    "Department ID is required"
+            );
+        }
+
+        if (page < 0) {
+            throw new IllegalArgumentException(
+                    "Page number cannot be negative"
+            );
+        }
+
+        if (size <= 0 || size > 100) {
+            throw new IllegalArgumentException(
+                    "Page size must be between 1 and 100"
+            );
+        }
+    }
+
+    private void validateDepartmentAccess(
+            Long userId,
+            Long departmentId
+    ) {
+
+        Long count =
+                userRepository.countActiveUserInDepartment(
+                        userId,
+                        departmentId
+                );
+
+        boolean hasAccess =
+                count != null && count > 0;
+
+        if (!hasAccess) {
+            throw new ResourceNotFoundException(
+                    "User does not have access to the selected department",
+                    "ERR_USER_DEPARTMENT_ACCESS_DENIED"
+            );
+        }
+    }
+
+    private Map<Long, List<ProjectMilestoneTrackerProjection>>
+    fetchMilestoneMap(List<Long> projectIds) {
+
+        List<ProjectMilestoneTrackerProjection> milestones =
+                milestoneAssignmentRepository
+                        .findTrackerMilestones(projectIds);
+
+        return milestones.stream()
+                .collect(
+                        Collectors.groupingBy(
+                                ProjectMilestoneTrackerProjection::getProjectId,
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        )
+                );
+    }
+
+    private Map<Long, Long> fetchPendingDocumentMap(
+            List<Long> projectIds
+    ) {
+
+        List<ProjectPendingDocumentProjection> records =
+                projectDocumentUploadRepository
+                        .findPendingDocumentCounts(projectIds);
+
+        return records.stream()
+                .collect(
+                        Collectors.toMap(
+                                ProjectPendingDocumentProjection::getProjectId,
+                                record -> safeLong(
+                                        record.getPendingDocuments()
+                                ),
+                                (first, second) -> first,
+                                HashMap::new
+                        )
+                );
+    }
+
+    private ProjectMilestoneTrackerResponseDto buildResponse(
+            ProjectTrackerSummaryProjection project,
+            List<ProjectMilestoneTrackerProjection>
+                    milestoneRecords,
+            Long pendingDocumentCount
+    ) {
+
+        List<ProjectMilestoneProgressDto> milestoneDtos =
+                milestoneRecords.stream()
+                        .sorted(
+                                Comparator.comparing(
+                                        record ->
+                                                safeInteger(
+                                                        record.getDisplayOrder()
+                                                )
+                                )
+                        )
+                        .map(this::buildMilestoneDto)
+                        .toList();
+
+        int overallPercentage =
+                calculateOverallPercentage(milestoneDtos);
+
+        ProjectMilestoneTrackerProjection currentMilestone =
+                findCurrentMilestone(milestoneRecords);
+
+        ProjectMilestoneTrackerProjection ownerRecord =
+                findOwnerRecord(
+                        currentMilestone,
+                        milestoneRecords
+                );
+
+        LocalDate dueDate =
+                currentMilestone != null
+                        && currentMilestone.getDueDate() != null
+                        ? currentMilestone.getDueDate()
+                        : project.getDueDate();
+
+        return ProjectMilestoneTrackerResponseDto.builder()
+                .projectId(project.getProjectId())
+                .projectNumber(project.getProjectNumber())
+                .projectValue(project.getProjectValue())
+                .companyId(project.getCompanyId())
+                .companyName(project.getCompanyName())
+                .productId(project.getProductId())
+                .serviceName(project.getServiceName())
+                .stageId(project.getStageId())
+                .stage(project.getStage())
+                .overallPercentage(overallPercentage)
+                .currentMilestoneId(
+                        currentMilestone == null
+                                ? null
+                                : currentMilestone.getMilestoneId()
+                )
+                .currentMilestoneName(
+                        currentMilestone == null
+                                ? null
+                                : currentMilestone.getMilestoneName()
+                )
+                .pendingDocumentCount(
+                        safeLong(pendingDocumentCount)
+                )
+                .dueDate(dueDate)
+                .priority(
+                        parsePriority(project.getPriority())
+                )
+                .ownerId(
+                        ownerRecord == null
+                                ? null
+                                : ownerRecord.getAssignedUserId()
+                )
+                .ownerName(
+                        ownerRecord == null
+                                ? null
+                                : ownerRecord.getAssignedUserName()
+                )
+                .milestones(milestoneDtos)
+                .build();
+    }
+
+    private ProjectMilestoneProgressDto buildMilestoneDto(
+            ProjectMilestoneTrackerProjection record
+    ) {
+
+        int percentage =
+                normalizePercentage(
+                        record.getProgressPercentage()
+                );
+
+        return ProjectMilestoneProgressDto.builder()
+                .milestoneId(record.getMilestoneId())
+                .milestoneName(record.getMilestoneName())
+                .displayOrder(
+                        safeInteger(record.getDisplayOrder())
+                )
+                .percentage(percentage)
+                .statusId(record.getStatusId())
+                .statusName(record.getStatusName())
+                .completed(percentage >= 100)
+                .assignedUserId(
+                        record.getAssignedUserId()
+                )
+                .assignedUserName(
+                        record.getAssignedUserName()
+                )
+                .build();
+    }
+
+    private int calculateOverallPercentage(
+            List<ProjectMilestoneProgressDto> milestones
+    ) {
+
+        if (milestones == null || milestones.isEmpty()) {
+            return 0;
+        }
+
+        double average =
+                milestones.stream()
+                        .map(
+                                ProjectMilestoneProgressDto::getPercentage
+                        )
+                        .filter(Objects::nonNull)
+                        .mapToInt(Integer::intValue)
+                        .average()
+                        .orElse(0.0);
+
+        return (int) Math.round(average);
+    }
+
+    private ProjectMilestoneTrackerProjection findCurrentMilestone(
+            List<ProjectMilestoneTrackerProjection> records
+    ) {
+
+        if (records == null || records.isEmpty()) {
+            return null;
+        }
+
+        return records.stream()
+                .filter(record ->
+                        normalizePercentage(
+                                record.getProgressPercentage()
+                        ) < 100
+                )
+                .sorted(
+                        Comparator.comparing(
+                                record ->
+                                        safeInteger(
+                                                record.getDisplayOrder()
+                                        )
+                        )
+                )
+                .findFirst()
+                .orElseGet(() ->
+                        records.stream()
+                                .max(
+                                        Comparator.comparing(
+                                                record ->
+                                                        safeInteger(
+                                                                record.getDisplayOrder()
+                                                        )
+                                        )
+                                )
+                                .orElse(null)
+                );
+    }
+
+    private ProjectMilestoneTrackerProjection findOwnerRecord(
+            ProjectMilestoneTrackerProjection currentMilestone,
+            List<ProjectMilestoneTrackerProjection> records
+    ) {
+
+        if (currentMilestone != null
+                && currentMilestone.getAssignedUserId() != null) {
+            return currentMilestone;
+        }
+
+        return records.stream()
+                .filter(record ->
+                        record.getAssignedUserId() != null
+                )
+                .findFirst()
+                .orElse(null);
+    }
+
+    private ProjectPriority parsePriority(
+            String priority
+    ) {
+
+        if (priority == null || priority.isBlank()) {
+            return ProjectPriority.STANDARD;
+        }
+
+        try {
+            return ProjectPriority.valueOf(
+                    priority.trim().toUpperCase()
+            );
+        } catch (IllegalArgumentException exception) {
+
+
+
+            return ProjectPriority.STANDARD;
+        }
+    }
+
+    private int normalizePercentage(
+            Integer percentage
+    ) {
+
+        if (percentage == null) {
+            return 0;
+        }
+
+        return Math.max(
+                0,
+                Math.min(percentage, 100)
+        );
+    }
+
+    private Integer safeInteger(Integer value) {
+        return value == null
+                ? Integer.MAX_VALUE
+                : value;
+    }
+
+    private Long safeLong(Long value) {
+        return value == null
+                ? 0L
+                : value;
+    }
 
 
 }
