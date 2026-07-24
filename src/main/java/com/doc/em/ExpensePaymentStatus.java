@@ -40,5 +40,13 @@ public enum ExpensePaymentStatus {
     /**
      * Payment was cancelled before completion.
      */
-    CANCELLED
+    CANCELLED,
+
+    /**
+     * Client paid government fee directly.
+     */
+    CLIENT_PAID,
+
+
+
 }

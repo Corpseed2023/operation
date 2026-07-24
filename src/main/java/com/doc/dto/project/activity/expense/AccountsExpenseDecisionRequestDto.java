@@ -1,6 +1,7 @@
 package com.doc.dto.project.activity.expense;
 
 import com.doc.em.ApprovalStatus;
+import com.doc.em.ExpensePaidBy;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
@@ -12,15 +13,11 @@ import java.math.BigDecimal;
 @Data
 public class AccountsExpenseDecisionRequestDto {
 
-    /**
-     * Allowed:
-     * APPROVED, REJECTED, ON_HOLD
-     */
     @NotNull(message = "Accounts decision status is required")
     private ApprovalStatus status;
 
     /**
-     * Mandatory only when status is APPROVED.
+     * Required when status is APPROVED.
      */
     @DecimalMin(
             value = "0.01",
@@ -29,16 +26,15 @@ public class AccountsExpenseDecisionRequestDto {
     @Digits(
             integer = 13,
             fraction = 2,
-            message = "Approved amount must contain a maximum of two decimal places"
+            message = "Approved amount can contain maximum two decimal places"
     )
     private BigDecimal approvedAmount;
 
     /**
-     * Required when:
-     * - Expense is rejected
-     * - Expense is placed on hold
-     * - Approved amount differs from requested amount
+     * Required for approved GOVERNMENT_FEE expenses.
      */
+    private ExpensePaidBy paidBy;
+
     @Size(
             max = 2000,
             message = "Decision remark cannot exceed 2000 characters"

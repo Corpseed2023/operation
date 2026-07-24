@@ -8,10 +8,7 @@ import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
-import com.doc.em.ActivityType;
-import com.doc.em.ApprovalStatus;
-import com.doc.em.ExpenseApprovalStage;
-import com.doc.em.ExpensePaymentStatus;
+import com.doc.em.*;
 import com.doc.entity.department.Department;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
@@ -638,7 +635,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         ) != 0 && decisionRemark == null) {
 
             throw new ValidationException(
-                    "Decision remark is required when approved amount differs from requested amount",
+                    "Remark is required when approved amount differs from requested amount",
                     "ERR_PARTIAL_APPROVAL_REMARK_REQUIRED"
             );
         }
@@ -648,11 +645,67 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
         /*
-         * Final approval is completed.
-         * The expense now enters the payment queue.
+         * Paid-by validation is mandatory only for government fees.
+         */
+        if (expense.getExpenseCategory() ==
+                ExpenseCategory.GOVERNMENT_FEE) {
+
+            if (request.getPaidBy() == null) {
+                throw new ValidationException(
+                        "Paid by is required for government fee approval",
+                        "ERR_GOVERNMENT_FEE_PAID_BY_REQUIRED"
+                );
+            }
+
+            expense.setExpensePaidBy(request.getPaidBy());
+
+            /*
+             * Client paid directly:
+             * no Account Service posting.
+             */
+            if (request.getPaidBy() == ExpensePaidBy.CLIENT) {
+
+                expense.setPaymentStatus(
+                        ExpensePaymentStatus.CLIENT_PAID
+                );
+
+                expense.setPaidAmount(approvedAmount);
+
+                expense.setAccountPostingStatus(
+                        AccountPostingStatus.SKIPPED
+                );
+
+                expense.setAccountPostingError(null);
+
+                return;
+            }
+
+            /*
+             * Company will pay:
+             * create accrual voucher in Account Service.
+             */
+            expense.setPaymentStatus(
+                    ExpensePaymentStatus.PENDING
+            );
+
+            expense.setAccountPostingStatus(
+                    AccountPostingStatus.PENDING
+            );
+
+            expense.setAccountPostingError(null);
+
+            return;
+        }
+
+        /*
+         * Other expense categories.
          */
         expense.setPaymentStatus(
                 ExpensePaymentStatus.PENDING
+        );
+
+        expense.setAccountPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
         );
     }
 
@@ -1547,6 +1600,29 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getCreatedByUserName()
         );
 
+        dto.setExpensePaidBy(
+                expense.getExpensePaidBy()
+        );
+
+        dto.setAccountPostingStatus(
+                expense.getAccountPostingStatus()
+        );
+
+        dto.setAccountVoucherId(
+                expense.getAccountVoucherId()
+        );
+
+        dto.setAccountVoucherNumber(
+                expense.getAccountVoucherNumber()
+        );
+
+        dto.setAccountPostedAt(
+                expense.getAccountPostedAt()
+        );
+
+        dto.setAccountPostingError(
+                expense.getAccountPostingError()
+        );
         dto.setCreatedDate(expense.getCreatedDate());
         dto.setUpdatedDate(expense.getUpdatedDate());
 

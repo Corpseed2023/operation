@@ -1,9 +1,6 @@
 package com.doc.entity.project.activity;
 
-import com.doc.em.ApprovalStatus;
-import com.doc.em.ExpenseApprovalStage;
-import com.doc.em.ExpenseCategory;
-import com.doc.em.ExpensePaymentStatus;
+import com.doc.em.*;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -308,6 +305,31 @@ public class ProjectExpense {
 
     @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "expense_paid_by", length = 30)
+    private ExpensePaidBy expensePaidBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(
+            name = "account_posting_status",
+            nullable = false,
+            length = 30
+    )
+    private AccountPostingStatus accountPostingStatus =
+            AccountPostingStatus.NOT_REQUIRED;
+
+    @Column(name = "account_voucher_id")
+    private Long accountVoucherId;
+
+    @Column(name = "account_voucher_number", length = 100)
+    private String accountVoucherNumber;
+
+    @Column(name = "account_posted_at")
+    private LocalDateTime accountPostedAt;
+
+    @Column(name = "account_posting_error", length = 2000)
+    private String accountPostingError;
 
     @PrePersist
     protected void onCreate() {

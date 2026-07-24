@@ -1,9 +1,6 @@
 package com.doc.dto.project.activity.expense;
 
-import com.doc.em.ApprovalStatus;
-import com.doc.em.ExpenseApprovalStage;
-import com.doc.em.ExpenseCategory;
-import com.doc.em.ExpensePaymentStatus;
+import com.doc.em.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -152,4 +149,18 @@ public class ProjectExpenseResponseDto {
     private LocalDateTime createdDate;
 
     private LocalDateTime updatedDate;
+
+    private ExpensePaidBy expensePaidBy;
+
+    private AccountPostingStatus accountPostingStatus;
+
+    private Long accountVoucherId;
+
+    private String accountVoucherNumber;
+
+    private LocalDateTime accountPostedAt;
+
+    private String accountPostingError;
+
+
 }
