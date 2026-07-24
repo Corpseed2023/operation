@@ -1,17 +1,19 @@
 package com.doc.impl.project;
 
-import com.doc.dto.project.dashboard.ProjectOverviewCardDto;
-import com.doc.dto.project.dashboard.ProjectOverviewResponseDto;
-import com.doc.dto.project.dashboard.ProjectStatusCountDto;
-import com.doc.dto.project.dashboard.UserProjectDashboardResponseDto;
+import com.doc.constants.DepartmentConstants;
+import com.doc.dto.project.dashboard.*;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
+import com.doc.exception.ValidationException;
+import com.doc.repository.ProjectCompletionProjection;
 import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.project.ProjectDashboardService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
@@ -275,6 +277,87 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
         );
     }
 
+    @Override
+    public ProjectCompletionResponseDto getProjectCompletionSummary(
+            Long userId
+    ) {
+
+        validateDepartmentAccess(userId);
+
+        ProjectCompletionProjection projection =
+                projectRepository.getProjectCompletionSummary();
+
+        long totalProjectCount =
+                projection == null
+                        || projection.getTotalProjectCount() == null
+                        ? 0L
+                        : projection.getTotalProjectCount();
+
+        long completedProjectCount =
+                projection == null
+                        || projection.getCompletedProjectCount() == null
+                        ? 0L
+                        : projection.getCompletedProjectCount();
+
+        BigDecimal completionPercentage =
+                calculateProjectCompletionPercentage(
+                        completedProjectCount,
+                        totalProjectCount
+                );
+
+        return ProjectCompletionResponseDto.builder()
+                .totalProjectCount(totalProjectCount)
+                .completedProjectCount(completedProjectCount)
+                .completionPercentage(completionPercentage)
+                .build();
+    }
+
+    private void validateDepartmentAccess(Long userId) {
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        Long userCount =
+                userRepository.countActiveUserInDepartment(
+                        userId,
+                        DepartmentConstants.PROJECT_DEPARTMENT_ID
+                );
+
+        boolean hasAccess = userCount != null && userCount > 0;
+
+        if (!hasAccess) {
+            throw new ResourceNotFoundException(
+                    "Active user not found in department ID 9",
+                    "ERR_USER_DEPARTMENT_ACCESS_DENIED"
+            );
+        }
+    }
+
+    private BigDecimal calculateProjectCompletionPercentage(
+            long completedProjectCount,
+            long totalProjectCount
+    ) {
+
+        if (totalProjectCount <= 0L) {
+            return BigDecimal.ZERO.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
+        }
+
+        return BigDecimal.valueOf(completedProjectCount)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(
+                        BigDecimal.valueOf(totalProjectCount),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+    }
+
     private User getActiveUser(Long userId) {
         return userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -372,4 +455,8 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
             Date toDateTimeExclusive
     ) {
     }
+
+
+
+
 }

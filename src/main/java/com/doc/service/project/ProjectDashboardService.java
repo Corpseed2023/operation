@@ -1,5 +1,6 @@
 package com.doc.service.project;
 
+import com.doc.dto.project.dashboard.ProjectCompletionResponseDto;
 import com.doc.dto.project.dashboard.ProjectOverviewResponseDto;
 import com.doc.dto.project.dashboard.UserProjectDashboardResponseDto;
 
@@ -20,4 +21,5 @@ public interface ProjectDashboardService {
             LocalDate fromDate,
             LocalDate toDate
     );
+    ProjectCompletionResponseDto getProjectCompletionSummary(Long userId);
 }

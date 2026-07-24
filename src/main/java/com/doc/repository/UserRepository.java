@@ -46,4 +46,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
               AND u.isActive = true
             """)
     List<User> findActiveManagersByDepartmentId(@Param("departmentId") Long departmentId);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM erp_operation.users u
+        INNER JOIN erp_operation.user_department_map udm
+                ON udm.user_id = u.id
+        WHERE u.id = :userId
+          AND udm.dept_id = :departmentId
+          AND u.is_active = 1
+          AND u.is_deleted = 0
+        """,
+            nativeQuery = true)
+    Long countActiveUserInDepartment(
+            @Param("userId") Long userId,
+            @Param("departmentId") Long departmentId
+    );
 }

@@ -1,5 +1,6 @@
 package com.doc.controller.dashboard;
 
+import com.doc.dto.project.dashboard.ProjectCompletionResponseDto;
 import com.doc.dto.project.dashboard.ProjectOverviewResponseDto;
 import com.doc.dto.project.dashboard.UserProjectDashboardResponseDto;
 import com.doc.service.project.ProjectDashboardService;
@@ -81,5 +82,15 @@ public class ProjectDashboardController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/completion-summary")
+    public ResponseEntity<ProjectCompletionResponseDto>
+    getProjectCompletionSummary(
+            @RequestParam Long userId
+    ) {
 
+        return ResponseEntity.ok(
+                projectDashboardService
+                        .getProjectCompletionSummary(userId)
+        );
+    }
 }

@@ -540,7 +540,23 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("projectNo") String projectNo
     );
 
-
+    @Query("""
+            SELECT
+                COUNT(p.id) AS totalProjectCount,
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN p.status.id = 3 THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS completedProjectCount
+            FROM Project p
+            WHERE p.isDeleted = false
+              AND p.isCancelled = false
+            """)
+    ProjectCompletionProjection getProjectCompletionSummary();
 
 
 
