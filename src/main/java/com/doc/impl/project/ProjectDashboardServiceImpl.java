@@ -5,9 +5,7 @@ import com.doc.dto.project.dashboard.*;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-import com.doc.repository.ProjectCompletionProjection;
-import com.doc.repository.ProjectRepository;
-import com.doc.repository.UserRepository;
+import com.doc.repository.*;
 import com.doc.service.project.ProjectDashboardService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +22,8 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+
+    private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
 
     private static final ZoneId INDIA_ZONE = ZoneId.of("Asia/Kolkata");
 
@@ -53,10 +53,11 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
 
     public ProjectDashboardServiceImpl(
             ProjectRepository projectRepository,
-            UserRepository userRepository
+            UserRepository userRepository, ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository
     ) {
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
+        this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
     }
 
     @Override
@@ -312,6 +313,125 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 .build();
     }
 
+    @Override
+    public List<ProjectStatusCountResponseDto>
+    getProjectStatusWiseSummary(Long userId) {
+
+        validateDepartmentAccess(userId);
+
+        List<ProjectStatusCountProjection> projections =
+                projectRepository.getProjectStatusWiseCount();
+
+        long totalProjectCount = projections.stream()
+                .map(ProjectStatusCountProjection::getProjectCount)
+                .filter(Objects::nonNull)
+                .mapToLong(Long::longValue)
+                .sum();
+
+        return projections.stream()
+                .map(projection -> {
+
+                    long projectCount =
+                            projection.getProjectCount() == null
+                                    ? 0L
+                                    : projection.getProjectCount();
+
+                    return ProjectStatusCountResponseDto.builder()
+                            .statusId(projection.getStatusId())
+                            .statusName(projection.getStatusName())
+                            .projectCount(projectCount)
+                            .percentage(
+                                    calculateStatusPercentage(
+                                            projectCount,
+                                            totalProjectCount
+                                    )
+                            )
+                            .build();
+                })
+                .toList();
+    }
+
+    @Override
+    public List<MilestoneOverviewResponseDto> getMilestoneOverview(
+            Long userId
+    ) {
+
+        validateDepartmentAccess(userId);
+
+        List<MilestoneOverviewProjection> projections =
+                projectMilestoneAssignmentRepository.getMilestoneOverview();
+
+        return projections.stream()
+                .map(projection -> {
+
+                    long totalProjects =
+                            projection.getTotalProjects() == null
+                                    ? 0L
+                                    : projection.getTotalProjects();
+
+                    long completedProjects =
+                            projection.getCompletedProjects() == null
+                                    ? 0L
+                                    : projection.getCompletedProjects();
+
+                    BigDecimal completionPercentage =
+                            calculateMilestonePercentage(
+                                    completedProjects,
+                                    totalProjects
+                            );
+
+                    return MilestoneOverviewResponseDto.builder()
+                            .milestoneId(projection.getMilestoneId())
+                            .milestoneName(projection.getMilestoneName())
+                            .totalProjects(totalProjects)
+                            .completedProjects(completedProjects)
+                            .completionPercentage(completionPercentage)
+                            .build();
+                })
+                .toList();
+    }
+    private BigDecimal calculateMilestonePercentage(
+            long completedProjects,
+            long totalProjects
+    ) {
+
+        if (totalProjects <= 0L) {
+            return BigDecimal.ZERO.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
+        }
+
+        return BigDecimal.valueOf(completedProjects)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(
+                        BigDecimal.valueOf(totalProjects),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+    }
+
+    private BigDecimal calculateStatusPercentage(
+            long statusProjectCount,
+            long totalProjectCount
+    ) {
+
+        if (totalProjectCount <= 0L) {
+            return BigDecimal.ZERO.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
+        }
+
+        return BigDecimal.valueOf(statusProjectCount)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(
+                        BigDecimal.valueOf(totalProjectCount),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+    }
+
     private void validateDepartmentAccess(Long userId) {
 
         if (userId == null) {
@@ -327,15 +447,15 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                         DepartmentConstants.PROJECT_DEPARTMENT_ID
                 );
 
-        boolean hasAccess = userCount != null && userCount > 0;
-
-        if (!hasAccess) {
+        if (userCount == null || userCount <= 0L) {
             throw new ResourceNotFoundException(
-                    "Active user not found in department ID 9",
-                    "ERR_USER_DEPARTMENT_ACCESS_DENIED"
+                    "User is not authorized to access project resources",
+                    "ERR_PROJECT_DEPARTMENT_ACCESS_DENIED"
             );
         }
     }
+
+
 
     private BigDecimal calculateProjectCompletionPercentage(
             long completedProjectCount,

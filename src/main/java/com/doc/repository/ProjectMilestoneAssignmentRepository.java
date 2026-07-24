@@ -205,6 +205,35 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             @Param("projectIds") List<Long> projectIds
     );
 
+    @Query("""
+            SELECT
+                m.id AS milestoneId,
+                m.name AS milestoneName,
 
+                COUNT(DISTINCT p.id) AS totalProjects,
+
+                COUNT(
+                    DISTINCT CASE
+                        WHEN s.id = 3 THEN p.id
+                        ELSE NULL
+                    END
+                ) AS completedProjects
+
+            FROM ProjectMilestoneAssignment pma
+            JOIN pma.project p
+            JOIN pma.milestone m
+            JOIN pma.status s
+
+            WHERE pma.isDeleted = false
+              AND pma.isVisible = true
+              AND p.isDeleted = false
+
+            GROUP BY
+                m.id,
+                m.name
+
+            ORDER BY m.id
+            """)
+    List<MilestoneOverviewProjection> getMilestoneOverview();
 
 }

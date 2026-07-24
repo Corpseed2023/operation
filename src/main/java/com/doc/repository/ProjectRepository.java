@@ -558,6 +558,24 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             """)
     ProjectCompletionProjection getProjectCompletionSummary();
 
+    @Query("""
+            SELECT
+                ps.id AS statusId,
+                ps.name AS statusName,
+                COUNT(p.id) AS projectCount
+            FROM ProjectStatus ps
+            LEFT JOIN Project p
+                   ON p.status.id = ps.id
+                  AND p.isDeleted = false
+            GROUP BY
+                ps.id,
+                ps.name
+            ORDER BY ps.id
+            """)
+    List<ProjectStatusCountProjection> getProjectStatusWiseCount();
+
+
+
 
 
 }

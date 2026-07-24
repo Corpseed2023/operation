@@ -1,8 +1,6 @@
 package com.doc.controller.dashboard;
 
-import com.doc.dto.project.dashboard.ProjectCompletionResponseDto;
-import com.doc.dto.project.dashboard.ProjectOverviewResponseDto;
-import com.doc.dto.project.dashboard.UserProjectDashboardResponseDto;
+import com.doc.dto.project.dashboard.*;
 import com.doc.service.project.ProjectDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -10,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/operationService/api/user-dashboard")
@@ -91,6 +90,28 @@ public class ProjectDashboardController {
         return ResponseEntity.ok(
                 projectDashboardService
                         .getProjectCompletionSummary(userId)
+        );
+    }
+
+    @GetMapping("/status-wise-summary")
+    public ResponseEntity<List<ProjectStatusCountResponseDto>>
+    getProjectStatusWiseSummary(
+            @RequestParam Long userId
+    ) {
+
+        return ResponseEntity.ok(
+                projectDashboardService
+                        .getProjectStatusWiseSummary(userId)
+        );
+    }
+    @GetMapping("/milestone-overview")
+    public ResponseEntity<List<MilestoneOverviewResponseDto>>
+    getMilestoneOverview(
+            @RequestParam Long userId
+    ) {
+
+        return ResponseEntity.ok(
+                projectDashboardService.getMilestoneOverview(userId)
         );
     }
 }

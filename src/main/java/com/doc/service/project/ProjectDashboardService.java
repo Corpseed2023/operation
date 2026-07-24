@@ -1,10 +1,9 @@
 package com.doc.service.project;
 
-import com.doc.dto.project.dashboard.ProjectCompletionResponseDto;
-import com.doc.dto.project.dashboard.ProjectOverviewResponseDto;
-import com.doc.dto.project.dashboard.UserProjectDashboardResponseDto;
+import com.doc.dto.project.dashboard.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public interface ProjectDashboardService {
 
@@ -22,4 +21,6 @@ public interface ProjectDashboardService {
             LocalDate toDate
     );
     ProjectCompletionResponseDto getProjectCompletionSummary(Long userId);
+    List<ProjectStatusCountResponseDto> getProjectStatusWiseSummary(Long userId);
+    List<MilestoneOverviewResponseDto> getMilestoneOverview(Long userId);
 }

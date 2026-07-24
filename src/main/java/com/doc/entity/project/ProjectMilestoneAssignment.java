@@ -33,6 +33,7 @@ public class ProjectMilestoneAssignment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
+
     @Comment("Associated project")
     private Project project;
 
