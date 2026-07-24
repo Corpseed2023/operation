@@ -66,4 +66,24 @@ public interface VendorRepository extends JpaRepository<Vendor, Long> {
     List<Vendor> findAllVendorsByProductId(
             @Param("productId") Long productId
     );
+
+    @Query("""
+        SELECT v
+        FROM Vendor v
+        WHERE v.isDeleted = false
+          AND (:status IS NULL OR v.status = :status)
+          AND (
+                :keyword IS NULL
+                OR LOWER(v.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(v.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(v.mobile) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(v.gstNumber) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(v.panNumber) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          )
+        """)
+    Page<Vendor> searchVendors(
+            @Param("keyword") String keyword,
+            @Param("status") VendorStatus status,
+            Pageable pageable
+    );
 }

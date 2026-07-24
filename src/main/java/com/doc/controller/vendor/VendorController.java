@@ -2,6 +2,8 @@ package com.doc.controller.vendor;
 
 import com.doc.dto.vendor.VendorRequestDto;
 import com.doc.dto.vendor.VendorResponseDto;
+import com.doc.entity.vendor.VendorStatus;
+import com.doc.exception.ValidationException;
 import com.doc.service.vendor.VendorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -56,14 +58,38 @@ public class VendorController {
     }
 
     @GetMapping
-    @Operation(summary = "Get all vendors with pagination and search")
     public ResponseEntity<Page<VendorResponseDto>> getAllVendors(
             @RequestParam Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status
+    ) {
 
-        Page<VendorResponseDto> vendors = vendorService.getAllVendors(userId, page, size, keyword);
+        VendorStatus vendorStatus = null;
+
+        if (status != null && !status.trim().isEmpty()) {
+            try {
+                vendorStatus = VendorStatus.valueOf(
+                        status.trim().toUpperCase()
+                );
+            } catch (IllegalArgumentException ex) {
+                throw new ValidationException(
+                        "Invalid vendor status: " + status,
+                        "ERR_INVALID_VENDOR_STATUS"
+                );
+            }
+        }
+
+        Page<VendorResponseDto> vendors =
+                vendorService.getAllVendors(
+                        userId,
+                        page,
+                        size,
+                        keyword,
+                        vendorStatus
+                );
+
         return ResponseEntity.ok(vendors);
     }
 

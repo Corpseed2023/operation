@@ -2,6 +2,7 @@ package com.doc.service.vendor;
 
 import com.doc.dto.vendor.VendorRequestDto;
 import com.doc.dto.vendor.VendorResponseDto;
+import com.doc.entity.vendor.VendorStatus;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
@@ -17,8 +18,13 @@ public interface VendorService {
 
     void deleteVendor(Long id);
 
-    Page<VendorResponseDto> getAllVendors(Long userId, int page, int size, String keyword);
-
+    Page<VendorResponseDto> getAllVendors(
+            Long userId,
+            int page,
+            int size,
+            String keyword,
+            VendorStatus status
+    );
 
     VendorResponseDto createVendor(Long userId, VendorRequestDto dto);
 }

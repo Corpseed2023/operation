@@ -259,16 +259,22 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
-    public Page<VendorResponseDto> getAllVendors(Long userId, int page, int size, String keyword) {
+    @Transactional(readOnly = true)
+    public Page<VendorResponseDto> getAllVendors(
+            Long userId,
+            int page,
+            int size,
+            String keyword,
+            VendorStatus status
+    ) {
 
-        // Validate user
         userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
 
-        // Frontend page starts from 1, Spring page starts from 0
         int pageIndex = page <= 0 ? 0 : page - 1;
-
-        // Optional safety for size
         int pageSize = size <= 0 ? 10 : size;
 
         Pageable pageable = PageRequest.of(
@@ -277,13 +283,17 @@ public class VendorServiceImpl implements VendorService {
                 Sort.by("createdDate").descending()
         );
 
-        Page<Vendor> vendors;
+        String normalizedKeyword =
+                keyword != null && !keyword.trim().isEmpty()
+                        ? keyword.trim()
+                        : null;
 
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            vendors = vendorRepository.searchVendors(keyword.trim(), pageable);
-        } else {
-            vendors = vendorRepository.findByIsDeletedFalse(pageable);
-        }
+        Page<Vendor> vendors =
+                vendorRepository.searchVendors(
+                        normalizedKeyword,
+                        status,
+                        pageable
+                );
 
         return vendors.map(this::mapEntityToDto);
     }
