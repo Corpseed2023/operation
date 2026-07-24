@@ -5,8 +5,10 @@ import com.doc.entity.product.Product;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.feign.AccountFeignClient;
 import com.doc.repository.vendor.*;
 import com.doc.service.vendor.VendorFinalizationService;
+import feign.FeignException;
 import jakarta.ws.rs.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -30,6 +34,7 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
     private final VendorQuotationItemRepository vendorQuotationItemRepository;
     private final VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository;
     private final ProductVendorMappingRepository productVendorMappingRepository;
+    private final AccountFeignClient accountFeignClient;
 
     @Override
     @Transactional
@@ -326,32 +331,29 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             Long submissionId,
             AccountsVendorFinalizationRequestDto requestDto
     ) {
-        VendorAccountsSubmission submission = vendorAccountsSubmissionRepository
-                .findByIdAndIsDeletedFalse(submissionId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor accounts submission not found",
-                        "ERR_VENDOR_ACCOUNTS_SUBMISSION_NOT_FOUND"
-                ));
+        VendorAccountsSubmission submission =
+                vendorAccountsSubmissionRepository
+                        .findByIdAndIsDeletedFalse(submissionId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Vendor accounts submission not found",
+                                "ERR_VENDOR_ACCOUNTS_SUBMISSION_NOT_FOUND"
+                        ));
 
-        if (submission.getStatus() == VendorAccountsSubmissionStatus.APPROVED) {
+        if (submission.getStatus()
+                == VendorAccountsSubmissionStatus.APPROVED) {
             throw new ValidationException(
                     "Vendor accounts submission already approved",
                     "ERR_VENDOR_ACCOUNTS_ALREADY_APPROVED"
             );
         }
 
-        if (submission.getStatus() == VendorAccountsSubmissionStatus.REJECTED) {
+        if (submission.getStatus()
+                == VendorAccountsSubmissionStatus.REJECTED) {
             throw new ValidationException(
                     "Rejected vendor accounts submission cannot be approved directly",
                     "ERR_VENDOR_ACCOUNTS_ALREADY_REJECTED"
             );
         }
-
-        submission.setStatus(VendorAccountsSubmissionStatus.APPROVED);
-        submission.setAccountsRemark(requestDto.getAccountsRemark());
-        submission.setAccountsVerifiedBy(requestDto.getUserId());
-        submission.setAccountsVerifiedDate(new Date());
-        submission.setUpdatedBy(requestDto.getUserId());
 
         Vendor vendor = submission.getVendor();
 
@@ -362,50 +364,74 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             );
         }
 
-        VendorFinalization finalization = submission.getVendorFinalization();
+        Date now = new Date();
+
+        submission.setStatus(
+                VendorAccountsSubmissionStatus.APPROVED
+        );
+        submission.setAccountsRemark(
+                requestDto.getAccountsRemark()
+        );
+        submission.setAccountsVerifiedBy(
+                requestDto.getUserId()
+        );
+        submission.setAccountsVerifiedDate(now);
+        submission.setUpdatedBy(requestDto.getUserId());
+        submission.setUpdatedDate(now);
+
+        VendorFinalization finalization =
+                submission.getVendorFinalization();
 
         if (finalization != null) {
-            finalization.setStatus(VendorFinalizationStatus.ACCOUNTS_APPROVED);
+            finalization.setStatus(
+                    VendorFinalizationStatus.ACCOUNTS_APPROVED
+            );
             finalization.setUpdatedBy(requestDto.getUserId());
-            finalization.setUpdatedDate(new Date());
+            finalization.setUpdatedDate(now);
 
             vendorFinalizationRepository.save(finalization);
         }
 
         vendor.setStatus(VendorStatus.ACTIVE);
         vendor.setUpdatedBy(requestDto.getUserId());
-        vendor.setUpdatedDate(new Date());
+        vendor.setUpdatedDate(now);
 
-        vendorRepository.save(vendor);
+        Vendor savedVendor = vendorRepository.save(vendor);
 
         VendorQuotation quotation = submission.getQuotation();
 
         if (quotation != null) {
             quotation.setStatus(VendorQuotationStatus.ACCEPTED);
             quotation.setUpdatedBy(requestDto.getUserId());
-            quotation.setUpdatedDate(new Date());
+            quotation.setUpdatedDate(now);
+
             vendorQuotationRepository.save(quotation);
         }
 
         RFQ rfq = submission.getRfq();
-        if(rfq != null){
+
+        if (rfq != null) {
             rfq.setStatus(RFQStatus.VENDOR_FINALIZED);
             rfq.setUpdatedBy(requestDto.getUserId());
-            rfq.setUpdatedDate(new Date());
+            rfq.setUpdatedDate(now);
+
             vendorRFQRepository.save(rfq);
         }
+
         if (rfq != null && rfq.getProduct() != null) {
+
             Product product = rfq.getProduct();
 
             ProductVendorMapping mapping =
                     productVendorMappingRepository
-                            .findByProductIdAndVendorId(product.getId(), vendor.getId())
+                            .findByProductIdAndVendorId(
+                                    product.getId(),
+                                    savedVendor.getId()
+                            )
                             .orElseGet(ProductVendorMapping::new);
 
-            Date now = new Date();
-
             mapping.setProduct(product);
-            mapping.setVendor(vendor);
+            mapping.setVendor(savedVendor);
             mapping.setActive(true);
             mapping.setDeleted(false);
             mapping.setUpdatedBy(requestDto.getUserId());
@@ -419,10 +445,16 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             productVendorMappingRepository.save(mapping);
         }
 
-        VendorAccountsSubmission saved =
+        VendorAccountsSubmission savedSubmission =
                 vendorAccountsSubmissionRepository.save(submission);
 
-        return mapAccountsSubmissionToResponse(saved);
+        // Combine Vendor + Accounts Submission and send to Account Service
+        syncApprovedVendorWithAccountService(
+                savedVendor,
+                savedSubmission
+        );
+
+        return mapAccountsSubmissionToResponse(savedSubmission);
     }
 
     @Override
@@ -626,6 +658,53 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         return response;
     }
 
+    private AccountVendorSyncResponseDto syncApprovedVendorWithAccountService(
+            Vendor vendor,
+            VendorAccountsSubmission submission
+    ) {
+        AccountVendorSyncRequestDto syncRequest =
+                buildAccountVendorSyncRequest(vendor, submission);
 
+        return accountFeignClient.syncVendor(syncRequest);
+    }
+
+
+    private AccountVendorSyncRequestDto buildAccountVendorSyncRequest(
+            Vendor vendor,
+            VendorAccountsSubmission submission
+    ) {
+        return AccountVendorSyncRequestDto.builder()
+
+                // Data from Operations Vendor
+                .operationVendorId(vendor.getId())
+                .vendorName(vendor.getName())
+                .email(vendor.getEmail())
+                .mobile(vendor.getMobile())
+                .pan(vendor.getPanNumber())
+                .active(vendor.getStatus() == VendorStatus.ACTIVE)
+                .operationUpdatedAt(
+                        vendor.getUpdatedDate() != null
+                                ? vendor.getUpdatedDate()
+                                .toInstant()
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDateTime()
+                                : LocalDateTime.now()
+                )
+                // Data from Vendor Accounts Submission
+                .gstNumber(vendor.getGstNumber())
+                .gstRegistrationType(
+                        submission.getGstRegistrationType() != null
+                                ? submission.getGstRegistrationType().name()
+                                : null
+                )
+                .accountHolderName(submission.getAccountHolderName())
+                .bankAccountNumber(submission.getAccountNumber())
+                .ifscCode(submission.getIfsc())
+
+                // Not available in the current submission entity
+                .bankName(null)
+
+                .build();
+    }
 
 }
