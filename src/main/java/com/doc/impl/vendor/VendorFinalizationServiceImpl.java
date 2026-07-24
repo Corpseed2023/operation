@@ -226,6 +226,14 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
                         "Vendor finalization not found",
                         "ERR_VENDOR_FINALIZATION_NOT_FOUND"
                 ));
+        Vendor vendor = finalization.getVendor();
+
+        if (vendor != null && vendor.getStatus() == VendorStatus.ACTIVE) {
+            throw new ValidationException(
+                    "Vendor is already active and does not require accounts approval",
+                    "ERR_ACTIVE_VENDOR_ACCOUNTS_NOT_REQUIRED"
+            );
+        }
 
         boolean alreadyActiveSubmission =
                 vendorAccountsSubmissionRepository
