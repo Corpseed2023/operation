@@ -1,16 +1,24 @@
 package com.doc.impl.project;
 
-import com.doc.dto.project.activity.*;
-import com.doc.dto.project.activity.expense.ApproveExpenseRequestDto;
+import com.doc.dto.project.activity.CreateCommentRequestDto;
+import com.doc.dto.project.activity.CreateNoteRequestDto;
+import com.doc.dto.project.activity.ProjectActivityResponseDto;
+import com.doc.dto.project.activity.ProjectCommentResponseDto;
+import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
+import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
 import com.doc.em.ApprovalStatus;
+import com.doc.em.ExpenseApprovalStage;
+import com.doc.em.ExpensePaymentStatus;
+import com.doc.entity.department.Department;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
 import com.doc.entity.project.activity.ProjectComment;
 import com.doc.entity.project.activity.ProjectExpense;
 import com.doc.entity.project.activity.ProjectNote;
+import com.doc.entity.user.Role;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -23,19 +31,40 @@ import com.doc.repository.projectRepo.activity.ProjectNoteRepository;
 import com.doc.service.ProjectActivityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class ProjectActivityServiceImpl implements ProjectActivityService {
+
+    private static final Set<ApprovalStatus> ALLOWED_DECISION_STATUSES =
+            EnumSet.of(
+                    ApprovalStatus.APPROVED,
+                    ApprovalStatus.REJECTED,
+                    ApprovalStatus.ON_HOLD
+            );
+
+    private static final List<ExpensePaymentStatus> ACTIVE_PAYMENT_STATUSES =
+            List.of(
+                    ExpensePaymentStatus.PENDING,
+                    ExpensePaymentStatus.PROCESSING,
+                    ExpensePaymentStatus.PARTIALLY_PAID,
+                    ExpensePaymentStatus.FAILED
+            );
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
@@ -44,24 +73,52 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     private final ProjectCommentRepository commentRepository;
     private final ProjectExpenseRepository expenseRepository;
 
-    // ---------------------------------------------------
-    // CREATE NOTE
-    // ---------------------------------------------------
+    // =========================================================
+    // NOTE
+    // =========================================================
 
     @Override
-    public ProjectActivityResponseDto addNote(Long projectId, CreateNoteRequestDto request) {
+    @Transactional
+    public ProjectActivityResponseDto addNote(
+            Long projectId,
+            CreateNoteRequestDto request
+    ) {
 
-        User user = validateUser(request.getCreatedByUserId());
+        if (request == null) {
+            throw new ValidationException(
+                    "Note request is required",
+                    "ERR_NOTE_REQUEST_REQUIRED"
+            );
+        }
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+        if (request.getCreatedByUserId() == null) {
+            throw new ValidationException(
+                    "Created by user ID is required",
+                    "ERR_CREATED_BY_REQUIRED"
+            );
+        }
+
+        if (request.getNoteText() == null ||
+                request.getNoteText().trim().isEmpty()) {
+
+            throw new ValidationException(
+                    "Note text is required",
+                    "ERR_NOTE_TEXT_REQUIRED"
+            );
+        }
+
+        User user = validateActiveUser(request.getCreatedByUserId());
+        Project project = validateActiveProject(projectId);
+
+        String noteText = request.getNoteText().trim();
 
         ProjectActivity activity = createActivity(
                 project,
                 ActivityType.NOTE,
                 "Note Added",
-                request.getNoteText(),
-                user
+                noteText,
+                user,
+                false
         );
 
         activity = activityRepository.save(activity);
@@ -69,7 +126,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         ProjectNote note = new ProjectNote();
         note.setProject(project);
         note.setActivity(activity);
-        note.setNoteText(request.getNoteText());
+        note.setNoteText(noteText);
         note.setCreatedDate(LocalDateTime.now());
         note.setCreatedByUserId(user.getId());
         note.setCreatedByUserName(user.getFullName());
@@ -79,24 +136,68 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return mapResponse(activity, note);
     }
 
-    // ---------------------------------------------------
-    // CREATE COMMENT
-    // ---------------------------------------------------
+    // =========================================================
+    // COMMENT
+    // =========================================================
 
     @Override
-    public ProjectActivityResponseDto addComment(Long projectId, CreateCommentRequestDto request) {
+    @Transactional
+    public ProjectActivityResponseDto addComment(
+            Long projectId,
+            CreateCommentRequestDto request
+    ) {
 
-        User user = validateUser(request.getCreatedByUserId());
+        if (request == null) {
+            throw new ValidationException(
+                    "Comment request is required",
+                    "ERR_COMMENT_REQUEST_REQUIRED"
+            );
+        }
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+        if (request.getCreatedByUserId() == null) {
+            throw new ValidationException(
+                    "Created by user ID is required",
+                    "ERR_CREATED_BY_REQUIRED"
+            );
+        }
+
+        if (request.getCommentText() == null ||
+                request.getCommentText().trim().isEmpty()) {
+
+            throw new ValidationException(
+                    "Comment text is required",
+                    "ERR_COMMENT_TEXT_REQUIRED"
+            );
+        }
+
+        User user = validateActiveUser(request.getCreatedByUserId());
+        Project project = validateActiveProject(projectId);
+
+        if (request.getParentCommentId() != null) {
+            ProjectComment parentComment = commentRepository
+                    .findById(request.getParentCommentId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Parent comment not found",
+                            "ERR_PARENT_COMMENT_NOT_FOUND"
+                    ));
+
+            if (!parentComment.getProject().getId().equals(projectId)) {
+                throw new ValidationException(
+                        "Parent comment does not belong to this project",
+                        "ERR_INVALID_PARENT_COMMENT"
+                );
+            }
+        }
+
+        String commentText = request.getCommentText().trim();
 
         ProjectActivity activity = createActivity(
                 project,
                 ActivityType.COMMENT,
                 "Comment Added",
-                request.getCommentText(),
-                user
+                commentText,
+                user,
+                false
         );
 
         activity = activityRepository.save(activity);
@@ -104,7 +205,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         ProjectComment comment = new ProjectComment();
         comment.setProject(project);
         comment.setActivity(activity);
-        comment.setCommentText(request.getCommentText());
+        comment.setCommentText(commentText);
         comment.setParentCommentId(request.getParentCommentId());
         comment.setCreatedDate(LocalDateTime.now());
         comment.setCreatedByUserId(user.getId());
@@ -115,441 +216,1450 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return mapResponse(activity, comment);
     }
 
-
-
-    @Override
-    public Page<ProjectActivityResponseDto> getAllActivities(Long projectId, Pageable pageable) {
-
-        pageable = normalizePageable(pageable);
-
-        Page<ProjectActivity> page = activityRepository
-                .findByProjectIdAndDeletedFalseOrderByActivityDateDesc(projectId, pageable);
-
-        List<ProjectActivityResponseDto> content = page.getContent()
-                .stream()
-                .map(activity -> {
-
-                    if (activity.getActivityType() == ActivityType.COMMENT) {
-
-                        ProjectComment comment =
-                                commentRepository.findByActivityId(activity.getId()).orElse(null);
-
-                        if (comment != null && comment.getParentCommentId() != null) {
-                            return null; // hide child comments
-                        }
-                    }
-
-                    return mapTimeline(activity);
-
-                })
-                .filter(Objects::nonNull)
-                .toList();
-
-        return new org.springframework.data.domain.PageImpl<>(
-                content,
-                pageable,
-                page.getTotalElements()
-        );
-    }
-
-    // ---------------------------------------------------
-    // FETCH BY TYPE
-    // ---------------------------------------------------
+    // =========================================================
+    // EXPENSE CREATION
+    // =========================================================
 
     @Override
-    public Page<ProjectActivityResponseDto> getActivitiesByType(Long projectId, ActivityType type, Pageable pageable) {
-
-        pageable = normalizePageable(pageable);
-
-        if (type == ActivityType.COMMENT) {
-            return activityRepository
-                    .findParentCommentActivities(projectId, type, pageable)
-                    .map(this::mapTimeline);
-        }
-
-        return activityRepository
-                .findByProjectIdAndActivityTypeAndDeletedFalseOrderByActivityDateDesc(projectId, type, pageable)
-                .map(this::mapTimeline);
-    }
-
-    // ---------------------------------------------------
-    // FETCH BY DATE RANGE
-    // ---------------------------------------------------
-
-    @Override
-    public Page<ProjectActivityResponseDto> getActivitiesByDateRange(
+    @Transactional
+    public ProjectActivityResponseDto addExpense(
             Long projectId,
-            LocalDate start,
-            LocalDate end,
-            Pageable pageable) {
+            CreateExpenseRequestDto request
+    ) {
 
-        pageable = normalizePageable(pageable);
+        if (request == null) {
+            throw new ValidationException(
+                    "Expense request is required",
+                    "ERR_EXPENSE_REQUEST_REQUIRED"
+            );
+        }
 
-        Page<ProjectActivity> page = activityRepository
-                .findByProjectIdAndActivityDateBetweenAndDeletedFalseOrderByActivityDateDesc(
-                        projectId,
-                        start.atStartOfDay(),
-                        end.atTime(23, 59, 59),
-                        pageable
-                );
+        if (request.getCreatedByUserId() == null) {
+            throw new ValidationException(
+                    "Created by user ID is required",
+                    "ERR_CREATED_BY_REQUIRED"
+            );
+        }
 
-        List<ProjectActivityResponseDto> content = page.getContent()
-                .stream()
-                .map(activity -> {
+        User user = validateActiveUser(request.getCreatedByUserId());
+        Project project = validateActiveProject(projectId);
 
-                    if (activity.getActivityType() == ActivityType.COMMENT) {
-
-                        ProjectComment comment =
-                                commentRepository.findByActivityId(activity.getId()).orElse(null);
-
-                        if (comment != null && comment.getParentCommentId() != null) {
-                            return null;
-                        }
-                    }
-
-                    return mapTimeline(activity);
-
-                })
-                .filter(Objects::nonNull)
-                .toList();
-
-        return new org.springframework.data.domain.PageImpl<>(
-                content,
-                pageable,
-                page.getTotalElements()
+        Department department = validateUserDepartment(
+                user,
+                request.getDepartmentId()
         );
-    }
 
-
-    @Override
-    public ProjectActivityResponseDto addExpense(Long projectId, CreateExpenseRequestDto request) {
-
-        // Validate User
-        User user = validateUser(request.getCreatedByUserId());
-
-        // Validate Project
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project not found with id: " + projectId, "ERR_PROJECT_NOT_FOUND"));
-
-        // Basic validations
-        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ValidationException("Expense amount must be greater than zero", "ERR_INVALID_AMOUNT");
+        if (request.getExpenseCategory() == null) {
+            throw new ValidationException(
+                    "Expense category is required",
+                    "ERR_EXPENSE_CATEGORY_REQUIRED"
+            );
         }
 
-        if (request.getExpenseType() == null || request.getExpenseType().trim().isEmpty()) {
-            throw new ValidationException("Expense type is required", "ERR_EXPENSE_TYPE_REQUIRED");
+        BigDecimal requestedAmount = normalizePositiveAmount(
+                request.getAmount(),
+                "Expense amount must be greater than zero",
+                "ERR_INVALID_EXPENSE_AMOUNT"
+        );
+
+        String remark = requireText(
+                request.getRemark(),
+                "Expense remark is required",
+                "ERR_EXPENSE_REMARK_REQUIRED"
+        );
+
+        if (request.getExpenseDate() != null &&
+                request.getExpenseDate().isAfter(LocalDateTime.now())) {
+
+            throw new ValidationException(
+                    "Expense date cannot be in the future",
+                    "ERR_FUTURE_EXPENSE_DATE"
+            );
         }
 
-        String summary = request.getExpenseType().trim() + " - ₹" + request.getAmount();
+        String currencyCode = normalizeCurrencyCode(
+                request.getCurrencyCode()
+        );
 
-        // Create Activity
+        String categoryName = request.getExpenseCategory()
+                .name()
+                .replace("_", " ");
+
+        String activitySummary =
+                categoryName
+                        + " - "
+                        + currencyCode
+                        + " "
+                        + requestedAmount
+                        + " - Pending CRT approval";
+
         ProjectActivity activity = createActivity(
                 project,
                 ActivityType.EXPENSE,
-                "Expense Added",
-                summary,
-                user
+                "Expense Request Raised",
+                activitySummary,
+                user,
+                false
         );
 
         activity = activityRepository.save(activity);
 
-        // Create Expense
         ProjectExpense expense = new ProjectExpense();
+
         expense.setProject(project);
         expense.setActivity(activity);
-        expense.setExpenseType(request.getExpenseType().trim());
-        expense.setAmount(request.getAmount());
-        expense.setRemark(request.getRemark());
-        expense.setExpenseDate(request.getExpenseDate() != null ? request.getExpenseDate() : LocalDateTime.now());
-        expense.setPaymentMedium(request.getPaymentMedium());
+
+        expense.setRaisedDepartmentId(department.getId());
+        expense.setRaisedDepartmentName(department.getName());
+
+        expense.setExpenseCategory(request.getExpenseCategory());
+        expense.setRequestedAmount(requestedAmount);
+        expense.setApprovedAmount(null);
+        expense.setPaidAmount(BigDecimal.ZERO);
+
+        expense.setCurrencyCode(currencyCode);
+        expense.setRemark(remark);
+
+        expense.setExpenseDate(
+                request.getExpenseDate() != null
+                        ? request.getExpenseDate()
+                        : LocalDateTime.now()
+        );
+
+        expense.setAttachmentUrl(
+                normalizeOptionalText(request.getAttachmentUrl())
+        );
+
+        expense.setExternalReference(
+                normalizeOptionalText(request.getExternalReference())
+        );
+
         expense.setCreatedByUserId(user.getId());
         expense.setCreatedByUserName(user.getFullName());
-        expense.setApprovalStatus(ApprovalStatus.PENDING);   // Default status
 
-        expenseRepository.save(expense);
+        expense.setApprovalStatus(ApprovalStatus.PENDING);
+        expense.setApprovalStage(ExpenseApprovalStage.CRT_REVIEW);
 
-        // Use clean DTO instead of raw entity to avoid circular reference
-        ProjectExpenseResponseDto expenseDto = mapToExpenseDto(expense);
+        expense.setCrtApprovalStatus(ApprovalStatus.PENDING);
+        expense.setAccountsApprovalStatus(ApprovalStatus.PENDING);
 
-        return mapResponse(activity, expenseDto);
+        expense.setPaymentStatus(
+                ExpensePaymentStatus.NOT_INITIATED
+        );
+
+        expense = expenseRepository.save(expense);
+
+        return mapResponse(
+                activity,
+                mapToExpenseDto(expense)
+        );
     }
 
-
+    // =========================================================
+    // CRT DECISION
+    // =========================================================
 
     @Override
     @Transactional
-    public void approveExpense(Long projectId, Long userId, Long expenseId, ApproveExpenseRequestDto request) {
+    public ProjectExpenseResponseDto takeCrtExpenseDecision(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            CrtExpenseDecisionRequestDto request
+    ) {
 
-        User user = validateUser(userId);
+        User user = validateActiveUser(userId);
+        validateCrtApprover(user);
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+        Project project = validateProject(projectId);
+        ProjectExpense expense = validateExpense(
+                project,
+                expenseId
+        );
 
-        ProjectExpense expense = expenseRepository.findById(expenseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Expense not found", "ERR_EXPENSE_NOT_FOUND"));
-
-        if (!expense.getProject().getId().equals(project.getId())) {
-            throw new ValidationException("Expense does not belong to this project", "ERR_INVALID_PROJECT");
+        if (request == null) {
+            throw new ValidationException(
+                    "CRT decision request is required",
+                    "ERR_CRT_DECISION_REQUIRED"
+            );
         }
 
+        ApprovalStatus decision = validateDecisionStatus(
+                request.getStatus()
+        );
 
-        ApprovalStatus newStatus;
-        try {
-            newStatus = ApprovalStatus.valueOf(request.getStatus().toUpperCase().trim());
-        } catch (IllegalArgumentException e) {
-            throw new ValidationException("Invalid status. Allowed: APPROVED, REJECTED, ON_HOLD", "ERR_INVALID_STATUS");
+        if (expense.getApprovalStage() !=
+                ExpenseApprovalStage.CRT_REVIEW) {
+
+            throw new ValidationException(
+                    "Expense is not pending at CRT review stage",
+                    "ERR_INVALID_APPROVAL_STAGE"
+            );
         }
 
-        if (newStatus == ApprovalStatus.PENDING) {
-            throw new ValidationException("Cannot manually set status to PENDING", "ERR_INVALID_STATUS");
+        if (expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
+                expense.getApprovalStatus() == ApprovalStatus.APPROVED) {
+
+            throw new ValidationException(
+                    "Expense approval workflow is already completed",
+                    "ERR_EXPENSE_ALREADY_COMPLETED"
+            );
         }
 
-        // Prevent re-processing final states
-        if (expense.getApprovalStatus() == ApprovalStatus.APPROVED ||
-                expense.getApprovalStatus() == ApprovalStatus.REJECTED) {
-            throw new ValidationException("Expense is already " + expense.getApprovalStatus(), "ERR_ALREADY_PROCESSED");
-        }
+        String decisionRemark = normalizeOptionalText(
+                request.getRemark()
+        );
 
-        // ==================== REJECTION REMARK VALIDATION ====================
-        if (newStatus == ApprovalStatus.REJECTED) {
-            if (request.getRejectionRemark() == null || request.getRejectionRemark().trim().isEmpty()) {
-                throw new ValidationException("Rejection remark is required when rejecting an expense", "ERR_REJECTION_REMARK_REQUIRED");
+        validateDecisionRemark(
+                decision,
+                decisionRemark
+        );
+
+        LocalDateTime actionTime = LocalDateTime.now();
+
+        expense.setCrtApprovalStatus(decision);
+        expense.setCrtActionByUserId(user.getId());
+        expense.setCrtActionByUserName(user.getFullName());
+        expense.setCrtActionDate(actionTime);
+        expense.setCrtDecisionRemark(decisionRemark);
+
+        switch (decision) {
+
+            case APPROVED -> {
+                expense.setApprovalStatus(ApprovalStatus.PENDING);
+                expense.setApprovalStage(
+                        ExpenseApprovalStage.ACCOUNTS_REVIEW
+                );
+
+                expense.setAccountsApprovalStatus(
+                        ApprovalStatus.PENDING
+                );
+
+                expense.setPaymentStatus(
+                        ExpensePaymentStatus.NOT_INITIATED
+                );
             }
-            expense.setRejectionRemark(request.getRejectionRemark().trim());
+
+            case REJECTED -> {
+                expense.setApprovalStatus(ApprovalStatus.REJECTED);
+                expense.setApprovalStage(
+                        ExpenseApprovalStage.COMPLETED
+                );
+
+                expense.setApprovedAmount(null);
+
+                expense.setPaymentStatus(
+                        ExpensePaymentStatus.CANCELLED
+                );
+            }
+
+            case ON_HOLD -> {
+                expense.setApprovalStatus(ApprovalStatus.ON_HOLD);
+                expense.setApprovalStage(
+                        ExpenseApprovalStage.CRT_REVIEW
+                );
+
+                expense.setPaymentStatus(
+                        ExpensePaymentStatus.NOT_INITIATED
+                );
+            }
+
+            default -> throw new ValidationException(
+                    "Invalid CRT decision",
+                    "ERR_INVALID_CRT_DECISION"
+            );
+        }
+
+        expense = expenseRepository.save(expense);
+
+        createExpenseDecisionActivity(
+                project,
+                expense,
+                user,
+                "CRT",
+                decision
+        );
+
+        return mapToExpenseDto(expense);
+    }
+
+    // =========================================================
+    // ACCOUNTS DECISION
+    // =========================================================
+
+    @Override
+    @Transactional
+    public ProjectExpenseResponseDto takeAccountsExpenseDecision(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            AccountsExpenseDecisionRequestDto request
+    ) {
+
+        User user = validateActiveUser(userId);
+        validateAccountsApprover(user);
+
+        Project project = validateProject(projectId);
+        ProjectExpense expense = validateExpense(
+                project,
+                expenseId
+        );
+
+        if (request == null) {
+            throw new ValidationException(
+                    "Accounts decision request is required",
+                    "ERR_ACCOUNTS_DECISION_REQUIRED"
+            );
+        }
+
+        ApprovalStatus decision = validateDecisionStatus(
+                request.getStatus()
+        );
+
+        if (expense.getApprovalStage() !=
+                ExpenseApprovalStage.ACCOUNTS_REVIEW) {
+
+            throw new ValidationException(
+                    "Expense is not pending at Accounts review stage",
+                    "ERR_INVALID_APPROVAL_STAGE"
+            );
+        }
+
+        if (expense.getCrtApprovalStatus() !=
+                ApprovalStatus.APPROVED) {
+
+            throw new ValidationException(
+                    "CRT approval is required before Accounts approval",
+                    "ERR_CRT_APPROVAL_REQUIRED"
+            );
+        }
+
+        if (expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
+                expense.getApprovalStatus() == ApprovalStatus.APPROVED) {
+
+            throw new ValidationException(
+                    "Expense approval workflow is already completed",
+                    "ERR_EXPENSE_ALREADY_COMPLETED"
+            );
+        }
+
+        String decisionRemark = normalizeOptionalText(
+                request.getRemark()
+        );
+
+        validateDecisionRemark(
+                decision,
+                decisionRemark
+        );
+
+        LocalDateTime actionTime = LocalDateTime.now();
+
+        expense.setAccountsApprovalStatus(decision);
+        expense.setAccountsActionByUserId(user.getId());
+        expense.setAccountsActionByUserName(user.getFullName());
+        expense.setAccountsActionDate(actionTime);
+        expense.setAccountsDecisionRemark(decisionRemark);
+
+        switch (decision) {
+
+            case APPROVED -> approveExpenseByAccounts(
+                    expense,
+                    request,
+                    decisionRemark
+            );
+
+            case REJECTED -> {
+                expense.setApprovalStatus(ApprovalStatus.REJECTED);
+                expense.setApprovalStage(
+                        ExpenseApprovalStage.COMPLETED
+                );
+
+                expense.setApprovedAmount(null);
+
+                expense.setPaymentStatus(
+                        ExpensePaymentStatus.CANCELLED
+                );
+            }
+
+            case ON_HOLD -> {
+                expense.setApprovalStatus(ApprovalStatus.ON_HOLD);
+                expense.setApprovalStage(
+                        ExpenseApprovalStage.ACCOUNTS_REVIEW
+                );
+
+                expense.setPaymentStatus(
+                        ExpensePaymentStatus.NOT_INITIATED
+                );
+            }
+
+            default -> throw new ValidationException(
+                    "Invalid Accounts decision",
+                    "ERR_INVALID_ACCOUNTS_DECISION"
+            );
+        }
+
+        expense = expenseRepository.save(expense);
+
+        createExpenseDecisionActivity(
+                project,
+                expense,
+                user,
+                "Accounts",
+                decision
+        );
+
+        return mapToExpenseDto(expense);
+    }
+
+    private void approveExpenseByAccounts(
+            ProjectExpense expense,
+            AccountsExpenseDecisionRequestDto request,
+            String decisionRemark
+    ) {
+
+        BigDecimal approvedAmount = normalizePositiveAmount(
+                request.getApprovedAmount(),
+                "Approved amount must be greater than zero",
+                "ERR_INVALID_APPROVED_AMOUNT"
+        );
+
+        if (approvedAmount.compareTo(
+                expense.getRequestedAmount()
+        ) > 0) {
+
+            throw new ValidationException(
+                    "Approved amount cannot exceed requested amount",
+                    "ERR_APPROVED_AMOUNT_EXCEEDS_REQUESTED"
+            );
+        }
+
+        if (approvedAmount.compareTo(
+                expense.getRequestedAmount()
+        ) != 0 && decisionRemark == null) {
+
+            throw new ValidationException(
+                    "Decision remark is required when approved amount differs from requested amount",
+                    "ERR_PARTIAL_APPROVAL_REMARK_REQUIRED"
+            );
+        }
+
+        expense.setApprovedAmount(approvedAmount);
+        expense.setApprovalStatus(ApprovalStatus.APPROVED);
+        expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
+
+        /*
+         * Final approval is completed.
+         * The expense now enters the payment queue.
+         */
+        expense.setPaymentStatus(
+                ExpensePaymentStatus.PENDING
+        );
+    }
+
+    // =========================================================
+    // APPROVAL QUEUE
+    // =========================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectExpenseResponseDto> getExpenseApprovalQueue(
+            Long userId,
+            ExpenseApprovalStage approvalStage,
+            ApprovalStatus approvalStatus
+    ) {
+
+        User user = validateActiveUser(userId);
+
+        if (approvalStage == null) {
+            throw new ValidationException(
+                    "Approval stage is required",
+                    "ERR_APPROVAL_STAGE_REQUIRED"
+            );
+        }
+
+        if (approvalStage == ExpenseApprovalStage.CRT_REVIEW) {
+            validateCrtApprover(user);
+        } else if (
+                approvalStage ==
+                        ExpenseApprovalStage.ACCOUNTS_REVIEW
+        ) {
+            validateAccountsApprover(user);
+        }
+
+        List<ProjectExpense> expenses;
+
+        if (approvalStatus == null) {
+            expenses = expenseRepository
+                    .findByApprovalStageOrderByExpenseDateDesc(
+                            approvalStage
+                    );
         } else {
-            expense.setRejectionRemark(null);
+            expenses = expenseRepository
+                    .findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
+                            approvalStage,
+                            approvalStatus
+                    );
         }
 
-        expense.setApprovalStatus(newStatus);
-        expense.setApproved(newStatus == ApprovalStatus.APPROVED);
-        expense.setApprovedByUserId(user.getId());
-        expense.setApprovedByUserName(user.getFullName());
-        expense.setApprovedDate(LocalDateTime.now());
-
-        expenseRepository.save(expense);
-
-        createExpenseApprovalActivity(project, expense, user, newStatus);
+        return expenses.stream()
+                .map(this::mapToExpenseDto)
+                .toList();
     }
 
-    private void createExpenseApprovalActivity(Project project, ProjectExpense expense, User user, ApprovalStatus status) {
-        ProjectActivity activity = new ProjectActivity();
-        activity.setProject(project);
-        activity.setActivityType(ActivityType.EXPENSE);
-        activity.setSystemGenerated(true);
-        activity.setCreatedByUserId(user.getId());
-        activity.setCreatedByUserName(user.getFullName());
-        activity.setActivityDate(LocalDateTime.now());
-        activity.setCreatedDate(LocalDateTime.now());
-        activity.setDeleted(false);
+    // =========================================================
+    // PAYMENT QUEUE
+    // =========================================================
 
-        if (status == ApprovalStatus.APPROVED) {
-            activity.setTitle("Expense Approved");
-            activity.setSummary("Expense of ₹" + expense.getAmount() + " approved by " + user.getFullName());
-        } else if (status == ApprovalStatus.REJECTED) {
-            activity.setTitle("Expense Rejected");
-            activity.setSummary("Expense of ₹" + expense.getAmount() + " rejected by " + user.getFullName());
-        } else if (status == ApprovalStatus.ON_HOLD) {
-            activity.setTitle("Expense On Hold");
-            activity.setSummary("Expense of ₹" + expense.getAmount() + " kept on hold by " + user.getFullName());
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectExpenseResponseDto> getExpensePaymentQueue(
+            Long userId,
+            ExpensePaymentStatus paymentStatus
+    ) {
+
+        User user = validateActiveUser(userId);
+        validateAccountsApprover(user);
+
+        List<ProjectExpense> expenses;
+
+        if (paymentStatus == null) {
+            expenses = expenseRepository
+                    .findByPaymentStatusInOrderByExpenseDateDesc(
+                            ACTIVE_PAYMENT_STATUSES
+                    );
+        } else {
+            expenses = expenseRepository
+                    .findByPaymentStatusOrderByExpenseDateDesc(
+                            paymentStatus
+                    );
         }
 
-        activityRepository.save(activity);
+        return expenses.stream()
+                .map(this::mapToExpenseDto)
+                .toList();
     }
 
+    // =========================================================
+    // EXPENSE BY PROJECT
+    // =========================================================
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectExpenseResponseDto> getExpensesByProject(
+            Long projectId,
+            Long userId
+    ) {
 
-    private User validateUser(Long userId) {
+        validateActiveUser(userId);
+        validateProject(projectId);
 
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+        return expenseRepository
+                .findByProjectIdOrderByExpenseDateDesc(projectId)
+                .stream()
+                .map(this::mapToExpenseDto)
+                .toList();
     }
 
+    // =========================================================
+    // EXPENSE BY ID
+    // =========================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectExpenseResponseDto getExpenseById(
+            Long expenseId,
+            Long userId
+    ) {
+
+        validateActiveUser(userId);
+
+        ProjectExpense expense = expenseRepository
+                .findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Expense not found with id: " + expenseId,
+                        "ERR_EXPENSE_NOT_FOUND"
+                ));
+
+        return mapToExpenseDto(expense);
+    }
+
+    // =========================================================
+    // ACTIVITY FETCH
+    // =========================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProjectActivityResponseDto> getAllActivities(
+            Long projectId,
+            Pageable pageable
+    ) {
+
+        validateProject(projectId);
+
+        Pageable normalizedPageable =
+                normalizePageable(pageable);
+
+        Page<ProjectActivity> page = activityRepository
+                .findByProjectIdAndDeletedFalseOrderByActivityDateDesc(
+                        projectId,
+                        normalizedPageable
+                );
+
+        List<ProjectActivityResponseDto> content =
+                page.getContent()
+                        .stream()
+                        .map(activity -> {
+
+                            if (activity.getActivityType() ==
+                                    ActivityType.COMMENT) {
+
+                                ProjectComment comment =
+                                        commentRepository
+                                                .findByActivityId(
+                                                        activity.getId()
+                                                )
+                                                .orElse(null);
+
+                                if (comment != null &&
+                                        comment.getParentCommentId() != null) {
+                                    return null;
+                                }
+                            }
+
+                            return mapTimeline(activity);
+                        })
+                        .filter(Objects::nonNull)
+                        .toList();
+
+        return new PageImpl<>(
+                content,
+                normalizedPageable,
+                page.getTotalElements()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProjectActivityResponseDto> getActivitiesByType(
+            Long projectId,
+            ActivityType type,
+            Pageable pageable
+    ) {
+
+        validateProject(projectId);
+
+        if (type == null) {
+            throw new ValidationException(
+                    "Activity type is required",
+                    "ERR_ACTIVITY_TYPE_REQUIRED"
+            );
+        }
+
+        Pageable normalizedPageable =
+                normalizePageable(pageable);
+
+        if (type == ActivityType.COMMENT) {
+            return activityRepository
+                    .findParentCommentActivities(
+                            projectId,
+                            type,
+                            normalizedPageable
+                    )
+                    .map(this::mapTimeline);
+        }
+
+        return activityRepository
+                .findByProjectIdAndActivityTypeAndDeletedFalseOrderByActivityDateDesc(
+                        projectId,
+                        type,
+                        normalizedPageable
+                )
+                .map(this::mapTimeline);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProjectActivityResponseDto> getActivitiesByDateRange(
+            Long projectId,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    ) {
+
+        validateProject(projectId);
+
+        if (startDate == null || endDate == null) {
+            throw new ValidationException(
+                    "Start date and end date are required",
+                    "ERR_DATE_RANGE_REQUIRED"
+            );
+        }
+
+        if (startDate.isAfter(endDate)) {
+            throw new ValidationException(
+                    "Start date cannot be after end date",
+                    "ERR_INVALID_DATE_RANGE"
+            );
+        }
+
+        Pageable normalizedPageable =
+                normalizePageable(pageable);
+
+        Page<ProjectActivity> page = activityRepository
+                .findByProjectIdAndActivityDateBetweenAndDeletedFalseOrderByActivityDateDesc(
+                        projectId,
+                        startDate.atStartOfDay(),
+                        endDate.atTime(23, 59, 59),
+                        normalizedPageable
+                );
+
+        List<ProjectActivityResponseDto> content =
+                page.getContent()
+                        .stream()
+                        .map(activity -> {
+
+                            if (activity.getActivityType() ==
+                                    ActivityType.COMMENT) {
+
+                                ProjectComment comment =
+                                        commentRepository
+                                                .findByActivityId(
+                                                        activity.getId()
+                                                )
+                                                .orElse(null);
+
+                                if (comment != null &&
+                                        comment.getParentCommentId() != null) {
+                                    return null;
+                                }
+                            }
+
+                            return mapTimeline(activity);
+                        })
+                        .filter(Objects::nonNull)
+                        .toList();
+
+        return new PageImpl<>(
+                content,
+                normalizedPageable,
+                page.getTotalElements()
+        );
+    }
+
+    // =========================================================
+    // VALIDATION HELPERS
+    // =========================================================
+
+    private User validateActiveUser(Long userId) {
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        return userRepository
+                .findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with id: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
+    }
+
+    private Project validateProject(Long projectId) {
+
+        if (projectId == null) {
+            throw new ValidationException(
+                    "Project ID is required",
+                    "ERR_PROJECT_ID_REQUIRED"
+            );
+        }
+
+        return projectRepository
+                .findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found with id: " + projectId,
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
+    }
+
+    private Project validateActiveProject(Long projectId) {
+
+        Project project = validateProject(projectId);
+
+        if (project.isDeleted()) {
+            throw new ValidationException(
+                    "Expense cannot be raised for a deleted project",
+                    "ERR_PROJECT_DELETED"
+            );
+        }
+
+        if (!project.isActive()) {
+            throw new ValidationException(
+                    "Expense cannot be raised for an inactive project",
+                    "ERR_PROJECT_INACTIVE"
+            );
+        }
+
+        if (project.isCancelled()) {
+            throw new ValidationException(
+                    "Expense cannot be raised for a cancelled project",
+                    "ERR_PROJECT_CANCELLED"
+            );
+        }
+
+        return project;
+    }
+
+    private ProjectExpense validateExpense(
+            Project project,
+            Long expenseId
+    ) {
+
+        if (expenseId == null) {
+            throw new ValidationException(
+                    "Expense ID is required",
+                    "ERR_EXPENSE_ID_REQUIRED"
+            );
+        }
+
+        ProjectExpense expense = expenseRepository
+                .findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Expense not found with id: " + expenseId,
+                        "ERR_EXPENSE_NOT_FOUND"
+                ));
+
+        if (expense.getProject() == null ||
+                !expense.getProject().getId().equals(project.getId())) {
+
+            throw new ValidationException(
+                    "Expense does not belong to the selected project",
+                    "ERR_EXPENSE_PROJECT_MISMATCH"
+            );
+        }
+
+        return expense;
+    }
+
+    private Department validateUserDepartment(
+            User user,
+            Long departmentId
+    ) {
+
+        if (departmentId == null) {
+            throw new ValidationException(
+                    "Department ID is required",
+                    "ERR_DEPARTMENT_REQUIRED"
+            );
+        }
+
+        if (user.getDepartments() == null) {
+            throw new ValidationException(
+                    "User is not assigned to any department",
+                    "ERR_USER_DEPARTMENT_NOT_FOUND"
+            );
+        }
+
+        return user.getDepartments()
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(department ->
+                        Objects.equals(
+                                department.getId(),
+                                departmentId
+                        )
+                )
+                .filter(department -> !department.isDeleted())
+                .findFirst()
+                .orElseThrow(() -> new ValidationException(
+                        "User does not belong to the selected department",
+                        "ERR_USER_DEPARTMENT_MISMATCH"
+                ));
+    }
+
+    private ApprovalStatus validateDecisionStatus(
+            ApprovalStatus status
+    ) {
+
+        if (status == null) {
+            throw new ValidationException(
+                    "Decision status is required",
+                    "ERR_DECISION_STATUS_REQUIRED"
+            );
+        }
+
+        if (!ALLOWED_DECISION_STATUSES.contains(status)) {
+            throw new ValidationException(
+                    "Allowed decision statuses are APPROVED, REJECTED and ON_HOLD",
+                    "ERR_INVALID_DECISION_STATUS"
+            );
+        }
+
+        return status;
+    }
+
+    private void validateDecisionRemark(
+            ApprovalStatus status,
+            String remark
+    ) {
+
+        if ((status == ApprovalStatus.REJECTED ||
+                status == ApprovalStatus.ON_HOLD) &&
+                remark == null) {
+
+            throw new ValidationException(
+                    "Decision remark is required for REJECTED or ON_HOLD status",
+                    "ERR_DECISION_REMARK_REQUIRED"
+            );
+        }
+    }
+
+    // =========================================================
+    // APPROVER AUTHORIZATION
+    // =========================================================
+
+    private void validateCrtApprover(User user) {
+
+        if (isAdministrator(user) ||
+                hasRoleContaining(user, "CRT") ||
+                hasDepartmentContaining(user, "CRT") ||
+                hasDepartmentContaining(
+                        user,
+                        "CUSTOMER RELATIONSHIP"
+                )) {
+            return;
+        }
+
+        throw new ValidationException(
+                "User is not authorized to take a CRT expense decision",
+                "ERR_CRT_APPROVAL_UNAUTHORIZED"
+        );
+    }
+
+    private void validateAccountsApprover(User user) {
+
+        if (isAdministrator(user) ||
+                hasRoleContaining(user, "ACCOUNT") ||
+                hasRoleContaining(user, "FINANCE") ||
+                hasDepartmentContaining(user, "ACCOUNT") ||
+                hasDepartmentContaining(user, "FINANCE")) {
+            return;
+        }
+
+        throw new ValidationException(
+                "User is not authorized to take an Accounts expense decision",
+                "ERR_ACCOUNTS_APPROVAL_UNAUTHORIZED"
+        );
+    }
+
+    private boolean isAdministrator(User user) {
+        return hasRoleContaining(user, "ADMIN");
+    }
+
+    private boolean hasRoleContaining(
+            User user,
+            String expectedValue
+    ) {
+
+        if (user.getRoles() == null) {
+            return false;
+        }
+
+        String normalizedExpected =
+                normalizeName(expectedValue);
+
+        return user.getRoles()
+                .stream()
+                .filter(Objects::nonNull)
+                .map(Role::getName)
+                .filter(Objects::nonNull)
+                .map(this::normalizeName)
+                .anyMatch(roleName ->
+                        roleName.contains(normalizedExpected)
+                );
+    }
+
+    private boolean hasDepartmentContaining(
+            User user,
+            String expectedValue
+    ) {
+
+        if (user.getDepartments() == null) {
+            return false;
+        }
+
+        String normalizedExpected =
+                normalizeName(expectedValue);
+
+        return user.getDepartments()
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(department -> !department.isDeleted())
+                .map(Department::getName)
+                .filter(Objects::nonNull)
+                .map(this::normalizeName)
+                .anyMatch(departmentName ->
+                        departmentName.contains(normalizedExpected)
+                );
+    }
+
+    private String normalizeName(String value) {
+        return value
+                .trim()
+                .toUpperCase(Locale.ROOT)
+                .replace("_", " ")
+                .replace("-", " ");
+    }
+
+    // =========================================================
+    // ACTIVITY HELPERS
+    // =========================================================
 
     private ProjectActivity createActivity(
             Project project,
             ActivityType type,
             String title,
             String summary,
-            User user
+            User user,
+            boolean systemGenerated
     ) {
+
+        LocalDateTime now = LocalDateTime.now();
 
         ProjectActivity activity = new ProjectActivity();
         activity.setProject(project);
         activity.setActivityType(type);
         activity.setTitle(title);
         activity.setSummary(summary);
-        activity.setActivityDate(LocalDateTime.now());
+        activity.setActivityDate(now);
         activity.setCreatedByUserId(user.getId());
         activity.setCreatedByUserName(user.getFullName());
-        activity.setCreatedDate(LocalDateTime.now());
+        activity.setSystemGenerated(systemGenerated);
         activity.setDeleted(false);
+        activity.setCreatedDate(now);
+        activity.setUpdatedDate(now);
 
         return activity;
     }
 
-    private ProjectActivityResponseDto mapResponse(ProjectActivity activity, Object details) {
+    private void createExpenseDecisionActivity(
+            Project project,
+            ProjectExpense expense,
+            User user,
+            String approvalLevel,
+            ApprovalStatus status
+    ) {
 
-        ProjectActivityResponseDto dto = new ProjectActivityResponseDto();
+        String currencyCode =
+                expense.getCurrencyCode() != null
+                        ? expense.getCurrencyCode()
+                        : "INR";
+
+        BigDecimal displayAmount =
+                expense.getApprovedAmount() != null
+                        ? expense.getApprovedAmount()
+                        : expense.getRequestedAmount();
+
+        String title;
+        String summary;
+
+        switch (status) {
+
+            case APPROVED -> {
+                title = approvalLevel + " Expense Approved";
+                summary = approvalLevel
+                        + " approved expense of "
+                        + currencyCode
+                        + " "
+                        + displayAmount
+                        + " by "
+                        + user.getFullName();
+            }
+
+            case REJECTED -> {
+                title = approvalLevel + " Expense Rejected";
+                summary = approvalLevel
+                        + " rejected expense of "
+                        + currencyCode
+                        + " "
+                        + displayAmount
+                        + " by "
+                        + user.getFullName();
+            }
+
+            case ON_HOLD -> {
+                title = approvalLevel + " Expense On Hold";
+                summary = approvalLevel
+                        + " placed expense of "
+                        + currencyCode
+                        + " "
+                        + displayAmount
+                        + " on hold by "
+                        + user.getFullName();
+            }
+
+            default -> throw new ValidationException(
+                    "Unsupported activity status",
+                    "ERR_UNSUPPORTED_ACTIVITY_STATUS"
+            );
+        }
+
+        ProjectActivity activity = createActivity(
+                project,
+                ActivityType.EXPENSE,
+                title,
+                summary,
+                user,
+                true
+        );
+
+        activityRepository.save(activity);
+    }
+
+    // =========================================================
+    // RESPONSE MAPPING
+    // =========================================================
+
+    private ProjectActivityResponseDto mapResponse(
+            ProjectActivity activity,
+            Object details
+    ) {
+
+        ProjectActivityResponseDto dto =
+                new ProjectActivityResponseDto();
+
         dto.setActivityId(activity.getId());
         dto.setActivityType(activity.getActivityType());
         dto.setTitle(activity.getTitle());
         dto.setSummary(activity.getSummary());
         dto.setActivityDate(activity.getActivityDate());
-        dto.setCreatedByUserId(activity.getCreatedByUserId());
-        dto.setCreatedByUserName(activity.getCreatedByUserName());
+        dto.setCreatedByUserId(
+                activity.getCreatedByUserId()
+        );
+        dto.setCreatedByUserName(
+                activity.getCreatedByUserName()
+        );
         dto.setDetails(details);
 
         return dto;
     }
 
-
-    private ProjectActivityResponseDto mapTimeline(ProjectActivity activity) {
+    private ProjectActivityResponseDto mapTimeline(
+            ProjectActivity activity
+    ) {
 
         Object details = null;
 
         switch (activity.getActivityType()) {
 
-            case NOTE:
-                details = noteRepository.findByActivityId(activity.getId()).orElse(null);
-                break;
+            case NOTE -> details = noteRepository
+                    .findByActivityId(activity.getId())
+                    .orElse(null);
 
-            case COMMENT:
-
+            case COMMENT -> {
                 ProjectComment rootComment =
-                        commentRepository.findByActivityId(activity.getId()).orElse(null);
+                        commentRepository
+                                .findByActivityId(activity.getId())
+                                .orElse(null);
 
                 if (rootComment != null) {
-
                     List<ProjectComment> allComments =
-                            commentRepository.findByProjectId(activity.getProject().getId());
+                            commentRepository.findByProjectId(
+                                    activity.getProject().getId()
+                            );
 
-                    details = buildCommentTree(rootComment, allComments);
+                    details = buildCommentTree(
+                            rootComment,
+                            allComments
+                    );
                 }
+            }
 
-                break;
+            case EXPENSE -> details = expenseRepository
+                    .findByActivityId(activity.getId())
+                    .map(this::mapToExpenseDto)
+                    .orElse(null);
 
-            case EXPENSE:
-                details = expenseRepository.findByActivityId(activity.getId()).orElse(null);
-                break;
+            default -> {
+                // No additional details.
+            }
         }
 
         return mapResponse(activity, details);
     }
 
+    private ProjectCommentResponseDto buildCommentTree(
+            ProjectComment root,
+            List<ProjectComment> allComments
+    ) {
 
-    private ProjectCommentResponseDto buildCommentTree(ProjectComment root, List<ProjectComment> allComments) {
+        ProjectCommentResponseDto dto =
+                new ProjectCommentResponseDto();
 
-        ProjectCommentResponseDto dto = new ProjectCommentResponseDto();
         dto.setId(root.getId());
         dto.setCommentText(root.getCommentText());
         dto.setParentCommentId(root.getParentCommentId());
         dto.setCreatedDate(root.getCreatedDate());
         dto.setCreatedByUserId(root.getCreatedByUserId());
-        dto.setCreatedByUserName(root.getCreatedByUserName());
+        dto.setCreatedByUserName(
+                root.getCreatedByUserName()
+        );
 
-        List<ProjectCommentResponseDto> children = allComments.stream()
-                .filter(c -> Objects.equals(root.getId(), c.getParentCommentId()))
-                .map(child -> buildCommentTree(child, allComments))
-                .toList();
+        List<ProjectCommentResponseDto> children =
+                allComments.stream()
+                        .filter(comment ->
+                                Objects.equals(
+                                        root.getId(),
+                                        comment.getParentCommentId()
+                                )
+                        )
+                        .map(comment ->
+                                buildCommentTree(
+                                        comment,
+                                        allComments
+                                )
+                        )
+                        .toList();
 
         dto.setChildren(children);
 
         return dto;
     }
 
-    private Pageable normalizePageable(Pageable pageable) {
-        int page = pageable.getPageNumber();
-        int size = pageable.getPageSize();
+    private ProjectExpenseResponseDto mapToExpenseDto(
+            ProjectExpense expense
+    ) {
 
-        if (page > 0) {
-            page = page - 1;
-        }
+        ProjectExpenseResponseDto dto =
+                new ProjectExpenseResponseDto();
 
-        return org.springframework.data.domain.PageRequest.of(
-                page,
-                size,
-                pageable.getSort()
-        );
-    }
-
-
-
-    @Override
-    public List<ProjectExpenseResponseDto> getExpensesByProject(Long projectId, Long userId) {
-
-        // ==================== VALIDATE USER ====================
-        validateUser(userId);
-
-        // ==================== VALIDATE PROJECT ====================
-        projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project not found with id: " + projectId,
-                        "ERR_PROJECT_NOT_FOUND"));
-
-        // Fetch all expenses for this project, ordered by expense date descending
-        List<ProjectExpense> expenses = expenseRepository
-                .findByProjectIdOrderByExpenseDateDesc(projectId);
-
-        // Convert to DTO list
-        return expenses.stream()
-                .map(this::mapToExpenseDto)
-                .toList();
-    }
-
-    private ProjectExpenseResponseDto mapToExpenseDto(ProjectExpense expense) {
-        ProjectExpenseResponseDto dto = new ProjectExpenseResponseDto();
-
-        // Expense fields
         dto.setExpenseId(expense.getId());
-        dto.setActivityId(expense.getActivity() != null ? expense.getActivity().getId() : null);
-        dto.setExpenseType(expense.getExpenseType());
-        dto.setAmount(expense.getAmount());
+
+        dto.setActivityId(
+                expense.getActivity() != null
+                        ? expense.getActivity().getId()
+                        : null
+        );
+
+        dto.setRaisedDepartmentId(
+                expense.getRaisedDepartmentId()
+        );
+
+        dto.setRaisedDepartmentName(
+                expense.getRaisedDepartmentName()
+        );
+
+        dto.setExpenseCategory(
+                expense.getExpenseCategory()
+        );
+
+        dto.setRequestedAmount(
+                expense.getRequestedAmount()
+        );
+
+        dto.setApprovedAmount(
+                expense.getApprovedAmount()
+        );
+
+        dto.setPaidAmount(
+                expense.getPaidAmount()
+        );
+
+        dto.setOutstandingAmount(
+                expense.getOutstandingAmount()
+        );
+
+        dto.setCurrencyCode(
+                expense.getCurrencyCode()
+        );
+
         dto.setRemark(expense.getRemark());
         dto.setExpenseDate(expense.getExpenseDate());
-        dto.setPaymentMedium(expense.getPaymentMedium());
-        dto.setApprovalStatus(expense.getApprovalStatus());
-        dto.setApproved(expense.isApproved());
-        dto.setApprovedByUserId(expense.getApprovedByUserId());
-        dto.setApprovedByUserName(expense.getApprovedByUserName()) ;
-        dto.setCreatedByUserId(expense.getCreatedByUserId());
-        dto.setCreatedByUserName(expense.getCreatedByUserName());
+        dto.setAttachmentUrl(expense.getAttachmentUrl());
 
-        if (expense.getProject() != null) {
-            Project project = expense.getProject();
+        dto.setExternalReference(
+                expense.getExternalReference()
+        );
+
+        dto.setApprovalStatus(
+                expense.getApprovalStatus()
+        );
+
+        dto.setApprovalStage(
+                expense.getApprovalStage()
+        );
+
+        dto.setCrtApprovalStatus(
+                expense.getCrtApprovalStatus()
+        );
+
+        dto.setCrtActionByUserId(
+                expense.getCrtActionByUserId()
+        );
+
+        dto.setCrtActionByUserName(
+                expense.getCrtActionByUserName()
+        );
+
+        dto.setCrtActionDate(
+                expense.getCrtActionDate()
+        );
+
+        dto.setCrtDecisionRemark(
+                expense.getCrtDecisionRemark()
+        );
+
+        dto.setAccountsApprovalStatus(
+                expense.getAccountsApprovalStatus()
+        );
+
+        dto.setAccountsActionByUserId(
+                expense.getAccountsActionByUserId()
+        );
+
+        dto.setAccountsActionByUserName(
+                expense.getAccountsActionByUserName()
+        );
+
+        dto.setAccountsActionDate(
+                expense.getAccountsActionDate()
+        );
+
+        dto.setAccountsDecisionRemark(
+                expense.getAccountsDecisionRemark()
+        );
+
+        dto.setPaymentStatus(
+                expense.getPaymentStatus()
+        );
+
+        dto.setPaymentCompletedDate(
+                expense.getPaymentCompletedDate()
+        );
+
+        dto.setCreatedByUserId(
+                expense.getCreatedByUserId()
+        );
+
+        dto.setCreatedByUserName(
+                expense.getCreatedByUserName()
+        );
+
+        dto.setCreatedDate(expense.getCreatedDate());
+        dto.setUpdatedDate(expense.getUpdatedDate());
+
+        Project project = expense.getProject();
+
+        if (project != null) {
             dto.setProjectId(project.getId());
             dto.setProjectNo(project.getProjectNo());
             dto.setProjectName(project.getName());
-            dto.setUnbilledNumber(project.getUnbilledNumber());
-            dto.setProductName(project.getProduct().getProductName());
+            dto.setUnbilledNumber(
+                    project.getUnbilledNumber()
+            );
+
+            if (project.getProduct() != null) {
+                dto.setProductName(
+                        project.getProduct().getProductName()
+                );
+            }
         }
 
         return dto;
     }
 
-    @Override
-    public List<ProjectExpenseResponseDto> getExpenseList(Long userId, ApprovalStatus approvalStatus) {
+    // =========================================================
+    // GENERAL HELPERS
+    // =========================================================
 
-        // Validate user exists and is active
-        validateUser(userId);
+    private BigDecimal normalizePositiveAmount(
+            BigDecimal amount,
+            String message,
+            String errorCode
+    ) {
 
-        List<ProjectExpense> expenses;
+        if (amount == null ||
+                amount.compareTo(BigDecimal.ZERO) <= 0) {
 
-        if (approvalStatus == null) {
-            expenses = expenseRepository.findAllByOrderByExpenseDateDesc();
-        } else {
-            expenses = expenseRepository.findByApprovalStatusOrderByExpenseDateDesc(approvalStatus);
+            throw new ValidationException(
+                    message,
+                    errorCode
+            );
         }
 
-        // Convert entity list to DTO list
-        return expenses.stream()
-                .map(this::mapToExpenseDto)
-                .toList();
+        return amount.setScale(
+                2,
+                RoundingMode.HALF_UP
+        );
     }
 
+    private String requireText(
+            String value,
+            String message,
+            String errorCode
+    ) {
 
+        String normalized =
+                normalizeOptionalText(value);
 
+        if (normalized == null) {
+            throw new ValidationException(
+                    message,
+                    errorCode
+            );
+        }
 
+        return normalized;
+    }
 
+    private String normalizeOptionalText(String value) {
 
+        if (value == null) {
+            return null;
+        }
+
+        String normalized = value.trim();
+
+        return normalized.isEmpty()
+                ? null
+                : normalized;
+    }
+
+    private String normalizeCurrencyCode(String value) {
+
+        String currencyCode =
+                value == null || value.trim().isEmpty()
+                        ? "INR"
+                        : value.trim().toUpperCase(Locale.ROOT);
+
+        if (!currencyCode.matches("^[A-Z]{3}$")) {
+            throw new ValidationException(
+                    "Currency code must contain exactly three letters",
+                    "ERR_INVALID_CURRENCY_CODE"
+            );
+        }
+
+        return currencyCode;
+    }
+
+    private Pageable normalizePageable(Pageable pageable) {
+
+        if (pageable == null) {
+            return PageRequest.of(0, 20);
+        }
+
+        int page = Math.max(pageable.getPageNumber(), 0);
+        int size = Math.min(
+                Math.max(pageable.getPageSize(), 1),
+                100
+        );
+
+        return PageRequest.of(
+                page,
+                size,
+                pageable.getSort()
+        );
+    }
 }
