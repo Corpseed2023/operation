@@ -236,4 +236,37 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             """)
     List<MilestoneOverviewProjection> getMilestoneOverview();
 
+    @Query("""
+            SELECT
+                d.id AS departmentId,
+                d.name AS departmentName,
+
+                COUNT(pma.id) AS assignedCount,
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN pma.status.id = 3 THEN 1
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS completedCount
+
+            FROM ProjectMilestoneAssignment pma
+            JOIN pma.assignedUser u
+            JOIN u.departments d
+            JOIN pma.project p
+
+            WHERE pma.isDeleted = false
+              AND p.isDeleted = false
+              AND pma.assignedUser IS NOT NULL
+
+            GROUP BY
+                d.id,
+                d.name
+
+            ORDER BY d.name
+            """)
+    List<TeamWorkloadProjection> getTeamWorkload();
 }

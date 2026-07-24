@@ -114,4 +114,14 @@ public class ProjectDashboardController {
                 projectDashboardService.getMilestoneOverview(userId)
         );
     }
+
+    @GetMapping("/team-workload")
+    public ResponseEntity<List<TeamWorkloadResponseDto>> getTeamWorkload(
+            @RequestParam Long userId
+    ) {
+
+        return ResponseEntity.ok(
+                projectDashboardService.getTeamWorkload(userId)
+        );
+    }
 }

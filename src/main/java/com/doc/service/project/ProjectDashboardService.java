@@ -23,4 +23,5 @@ public interface ProjectDashboardService {
     ProjectCompletionResponseDto getProjectCompletionSummary(Long userId);
     List<ProjectStatusCountResponseDto> getProjectStatusWiseSummary(Long userId);
     List<MilestoneOverviewResponseDto> getMilestoneOverview(Long userId);
+    List<TeamWorkloadResponseDto> getTeamWorkload(Long userId);
 }

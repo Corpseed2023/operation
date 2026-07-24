@@ -390,6 +390,68 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 })
                 .toList();
     }
+
+    @Override
+    public List<TeamWorkloadResponseDto> getTeamWorkload(Long userId) {
+
+        validateDepartmentAccess(userId);
+
+        List<TeamWorkloadProjection> projections =
+                projectMilestoneAssignmentRepository.getTeamWorkload();
+
+        return projections.stream()
+                .map(projection -> {
+
+                    long assignedCount =
+                            projection.getAssignedCount() == null
+                                    ? 0L
+                                    : projection.getAssignedCount();
+
+                    long completedCount =
+                            projection.getCompletedCount() == null
+                                    ? 0L
+                                    : projection.getCompletedCount();
+
+                    BigDecimal completionPercentage =
+                            calculateTeamCompletionPercentage(
+                                    completedCount,
+                                    assignedCount
+                            );
+
+                    return TeamWorkloadResponseDto.builder()
+                            .departmentId(projection.getDepartmentId())
+                            .departmentName(
+                                    projection.getDepartmentName() + " Team"
+                            )
+                            .assignedCount(assignedCount)
+                            .completedCount(completedCount)
+                            .completionPercentage(completionPercentage)
+                            .build();
+                })
+                .toList();
+    }
+
+    private BigDecimal calculateTeamCompletionPercentage(
+            long completedCount,
+            long assignedCount
+    ) {
+
+        if (assignedCount <= 0L) {
+            return BigDecimal.ZERO.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
+        }
+
+        return BigDecimal.valueOf(completedCount)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(
+                        BigDecimal.valueOf(assignedCount),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+    }
+
     private BigDecimal calculateMilestonePercentage(
             long completedProjects,
             long totalProjects
