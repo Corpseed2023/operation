@@ -10,7 +10,7 @@ import com.doc.entity.vendor.VendorStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.UserRepository;
-import com.doc.repository.vendor.VendorRepository;
+import com.doc.repository.vendor.*;
 import com.doc.service.vendor.VendorMailService;
 import com.doc.service.vendor.VendorService;
 import lombok.RequiredArgsConstructor;
@@ -24,14 +24,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.doc.repository.vendor.RFQVendorRepository;
-import com.doc.repository.vendor.VendorQuotationRepository;
-import com.doc.repository.vendor.VendorFinalizationRepository;
-import com.doc.repository.vendor.VendorOnboardingRepository;
 @Service
 public class VendorServiceImpl implements VendorService {
 
@@ -45,6 +43,7 @@ public class VendorServiceImpl implements VendorService {
     private final VendorQuotationRepository vendorQuotationRepository;
     private final VendorFinalizationRepository vendorFinalizationRepository;
     private final VendorOnboardingRepository vendorOnboardingRepository;
+    private final VendorRestrictionRequestRepository vendorRestrictionRequestRepository;
 
     public VendorServiceImpl(
             VendorRepository vendorRepository,
@@ -53,7 +52,8 @@ public class VendorServiceImpl implements VendorService {
             RFQVendorRepository rfqVendorRepository,
             VendorQuotationRepository vendorQuotationRepository,
             VendorFinalizationRepository vendorFinalizationRepository,
-            VendorOnboardingRepository vendorOnboardingRepository
+            VendorOnboardingRepository vendorOnboardingRepository,
+            VendorRestrictionRequestRepository vendorRestrictionRequestRepository
     ) {
         this.vendorRepository = vendorRepository;
         this.vendorMailService = vendorMailService;
@@ -62,6 +62,8 @@ public class VendorServiceImpl implements VendorService {
         this.vendorQuotationRepository = vendorQuotationRepository;
         this.vendorFinalizationRepository = vendorFinalizationRepository;
         this.vendorOnboardingRepository = vendorOnboardingRepository;
+        this.vendorRestrictionRequestRepository = vendorRestrictionRequestRepository;
+
     }
 
     @Override
@@ -145,6 +147,811 @@ public class VendorServiceImpl implements VendorService {
         );
 
         return mapEntityToDto(vendor);
+    }
+
+    @Override
+    @Transactional
+    public VendorRestrictionResponseDto restrictVendor(
+            Long vendorId,
+            Long userId,
+            VendorRestrictionRequestDto dto) {
+
+        if (vendorId == null) {
+            throw new ValidationException(
+                    "Vendor ID is required",
+                    "ERR_VENDOR_ID_REQUIRED"
+            );
+        }
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        if (dto == null) {
+            throw new ValidationException(
+                    "Vendor restriction request is required",
+                    "ERR_VENDOR_RESTRICTION_REQUEST_REQUIRED"
+            );
+        }
+
+        /*
+         * Because vendorId is present in both path variable and request body,
+         * validate that both values are the same.
+         */
+        if (dto.getVendorId() != null
+                && !vendorId.equals(dto.getVendorId())) {
+
+            throw new ValidationException(
+                    "Vendor ID in request body does not match path vendor ID",
+                    "ERR_VENDOR_ID_MISMATCH"
+            );
+        }
+
+        /*
+         * Validate requesting user.
+         */
+        User requestedByUser = userRepository
+                .findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_ACTIVE_USER_NOT_FOUND"
+                ));
+
+        /*
+         * Fetch vendor.
+         */
+        Vendor vendor = vendorRepository
+                .findById(vendorId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor not found with ID: " + vendorId,
+                        "ERR_VENDOR_NOT_FOUND"
+                ));
+
+        /*
+         * Deleted vendors cannot be restricted.
+         */
+        if ((vendor.isDeleted())) {
+            throw new ValidationException(
+                    "Deleted vendor cannot be suspended or blacklisted",
+                    "ERR_VENDOR_DELETED"
+            );
+        }
+
+        /*
+         * Only ACTIVE vendors can enter this workflow.
+         */
+        if (vendor.getStatus() != VendorStatus.ACTIVE) {
+            throw new ValidationException(
+                    "Only an ACTIVE vendor can be suspended or blacklisted. "
+                            + "Current status: " + vendor.getStatus(),
+                    "ERR_VENDOR_NOT_ACTIVE"
+            );
+        }
+
+        if (dto.getRestrictionType() == null) {
+            throw new ValidationException(
+                    "Restriction type is required",
+                    "ERR_RESTRICTION_TYPE_REQUIRED"
+            );
+        }
+
+        if (dto.getReason() == null
+                || dto.getReason().trim().isEmpty()) {
+
+            throw new ValidationException(
+                    "Restriction reason is required",
+                    "ERR_RESTRICTION_REASON_REQUIRED"
+            );
+        }
+
+        /*
+         * Suspension requires start and end dates.
+         */
+        if (dto.getRestrictionType()
+                == VendorRestrictionType.SUSPENSION) {
+
+            if (dto.getRestrictionStartDate() == null) {
+                throw new ValidationException(
+                        "Restriction start date is required for suspension",
+                        "ERR_RESTRICTION_START_DATE_REQUIRED"
+                );
+            }
+
+            if (dto.getRestrictionEndDate() == null) {
+                throw new ValidationException(
+                        "Restriction end date is required for suspension",
+                        "ERR_RESTRICTION_END_DATE_REQUIRED"
+                );
+            }
+
+            if (dto.getRestrictionStartDate()
+                    .isBefore(LocalDate.now())) {
+
+                throw new ValidationException(
+                        "Restriction start date cannot be before today",
+                        "ERR_RESTRICTION_START_DATE_IN_PAST"
+                );
+            }
+
+            if (dto.getRestrictionEndDate()
+                    .isBefore(dto.getRestrictionStartDate())) {
+
+                throw new ValidationException(
+                        "Restriction end date cannot be before start date",
+                        "ERR_INVALID_RESTRICTION_DATE_RANGE"
+                );
+            }
+        }
+
+        /*
+         * Blacklist does not require start or end dates.
+         */
+        if (dto.getRestrictionType()
+                == VendorRestrictionType.BLACKLIST) {
+
+            if (dto.getRestrictionStartDate() != null
+                    || dto.getRestrictionEndDate() != null) {
+
+                throw new ValidationException(
+                        "Restriction dates are not allowed for blacklist requests",
+                        "ERR_BLACKLIST_DATES_NOT_ALLOWED"
+                );
+            }
+        }
+
+        /*
+         * Prevent multiple pending requests for the same vendor.
+         */
+        boolean pendingRequestExists =
+                vendorRestrictionRequestRepository
+                        .existsByVendor_IdAndStatusIn(
+                                vendorId,
+                                List.of(
+                                        VendorRestrictionRequestStatus
+                                                .PENDING_ACCOUNTS,
+
+                                        VendorRestrictionRequestStatus
+                                                .PENDING_ADMIN
+                                )
+                        );
+
+        if (pendingRequestExists) {
+            throw new ValidationException(
+                    "A pending restriction request already exists for this vendor",
+                    "ERR_PENDING_VENDOR_RESTRICTION_EXISTS"
+            );
+        }
+
+        /*
+         * Create request only.
+         *
+         * Vendor status must not be changed here.
+         * Vendor will be updated only after final Admin approval.
+         */
+        VendorRestrictionRequest restrictionRequest =
+                VendorRestrictionRequest.builder()
+                        .vendor(vendor)
+                        .restrictionType(dto.getRestrictionType())
+                        .status(
+                                VendorRestrictionRequestStatus
+                                        .PENDING_ACCOUNTS
+                        )
+                        .reason(dto.getReason().trim())
+                        .restrictionStartDate(
+                                dto.getRestrictionStartDate()
+                        )
+                        .restrictionEndDate(
+                                dto.getRestrictionEndDate()
+                        )
+                        .attachmentUrl(
+                                normalizeNullableText(
+                                        dto.getAttachmentUrl()
+                                )
+                        )
+                        .requestedBy(userId)
+                        .requestedAt(LocalDateTime.now())
+                        .build();
+
+        VendorRestrictionRequest savedRequest =
+                vendorRestrictionRequestRepository.save(
+                        restrictionRequest
+                );
+
+        return VendorRestrictionResponseDto.builder()
+                .id(savedRequest.getId())
+                .vendorId(vendor.getId())
+                .vendorName(vendor.getName())
+                .restrictionType(savedRequest.getRestrictionType())
+                .status(savedRequest.getStatus())
+                .reason(savedRequest.getReason())
+                .restrictionStartDate(
+                        savedRequest.getRestrictionStartDate()
+                )
+                .restrictionEndDate(
+                        savedRequest.getRestrictionEndDate()
+                )
+                .attachmentUrl(savedRequest.getAttachmentUrl())
+                .requestedBy(savedRequest.getRequestedBy())
+                .requestedByName(requestedByUser.getFullName())
+                .requestedAt(savedRequest.getRequestedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public VendorRestrictionResponseDto reviewRestrictionByAccounts(
+            Long requestId,
+            Long userId,
+            VendorRestrictionAccountsReviewDto dto) {
+
+        if (requestId == null) {
+            throw new ValidationException(
+                    "Restriction request ID is required",
+                    "ERR_RESTRICTION_REQUEST_ID_REQUIRED"
+            );
+        }
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "Accounts user ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        if (dto == null) {
+            throw new ValidationException(
+                    "Accounts review request is required",
+                    "ERR_ACCOUNTS_REVIEW_REQUEST_REQUIRED"
+            );
+        }
+
+        if (dto.getApproved() == null) {
+            throw new ValidationException(
+                    "Approval status is required",
+                    "ERR_APPROVAL_STATUS_REQUIRED"
+            );
+        }
+
+        /*
+         * Validate the Accounts user.
+         */
+        User accountsUser = userRepository
+                .findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active Accounts user not found with ID: " + userId,
+                        "ERR_ACTIVE_USER_NOT_FOUND"
+                ));
+
+        /*
+         * Add Accounts department or role validation here.
+         *
+         * Example:
+         *
+         * boolean accountsUserValid =
+         *         userRepository.existsActiveUserInDepartment(
+         *                 userId,
+         *                 ACCOUNTS_DEPARTMENT_ID
+         *         );
+         *
+         * if (!accountsUserValid) {
+         *     throw new ValidationException(
+         *             "User does not belong to the Accounts department",
+         *             "ERR_USER_NOT_IN_ACCOUNTS"
+         *     );
+         * }
+         */
+
+        /*
+         * Lock and fetch the request.
+         */
+        VendorRestrictionRequest restrictionRequest =
+                vendorRestrictionRequestRepository
+                        .findByIdForUpdate(requestId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Vendor restriction request not found with ID: "
+                                        + requestId,
+                                "ERR_VENDOR_RESTRICTION_REQUEST_NOT_FOUND"
+                        ));
+
+        /*
+         * Accounts can review only PENDING_ACCOUNTS requests.
+         */
+        if (restrictionRequest.getStatus()
+                != VendorRestrictionRequestStatus.PENDING_ACCOUNTS) {
+
+            throw new ValidationException(
+                    "Restriction request is not pending for Accounts review. "
+                            + "Current status: "
+                            + restrictionRequest.getStatus(),
+                    "ERR_REQUEST_NOT_PENDING_ACCOUNTS"
+            );
+        }
+
+        /*
+         * Rejection remarks are mandatory.
+         */
+        if (Boolean.FALSE.equals(dto.getApproved())
+                && (dto.getRemarks() == null
+                || dto.getRemarks().trim().isEmpty())) {
+
+            throw new ValidationException(
+                    "Accounts remarks are required when rejecting the request",
+                    "ERR_ACCOUNTS_REJECTION_REMARKS_REQUIRED"
+            );
+        }
+
+        restrictionRequest.setAccountsReviewedBy(userId);
+        restrictionRequest.setAccountsReviewedAt(LocalDateTime.now());
+        restrictionRequest.setAccountsRemarks(
+                normalizeNullableText(dto.getRemarks())
+        );
+
+        if (Boolean.TRUE.equals(dto.getApproved())) {
+
+            /*
+             * Send approved request to Admin.
+             */
+            restrictionRequest.setStatus(
+                    VendorRestrictionRequestStatus.PENDING_ADMIN
+            );
+
+        } else {
+
+            /*
+             * End workflow after Accounts rejection.
+             */
+            restrictionRequest.setStatus(
+                    VendorRestrictionRequestStatus.ACCOUNTS_REJECTED
+            );
+        }
+
+        VendorRestrictionRequest savedRequest =
+                vendorRestrictionRequestRepository.save(
+                        restrictionRequest
+                );
+
+        String requestedByName = userRepository
+                .findById(savedRequest.getRequestedBy())
+                .map(User::getFullName)
+                .orElse(null);
+
+        Vendor vendor = savedRequest.getVendor();
+
+        return VendorRestrictionResponseDto.builder()
+                .id(savedRequest.getId())
+                .vendorId(vendor.getId())
+                .vendorName(vendor.getName())
+                .restrictionType(savedRequest.getRestrictionType())
+                .status(savedRequest.getStatus())
+                .reason(savedRequest.getReason())
+                .restrictionStartDate(
+                        savedRequest.getRestrictionStartDate()
+                )
+                .restrictionEndDate(
+                        savedRequest.getRestrictionEndDate()
+                )
+                .attachmentUrl(savedRequest.getAttachmentUrl())
+                .requestedBy(savedRequest.getRequestedBy())
+                .requestedByName(requestedByName)
+                .requestedAt(savedRequest.getRequestedAt())
+                .accountsReviewedBy(
+                        savedRequest.getAccountsReviewedBy()
+                )
+                .accountsReviewedByName(
+                        accountsUser.getFullName()
+                )
+                .accountsReviewedAt(
+                        savedRequest.getAccountsReviewedAt()
+                )
+                .accountsRemarks(
+                        savedRequest.getAccountsRemarks()
+                )
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public VendorRestrictionResponseDto reviewRestrictionByAdmin(
+            Long requestId,
+            Long userId,
+            VendorRestrictionAdminReviewDto dto) {
+
+        if (requestId == null) {
+            throw new ValidationException(
+                    "Restriction request ID is required",
+                    "ERR_RESTRICTION_REQUEST_ID_REQUIRED"
+            );
+        }
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "Admin user ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        if (dto == null) {
+            throw new ValidationException(
+                    "Admin review request is required",
+                    "ERR_ADMIN_REVIEW_REQUEST_REQUIRED"
+            );
+        }
+
+        if (dto.getApproved() == null) {
+            throw new ValidationException(
+                    "Approval status is required",
+                    "ERR_APPROVAL_STATUS_REQUIRED"
+            );
+        }
+
+        /*
+         * Validate active Admin user.
+         */
+        User adminUser = userRepository
+                .findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active Admin user not found with ID: " + userId,
+                        "ERR_ACTIVE_USER_NOT_FOUND"
+                ));
+
+        /*
+         * Add Admin department or role validation here.
+         *
+         * Example:
+         *
+         * boolean validAdmin =
+         *         userRepository.existsActiveUserInDepartment(
+         *                 userId,
+         *                 ADMIN_DEPARTMENT_ID
+         *         );
+         *
+         * if (!validAdmin) {
+         *     throw new ValidationException(
+         *             "User does not belong to the Admin department",
+         *             "ERR_USER_NOT_IN_ADMIN"
+         *     );
+         * }
+         */
+
+        /*
+         * Lock and fetch the request.
+         */
+        VendorRestrictionRequest restrictionRequest =
+                vendorRestrictionRequestRepository
+                        .findByIdForUpdate(requestId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Vendor restriction request not found with ID: "
+                                        + requestId,
+                                "ERR_VENDOR_RESTRICTION_REQUEST_NOT_FOUND"
+                        ));
+
+        /*
+         * Admin can review only after Accounts approval.
+         */
+        if (restrictionRequest.getStatus()
+                != VendorRestrictionRequestStatus.PENDING_ADMIN) {
+
+            throw new ValidationException(
+                    "Restriction request is not pending for Admin review. "
+                            + "Current status: "
+                            + restrictionRequest.getStatus(),
+                    "ERR_REQUEST_NOT_PENDING_ADMIN"
+            );
+        }
+
+        /*
+         * Remarks are mandatory for rejection.
+         */
+        if (Boolean.FALSE.equals(dto.getApproved())
+                && (dto.getRemarks() == null
+                || dto.getRemarks().trim().isEmpty())) {
+
+            throw new ValidationException(
+                    "Admin remarks are required when rejecting the request",
+                    "ERR_ADMIN_REJECTION_REMARKS_REQUIRED"
+            );
+        }
+
+        LocalDateTime reviewTime = LocalDateTime.now();
+
+        restrictionRequest.setAdminReviewedBy(userId);
+        restrictionRequest.setAdminReviewedAt(reviewTime);
+        restrictionRequest.setAdminRemarks(
+                normalizeNullableText(dto.getRemarks())
+        );
+
+        Vendor vendor = restrictionRequest.getVendor();
+
+        if (Boolean.TRUE.equals(dto.getApproved())) {
+
+            /*
+             * Final approval can restrict only an ACTIVE vendor.
+             */
+            if (vendor.getStatus() != VendorStatus.ACTIVE) {
+                throw new ValidationException(
+                        "Vendor is no longer ACTIVE. Current status: "
+                                + vendor.getStatus(),
+                        "ERR_VENDOR_STATUS_CHANGED"
+                );
+            }
+
+            /*
+             * Mark the request as finally approved.
+             */
+            restrictionRequest.setStatus(
+                    VendorRestrictionRequestStatus.FINAL_APPROVED
+            );
+
+            /*
+             * Apply final restriction to Vendor.
+             */
+            if (restrictionRequest.getRestrictionType()
+                    == VendorRestrictionType.SUSPENSION) {
+
+                vendor.setStatus(VendorStatus.SUSPENDED);
+
+                vendor.setRestrictionStartDate(
+                        restrictionRequest.getRestrictionStartDate()
+                );
+
+                vendor.setRestrictionEndDate(
+                        restrictionRequest.getRestrictionEndDate()
+                );
+
+            } else if (restrictionRequest.getRestrictionType()
+                    == VendorRestrictionType.BLACKLIST) {
+
+                vendor.setStatus(VendorStatus.BLACKLISTED);
+
+                /*
+                 * Blacklist has no suspension date range.
+                 */
+                vendor.setRestrictionStartDate(null);
+                vendor.setRestrictionEndDate(null);
+            }
+
+            vendor.setRestrictionReason(
+                    restrictionRequest.getReason()
+            );
+
+            vendor.setRestrictedBy(userId);
+            vendor.setRestrictedAt(reviewTime);
+
+            /*
+             * Existing Vendor audit fields.
+             */
+            vendor.setUpdatedBy(userId);
+            vendor.setUpdatedDate(new Date());
+
+            vendorRepository.save(vendor);
+
+        } else {
+
+            /*
+             * Admin rejected the request.
+             * Vendor remains ACTIVE.
+             */
+            restrictionRequest.setStatus(
+                    VendorRestrictionRequestStatus.ADMIN_REJECTED
+            );
+        }
+
+        VendorRestrictionRequest savedRequest =
+                vendorRestrictionRequestRepository.save(
+                        restrictionRequest
+                );
+
+        String requestedByName =
+                findUserName(savedRequest.getRequestedBy());
+
+        String accountsReviewedByName =
+                findUserName(savedRequest.getAccountsReviewedBy());
+
+        return VendorRestrictionResponseDto.builder()
+                .id(savedRequest.getId())
+                .vendorId(vendor.getId())
+                .vendorName(vendor.getName())
+                .restrictionType(
+                        savedRequest.getRestrictionType()
+                )
+                .status(savedRequest.getStatus())
+                .reason(savedRequest.getReason())
+                .restrictionStartDate(
+                        savedRequest.getRestrictionStartDate()
+                )
+                .restrictionEndDate(
+                        savedRequest.getRestrictionEndDate()
+                )
+                .attachmentUrl(
+                        savedRequest.getAttachmentUrl()
+                )
+                .requestedBy(
+                        savedRequest.getRequestedBy()
+                )
+                .requestedByName(requestedByName)
+                .requestedAt(
+                        savedRequest.getRequestedAt()
+                )
+                .accountsReviewedBy(
+                        savedRequest.getAccountsReviewedBy()
+                )
+                .accountsReviewedByName(
+                        accountsReviewedByName
+                )
+                .accountsReviewedAt(
+                        savedRequest.getAccountsReviewedAt()
+                )
+                .accountsRemarks(
+                        savedRequest.getAccountsRemarks()
+                )
+                .adminReviewedBy(
+                        savedRequest.getAdminReviewedBy()
+                )
+                .adminReviewedByName(
+                        adminUser.getFullName()
+                )
+                .adminReviewedAt(
+                        savedRequest.getAdminReviewedAt()
+                )
+                .adminRemarks(
+                        savedRequest.getAdminRemarks()
+                )
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<VendorRestrictionResponseDto> getAccountsRestrictionRequests(
+            Long userId,
+            int page,
+            int size,
+            VendorRestrictionRequestStatus status) {
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_ACTIVE_USER_NOT_FOUND"
+                ));
+
+        /*
+         * Add your Accounts department validation here.
+         */
+
+        VendorRestrictionRequestStatus effectiveStatus =
+                status != null
+                        ? status
+                        : VendorRestrictionRequestStatus.PENDING_ACCOUNTS;
+
+        List<VendorRestrictionRequestStatus> accountsAllowedStatuses =
+                List.of(
+                        VendorRestrictionRequestStatus.PENDING_ACCOUNTS,
+                        VendorRestrictionRequestStatus.ACCOUNTS_REJECTED,
+                        VendorRestrictionRequestStatus.PENDING_ADMIN,
+                        VendorRestrictionRequestStatus.ADMIN_REJECTED,
+                        VendorRestrictionRequestStatus.FINAL_APPROVED
+                );
+
+        if (!accountsAllowedStatuses.contains(effectiveStatus)) {
+            throw new ValidationException(
+                    "Invalid restriction request status for Accounts: "
+                            + effectiveStatus,
+                    "ERR_INVALID_ACCOUNTS_RESTRICTION_STATUS"
+            );
+        }
+
+        Pageable pageable =
+                createRestrictionPageable(page, size);
+
+        Page<VendorRestrictionRequest> requests =
+                vendorRestrictionRequestRepository.findRequestsByStatus(
+                        effectiveStatus,
+                        pageable
+                );
+
+        return requests.map(this::mapRestrictionToResponse);
+    }
+
+    private Pageable createRestrictionPageable(int page, int size) {
+
+        int pageIndex = page <= 0 ? 0 : page - 1;
+        int pageSize = size <= 0 ? 10 : Math.min(size, 100);
+
+        return PageRequest.of(
+                pageIndex,
+                pageSize,
+                Sort.by(
+                        Sort.Direction.DESC,
+                        "requestedAt"
+                )
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<VendorRestrictionResponseDto> getAdminRestrictionRequests(
+            Long userId,
+            int page,
+            int size,
+            VendorRestrictionRequestStatus status) {
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_ACTIVE_USER_NOT_FOUND"
+                ));
+
+        /*
+         * Add your Admin department validation here.
+         */
+
+        VendorRestrictionRequestStatus effectiveStatus =
+                status != null
+                        ? status
+                        : VendorRestrictionRequestStatus.PENDING_ADMIN;
+
+        List<VendorRestrictionRequestStatus> adminAllowedStatuses =
+                List.of(
+                        VendorRestrictionRequestStatus.PENDING_ADMIN,
+                        VendorRestrictionRequestStatus.ADMIN_REJECTED,
+                        VendorRestrictionRequestStatus.FINAL_APPROVED
+                );
+
+        if (!adminAllowedStatuses.contains(effectiveStatus)) {
+            throw new ValidationException(
+                    "Invalid restriction request status for Admin: "
+                            + effectiveStatus,
+                    "ERR_INVALID_ADMIN_RESTRICTION_STATUS"
+            );
+        }
+
+        Pageable pageable =
+                createRestrictionPageable(page, size);
+
+        Page<VendorRestrictionRequest> requests =
+                vendorRestrictionRequestRepository.findRequestsByStatus(
+                        effectiveStatus,
+                        pageable
+                );
+
+        return requests.map(this::mapRestrictionToResponse);
+    }
+
+    private String findUserName(Long userId) {
+
+        if (userId == null) {
+            return null;
+        }
+
+        return userRepository
+                .findById(userId)
+                .map(User::getFullName)
+                .orElse(null);
+    }
+
+    private String normalizeNullableText(String value) {
+
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        return value.trim();
     }
 
 
@@ -472,5 +1279,95 @@ public class VendorServiceImpl implements VendorService {
         }
 
         return dto;
+    }
+    private VendorRestrictionResponseDto mapRestrictionToResponse(
+            VendorRestrictionRequest request) {
+
+        Vendor vendor = request.getVendor();
+
+        return VendorRestrictionResponseDto.builder()
+                .id(request.getId())
+
+                .vendorId(
+                        vendor != null
+                                ? vendor.getId()
+                                : null
+                )
+
+                .vendorName(
+                        vendor != null
+                                ? vendor.getName()
+                                : null
+                )
+
+                .restrictionType(
+                        request.getRestrictionType()
+                )
+
+                .status(
+                        request.getStatus()
+                )
+
+                .reason(
+                        request.getReason()
+                )
+
+                .restrictionStartDate(
+                        request.getRestrictionStartDate()
+                )
+
+                .restrictionEndDate(
+                        request.getRestrictionEndDate()
+                )
+
+                .attachmentUrl(
+                        request.getAttachmentUrl()
+                )
+
+                .requestedBy(
+                        request.getRequestedBy()
+                )
+
+                .requestedByName(
+                        findUserName(request.getRequestedBy())
+                )
+
+                .requestedAt(
+                        request.getRequestedAt()
+                )
+
+                .accountsReviewedBy(
+                        request.getAccountsReviewedBy()
+                )
+
+                .accountsReviewedByName(
+                        findUserName(request.getAccountsReviewedBy())
+                )
+
+                .accountsReviewedAt(
+                        request.getAccountsReviewedAt()
+                )
+
+                .accountsRemarks(
+                        request.getAccountsRemarks()
+                )
+
+                .adminReviewedBy(
+                        request.getAdminReviewedBy()
+                )
+
+                .adminReviewedByName(
+                        findUserName(request.getAdminReviewedBy())
+                )
+
+                .adminReviewedAt(
+                        request.getAdminReviewedAt()
+                )
+
+                .adminRemarks(
+                        request.getAdminRemarks()
+                )
+
+                .build();
     }
 }
