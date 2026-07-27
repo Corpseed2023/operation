@@ -130,7 +130,7 @@ public class Project {
     private boolean isCancelled = false;
     private Long cancellerId;
 
-    ;@Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false, length = 20)
     @Comment("Project priority: STANDARD, HIGH, CRITICAL")
     private ProjectPriority priority = ProjectPriority.STANDARD;

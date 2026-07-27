@@ -19,7 +19,7 @@ public class ProjectMilestoneTrackerResponseDto {
 
     private String projectNumber;
 
-    private BigDecimal projectValue;
+    private Double projectValue;
 
     private Long companyId;
 

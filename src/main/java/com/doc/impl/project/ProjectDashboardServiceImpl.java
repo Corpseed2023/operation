@@ -730,9 +730,9 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
             int size
     ) {
 
-        validateRequest(userId, departmentId, page, size);
+        //validateRequest(userId, departmentId, page, size);
 
-        validateDepartmentAccess(userId, departmentId);
+        //validateDepartmentAccess(userId, departmentId);
 
         Pageable pageable = PageRequest.of(
                 page,

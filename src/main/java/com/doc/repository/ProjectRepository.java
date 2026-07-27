@@ -576,92 +576,106 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     @Query(
             value = """
-                    SELECT
-                        p.id AS projectId,
-                        p.project_no AS projectNumber,
-                        p.project_value AS projectValue,
+                SELECT
+                    p.id AS projectId,
+                    p.project_no AS projectNumber,
+                    ppd.total_amount AS projectValue,
 
-                        c.id AS companyId,
-                        c.name AS companyName,
+                    c.id AS companyId,
+                    c.name AS companyName,
 
-                        pr.id AS productId,
-                        pr.name AS serviceName,
+                    pr.id AS productId,
+                    pr.product_name AS serviceName,
 
-                        ps.id AS stageId,
-                        ps.name AS stage,
+                    ps.id AS stageId,
+                    ps.name AS stage,
 
-                        p.priority AS priority,
+                    p.priority AS priority,
 
-                        (
-                            SELECT MIN(pma2.date)
-                            FROM project_milestone_assignment pma2
-                            WHERE pma2.project_id = p.id
-                              AND pma2.is_deleted = 0
-                              AND pma2.is_visible = 1
-                              AND pma2.status_id <> 3
-                              AND pma2.date IS NOT NULL
-                        ) AS dueDate
+                    (
+                        SELECT MIN(pma2.date)
+                        FROM project_milestone_assignment pma2
+                        WHERE pma2.project_id = p.id
+                          AND pma2.is_deleted = 0
+                          AND pma2.is_visible = 1
+                          AND pma2.status_id <> 3
+                          AND pma2.date IS NOT NULL
+                    ) AS dueDate
 
-                    FROM project p
+                FROM project p
 
-                    INNER JOIN company c
-                            ON c.id = p.company_id
+                INNER JOIN company c
+                        ON c.id = p.company_id
 
-                    INNER JOIN product pr
-                            ON pr.id = p.product_id
+                INNER JOIN products pr
+                        ON pr.id = p.product_id
 
-                    LEFT JOIN project_status ps
-                           ON ps.id = p.status_id
+                INNER JOIN project_statuses ps
+                        ON ps.id = p.status_id
 
-                    WHERE p.is_deleted = 0
+                LEFT JOIN project_payment_detail ppd
+                       ON ppd.project_id = p.id
+                      AND ppd.is_deleted = 0
 
-                      AND (
-                            :stageId IS NULL
-                            OR p.status_id = :stageId
-                      )
+                WHERE p.is_deleted = 0
+                  AND p.is_active = 1
 
-                      AND (
-                            :search IS NULL
-                            OR :search = ''
-                            OR LOWER(p.project_no)
-                               LIKE LOWER(CONCAT('%', :search, '%'))
-                            OR LOWER(c.name)
-                               LIKE LOWER(CONCAT('%', :search, '%'))
-                            OR LOWER(pr.name)
-                               LIKE LOWER(CONCAT('%', :search, '%'))
-                      )
+                  AND (
+                        :stageId IS NULL
+                        OR p.status_id = :stageId
+                  )
 
-                    ORDER BY p.id DESC
-                    """,
+                  AND (
+                        :search IS NULL
+                        OR TRIM(:search) = ''
+                        OR LOWER(p.project_no)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                        OR LOWER(p.name)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                        OR LOWER(c.name)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                        OR LOWER(pr.product_name)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                  )
+
+                ORDER BY p.id DESC
+                """,
+
             countQuery = """
-                    SELECT COUNT(DISTINCT p.id)
+                SELECT COUNT(DISTINCT p.id)
 
-                    FROM project p
+                FROM project p
 
-                    INNER JOIN company c
-                            ON c.id = p.company_id
+                INNER JOIN company c
+                        ON c.id = p.company_id
 
-                    INNER JOIN product pr
-                            ON pr.id = p.product_id
+                INNER JOIN products pr
+                        ON pr.id = p.product_id
 
-                    WHERE p.is_deleted = 0
+                INNER JOIN project_statuses ps
+                        ON ps.id = p.status_id
 
-                      AND (
-                            :stageId IS NULL
-                            OR p.status_id = :stageId
-                      )
+                WHERE p.is_deleted = 0
+                  AND p.is_active = 1
 
-                      AND (
-                            :search IS NULL
-                            OR :search = ''
-                            OR LOWER(p.project_no)
-                               LIKE LOWER(CONCAT('%', :search, '%'))
-                            OR LOWER(c.name)
-                               LIKE LOWER(CONCAT('%', :search, '%'))
-                            OR LOWER(pr.name)
-                               LIKE LOWER(CONCAT('%', :search, '%'))
-                      )
-                    """,
+                  AND (
+                        :stageId IS NULL
+                        OR p.status_id = :stageId
+                  )
+
+                  AND (
+                        :search IS NULL
+                        OR TRIM(:search) = ''
+                        OR LOWER(p.project_no)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                        OR LOWER(p.name)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                        OR LOWER(c.name)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                        OR LOWER(pr.product_name)
+                           LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                  )
+                """,
             nativeQuery = true
     )
     Page<ProjectTrackerSummaryProjection> findProjectMilestoneTrackerProjects(
@@ -669,7 +683,5 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("search") String search,
             Pageable pageable
     );
-
-
 
 }

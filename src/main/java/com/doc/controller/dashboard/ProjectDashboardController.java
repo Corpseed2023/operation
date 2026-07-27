@@ -160,7 +160,7 @@ public class ProjectDashboardController {
 
             @RequestParam Long userId,
 
-            @RequestParam Long departmentId,
+            @RequestParam (required = false) Long departmentId,
 
             @RequestParam(required = false)
             Long stageId,

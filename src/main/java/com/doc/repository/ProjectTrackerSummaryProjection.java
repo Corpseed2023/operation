@@ -9,7 +9,7 @@ public interface ProjectTrackerSummaryProjection {
 
     String getProjectNumber();
 
-    BigDecimal getProjectValue();
+    Double getProjectValue();
 
     Long getCompanyId();
 

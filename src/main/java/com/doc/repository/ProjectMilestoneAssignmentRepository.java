@@ -325,51 +325,48 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
 
     @Query(
             value = """
-                    SELECT
-                        pma.id AS assignmentId,
-                        pma.project_id AS projectId,
+                SELECT
+                    pma.id AS assignmentId,
+                    pma.project_id AS projectId,
 
-                        m.id AS milestoneId,
-                        m.name AS milestoneName,
+                    m.id AS milestoneId,
+                    m.name AS milestoneName,
 
-                        COALESCE(pmm.display_order, m.id) AS displayOrder,
+                    m.id AS displayOrder,
 
-                        ms.id AS statusId,
-                        ms.name AS statusName,
+                    ms.id AS statusId,
+                    ms.name AS statusName,
 
-                        CASE
-                            WHEN pma.status_id = 3 THEN 100
-                            WHEN pma.status_id = 2 THEN 50
-                            ELSE 0
-                        END AS progressPercentage,
+                    CASE
+                        WHEN pma.status_id = 3 THEN 100
+                        WHEN pma.status_id = 2 THEN 50
+                        ELSE 0
+                    END AS progressPercentage,
 
-                        u.id AS assignedUserId,
-                        u.full_name AS assignedUserName,
+                    u.id AS assignedUserId,
+                    u.full_name AS assignedUserName,
 
-                        pma.date AS dueDate
+                    pma.date AS dueDate
 
-                    FROM project_milestone_assignment pma
+                FROM project_milestone_assignment pma
 
-                    INNER JOIN milestones m
-                            ON m.id = pma.milestone_id
+                INNER JOIN milestones m
+                        ON m.id = pma.milestone_id
 
-                    LEFT JOIN product_milestone_map pmm
-                           ON pmm.id = pma.product_milestone_map_id
+                LEFT JOIN milestone_statuses ms
+                       ON ms.id = pma.status_id
 
-                    LEFT JOIN milestone_status ms
-                           ON ms.id = pma.status_id
+                LEFT JOIN users u
+                       ON u.id = pma.assigned_user_id
 
-                    LEFT JOIN users u
-                           ON u.id = pma.assigned_user_id
+                WHERE pma.project_id IN (:projectIds)
+                  AND pma.is_deleted = 0
+                  AND pma.is_visible = 1
 
-                    WHERE pma.project_id IN (:projectIds)
-                      AND pma.is_deleted = 0
-                      AND pma.is_visible = 1
-
-                    ORDER BY
-                        pma.project_id ASC,
-                        COALESCE(pmm.display_order, m.id) ASC
-                    """,
+                ORDER BY
+                    pma.project_id ASC,
+                    m.id ASC
+                """,
             nativeQuery = true
     )
     List<ProjectMilestoneTrackerProjection> findTrackerMilestones(
