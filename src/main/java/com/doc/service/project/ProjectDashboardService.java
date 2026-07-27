@@ -1,6 +1,7 @@
 package com.doc.service.project;
 
 import com.doc.dto.project.dashboard.*;
+import com.doc.dto.user.UserProjectPerformanceResponseDto;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDate;
@@ -37,5 +38,14 @@ public interface ProjectDashboardService {
             String search,
             int page,
             int size
+    );
+
+
+
+
+
+    UserProjectPerformanceResponseDto getUserProjectPerformance(
+            Long userId,
+            Long projectId
     );
 }

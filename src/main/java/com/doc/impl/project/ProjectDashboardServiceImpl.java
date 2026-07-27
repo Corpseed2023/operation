@@ -2,6 +2,8 @@ package com.doc.impl.project;
 
 import com.doc.constants.DepartmentConstants;
 import com.doc.dto.project.dashboard.*;
+import com.doc.dto.user.UserProjectPerformanceDetailDto;
+import com.doc.dto.user.UserProjectPerformanceResponseDto;
 import com.doc.entity.project.ProjectPriority;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
@@ -15,7 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -799,6 +803,282 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
         );
     }
 
+    @Override
+    public UserProjectPerformanceResponseDto getUserProjectPerformance(
+            Long userId,
+            Long projectId
+    ) {
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_ACTIVE_USER_NOT_FOUND"
+                ));
+
+        List<UserMilestonePerformanceProjection> records =
+                projectMilestoneAssignmentRepository
+                        .findUserProjectPerformance(userId, projectId);
+
+        Map<Long, List<UserMilestonePerformanceProjection>> projectGroups =
+                records.stream()
+                        .filter(record -> record.getProjectId() != null)
+                        .collect(Collectors.groupingBy(
+                                UserMilestonePerformanceProjection::getProjectId,
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        ));
+
+        List<UserProjectPerformanceDetailDto> projectDetails =
+                new ArrayList<>();
+
+        long totalCompletedMilestones = 0L;
+        long totalBeforeTat = 0L;
+        long totalWithinTat = 0L;
+        long totalDelayed = 0L;
+
+        /*
+         * Number of completed milestones for which performance
+         * was actually calculated.
+         */
+        long totalPerformanceCalculatedMilestones = 0L;
+
+        BigDecimal totalPerformance = BigDecimal.ZERO;
+
+        for (Map.Entry<Long, List<UserMilestonePerformanceProjection>> entry
+                : projectGroups.entrySet()) {
+
+            List<UserMilestonePerformanceProjection> projectRecords =
+                    entry.getValue();
+
+            if (projectRecords.isEmpty()) {
+                continue;
+            }
+
+            UserMilestonePerformanceProjection first =
+                    projectRecords.get(0);
+
+            long projectCompletedMilestones = 0L;
+            long beforeTatCount = 0L;
+            long withinTatCount = 0L;
+            long delayedCount = 0L;
+
+            long projectPerformanceCalculatedMilestones = 0L;
+
+            BigDecimal projectPerformanceTotal = BigDecimal.ZERO;
+
+            for (UserMilestonePerformanceProjection record : projectRecords) {
+
+                /*
+                 * Count completed milestones independently of whether
+                 * performance TAT is configured.
+                 */
+                if (isCompletedMilestone(record)) {
+                    projectCompletedMilestones++;
+                    totalCompletedMilestones++;
+                }
+
+                /*
+                 * Do not calculate performance when:
+                 * - milestone is not completed
+                 * - TAT is not applicable
+                 * - TAT hours are null or zero
+                 * - started/completed dates are null
+                 */
+                if (!isPerformanceCalculable(record)) {
+                    continue;
+                }
+
+                Double performanceTatHours =
+                        record.getPerformanceTatHours();
+
+                BigDecimal tatHours =
+                        BigDecimal.valueOf(performanceTatHours)
+                                .setScale(
+                                        2,
+                                        RoundingMode.HALF_UP
+                                );
+
+                BigDecimal actualHours =
+                        calculateActualHours(
+                                record.getStartedDate(),
+                                record.getCompletedDate()
+                        );
+
+                BigDecimal performance =
+                        calculatePerformancePercentage(
+                                tatHours,
+                                actualHours
+                        );
+
+                projectPerformanceTotal =
+                        projectPerformanceTotal.add(performance);
+
+                totalPerformance =
+                        totalPerformance.add(performance);
+
+                projectPerformanceCalculatedMilestones++;
+                totalPerformanceCalculatedMilestones++;
+
+                int comparison =
+                        actualHours.compareTo(tatHours);
+
+                if (comparison < 0) {
+
+                    beforeTatCount++;
+                    totalBeforeTat++;
+
+                } else if (comparison == 0) {
+
+                    withinTatCount++;
+                    totalWithinTat++;
+
+                } else {
+
+                    delayedCount++;
+                    totalDelayed++;
+                }
+            }
+
+            BigDecimal projectAveragePerformance =
+                    projectPerformanceCalculatedMilestones == 0
+                            ? BigDecimal.ZERO.setScale(
+                            2,
+                            RoundingMode.HALF_UP
+                    )
+                            : projectPerformanceTotal.divide(
+                            BigDecimal.valueOf(
+                                    projectPerformanceCalculatedMilestones
+                            ),
+                            2,
+                            RoundingMode.HALF_UP
+                    );
+
+            projectDetails.add(
+                    UserProjectPerformanceDetailDto.builder()
+                            .projectId(first.getProjectId())
+                            .projectNumber(first.getProjectNumber())
+                            .projectName(first.getProjectName())
+                            .productId(first.getProductId())
+                            .productName(first.getProductName())
+                            .totalAssignedMilestones(
+                                    (long) projectRecords.size()
+                            )
+                            .completedMilestones(
+                                    projectCompletedMilestones
+                            )
+                            .beforeTatCount(beforeTatCount)
+                            .withinTatCount(withinTatCount)
+                            .delayedCount(delayedCount)
+                            .performancePercentage(
+                                    projectAveragePerformance
+                            )
+                            .build()
+            );
+        }
+
+        BigDecimal averagePerformance =
+                totalPerformanceCalculatedMilestones == 0
+                        ? BigDecimal.ZERO.setScale(
+                        2,
+                        RoundingMode.HALF_UP
+                )
+                        : totalPerformance.divide(
+                        BigDecimal.valueOf(
+                                totalPerformanceCalculatedMilestones
+                        ),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+
+        return UserProjectPerformanceResponseDto.builder()
+                .userId(user.getId())
+                .userName(user.getFullName())
+                .totalProjects((long) projectGroups.size())
+                .totalCompletedMilestones(
+                        totalCompletedMilestones
+                )
+                .completedBeforeTat(totalBeforeTat)
+                .completedWithinTat(totalWithinTat)
+                .delayedMilestones(totalDelayed)
+                .averagePerformancePercentage(
+                        averagePerformance
+                )
+                .projectPerformance(projectDetails)
+                .build();
+    }
+
+
+    private boolean isCompletedMilestone(
+            UserMilestonePerformanceProjection record
+    ) {
+
+        return record.getStatusId() != null
+                && record.getStatusId().equals(3L);
+    }
+    private boolean isPerformanceCalculable(
+            UserMilestonePerformanceProjection record
+    ) {
+
+        if (!isCompletedMilestone(record)) {
+            return false;
+        }
+
+        if (!Boolean.TRUE.equals(
+                record.getPerformanceTatApplicable()
+        )) {
+            return false;
+        }
+
+        Double performanceTatHours =
+                record.getPerformanceTatHours();
+
+        if (performanceTatHours == null
+                || performanceTatHours <= 0) {
+            return false;
+        }
+
+        return record.getStartedDate() != null
+                && record.getCompletedDate() != null;
+    }
+
+    private BigDecimal calculateActualHours(
+            LocalDateTime startedDate,
+            LocalDateTime completedDate
+    ) {
+
+        if (startedDate == null || completedDate == null) {
+            return BigDecimal.ZERO.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
+        }
+
+        if (completedDate.isBefore(startedDate)) {
+            throw new ValidationException(
+                    "Completed date cannot be before started date",
+                    "ERR_INVALID_COMPLETION_DATE"
+            );
+        }
+
+        long totalMinutes = Duration.between(
+                startedDate,
+                completedDate
+        ).toMinutes();
+
+        return BigDecimal.valueOf(totalMinutes)
+                .divide(
+                        BigDecimal.valueOf(60),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+    }
     private void validateRequest(
             Long userId,
             Long departmentId,
@@ -1120,6 +1400,36 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 ? 0L
                 : value;
     }
+    private BigDecimal calculatePerformancePercentage(
+            BigDecimal tatHours,
+            BigDecimal actualHours
+    ) {
 
+        if (tatHours == null ||
+                tatHours.compareTo(BigDecimal.ZERO) <= 0) {
+
+            return BigDecimal.ZERO.setScale(2);
+        }
+
+        BigDecimal performance = BigDecimal.valueOf(100)
+                .add(
+                        tatHours.subtract(actualHours)
+                                .multiply(BigDecimal.valueOf(100))
+                                .divide(
+                                        tatHours,
+                                        2,
+                                        RoundingMode.HALF_UP
+                                )
+                );
+
+        if (performance.compareTo(BigDecimal.ZERO) < 0) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+
+        return performance.setScale(
+                2,
+                RoundingMode.HALF_UP
+        );
+    }
 
 }

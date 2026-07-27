@@ -1,6 +1,7 @@
 package com.doc.controller.dashboard;
 
 import com.doc.dto.project.dashboard.*;
+import com.doc.dto.user.UserProjectPerformanceResponseDto;
 import com.doc.service.project.ProjectDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.domain.Page;
@@ -187,5 +188,21 @@ public class ProjectDashboardController {
                         );
 
         return ResponseEntity.ok(response);
+    }
+/// User performance for milestones assigned to the user,
+/// grouped by project
+    @GetMapping("/user-performance/{userId}")
+    public ResponseEntity<UserProjectPerformanceResponseDto>
+    getUserProjectPerformance(
+            @PathVariable Long userId,
+            @RequestParam(required = false) Long projectId
+    ) {
+
+        return ResponseEntity.ok(
+                projectDashboardService.getUserProjectPerformance(
+                        userId,
+                        projectId
+                )
+        );
     }
 }
