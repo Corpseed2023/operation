@@ -1,5 +1,3 @@
-
-
 package com.doc.controller.project;
 
 import com.doc.dto.project.activity.ProjectActivityResponseDto;
@@ -50,19 +48,8 @@ public class ProjectExpenseController {
                 request.getExpenseCategory()
         );
 
-        log.debug(
-                "[EXPENSE-CREATE-SERVICE-CALL] Calling addExpense | projectId={}",
-                projectId
-        );
-
         ProjectActivityResponseDto response =
                 activityService.addExpense(projectId, request);
-
-        log.info(
-                "[EXPENSE-CREATE-SUCCESS] Expense request created | projectId={} | createdByUserId={}",
-                projectId,
-                request.getCreatedByUserId()
-        );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -89,11 +76,12 @@ public class ProjectExpenseController {
     ) {
 
         log.info(
-                "[CRT-DECISION-REQUEST] projectId={} | expenseId={} | userId={} | decision={}",
+                "[CRT-DECISION-REQUEST] projectId={} | expenseId={} | userId={} | decision={} | expensePaidBy={}",
                 projectId,
                 expenseId,
                 userId,
-                request.getStatus()
+                request.getStatus(),
+                request.getExpensePaidBy()
         );
 
         ProjectExpenseResponseDto response =
@@ -103,14 +91,6 @@ public class ProjectExpenseController {
                         userId,
                         request
                 );
-
-        log.info(
-                "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
-                projectId,
-                expenseId,
-                userId,
-                request.getStatus()
-        );
 
         return ResponseEntity.ok(response);
     }
@@ -151,14 +131,6 @@ public class ProjectExpenseController {
                         request
                 );
 
-        log.info(
-                "[ACCOUNTS-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
-                projectId,
-                expenseId,
-                userId,
-                request.getStatus()
-        );
-
         return ResponseEntity.ok(response);
     }
 
@@ -175,28 +147,13 @@ public class ProjectExpenseController {
             ApprovalStatus approvalStatus
     ) {
 
-        log.info(
-                "[EXPENSE-APPROVAL-QUEUE-REQUEST] userId={} | approvalStage={} | approvalStatus={}",
-                userId,
-                approvalStage,
-                approvalStatus
-        );
-
-        List<ProjectExpenseResponseDto> response =
+        return ResponseEntity.ok(
                 activityService.getExpenseApprovalQueue(
                         userId,
                         approvalStage,
                         approvalStatus
-                );
-
-        log.info(
-                "[EXPENSE-APPROVAL-QUEUE-SUCCESS] userId={} | approvalStage={} | recordCount={}",
-                userId,
-                approvalStage,
-                response.size()
+                )
         );
-
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/payment-queue")
@@ -209,26 +166,12 @@ public class ProjectExpenseController {
             ExpensePaymentStatus paymentStatus
     ) {
 
-        log.info(
-                "[EXPENSE-PAYMENT-QUEUE-REQUEST] userId={} | paymentStatus={}",
-                userId,
-                paymentStatus
-        );
-
-        List<ProjectExpenseResponseDto> response =
+        return ResponseEntity.ok(
                 activityService.getExpensePaymentQueue(
                         userId,
                         paymentStatus
-                );
-
-        log.info(
-                "[EXPENSE-PAYMENT-QUEUE-SUCCESS] userId={} | paymentStatus={} | recordCount={}",
-                userId,
-                paymentStatus,
-                response.size()
+                )
         );
-
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/project/{projectId}")
@@ -242,25 +185,12 @@ public class ProjectExpenseController {
             Long userId
     ) {
 
-        log.info(
-                "[PROJECT-EXPENSE-LIST-REQUEST] projectId={} | userId={}",
-                projectId,
-                userId
-        );
-
-        List<ProjectExpenseResponseDto> response =
+        return ResponseEntity.ok(
                 activityService.getExpensesByProject(
                         projectId,
                         userId
-                );
-
-        log.info(
-                "[PROJECT-EXPENSE-LIST-SUCCESS] projectId={} | recordCount={}",
-                projectId,
-                response.size()
+                )
         );
-
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{expenseId}")
@@ -274,22 +204,11 @@ public class ProjectExpenseController {
             Long userId
     ) {
 
-        log.info(
-                "[EXPENSE-DETAIL-REQUEST] expenseId={} | userId={}",
-                expenseId,
-                userId
+        return ResponseEntity.ok(
+                activityService.getExpenseById(
+                        expenseId,
+                        userId
+                )
         );
-
-        ProjectExpenseResponseDto response =
-                activityService.getExpenseById(expenseId, userId);
-
-        log.info(
-                "[EXPENSE-DETAIL-SUCCESS] expenseId={} | userId={}",
-                expenseId,
-                userId
-        );
-
-        return ResponseEntity.ok(response);
     }
-
 }

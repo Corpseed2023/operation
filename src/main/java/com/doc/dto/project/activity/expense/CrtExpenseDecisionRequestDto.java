@@ -1,26 +1,30 @@
 package com.doc.dto.project.activity.expense;
 
 import com.doc.em.ApprovalStatus;
+import com.doc.em.ExpensePaidBy;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
-@Data
+@Getter
+@Setter
 public class CrtExpenseDecisionRequestDto {
 
-    /**
-     * Allowed:
-     * APPROVED, REJECTED, ON_HOLD
-     */
     @NotNull(message = "CRT decision status is required")
     private ApprovalStatus status;
 
     /**
-     * Required when status is REJECTED or ON_HOLD.
+     * Required only when CRT approves the expense.
+     *
+     * COMPANY = Accounts team will pay.
+     * CLIENT  = Client will pay directly.
      */
+    private ExpensePaidBy expensePaidBy;
+
     @Size(
             max = 2000,
-            message = "Decision remark cannot exceed 2000 characters"
+            message = "Remark cannot exceed 2000 characters"
     )
     private String remark;
 }

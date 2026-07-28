@@ -9,6 +9,7 @@ import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
+import com.doc.em.AccountPostingStatus;
 import com.doc.em.ApprovalStatus;
 import com.doc.em.ExpenseApprovalStage;
 import com.doc.em.ExpensePaidBy;
@@ -474,9 +475,19 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setCrtApprovalStatus(ApprovalStatus.PENDING);
         expense.setAccountsApprovalStatus(ApprovalStatus.PENDING);
 
+        expense.setExpensePaidBy(null);
+
         expense.setPaymentStatus(
                 ExpensePaymentStatus.NOT_INITIATED
         );
+
+        expense.setAccountPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
+        );
+        expense.setAccountVoucherId(null);
+        expense.setAccountVoucherNumber(null);
+        expense.setAccountPostedAt(null);
+        expense.setAccountPostingError(null);
 
         expense = expenseRepository.save(expense);
 
@@ -608,6 +619,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         switch (decision) {
 
             case APPROVED -> {
+
+                if (request.getExpensePaidBy() == null) {
+                    throw new ValidationException(
+                            "Expense paid by is required when CRT approves the expense",
+                            "ERR_EXPENSE_PAID_BY_REQUIRED"
+                    );
+                }
+
+                expense.setExpensePaidBy(
+                        request.getExpensePaidBy()
+                );
+
                 expense.setApprovalStatus(ApprovalStatus.PENDING);
                 expense.setApprovalStage(
                         ExpenseApprovalStage.ACCOUNTS_REVIEW
@@ -617,9 +640,36 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         ApprovalStatus.PENDING
                 );
 
-                expense.setPaymentStatus(
-                        ExpensePaymentStatus.NOT_INITIATED
+                /*
+                 * CRT only decides who is responsible for payment.
+                 * Accounts must still review the expense.
+                 *
+                 * CLIENT:
+                 * - Client has paid/will pay directly.
+                 * - It must never enter the company payment queue.
+                 * - It must never create an accounting voucher.
+                 *
+                 * COMPANY:
+                 * - Accounts will approve first.
+                 * - After approval it enters the payment queue as PENDING.
+                 */
+                if (request.getExpensePaidBy() == ExpensePaidBy.CLIENT) {
+                    expense.setPaymentStatus(
+                            ExpensePaymentStatus.CLIENT_PAID
+                    );
+                } else {
+                    expense.setPaymentStatus(
+                            ExpensePaymentStatus.NOT_INITIATED
+                    );
+                }
+
+                expense.setAccountPostingStatus(
+                        AccountPostingStatus.NOT_REQUIRED
                 );
+                expense.setAccountVoucherId(null);
+                expense.setAccountVoucherNumber(null);
+                expense.setAccountPostedAt(null);
+                expense.setAccountPostingError(null);
             }
 
             case REJECTED -> {
@@ -629,10 +679,21 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 );
 
                 expense.setApprovedAmount(null);
+                expense.setPaidAmount(BigDecimal.ZERO);
+                expense.setExpensePaidBy(null);
 
                 expense.setPaymentStatus(
                         ExpensePaymentStatus.CANCELLED
                 );
+
+                expense.setPaymentCompletedDate(null);
+                expense.setAccountPostingStatus(
+                        AccountPostingStatus.NOT_REQUIRED
+                );
+                expense.setAccountVoucherId(null);
+                expense.setAccountVoucherNumber(null);
+                expense.setAccountPostedAt(null);
+                expense.setAccountPostingError(null);
             }
 
             case ON_HOLD -> {
@@ -643,6 +704,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
                 expense.setPaymentStatus(
                         ExpensePaymentStatus.NOT_INITIATED
+                );
+
+                expense.setAccountPostingStatus(
+                        AccountPostingStatus.NOT_REQUIRED
                 );
             }
 
@@ -821,10 +886,20 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 );
 
                 expense.setApprovedAmount(null);
+                expense.setPaidAmount(BigDecimal.ZERO);
 
                 expense.setPaymentStatus(
                         ExpensePaymentStatus.CANCELLED
                 );
+
+                expense.setPaymentCompletedDate(null);
+                expense.setAccountPostingStatus(
+                        AccountPostingStatus.NOT_REQUIRED
+                );
+                expense.setAccountVoucherId(null);
+                expense.setAccountVoucherNumber(null);
+                expense.setAccountPostedAt(null);
+                expense.setAccountPostingError(null);
             }
 
             case ON_HOLD -> {
@@ -833,8 +908,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         ExpenseApprovalStage.ACCOUNTS_REVIEW
                 );
 
-                expense.setPaymentStatus(
-                        ExpensePaymentStatus.NOT_INITIATED
+                /*
+                 * Preserve CLIENT_PAID because client-paid expenses must not
+                 * become company-payable while Accounts has placed them on hold.
+                 */
+                if (expense.getExpensePaidBy() == ExpensePaidBy.COMPANY) {
+                    expense.setPaymentStatus(
+                            ExpensePaymentStatus.NOT_INITIATED
+                    );
+                }
+
+                expense.setAccountPostingStatus(
+                        AccountPostingStatus.NOT_REQUIRED
                 );
             }
 
@@ -863,15 +948,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 decision
         );
 
-        if (decision == ApprovalStatus.APPROVED
-                && expense.getPaymentStatus()
-                == ExpensePaymentStatus.PAID) {
-
-            scheduleAccountPostingAfterCommit(
-                    expense.getId()
-            );
-        }
-
         log.info(
                 "[ACCOUNTS-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
                 projectId,
@@ -890,10 +966,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     ) {
 
         log.debug(
-                "[ACCOUNTS-APPROVAL-AMOUNT-VALIDATION] expenseId={} | requestedAmount={} | submittedApprovedAmount={}",
+                "[ACCOUNTS-APPROVAL-AMOUNT-VALIDATION] expenseId={} | requestedAmount={} | submittedApprovedAmount={} | expensePaidBy={}",
                 expense.getId(),
                 expense.getRequestedAmount(),
-                request.getApprovedAmount()
+                request.getApprovedAmount(),
+                expense.getExpensePaidBy()
         );
 
         BigDecimal approvedAmount = normalizePositiveAmount(
@@ -934,37 +1011,86 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
+        if (expense.getExpensePaidBy() == null) {
+            throw new ValidationException(
+                    "CRT must decide whether the expense is paid by CLIENT or COMPANY",
+                    "ERR_EXPENSE_PAID_BY_NOT_DECIDED"
+            );
+        }
+
         expense.setApprovedAmount(approvedAmount);
         expense.setApprovalStatus(ApprovalStatus.APPROVED);
         expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
-        /*
-         * Accounts approval means the company has paid this expense.
-         * Default older/null records to COMPANY so the Feign request has
-         * a valid paidBy value.
-         */
-        if (expense.getExpensePaidBy() == null) {
-            expense.setExpensePaidBy(
-                    ExpensePaidBy.COMPANY
+        if (expense.getExpensePaidBy() == ExpensePaidBy.CLIENT) {
+
+            /*
+             * Client paid expense:
+             * - Accounts only verifies/approves.
+             * - No company payment queue.
+             * - No Feign accounting call.
+             * - No ledger/voucher creation.
+             */
+            expense.setPaidAmount(approvedAmount);
+            expense.setPaymentStatus(
+                    ExpensePaymentStatus.CLIENT_PAID
+            );
+            expense.setPaymentCompletedDate(
+                    LocalDateTime.now()
+            );
+
+            expense.setAccountPostingStatus(
+                    AccountPostingStatus.NOT_REQUIRED
+            );
+            expense.setAccountVoucherId(null);
+            expense.setAccountVoucherNumber(null);
+            expense.setAccountPostedAt(null);
+            expense.setAccountPostingError(null);
+
+            log.info(
+                    "[CLIENT-PAID-EXPENSE-APPROVED] expenseId={} | approvedAmount={} | ledgerPosting=false",
+                    expense.getId(),
+                    approvedAmount
+            );
+
+        } else {
+
+            /*
+             * Company paid expense:
+             * Accounts approval does not mean payment is completed.
+             * Move it to the payment queue. A separate payment-completion
+             * API must set PAID and then schedule account posting.
+             */
+            expense.setPaidAmount(BigDecimal.ZERO);
+            expense.setPaymentStatus(
+                    ExpensePaymentStatus.PENDING
+            );
+            expense.setPaymentCompletedDate(null);
+
+            expense.setAccountPostingStatus(
+                    AccountPostingStatus.NOT_REQUIRED
+            );
+            expense.setAccountVoucherId(null);
+            expense.setAccountVoucherNumber(null);
+            expense.setAccountPostedAt(null);
+            expense.setAccountPostingError(null);
+
+            log.info(
+                    "[COMPANY-PAID-EXPENSE-APPROVED] expenseId={} | approvedAmount={} | paymentStatus=PENDING",
+                    expense.getId(),
+                    approvedAmount
             );
         }
 
-        /*
-         * In this workflow, Accounts approval confirms that the payment
-         * has actually been completed.
-         */
-        expense.setPaidAmount(approvedAmount);
-        expense.setPaymentStatus(ExpensePaymentStatus.PAID);
-        expense.setPaymentCompletedDate(LocalDateTime.now());
-
         log.debug(
-                "[ACCOUNTS-APPROVAL-STATE-UPDATED] expenseId={} | approvedAmount={} | paidAmount={} | approvalStatus={} | paymentStatus={} | paymentCompletedDate={}",
+                "[ACCOUNTS-APPROVAL-STATE-UPDATED] expenseId={} | expensePaidBy={} | approvedAmount={} | paidAmount={} | approvalStatus={} | paymentStatus={} | accountPostingStatus={}",
                 expense.getId(),
+                expense.getExpensePaidBy(),
                 expense.getApprovedAmount(),
                 expense.getPaidAmount(),
                 expense.getApprovalStatus(),
                 expense.getPaymentStatus(),
-                expense.getPaymentCompletedDate()
+                expense.getAccountPostingStatus()
         );
     }
 
@@ -1120,6 +1246,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         User user = validateActiveUser(userId);
         validateAccountsApprover(user);
+
+        if (paymentStatus == ExpensePaymentStatus.CLIENT_PAID) {
+            throw new ValidationException(
+                    "Client-paid expenses are not part of the company payment queue",
+                    "ERR_CLIENT_PAID_NOT_PAYMENT_QUEUE"
+            );
+        }
 
         List<ProjectExpense> expenses;
 
@@ -2205,6 +2338,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         dto.setAccountsDecisionRemark(
                 expense.getAccountsDecisionRemark()
+        );
+
+        dto.setExpensePaidBy(
+                expense.getExpensePaidBy()
         );
 
         dto.setPaymentStatus(
