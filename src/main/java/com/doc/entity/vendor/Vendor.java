@@ -42,6 +42,22 @@ public class Vendor {
     @Comment("Primary vendor mobile number")
     private String mobile;
 
+    @Column(name = "full_address", length = 1000)
+    @Comment("Vendor complete address")
+    private String fullAddress;
+
+    @Column(name = "city", length = 100)
+    @Comment("Vendor city")
+    private String city;
+
+    @Column(name = "state", length = 100)
+    @Comment("Vendor state")
+    private String state;
+
+    @Column(name = "country", length = 100)
+    @Comment("Vendor country")
+    private String country;
+
     /**
      * GST is not mandatory during basic vendor creation.
      * It can be collected during onboarding.

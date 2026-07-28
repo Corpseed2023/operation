@@ -46,4 +46,71 @@ public interface UserRepository extends JpaRepository<User, Long> {
               AND u.isActive = true
             """)
     List<User> findActiveManagersByDepartmentId(@Param("departmentId") Long departmentId);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM erp_operation.users u
+        INNER JOIN erp_operation.user_department_map udm
+                ON udm.user_id = u.id
+        WHERE u.id = :userId
+          AND udm.dept_id = :departmentId
+          AND u.is_active = 1
+          AND u.is_deleted = 0
+        """,
+            nativeQuery = true)
+    Long
+    countActiveUserInDepartment(
+            @Param("userId") Long userId,
+            @Param("departmentId") Long departmentId
+    );
+
+    @Query(
+            value = """
+                SELECT
+                    u.id AS userId,
+                    u.full_name AS userName,
+                    d.id AS departmentId,
+                    d.name AS departmentName
+                FROM users u
+
+                INNER JOIN user_department_map udm
+                        ON udm.user_id = u.id
+
+                INNER JOIN departments d
+                        ON d.id = udm.department_id
+
+                WHERE u.id = :userId
+                  AND u.is_active = 1
+                  AND u.is_deleted = 0
+                """,
+            nativeQuery = true
+    )
+    Optional<UserDepartmentProjection> findActiveUserDepartment(
+            @Param("userId") Long userId
+    );
+
+    @Query(
+            value = """
+                SELECT
+                    u.id AS userId,
+                    d.id AS departmentId,
+                    d.name AS departmentName
+                FROM users u
+                INNER JOIN user_department_map udm
+                        ON udm.user_id = u.id
+                INNER JOIN departments d
+                        ON d.id = udm.dept_id
+                WHERE u.id = :userId
+                  AND u.is_active = 1
+                  AND u.is_deleted = 0
+                """,
+            nativeQuery = true
+    )
+    List<UserDepartmentProjection> findActiveDepartmentsByUserId(
+            @Param("userId") Long userId
+    );
+
+
+
+
 }

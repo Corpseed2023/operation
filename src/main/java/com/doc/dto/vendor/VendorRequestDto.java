@@ -30,4 +30,16 @@ public class VendorRequestDto {
 
     @Size(max = 10)
     private String panNumber;
+
+    @Size(max = 1000)
+    private String fullAddress;
+
+    @Size(max = 100)
+    private String city;
+
+    @Size(max = 100)
+    private String state;
+
+    @Size(max = 100)
+    private String country;
 }

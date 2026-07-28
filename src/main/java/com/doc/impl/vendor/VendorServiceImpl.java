@@ -138,6 +138,10 @@ public class VendorServiceImpl implements VendorService {
         vendor.setCreatedBy(createdByUser.getId());
         vendor.setUpdatedBy(createdByUser.getId());
         vendor.setDeleted(false);
+        vendor.setState(dto.getState());
+        vendor.setCity(dto.getCity());
+        vendor.setFullAddress(dto.getFullAddress());
+        vendor.setCountry(dto.getCountry());
 
         vendor = vendorRepository.save(vendor);
 
@@ -1149,6 +1153,10 @@ public class VendorServiceImpl implements VendorService {
         dto.setCreatedDate(vendor.getCreatedDate());
         dto.setUpdatedDate(vendor.getUpdatedDate());
         dto.setDeleted(vendor.isDeleted());
+        dto.setFullAddress(vendor.getFullAddress());
+        dto.setCity(vendor.getCity());
+        dto.setState(vendor.getState());
+        dto.setCountry(vendor.getCountry());
 
         return dto;
     }

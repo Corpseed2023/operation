@@ -38,6 +38,12 @@ public class VendorResponseDto {
 
     private boolean isDeleted;
 
+
+    private String fullAddress;
+    private String city;
+    private String state;
+    private String country;
+
     private List<RFQVendorResponseDto> rfqs;
     private List<VendorQuotationResponseDto> quotations;
     private List<VendorFinalizationResponseDto> finalizations;
