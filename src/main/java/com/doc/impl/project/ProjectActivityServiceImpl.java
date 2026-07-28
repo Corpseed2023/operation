@@ -631,90 +631,84 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         request.getExpensePaidBy()
                 );
 
-                expense.setApprovalStatus(ApprovalStatus.PENDING);
-                expense.setApprovalStage(
-                        ExpenseApprovalStage.ACCOUNTS_REVIEW
-                );
-
-                expense.setAccountsApprovalStatus(
-                        ApprovalStatus.PENDING
-                );
-
-                /*
-                 * CRT only decides who is responsible for payment.
-                 * Accounts must still review the expense.
-                 *
-                 * CLIENT:
-                 * - Client has paid/will pay directly.
-                 * - It must never enter the company payment queue.
-                 * - It must never create an accounting voucher.
-                 *
-                 * COMPANY:
-                 * - Accounts will approve first.
-                 * - After approval it enters the payment queue as PENDING.
-                 */
                 if (request.getExpensePaidBy() == ExpensePaidBy.CLIENT) {
+
+                    /*
+                     * Client-paid expense completes at CRT approval.
+                     */
+                    expense.setApprovalStatus(
+                            ApprovalStatus.APPROVED
+                    );
+
+                    expense.setApprovalStage(
+                            ExpenseApprovalStage.COMPLETED
+                    );
+
+                    expense.setAccountsApprovalStatus(
+                            ApprovalStatus.CANCELLED
+                    );
+
+                    expense.setApprovedAmount(
+                            expense.getRequestedAmount()
+                    );
+
+                    expense.setPaidAmount(
+                            expense.getRequestedAmount()
+                    );
+
                     expense.setPaymentStatus(
                             ExpensePaymentStatus.CLIENT_PAID
                     );
+
+                    expense.setPaymentCompletedDate(
+                            actionTime
+                    );
+
+                    expense.setAccountPostingStatus(
+                            AccountPostingStatus.NOT_REQUIRED
+                    );
+
+                    expense.setAccountVoucherId(null);
+                    expense.setAccountVoucherNumber(null);
+                    expense.setAccountPostedAt(null);
+                    expense.setAccountPostingError(null);
+
                 } else {
+
+                    /*
+                     * Company-paid expense proceeds to Accounts.
+                     */
+                    expense.setApprovalStatus(
+                            ApprovalStatus.PENDING
+                    );
+
+                    expense.setApprovalStage(
+                            ExpenseApprovalStage.ACCOUNTS_REVIEW
+                    );
+
+                    expense.setAccountsApprovalStatus(
+                            ApprovalStatus.PENDING
+                    );
+
+                    expense.setApprovedAmount(null);
+                    expense.setPaidAmount(BigDecimal.ZERO);
+
                     expense.setPaymentStatus(
                             ExpensePaymentStatus.NOT_INITIATED
                     );
+
+                    expense.setPaymentCompletedDate(null);
+
+                    expense.setAccountPostingStatus(
+                            AccountPostingStatus.NOT_REQUIRED
+                    );
+
+                    expense.setAccountVoucherId(null);
+                    expense.setAccountVoucherNumber(null);
+                    expense.setAccountPostedAt(null);
+                    expense.setAccountPostingError(null);
                 }
-
-                expense.setAccountPostingStatus(
-                        AccountPostingStatus.NOT_REQUIRED
-                );
-                expense.setAccountVoucherId(null);
-                expense.setAccountVoucherNumber(null);
-                expense.setAccountPostedAt(null);
-                expense.setAccountPostingError(null);
             }
-
-            case REJECTED -> {
-                expense.setApprovalStatus(ApprovalStatus.REJECTED);
-                expense.setApprovalStage(
-                        ExpenseApprovalStage.COMPLETED
-                );
-
-                expense.setApprovedAmount(null);
-                expense.setPaidAmount(BigDecimal.ZERO);
-                expense.setExpensePaidBy(null);
-
-                expense.setPaymentStatus(
-                        ExpensePaymentStatus.CANCELLED
-                );
-
-                expense.setPaymentCompletedDate(null);
-                expense.setAccountPostingStatus(
-                        AccountPostingStatus.NOT_REQUIRED
-                );
-                expense.setAccountVoucherId(null);
-                expense.setAccountVoucherNumber(null);
-                expense.setAccountPostedAt(null);
-                expense.setAccountPostingError(null);
-            }
-
-            case ON_HOLD -> {
-                expense.setApprovalStatus(ApprovalStatus.ON_HOLD);
-                expense.setApprovalStage(
-                        ExpenseApprovalStage.CRT_REVIEW
-                );
-
-                expense.setPaymentStatus(
-                        ExpensePaymentStatus.NOT_INITIATED
-                );
-
-                expense.setAccountPostingStatus(
-                        AccountPostingStatus.NOT_REQUIRED
-                );
-            }
-
-            default -> throw new ValidationException(
-                    "Invalid CRT decision",
-                    "ERR_INVALID_CRT_DECISION"
-            );
         }
 
         expense = expenseRepository.save(expense);
