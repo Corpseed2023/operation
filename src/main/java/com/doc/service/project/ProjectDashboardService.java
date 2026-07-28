@@ -1,8 +1,8 @@
 package com.doc.service.project;
 
-import com.doc.dto.project.dashboard.ProjectOverviewResponseDto;
-import com.doc.dto.project.dashboard.UserProjectDashboardResponseDto;
-import com.doc.repository.projection.VendorAssignmentCountProjection;
+import com.doc.dto.project.dashboard.*;
+import com.doc.dto.user.UserProjectPerformanceResponseDto;
+import org.springframework.data.domain.Page;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -22,6 +22,30 @@ public interface ProjectDashboardService {
             LocalDate fromDate,
             LocalDate toDate
     );
+    ProjectCompletionResponseDto getProjectCompletionSummary(Long userId);
+    List<ProjectStatusCountResponseDto> getProjectStatusWiseSummary(Long userId);
+    List<MilestoneOverviewResponseDto> getMilestoneOverview(Long userId);
+    List<TeamWorkloadResponseDto> getTeamWorkload(Long userId);
+    List<DueRiskQueueResponseDto> getDueRiskQueue(
+            Long userId,
+            Integer upcomingDays,
+            Integer limit
+    );
+    Page<ProjectMilestoneTrackerResponseDto> getMilestoneTracker(
+            Long userId,
+            Long departmentId,
+            Long stageId,
+            String search,
+            int page,
+            int size
+    );
 
 
+
+
+
+    UserProjectPerformanceResponseDto getUserProjectPerformance(
+            Long userId,
+            Long projectId
+    );
 }
