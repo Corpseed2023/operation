@@ -541,38 +541,74 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
     @Query("""
-            SELECT
-                COUNT(p.id) AS totalProjectCount,
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN p.status.id = 3 THEN 1
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ) AS completedProjectCount
-            FROM Project p
-            WHERE p.isDeleted = false
-              AND p.isCancelled = false
-            """)
-    ProjectCompletionProjection getProjectCompletionSummary();
+        SELECT
+            COUNT(DISTINCT p.id) AS totalProjectCount,
+
+            COUNT(
+                DISTINCT CASE
+                    WHEN p.status.id = 3
+                    THEN p.id
+                    ELSE NULL
+                END
+            ) AS completedProjectCount
+
+        FROM Project p
+
+        WHERE p.isDeleted = false
+          AND p.isCancelled = false
+
+          AND (
+                :departmentId IS NULL
+                OR EXISTS (
+                    SELECT pma.id
+                    FROM ProjectMilestoneAssignment pma
+                    JOIN pma.assignedUser u
+                    JOIN u.departments d
+                    WHERE pma.project.id = p.id
+                      AND pma.isDeleted = false
+                      AND pma.isVisible = true
+                      AND d.id = :departmentId
+                )
+          )
+        """)
+    ProjectCompletionProjection getProjectCompletionSummary(
+            @Param("departmentId") Long departmentId
+    );
 
     @Query("""
-            SELECT
-                ps.id AS statusId,
-                ps.name AS statusName,
-                COUNT(p.id) AS projectCount
-            FROM ProjectStatus ps
-            LEFT JOIN Project p
-                   ON p.status.id = ps.id
-                  AND p.isDeleted = false
-            GROUP BY
-                ps.id,
-                ps.name
-            ORDER BY ps.id
-            """)
-    List<ProjectStatusCountProjection> getProjectStatusWiseCount();
+        SELECT
+            ps.id AS statusId,
+            ps.name AS statusName,
+            COUNT(DISTINCT p.id) AS projectCount
+
+        FROM ProjectStatus ps
+
+        LEFT JOIN Project p
+               ON p.status.id = ps.id
+              AND p.isDeleted = false
+              AND (
+                    :departmentId IS NULL
+                    OR EXISTS (
+                        SELECT pma.id
+                        FROM ProjectMilestoneAssignment pma
+                        JOIN pma.assignedUser u
+                        JOIN u.departments d
+                        WHERE pma.project.id = p.id
+                          AND pma.isDeleted = false
+                          AND pma.isVisible = true
+                          AND d.id = :departmentId
+                    )
+              )
+
+        GROUP BY
+            ps.id,
+            ps.name
+
+        ORDER BY ps.id
+        """)
+    List<ProjectStatusCountProjection> getProjectStatusWiseCount(
+            @Param("departmentId") Long departmentId
+    );
 
     @Query(
             value = """
@@ -595,11 +631,19 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                     (
                         SELECT MIN(pma2.date)
                         FROM project_milestone_assignment pma2
+
+                        INNER JOIN user_department_map udm2
+                                ON udm2.user_id = pma2.assigned_user_id
+
                         WHERE pma2.project_id = p.id
                           AND pma2.is_deleted = 0
                           AND pma2.is_visible = 1
                           AND pma2.status_id <> 3
                           AND pma2.date IS NOT NULL
+                          AND (
+                                :departmentId IS NULL
+                                OR udm2.dept_id = :departmentId
+                          )
                     ) AS dueDate
 
                 FROM project p
@@ -619,6 +663,24 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
                 WHERE p.is_deleted = 0
                   AND p.is_active = 1
+
+                  AND (
+                        :departmentId IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM project_milestone_assignment pma
+
+                            INNER JOIN user_department_map udm
+                                    ON udm.user_id =
+                                       pma.assigned_user_id
+
+                            WHERE pma.project_id = p.id
+                              AND pma.is_deleted = 0
+                              AND pma.is_visible = 1
+                              AND udm.dept_id =
+                                  :departmentId
+                        )
+                  )
 
                   AND (
                         :stageId IS NULL
@@ -659,6 +721,24 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                   AND p.is_active = 1
 
                   AND (
+                        :departmentId IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM project_milestone_assignment pma
+
+                            INNER JOIN user_department_map udm
+                                    ON udm.user_id =
+                                       pma.assigned_user_id
+
+                            WHERE pma.project_id = p.id
+                              AND pma.is_deleted = 0
+                              AND pma.is_visible = 1
+                              AND udm.dept_id =
+                                  :departmentId
+                        )
+                  )
+
+                  AND (
                         :stageId IS NULL
                         OR p.status_id = :stageId
                   )
@@ -678,10 +758,11 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                 """,
             nativeQuery = true
     )
-    Page<ProjectTrackerSummaryProjection> findProjectMilestoneTrackerProjects(
+    Page<ProjectTrackerSummaryProjection>
+    findProjectMilestoneTrackerProjects(
+            @Param("departmentId") Long departmentId,
             @Param("stageId") Long stageId,
             @Param("search") String search,
             Pageable pageable
     );
-
 }

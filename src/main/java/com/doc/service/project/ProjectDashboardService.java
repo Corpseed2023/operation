@@ -33,15 +33,11 @@ public interface ProjectDashboardService {
     );
     Page<ProjectMilestoneTrackerResponseDto> getMilestoneTracker(
             Long userId,
-            Long departmentId,
             Long stageId,
             String search,
             int page,
             int size
     );
-
-
-
 
 
     UserProjectPerformanceResponseDto getUserProjectPerformance(

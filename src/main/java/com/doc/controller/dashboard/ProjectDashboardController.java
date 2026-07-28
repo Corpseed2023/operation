@@ -180,7 +180,6 @@ public class ProjectDashboardController {
                 projectDashboardService
                         .getMilestoneTracker(
                                 userId,
-                                departmentId,
                                 stageId,
                                 search,
                                 page,

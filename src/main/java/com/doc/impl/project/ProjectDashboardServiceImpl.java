@@ -301,9 +301,11 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     ) {
 
         //validateDepartmentAccess(userId);
+        Long departmentId =
+                validateUserAndGetDepartmentId(userId);
 
         ProjectCompletionProjection projection =
-                projectRepository.getProjectCompletionSummary();
+                projectRepository.getProjectCompletionSummary(departmentId);
 
         long totalProjectCount =
                 projection == null
@@ -335,9 +337,10 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     getProjectStatusWiseSummary(Long userId) {
 
         //validateDepartmentAccess(userId);
-
+        Long departmentId =
+                validateUserAndGetDepartmentId(userId);
         List<ProjectStatusCountProjection> projections =
-                projectRepository.getProjectStatusWiseCount();
+                projectRepository.getProjectStatusWiseCount(departmentId);
 
         long totalProjectCount = projections.stream()
                 .map(ProjectStatusCountProjection::getProjectCount)
@@ -374,9 +377,11 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     ) {
 
         //validateDepartmentAccess(userId);
+        Long departmentId =
+                validateUserAndGetDepartmentId(userId);
 
         List<MilestoneOverviewProjection> projections =
-                projectMilestoneAssignmentRepository.getMilestoneOverview();
+                projectMilestoneAssignmentRepository.getMilestoneOverview(departmentId);
 
         return projections.stream()
                 .map(projection -> {
@@ -412,9 +417,11 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     public List<TeamWorkloadResponseDto> getTeamWorkload(Long userId) {
 
         //validateDepartmentAccess(userId);
+        Long departmentId =
+                validateUserAndGetDepartmentId(userId);
 
         List<TeamWorkloadProjection> projections =
-                projectMilestoneAssignmentRepository.getTeamWorkload();
+                projectMilestoneAssignmentRepository.getTeamWorkload(departmentId);
 
         return projections.stream()
                 .map(projection -> {
@@ -456,6 +463,8 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     ) {
 
         //validateDepartmentAccess(userId);
+        Long departmentId =
+                validateUserAndGetDepartmentId(userId);
 
         int days = upcomingDays == null || upcomingDays < 0
                 ? 7
@@ -468,7 +477,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
         LocalDate today = LocalDate.now();
 
         List<DueRiskQueueProjection> projections =
-                projectMilestoneAssignmentRepository.findDueRiskQueue(
+                projectMilestoneAssignmentRepository.findDueRiskQueue(departmentId,
                         days,
                         recordLimit
                 );
@@ -727,13 +736,15 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     @Override
     public Page<ProjectMilestoneTrackerResponseDto> getMilestoneTracker(
             Long userId,
-            Long departmentId,
             Long stageId,
             String search,
             int page,
             int size
     ) {
-        validateDepartmentAccess(userId);
+
+        Long departmentId =
+                validateUserAndGetDepartmentId(userId);
+
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -744,12 +755,13 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
         );
 
         String normalizedSearch =
-                search == null
+                search == null || search.isBlank()
                         ? null
                         : search.trim();
 
         Page<ProjectTrackerSummaryProjection> projectPage =
                 projectRepository.findProjectMilestoneTrackerProjects(
+                        departmentId,
                         stageId,
                         normalizedSearch,
                         pageable
@@ -775,10 +787,15 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
 
         Map<Long, List<ProjectMilestoneTrackerProjection>>
                 milestoneMap =
-                fetchMilestoneMap(projectIds);
+                fetchMilestoneMap(
+                        projectIds,
+                        departmentId
+                );
 
         Map<Long, Long> pendingDocumentMap =
-                fetchPendingDocumentMap(projectIds);
+                fetchPendingDocumentMap(
+                        projectIds
+                );
 
         List<ProjectMilestoneTrackerResponseDto> response =
                 projectPage.getContent()
@@ -1134,7 +1151,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     }
 
     private Map<Long, List<ProjectMilestoneTrackerProjection>>
-    fetchMilestoneMap(List<Long> projectIds) {
+    fetchMilestoneMap(List<Long> projectIds, Long departmentId) {
 
         List<ProjectMilestoneTrackerProjection> milestones =
                 milestoneAssignmentRepository
@@ -1462,5 +1479,51 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                         )
                 );
     }
+    private Long validateUserAndGetDepartmentId(Long userId) {
 
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "USER_ID_REQUIRED"
+            );
+        }
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Active user not found with ID: " + userId,
+                                "ACTIVE_USER_NOT_FOUND"
+                        )
+                );
+
+        boolean isAdmin = user.getRoles()
+                .stream()
+                .anyMatch(role ->
+                        "ADMIN".equalsIgnoreCase(role.getName())
+                );
+
+        // Admin can see all department data
+        if (isAdmin) {
+            return null;
+        }
+
+        List<UserDepartmentProjection> departments =
+                userRepository.findActiveDepartmentsByUserId(userId);
+
+        if (departments == null || departments.isEmpty()) {
+            throw new ResourceNotFoundException(
+                    "No department is mapped with user ID: " + userId,
+                    "USER_DEPARTMENT_NOT_FOUND"
+            );
+        }
+
+        if (departments.size() > 1) {
+            throw new ValidationException(
+                    "User is mapped with multiple departments",
+                    "MULTIPLE_USER_DEPARTMENTS"
+            );
+        }
+
+        return departments.get(0).getDepartmentId();
+    }
 }
