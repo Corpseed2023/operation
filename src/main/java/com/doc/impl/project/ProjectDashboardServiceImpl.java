@@ -300,7 +300,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
             Long userId
     ) {
 
-        validateDepartmentAccess(userId);
+        //validateDepartmentAccess(userId);
 
         ProjectCompletionProjection projection =
                 projectRepository.getProjectCompletionSummary();
@@ -334,7 +334,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     public List<ProjectStatusCountResponseDto>
     getProjectStatusWiseSummary(Long userId) {
 
-        validateDepartmentAccess(userId);
+        //validateDepartmentAccess(userId);
 
         List<ProjectStatusCountProjection> projections =
                 projectRepository.getProjectStatusWiseCount();
@@ -373,7 +373,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
             Long userId
     ) {
 
-        validateDepartmentAccess(userId);
+        //validateDepartmentAccess(userId);
 
         List<MilestoneOverviewProjection> projections =
                 projectMilestoneAssignmentRepository.getMilestoneOverview();
@@ -411,7 +411,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     @Override
     public List<TeamWorkloadResponseDto> getTeamWorkload(Long userId) {
 
-        validateDepartmentAccess(userId);
+        //validateDepartmentAccess(userId);
 
         List<TeamWorkloadProjection> projections =
                 projectMilestoneAssignmentRepository.getTeamWorkload();
@@ -455,7 +455,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
             Integer limit
     ) {
 
-        validateDepartmentAccess(userId);
+        //validateDepartmentAccess(userId);
 
         int days = upcomingDays == null || upcomingDays < 0
                 ? 7
@@ -1430,6 +1430,37 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 2,
                 RoundingMode.HALF_UP
         );
+    }
+
+
+
+    private UserDepartmentProjection validateUserAndGetDepartment(
+            Long userId
+    ) {
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "USER_ID_REQUIRED"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Active user not found with ID: " + userId,
+                                "USER_NOT_FOUND"
+                        )
+                );
+
+        return userRepository
+                .findActiveUserDepartment(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "No department is mapped with user ID: " + userId,
+                                "USER_DEPARTMENT_NOT_FOUND"
+                        )
+                );
     }
 
 }
