@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Comment;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -89,6 +91,21 @@ public class Vendor {
 
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
+
+    @Column(name = "restriction_reason", length = 2000)
+    private String restrictionReason;
+
+    @Column(name = "restriction_start_date")
+    private LocalDate restrictionStartDate;
+
+    @Column(name = "restriction_end_date")
+    private LocalDate restrictionEndDate;
+
+    @Column(name = "restricted_at")
+    private LocalDateTime restrictedAt;
+
+    @Column(name = "restricted_by")
+    private Long restrictedBy;
 
     /**
      * Vendor contact persons.

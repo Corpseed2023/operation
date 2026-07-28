@@ -2,6 +2,7 @@ package com.doc.repository;
 
 import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.project.ProcurementStatus;
+import com.doc.repository.projection.VendorAssignmentCountProjection;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -46,7 +47,43 @@ public interface ProcurementMilestoneAssignmentRepository extends JpaRepository<
     WHERE pma.id = :id AND pma.isDeleted = false
 """)
     Optional<ProcurementMilestoneAssignment> findByIdAndIsDeletedFalse(@Param("id") Long id);
+    @Query("""
+        SELECT
+            pvm.vendor.id AS vendorId,
+            pvm.vendor.name AS vendorName,
 
+            COUNT(DISTINCT pma.id) AS totalAssignmentCount,
+
+            COUNT(DISTINCT CASE
+                WHEN p.status.id IN (2, 6)
+                THEN pma.id
+            END) AS activeCount,
+
+            COUNT(DISTINCT CASE
+                WHEN p.status.id = 3
+                THEN pma.id
+            END) AS completedCount,
+
+            COUNT(DISTINCT CASE
+                WHEN p.status.id = 1
+                THEN pma.id
+            END) AS pendingCount
+
+        FROM ProcurementMilestoneAssignment pma
+        JOIN pma.project p
+
+        JOIN ProductVendorMapping pvm
+            ON pvm.product.id = p.product.id
+
+        WHERE pma.isDeleted = false
+          AND p.product.id = :productId
+
+        GROUP BY pvm.vendor.id, pvm.vendor.name
+        ORDER BY pvm.vendor.name ASC
+    """)
+    List<VendorAssignmentCountProjection> getVendorWiseAssignmentCountsByProductId(
+            @Param("productId") Long productId
+    );
 
 
 }

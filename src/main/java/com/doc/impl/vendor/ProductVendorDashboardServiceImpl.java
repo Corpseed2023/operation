@@ -1,11 +1,10 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.vendor.ProductVendorDashboardCountDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.*;
-import com.doc.repository.vendor.ProductVendorMappingRepository;
-import com.doc.repository.vendor.VendorFinalizationRepository;
-import com.doc.repository.vendor.VendorQuotationRepository;
-import com.doc.repository.vendor.VendorRFQRepository;
+import com.doc.repository.ProcurementMilestoneAssignmentRepository;
+import com.doc.repository.projection.*;
+import com.doc.repository.vendor.*;
 import com.doc.service.vendor.ProductVendorDashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -13,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 /**
@@ -33,6 +33,10 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
     private final VendorFinalizationRepository vendorFinalizationRepository;
     private final VendorRFQRepository vendorRFQRepository;
     private final VendorQuotationRepository vendorQuotationRepository;
+    private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
+    private final ProductVendorDashboardRepository productVendorDashboardRepository;
+    private final ProcurementPaymentRequestRepository procurementPaymentRequestRepository;
+    private final RFQVendorRepository rfqVendorRepository;
 
     /**
      * Fetches all dashboard count data for a given product.
@@ -179,7 +183,216 @@ public class ProductVendorDashboardServiceImpl implements ProductVendorDashboard
         );
     }
 
+    @Override
+    public List<VendorAssignmentCountProjection> getVendorWiseAssignmentCounts(Long productId) {
+        return procurementMilestoneAssignmentRepository
+                .getVendorWiseAssignmentCountsByProductId(productId);
+    }
 
+    @Override
+    public ProductVendorDashboardResponse getDashboardByProductId(Long productId) {
+        ProductVendorDashboardProjection projection =
+                productVendorDashboardRepository
+                        .getDashboardByProductId(productId);
 
+        return ProductVendorDashboardResponse.builder()
+                .productId(productId)
+                .registeredVendorCount(
+                        valueOrZero(
+                                projection.getRegisteredVendorCount()
+                        )
+                )
+                .activeRfqCount(
+                        valueOrZero(
+                                projection.getActiveRfqCount()
+                        )
+                )
+                .quotationReceivedCount(
+                        valueOrZero(
+                                projection.getQuotationReceivedCount()
+                        )
+                )
+                .priceComparisonCount(
+                        valueOrZero(
+                                projection.getPriceComparisonCount()
+                        )
+                )
+                .vendorSelectedCount(
+                        valueOrZero(
+                                projection.getVendorSelectedCount()
+                        )
+                )
+                .build();
+    }
 
+    @Override
+    public VendorPaymentSummaryResponse getVendorPaymentSummary(Long productId, Long vendorId) {
+        VendorPaymentSummaryProjection projection =
+                procurementPaymentRequestRepository
+                        .getVendorPaymentSummary(
+                                vendorId,
+                                productId
+
+                        );
+
+        return VendorPaymentSummaryResponse.builder()
+                .productId(productId)
+                .vendorId(vendorId)
+                .paymentGivenAmount(
+                        decimalOrZero(
+                                projection.getPaymentGivenAmount()
+                        )
+                )
+                .pendingPaymentAmount(
+                        decimalOrZero(
+                                projection.getPendingPaymentAmount()
+                        )
+                )
+                .paymentReleasedCount(
+                        longOrZero(
+                                projection.getPaymentReleasedCount()
+                        )
+                )
+                .pendingPaymentCount(
+                        longOrZero(
+                                projection.getPendingPaymentCount()
+                        )
+                )
+                .build();
+    }
+
+    @Override
+    public List<ProductRfqDashboardResponse> getRfqDashboard(Long productId) {
+        return rfqVendorRepository
+                .findRfqDashboardByProductId(productId)
+                .stream()
+                .map(this::mapRfqDashboardResponse)
+                .toList();
+    }
+
+    @Override
+    public ProductVendorVerificationResponse getVendorVerificationByProductId(
+            Long productId
+    ) {
+
+        List<Vendor> vendors =
+                productVendorMappingRepository.findAllVendorsByProductId(productId);
+
+        int verified = 0;
+        int notVerified = 0;
+
+        for (Vendor vendor : vendors) {
+
+            if (vendor.getStatus() == VendorStatus.ACTIVE) {
+                verified++;
+            } else if (vendor.getStatus() == VendorStatus.PROSPECTIVE
+                    || vendor.getStatus() == VendorStatus.ONBOARDING) {
+                notVerified++;
+            }
+        }
+
+        return new ProductVendorVerificationResponse(
+                productId,
+                verified,
+                notVerified
+        );
+    }
+
+    @Override
+    public ProductQuotationResponseRate getQuotationResponseRate(
+            Long productId
+    ) {
+      /*  if (productId == null) {
+            throw new IllegalArgumentException(
+                    "Product ID is required"
+            );
+        }
+
+        if (!productRepository.existsById(productId)) {
+            throw new RuntimeException(
+                    "Product not found with ID: " + productId
+            );
+        }*/
+
+        QuotationResponseRateProjection projection =
+                rfqVendorRepository.getQuotationResponseRate(productId);
+
+        long totalInvited = projection != null
+                && projection.getTotalInvited() != null
+                ? projection.getTotalInvited()
+                : 0L;
+
+        long responded = projection != null
+                && projection.getResponded() != null
+                ? projection.getResponded()
+                : 0L;
+
+        long pending = Math.max(totalInvited - responded, 0L);
+
+        BigDecimal responseRate = BigDecimal.ZERO;
+
+        if (totalInvited > 0) {
+            responseRate = BigDecimal.valueOf(responded)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(
+                            BigDecimal.valueOf(totalInvited),
+                            2,
+                            RoundingMode.HALF_UP
+                    );
+        }
+
+        return ProductQuotationResponseRate.builder()
+                .productId(productId)
+                .totalInvited(totalInvited)
+                .responded(responded)
+                .pending(pending)
+                .responseRate(responseRate)
+                .build();
+    }
+
+    private VendorVerificationResponse mapToResponse(Vendor vendor) {
+
+        return new VendorVerificationResponse(
+                vendor.getId(),
+                vendor.getName(),
+                vendor.getEmail(),
+                vendor.getMobile(),
+                vendor.getGstNumber(),
+                vendor.getPanNumber(),
+                vendor.getStatus(),
+                vendor.getStatus() == VendorStatus.ACTIVE
+        );
+    }
+
+    private ProductRfqDashboardResponse mapRfqDashboardResponse(
+            ProductRfqDashboardProjection projection
+    ) {
+        return ProductRfqDashboardResponse.builder()
+                .rfqId(projection.getRfqId())
+                .rfqNumber(projection.getRfqNumber())
+                .title(projection.getTitle())
+                .quotationSubmissionDeadline(
+                        projection.getQuotationSubmissionDeadline()
+                )
+                .vendorsInvited(
+                        valueOrZero(projection.getVendorsInvited())
+                )
+                .quotationsReceived(
+                        valueOrZero(projection.getQuotationsReceived())
+                )
+                .status(projection.getStatus())
+                .build();
+    }
+
+    private Long valueOrZero(Long value) {
+        return value != null ? value : 0L;
+    }
+
+    private BigDecimal decimalOrZero(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private Long longOrZero(Long value) {
+        return value != null ? value : 0L;
+    }
 }

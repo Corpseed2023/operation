@@ -7,6 +7,7 @@ import com.doc.dto.vendor.VendorQuotationResponseDto;
 import com.doc.dto.vendor.request.VendorQuotationDocumentRequestDto;
 import com.doc.dto.mail.MailRequestDto;
 import com.doc.dto.vendor.*;
+import com.doc.entity.product.Product;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -32,6 +33,8 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
     private final RFQVendorRepository rfqVendorRepository;
     private final VendorRepository vendorRepository;
     private final MailService mailService;
+    private final ProductVendorMappingRepository productVendorMappingRepository;
+    private final VendorFinalizationRepository vendorFinalizationRepository;
 
     @Override
     @Transactional
@@ -328,9 +331,13 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         String vendorEmail = null;
 
-        if (quotation.getRfqVendor() != null &&
-                StringUtils.hasText(quotation.getRfqVendor().getSentToEmail())) {
+        if (quotation.getRfqVendor() != null
+                && StringUtils.hasText(
+                quotation.getRfqVendor().getSentToEmail()
+        )) {
+
             vendorEmail = quotation.getRfqVendor().getSentToEmail();
+
         } else if (StringUtils.hasText(vendor.getEmail())) {
             vendorEmail = vendor.getEmail();
         }
@@ -349,18 +356,122 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                 requestDto
         );
 
+        Date now = new Date();
+
         quotation.setAgreementFileUrl(requestDto.getAttachmentUrl());
         quotation.setRemarks(
                 StringUtils.hasText(requestDto.getRemarks())
                         ? requestDto.getRemarks()
                         : quotation.getRemarks()
         );
-        quotation.setStatus(VendorQuotationStatus.AGREEMENT_SENT_TO_VENDOR);
         quotation.setUpdatedBy(userId);
+        quotation.setUpdatedDate(now);
 
-        VendorQuotation saved = vendorQuotationRepository.save(quotation);
+        /*
+         * Existing active vendor:
+         * Map product with vendor and skip Accounts workflow.
+         */
+        if (vendor.getStatus() == VendorStatus.ACTIVE) {
+
+            mapProductWithActiveVendor(
+                    quotation,
+                    vendor,
+                    userId,
+                    now
+            );
+
+            quotation.setStatus(VendorQuotationStatus.ACCEPTED);
+
+            RFQ rfq = quotation.getRfq();
+
+            if (rfq != null) {
+                rfq.setStatus(RFQStatus.VENDOR_FINALIZED);
+                rfq.setUpdatedBy(userId);
+                rfq.setUpdatedDate(now);
+
+                rfqRepository.save(rfq);
+            }
+
+            RFQVendor rfqVendor = quotation.getRfqVendor();
+
+            if (rfqVendor != null) {
+                rfqVendor.setStatus(RFQVendorStatus.SELECTED);
+                rfqVendor.setUpdatedBy(userId);
+                rfqVendor.setUpdatedDate(now);
+                rfqVendor.setRemarks(
+                        "Active vendor mapped with product; accounts workflow skipped"
+                );
+
+                rfqVendorRepository.save(rfqVendor);
+            }
+
+            vendorFinalizationRepository
+                    .findByQuotation_IdAndIsDeletedFalse(quotationId)
+                    .forEach(finalization -> {
+                        /*
+                         * Prefer adding a dedicated status such as
+                         * ACTIVE_VENDOR_MAPPED instead of ACCOUNTS_APPROVED.
+                         */
+                        finalization.setStatus(
+                                VendorFinalizationStatus.FINALIZED
+                        );
+                        finalization.setSentToAccounts(false);
+                        finalization.setUpdatedBy(userId);
+                        finalization.setUpdatedDate(now);
+                    });
+
+        } else {
+            /*
+             * New or inactive vendor must still go through Accounts.
+             */
+            quotation.setStatus(
+                    VendorQuotationStatus.AGREEMENT_SENT_TO_VENDOR
+            );
+        }
+
+        VendorQuotation saved =
+                vendorQuotationRepository.save(quotation);
 
         return mapToResponse(saved);
+    }
+    private void mapProductWithActiveVendor(
+            VendorQuotation quotation,
+            Vendor vendor,
+            Long userId,
+            Date now
+    ) {
+        RFQ rfq = quotation.getRfq();
+
+        if (rfq == null || rfq.getProduct() == null) {
+            throw new ValidationException(
+                    "Product is not available for this quotation",
+                    "ERR_PRODUCT_NOT_AVAILABLE"
+            );
+        }
+
+        Product product = rfq.getProduct();
+
+        ProductVendorMapping mapping =
+                productVendorMappingRepository
+                        .findByProductIdAndVendorId(
+                                product.getId(),
+                                vendor.getId()
+                        )
+                        .orElseGet(ProductVendorMapping::new);
+
+        mapping.setProduct(product);
+        mapping.setVendor(vendor);
+        mapping.setActive(true);
+        mapping.setDeleted(false);
+        mapping.setUpdatedBy(userId);
+        mapping.setUpdatedDate(now);
+
+        if (mapping.getId() == null) {
+            mapping.setCreatedBy(userId);
+            mapping.setCreatedDate(now);
+        }
+
+        productVendorMappingRepository.save(mapping);
     }
 
     @Override

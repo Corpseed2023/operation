@@ -117,5 +117,9 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
             @Param("status") VendorFinalizationStatus status
     );
 
+    List<VendorFinalization> findByQuotation_IdAndIsDeletedFalse(
+            Long quotationId
+    );
+
 
 }
