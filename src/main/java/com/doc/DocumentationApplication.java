@@ -29,7 +29,7 @@ public class DocumentationApplication {
 	}
 
 	/**
-	 * Initializes predefined statuses and payment types.
+	 * Initializes predefined statuses and pay  ment types.
 	 *
 	 * IMPORTANT:
 	 * Uses explicit IDs to match StatusConstants.java.

@@ -1,3 +1,5 @@
+
+
 package com.doc.controller.project;
 
 import com.doc.dto.project.activity.ProjectActivityResponseDto;
@@ -12,6 +14,7 @@ import com.doc.service.ProjectActivityService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -19,19 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Project expense management APIs.
- *
- * Workflow:
- *
- * Technical/Originating Department
- *          ↓
- * CRT_REVIEW
- *          ↓
- * ACCOUNTS_REVIEW
- *          ↓
- * APPROVED / PAYMENT PENDING
- */
+@Slf4j
 @RestController
 @RequestMapping("/operationService/api/projects/expenses")
 @RequiredArgsConstructor
@@ -40,12 +31,6 @@ public class ProjectExpenseController {
 
     private final ProjectActivityService activityService;
 
-    /**
-     * Create expense request.
-     *
-     * POST:
-     * /operationService/api/projects/expenses?projectId=123
-     */
     @PostMapping
     public ResponseEntity<ProjectActivityResponseDto> createExpense(
             @RequestParam
@@ -57,21 +42,33 @@ public class ProjectExpenseController {
             CreateExpenseRequestDto request
     ) {
 
+        log.info(
+                "[EXPENSE-CREATE-REQUEST] projectId={} | createdByUserId={} | departmentId={} | category={}",
+                projectId,
+                request.getCreatedByUserId(),
+                request.getDepartmentId(),
+                request.getExpenseCategory()
+        );
+
+        log.debug(
+                "[EXPENSE-CREATE-SERVICE-CALL] Calling addExpense | projectId={}",
+                projectId
+        );
+
         ProjectActivityResponseDto response =
                 activityService.addExpense(projectId, request);
+
+        log.info(
+                "[EXPENSE-CREATE-SUCCESS] Expense request created | projectId={} | createdByUserId={}",
+                projectId,
+                request.getCreatedByUserId()
+        );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
     }
 
-    /**
-     * CRT approves, rejects or places an expense on hold.
-     *
-     * PUT:
-     * /operationService/api/projects/expenses/{expenseId}/crt-decision
-     * ?projectId=123&userId=456
-     */
     @PutMapping("/{expenseId}/crt-decision")
     public ResponseEntity<ProjectExpenseResponseDto> takeCrtDecision(
             @PathVariable
@@ -91,6 +88,14 @@ public class ProjectExpenseController {
             CrtExpenseDecisionRequestDto request
     ) {
 
+        log.info(
+                "[CRT-DECISION-REQUEST] projectId={} | expenseId={} | userId={} | decision={}",
+                projectId,
+                expenseId,
+                userId,
+                request.getStatus()
+        );
+
         ProjectExpenseResponseDto response =
                 activityService.takeCrtExpenseDecision(
                         projectId,
@@ -99,16 +104,17 @@ public class ProjectExpenseController {
                         request
                 );
 
+        log.info(
+                "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
+                projectId,
+                expenseId,
+                userId,
+                request.getStatus()
+        );
+
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Accounts approves, rejects or places an expense on hold.
-     *
-     * PUT:
-     * /operationService/api/projects/expenses/{expenseId}/accounts-decision
-     * ?projectId=123&userId=456
-     */
     @PutMapping("/{expenseId}/accounts-decision")
     public ResponseEntity<ProjectExpenseResponseDto> takeAccountsDecision(
             @PathVariable
@@ -128,6 +134,15 @@ public class ProjectExpenseController {
             AccountsExpenseDecisionRequestDto request
     ) {
 
+        log.info(
+                "[ACCOUNTS-DECISION-REQUEST] projectId={} | expenseId={} | userId={} | decision={} | approvedAmount={}",
+                projectId,
+                expenseId,
+                userId,
+                request.getStatus(),
+                request.getApprovedAmount()
+        );
+
         ProjectExpenseResponseDto response =
                 activityService.takeAccountsExpenseDecision(
                         projectId,
@@ -136,20 +151,17 @@ public class ProjectExpenseController {
                         request
                 );
 
+        log.info(
+                "[ACCOUNTS-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
+                projectId,
+                expenseId,
+                userId,
+                request.getStatus()
+        );
+
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get expenses requiring action at a specific approval stage.
-     *
-     * CRT queue:
-     * GET /operationService/api/projects/expenses/approval-queue
-     * ?userId=10&approvalStage=CRT_REVIEW&approvalStatus=PENDING
-     *
-     * Accounts queue:
-     * GET /operationService/api/projects/expenses/approval-queue
-     * ?userId=20&approvalStage=ACCOUNTS_REVIEW&approvalStatus=PENDING
-     */
     @GetMapping("/approval-queue")
     public ResponseEntity<List<ProjectExpenseResponseDto>> getApprovalQueue(
             @RequestParam
@@ -163,6 +175,13 @@ public class ProjectExpenseController {
             ApprovalStatus approvalStatus
     ) {
 
+        log.info(
+                "[EXPENSE-APPROVAL-QUEUE-REQUEST] userId={} | approvalStage={} | approvalStatus={}",
+                userId,
+                approvalStage,
+                approvalStatus
+        );
+
         List<ProjectExpenseResponseDto> response =
                 activityService.getExpenseApprovalQueue(
                         userId,
@@ -170,16 +189,16 @@ public class ProjectExpenseController {
                         approvalStatus
                 );
 
+        log.info(
+                "[EXPENSE-APPROVAL-QUEUE-SUCCESS] userId={} | approvalStage={} | recordCount={}",
+                userId,
+                approvalStage,
+                response.size()
+        );
+
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get payment queue.
-     *
-     * Example:
-     * GET /operationService/api/projects/expenses/payment-queue
-     * ?userId=20&paymentStatus=PENDING
-     */
     @GetMapping("/payment-queue")
     public ResponseEntity<List<ProjectExpenseResponseDto>> getPaymentQueue(
             @RequestParam
@@ -190,21 +209,28 @@ public class ProjectExpenseController {
             ExpensePaymentStatus paymentStatus
     ) {
 
+        log.info(
+                "[EXPENSE-PAYMENT-QUEUE-REQUEST] userId={} | paymentStatus={}",
+                userId,
+                paymentStatus
+        );
+
         List<ProjectExpenseResponseDto> response =
                 activityService.getExpensePaymentQueue(
                         userId,
                         paymentStatus
                 );
 
+        log.info(
+                "[EXPENSE-PAYMENT-QUEUE-SUCCESS] userId={} | paymentStatus={} | recordCount={}",
+                userId,
+                paymentStatus,
+                response.size()
+        );
+
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get all project expenses.
-     *
-     * GET:
-     * /operationService/api/projects/expenses/project/123?userId=456
-     */
     @GetMapping("/project/{projectId}")
     public ResponseEntity<List<ProjectExpenseResponseDto>> getProjectExpenses(
             @PathVariable
@@ -216,21 +242,27 @@ public class ProjectExpenseController {
             Long userId
     ) {
 
+        log.info(
+                "[PROJECT-EXPENSE-LIST-REQUEST] projectId={} | userId={}",
+                projectId,
+                userId
+        );
+
         List<ProjectExpenseResponseDto> response =
                 activityService.getExpensesByProject(
                         projectId,
                         userId
                 );
 
+        log.info(
+                "[PROJECT-EXPENSE-LIST-SUCCESS] projectId={} | recordCount={}",
+                projectId,
+                response.size()
+        );
+
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get a single expense.
-     *
-     * GET:
-     * /operationService/api/projects/expenses/789?userId=456
-     */
     @GetMapping("/{expenseId}")
     public ResponseEntity<ProjectExpenseResponseDto> getExpenseById(
             @PathVariable
@@ -242,9 +274,22 @@ public class ProjectExpenseController {
             Long userId
     ) {
 
+        log.info(
+                "[EXPENSE-DETAIL-REQUEST] expenseId={} | userId={}",
+                expenseId,
+                userId
+        );
+
         ProjectExpenseResponseDto response =
                 activityService.getExpenseById(expenseId, userId);
 
+        log.info(
+                "[EXPENSE-DETAIL-SUCCESS] expenseId={} | userId={}",
+                expenseId,
+                userId
+        );
+
         return ResponseEntity.ok(response);
     }
+
 }

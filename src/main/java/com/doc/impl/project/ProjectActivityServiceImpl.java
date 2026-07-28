@@ -8,7 +8,10 @@ import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
-import com.doc.em.*;
+import com.doc.em.ActivityType;
+import com.doc.em.ApprovalStatus;
+import com.doc.em.ExpenseApprovalStage;
+import com.doc.em.ExpensePaymentStatus;
 import com.doc.entity.department.Department;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
@@ -27,6 +30,7 @@ import com.doc.repository.projectRepo.activity.ProjectExpenseRepository;
 import com.doc.repository.projectRepo.activity.ProjectNoteRepository;
 import com.doc.service.ProjectActivityService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -44,6 +48,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProjectActivityServiceImpl implements ProjectActivityService {
@@ -81,7 +86,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             CreateNoteRequestDto request
     ) {
 
+        log.info(
+                "[NOTE-CREATE-START] projectId={} | createdByUserId={}",
+                projectId,
+                request != null ? request.getCreatedByUserId() : null
+        );
+
         if (request == null) {
+            log.warn(
+                    "[NOTE-CREATE-VALIDATION-FAILED] projectId={} | reason=request-null",
+                    projectId
+            );
             throw new ValidationException(
                     "Note request is required",
                     "ERR_NOTE_REQUEST_REQUIRED"
@@ -89,6 +104,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (request.getCreatedByUserId() == null) {
+            log.warn(
+                    "[NOTE-CREATE-VALIDATION-FAILED] projectId={} | reason=created-by-user-id-null",
+                    projectId
+            );
             throw new ValidationException(
                     "Created by user ID is required",
                     "ERR_CREATED_BY_REQUIRED"
@@ -98,6 +117,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (request.getNoteText() == null ||
                 request.getNoteText().trim().isEmpty()) {
 
+            log.warn(
+                    "[NOTE-CREATE-VALIDATION-FAILED] projectId={} | userId={} | reason=note-text-empty",
+                    projectId,
+                    request.getCreatedByUserId()
+            );
             throw new ValidationException(
                     "Note text is required",
                     "ERR_NOTE_TEXT_REQUIRED"
@@ -120,6 +144,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         activity = activityRepository.save(activity);
 
+        log.debug(
+                "[NOTE-ACTIVITY-SAVED] projectId={} | activityId={} | userId={}",
+                projectId,
+                activity.getId(),
+                user.getId()
+        );
+
         ProjectNote note = new ProjectNote();
         note.setProject(project);
         note.setActivity(activity);
@@ -128,7 +159,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         note.setCreatedByUserId(user.getId());
         note.setCreatedByUserName(user.getFullName());
 
-        noteRepository.save(note);
+        note = noteRepository.save(note);
+
+        log.info(
+                "[NOTE-CREATE-SUCCESS] projectId={} | activityId={} | noteId={} | userId={}",
+                projectId,
+                activity.getId(),
+                note.getId(),
+                user.getId()
+        );
 
         return mapResponse(activity, note);
     }
@@ -144,7 +183,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             CreateCommentRequestDto request
     ) {
 
+        log.info(
+                "[COMMENT-CREATE-START] projectId={} | createdByUserId={} | parentCommentId={}",
+                projectId,
+                request != null ? request.getCreatedByUserId() : null,
+                request != null ? request.getParentCommentId() : null
+        );
+
         if (request == null) {
+            log.warn(
+                    "[COMMENT-CREATE-VALIDATION-FAILED] projectId={} | reason=request-null",
+                    projectId
+            );
             throw new ValidationException(
                     "Comment request is required",
                     "ERR_COMMENT_REQUEST_REQUIRED"
@@ -152,6 +202,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (request.getCreatedByUserId() == null) {
+            log.warn(
+                    "[COMMENT-CREATE-VALIDATION-FAILED] projectId={} | reason=created-by-user-id-null",
+                    projectId
+            );
             throw new ValidationException(
                     "Created by user ID is required",
                     "ERR_CREATED_BY_REQUIRED"
@@ -161,6 +215,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (request.getCommentText() == null ||
                 request.getCommentText().trim().isEmpty()) {
 
+            log.warn(
+                    "[COMMENT-CREATE-VALIDATION-FAILED] projectId={} | userId={} | reason=comment-text-empty",
+                    projectId,
+                    request.getCreatedByUserId()
+            );
             throw new ValidationException(
                     "Comment text is required",
                     "ERR_COMMENT_TEXT_REQUIRED"
@@ -171,6 +230,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         Project project = validateActiveProject(projectId);
 
         if (request.getParentCommentId() != null) {
+            log.debug(
+                    "[COMMENT-PARENT-VALIDATION] projectId={} | parentCommentId={}",
+                    projectId,
+                    request.getParentCommentId()
+            );
+
             ProjectComment parentComment = commentRepository
                     .findById(request.getParentCommentId())
                     .orElseThrow(() -> new ResourceNotFoundException(
@@ -179,6 +244,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                     ));
 
             if (!parentComment.getProject().getId().equals(projectId)) {
+                log.warn(
+                        "[COMMENT-PARENT-VALIDATION-FAILED] projectId={} | parentCommentId={} | parentProjectId={}",
+                        projectId,
+                        request.getParentCommentId(),
+                        parentComment.getProject().getId()
+                );
                 throw new ValidationException(
                         "Parent comment does not belong to this project",
                         "ERR_INVALID_PARENT_COMMENT"
@@ -199,6 +270,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         activity = activityRepository.save(activity);
 
+        log.debug(
+                "[COMMENT-ACTIVITY-SAVED] projectId={} | activityId={} | userId={}",
+                projectId,
+                activity.getId(),
+                user.getId()
+        );
+
         ProjectComment comment = new ProjectComment();
         comment.setProject(project);
         comment.setActivity(activity);
@@ -208,7 +286,16 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         comment.setCreatedByUserId(user.getId());
         comment.setCreatedByUserName(user.getFullName());
 
-        commentRepository.save(comment);
+        comment = commentRepository.save(comment);
+
+        log.info(
+                "[COMMENT-CREATE-SUCCESS] projectId={} | activityId={} | commentId={} | parentCommentId={} | userId={}",
+                projectId,
+                activity.getId(),
+                comment.getId(),
+                comment.getParentCommentId(),
+                user.getId()
+        );
 
         return mapResponse(activity, comment);
     }
@@ -224,7 +311,19 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             CreateExpenseRequestDto request
     ) {
 
+        log.info(
+                "[EXPENSE-CREATE-START] projectId={} | createdByUserId={} | departmentId={} | category={}",
+                projectId,
+                request != null ? request.getCreatedByUserId() : null,
+                request != null ? request.getDepartmentId() : null,
+                request != null ? request.getExpenseCategory() : null
+        );
+
         if (request == null) {
+            log.warn(
+                    "[EXPENSE-CREATE-VALIDATION-FAILED] projectId={} | reason=request-null",
+                    projectId
+            );
             throw new ValidationException(
                     "Expense request is required",
                     "ERR_EXPENSE_REQUEST_REQUIRED"
@@ -232,6 +331,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (request.getCreatedByUserId() == null) {
+            log.warn(
+                    "[EXPENSE-CREATE-VALIDATION-FAILED] projectId={} | reason=created-by-user-id-null",
+                    projectId
+            );
             throw new ValidationException(
                     "Created by user ID is required",
                     "ERR_CREATED_BY_REQUIRED"
@@ -246,7 +349,19 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 request.getDepartmentId()
         );
 
+        log.debug(
+                "[EXPENSE-CREATE-CONTEXT-VALIDATED] projectId={} | userId={} | departmentId={}",
+                project.getId(),
+                user.getId(),
+                department.getId()
+        );
+
         if (request.getExpenseCategory() == null) {
+            log.warn(
+                    "[EXPENSE-CREATE-VALIDATION-FAILED] projectId={} | userId={} | reason=category-null",
+                    projectId,
+                    user.getId()
+            );
             throw new ValidationException(
                     "Expense category is required",
                     "ERR_EXPENSE_CATEGORY_REQUIRED"
@@ -268,6 +383,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (request.getExpenseDate() != null &&
                 request.getExpenseDate().isAfter(LocalDateTime.now())) {
 
+            log.warn(
+                    "[EXPENSE-CREATE-VALIDATION-FAILED] projectId={} | userId={} | reason=future-expense-date",
+                    projectId,
+                    user.getId()
+            );
             throw new ValidationException(
                     "Expense date cannot be in the future",
                     "ERR_FUTURE_EXPENSE_DATE"
@@ -300,6 +420,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         activity = activityRepository.save(activity);
+
+        log.debug(
+                "[EXPENSE-ACTIVITY-SAVED] projectId={} | activityId={} | userId={}",
+                projectId,
+                activity.getId(),
+                user.getId()
+        );
 
         ProjectExpense expense = new ProjectExpense();
 
@@ -346,6 +473,16 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         expense = expenseRepository.save(expense);
 
+        log.info(
+                "[EXPENSE-CREATE-SUCCESS] projectId={} | expenseId={} | activityId={} | stage={} | approvalStatus={} | paymentStatus={}",
+                projectId,
+                expense.getId(),
+                activity.getId(),
+                expense.getApprovalStage(),
+                expense.getApprovalStatus(),
+                expense.getPaymentStatus()
+        );
+
         return mapResponse(
                 activity,
                 mapToExpenseDto(expense)
@@ -365,6 +502,14 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             CrtExpenseDecisionRequestDto request
     ) {
 
+        log.info(
+                "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | requestedDecision={}",
+                projectId,
+                expenseId,
+                userId,
+                request != null ? request.getStatus() : null
+        );
+
         User user = validateActiveUser(userId);
         validateCrtApprover(user);
 
@@ -374,7 +519,22 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expenseId
         );
 
+        log.debug(
+                "[CRT-EXPENSE-LOADED] expenseId={} | currentStage={} | approvalStatus={} | crtStatus={} | paymentStatus={}",
+                expense.getId(),
+                expense.getApprovalStage(),
+                expense.getApprovalStatus(),
+                expense.getCrtApprovalStatus(),
+                expense.getPaymentStatus()
+        );
+
         if (request == null) {
+            log.warn(
+                    "[CRT-DECISION-VALIDATION-FAILED] projectId={} | expenseId={} | userId={} | reason=request-null",
+                    projectId,
+                    expenseId,
+                    userId
+            );
             throw new ValidationException(
                     "CRT decision request is required",
                     "ERR_CRT_DECISION_REQUIRED"
@@ -388,6 +548,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (expense.getApprovalStage() !=
                 ExpenseApprovalStage.CRT_REVIEW) {
 
+            log.warn(
+                    "[CRT-DECISION-VALIDATION-FAILED] expenseId={} | currentStage={} | expectedStage={}",
+                    expenseId,
+                    expense.getApprovalStage(),
+                    ExpenseApprovalStage.CRT_REVIEW
+            );
             throw new ValidationException(
                     "Expense is not pending at CRT review stage",
                     "ERR_INVALID_APPROVAL_STAGE"
@@ -397,6 +563,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
                 expense.getApprovalStatus() == ApprovalStatus.APPROVED) {
 
+            log.warn(
+                    "[CRT-DECISION-VALIDATION-FAILED] expenseId={} | approvalStatus={} | reason=workflow-completed",
+                    expenseId,
+                    expense.getApprovalStatus()
+            );
             throw new ValidationException(
                     "Expense approval workflow is already completed",
                     "ERR_EXPENSE_ALREADY_COMPLETED"
@@ -413,6 +584,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         LocalDateTime actionTime = LocalDateTime.now();
+
+        log.info(
+                "[CRT-DECISION-PROCESSING] expenseId={} | decision={} | userId={}",
+                expenseId,
+                decision,
+                user.getId()
+        );
 
         expense.setCrtApprovalStatus(decision);
         expense.setCrtActionByUserId(user.getId());
@@ -469,11 +647,28 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         expense = expenseRepository.save(expense);
 
+        log.info(
+                "[CRT-EXPENSE-SAVED] expenseId={} | decision={} | newStage={} | approvalStatus={} | paymentStatus={}",
+                expense.getId(),
+                decision,
+                expense.getApprovalStage(),
+                expense.getApprovalStatus(),
+                expense.getPaymentStatus()
+        );
+
         createExpenseDecisionActivity(
                 project,
                 expense,
                 user,
                 "CRT",
+                decision
+        );
+
+        log.info(
+                "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
+                projectId,
+                expense.getId(),
+                user.getId(),
                 decision
         );
 
@@ -493,6 +688,14 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             AccountsExpenseDecisionRequestDto request
     ) {
 
+        log.info(
+                "[ACCOUNTS-DECISION-START] projectId={} | expenseId={} | userId={} | requestedDecision={}",
+                projectId,
+                expenseId,
+                userId,
+                request != null ? request.getStatus() : null
+        );
+
         User user = validateActiveUser(userId);
         validateAccountsApprover(user);
 
@@ -502,7 +705,23 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expenseId
         );
 
+        log.debug(
+                "[ACCOUNTS-EXPENSE-LOADED] expenseId={} | requestedAmount={} | currentStage={} | approvalStatus={} | crtStatus={} | accountsStatus={}",
+                expense.getId(),
+                expense.getRequestedAmount(),
+                expense.getApprovalStage(),
+                expense.getApprovalStatus(),
+                expense.getCrtApprovalStatus(),
+                expense.getAccountsApprovalStatus()
+        );
+
         if (request == null) {
+            log.warn(
+                    "[ACCOUNTS-DECISION-VALIDATION-FAILED] projectId={} | expenseId={} | userId={} | reason=request-null",
+                    projectId,
+                    expenseId,
+                    userId
+            );
             throw new ValidationException(
                     "Accounts decision request is required",
                     "ERR_ACCOUNTS_DECISION_REQUIRED"
@@ -516,6 +735,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (expense.getApprovalStage() !=
                 ExpenseApprovalStage.ACCOUNTS_REVIEW) {
 
+            log.warn(
+                    "[ACCOUNTS-DECISION-VALIDATION-FAILED] expenseId={} | currentStage={} | expectedStage={}",
+                    expenseId,
+                    expense.getApprovalStage(),
+                    ExpenseApprovalStage.ACCOUNTS_REVIEW
+            );
             throw new ValidationException(
                     "Expense is not pending at Accounts review stage",
                     "ERR_INVALID_APPROVAL_STAGE"
@@ -525,6 +750,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (expense.getCrtApprovalStatus() !=
                 ApprovalStatus.APPROVED) {
 
+            log.warn(
+                    "[ACCOUNTS-DECISION-VALIDATION-FAILED] expenseId={} | crtStatus={} | reason=crt-not-approved",
+                    expenseId,
+                    expense.getCrtApprovalStatus()
+            );
             throw new ValidationException(
                     "CRT approval is required before Accounts approval",
                     "ERR_CRT_APPROVAL_REQUIRED"
@@ -534,6 +764,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
                 expense.getApprovalStatus() == ApprovalStatus.APPROVED) {
 
+            log.warn(
+                    "[ACCOUNTS-DECISION-VALIDATION-FAILED] expenseId={} | approvalStatus={} | reason=workflow-completed",
+                    expenseId,
+                    expense.getApprovalStatus()
+            );
             throw new ValidationException(
                     "Expense approval workflow is already completed",
                     "ERR_EXPENSE_ALREADY_COMPLETED"
@@ -550,6 +785,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         LocalDateTime actionTime = LocalDateTime.now();
+
+        log.info(
+                "[ACCOUNTS-DECISION-PROCESSING] expenseId={} | decision={} | userId={}",
+                expenseId,
+                decision,
+                user.getId()
+        );
 
         expense.setAccountsApprovalStatus(decision);
         expense.setAccountsActionByUserId(user.getId());
@@ -597,11 +839,28 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         expense = expenseRepository.save(expense);
 
+        log.info(
+                "[ACCOUNTS-EXPENSE-SAVED] expenseId={} | decision={} | approvedAmount={} | approvalStatus={} | paymentStatus={}",
+                expense.getId(),
+                decision,
+                expense.getApprovedAmount(),
+                expense.getApprovalStatus(),
+                expense.getPaymentStatus()
+        );
+
         createExpenseDecisionActivity(
                 project,
                 expense,
                 user,
                 "Accounts",
+                decision
+        );
+
+        log.info(
+                "[ACCOUNTS-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
+                projectId,
+                expense.getId(),
+                user.getId(),
                 decision
         );
 
@@ -614,6 +873,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             String decisionRemark
     ) {
 
+        log.debug(
+                "[ACCOUNTS-APPROVAL-AMOUNT-VALIDATION] expenseId={} | requestedAmount={} | submittedApprovedAmount={}",
+                expense.getId(),
+                expense.getRequestedAmount(),
+                request.getApprovedAmount()
+        );
+
         BigDecimal approvedAmount = normalizePositiveAmount(
                 request.getApprovedAmount(),
                 "Approved amount must be greater than zero",
@@ -624,6 +890,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getRequestedAmount()
         ) > 0) {
 
+            log.warn(
+                    "[ACCOUNTS-APPROVAL-VALIDATION-FAILED] expenseId={} | requestedAmount={} | approvedAmount={} | reason=approved-exceeds-requested",
+                    expense.getId(),
+                    expense.getRequestedAmount(),
+                    approvedAmount
+            );
             throw new ValidationException(
                     "Approved amount cannot exceed requested amount",
                     "ERR_APPROVED_AMOUNT_EXCEEDS_REQUESTED"
@@ -634,8 +906,14 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getRequestedAmount()
         ) != 0 && decisionRemark == null) {
 
+            log.warn(
+                    "[ACCOUNTS-APPROVAL-VALIDATION-FAILED] expenseId={} | requestedAmount={} | approvedAmount={} | reason=partial-approval-remark-missing",
+                    expense.getId(),
+                    expense.getRequestedAmount(),
+                    approvedAmount
+            );
             throw new ValidationException(
-                    "Remark is required when approved amount differs from requested amount",
+                    "Decision remark is required when approved amount differs from requested amount",
                     "ERR_PARTIAL_APPROVAL_REMARK_REQUIRED"
             );
         }
@@ -645,67 +923,21 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
         /*
-         * Paid-by validation is mandatory only for government fees.
+         * In this workflow, Accounts approval confirms that the payment
+         * has actually been completed.
          */
-        if (expense.getExpenseCategory() ==
-                ExpenseCategory.GOVERNMENT_FEE) {
+        expense.setPaidAmount(approvedAmount);
+        expense.setPaymentStatus(ExpensePaymentStatus.PAID);
+        expense.setPaymentCompletedDate(LocalDateTime.now());
 
-            if (request.getPaidBy() == null) {
-                throw new ValidationException(
-                        "Paid by is required for government fee approval",
-                        "ERR_GOVERNMENT_FEE_PAID_BY_REQUIRED"
-                );
-            }
-
-            expense.setExpensePaidBy(request.getPaidBy());
-
-            /*
-             * Client paid directly:
-             * no Account Service posting.
-             */
-            if (request.getPaidBy() == ExpensePaidBy.CLIENT) {
-
-                expense.setPaymentStatus(
-                        ExpensePaymentStatus.CLIENT_PAID
-                );
-
-                expense.setPaidAmount(approvedAmount);
-
-                expense.setAccountPostingStatus(
-                        AccountPostingStatus.SKIPPED
-                );
-
-                expense.setAccountPostingError(null);
-
-                return;
-            }
-
-            /*
-             * Company will pay:
-             * create accrual voucher in Account Service.
-             */
-            expense.setPaymentStatus(
-                    ExpensePaymentStatus.PENDING
-            );
-
-            expense.setAccountPostingStatus(
-                    AccountPostingStatus.PENDING
-            );
-
-            expense.setAccountPostingError(null);
-
-            return;
-        }
-
-        /*
-         * Other expense categories.
-         */
-        expense.setPaymentStatus(
-                ExpensePaymentStatus.PENDING
-        );
-
-        expense.setAccountPostingStatus(
-                AccountPostingStatus.NOT_REQUIRED
+        log.debug(
+                "[ACCOUNTS-APPROVAL-STATE-UPDATED] expenseId={} | approvedAmount={} | paidAmount={} | approvalStatus={} | paymentStatus={} | paymentCompletedDate={}",
+                expense.getId(),
+                expense.getApprovedAmount(),
+                expense.getPaidAmount(),
+                expense.getApprovalStatus(),
+                expense.getPaymentStatus(),
+                expense.getPaymentCompletedDate()
         );
     }
 
@@ -721,9 +953,20 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             ApprovalStatus approvalStatus
     ) {
 
+        log.info(
+                "[EXPENSE-APPROVAL-QUEUE-START] userId={} | approvalStage={} | approvalStatus={}",
+                userId,
+                approvalStage,
+                approvalStatus
+        );
+
         User user = validateActiveUser(userId);
 
         if (approvalStage == null) {
+            log.warn(
+                    "[EXPENSE-APPROVAL-QUEUE-VALIDATION-FAILED] userId={} | reason=approval-stage-null",
+                    userId
+            );
             throw new ValidationException(
                     "Approval stage is required",
                     "ERR_APPROVAL_STAGE_REQUIRED"
@@ -754,6 +997,14 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                     );
         }
 
+        log.info(
+                "[EXPENSE-APPROVAL-QUEUE-SUCCESS] userId={} | approvalStage={} | approvalStatus={} | recordCount={}",
+                userId,
+                approvalStage,
+                approvalStatus,
+                expenses.size()
+        );
+
         return expenses.stream()
                 .map(this::mapToExpenseDto)
                 .toList();
@@ -769,6 +1020,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId,
             ExpensePaymentStatus paymentStatus
     ) {
+
+        log.info(
+                "[EXPENSE-PAYMENT-QUEUE-START] userId={} | paymentStatus={}",
+                userId,
+                paymentStatus
+        );
 
         User user = validateActiveUser(userId);
         validateAccountsApprover(user);
@@ -787,6 +1044,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                     );
         }
 
+        log.info(
+                "[EXPENSE-PAYMENT-QUEUE-SUCCESS] userId={} | paymentStatus={} | recordCount={}",
+                userId,
+                paymentStatus,
+                expenses.size()
+        );
+
         return expenses.stream()
                 .map(this::mapToExpenseDto)
                 .toList();
@@ -803,11 +1067,26 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId
     ) {
 
+        log.info(
+                "[PROJECT-EXPENSES-START] projectId={} | userId={}",
+                projectId,
+                userId
+        );
+
         validateActiveUser(userId);
         validateProject(projectId);
 
-        return expenseRepository
-                .findByProjectIdOrderByExpenseDateDesc(projectId)
+        List<ProjectExpense> expenses = expenseRepository
+                .findByProjectIdOrderByExpenseDateDesc(projectId);
+
+        log.info(
+                "[PROJECT-EXPENSES-SUCCESS] projectId={} | userId={} | recordCount={}",
+                projectId,
+                userId,
+                expenses.size()
+        );
+
+        return expenses
                 .stream()
                 .map(this::mapToExpenseDto)
                 .toList();
@@ -824,6 +1103,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId
     ) {
 
+        log.info(
+                "[EXPENSE-DETAIL-START] expenseId={} | userId={}",
+                expenseId,
+                userId
+        );
+
         validateActiveUser(userId);
 
         ProjectExpense expense = expenseRepository
@@ -832,6 +1117,16 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         "Expense not found with id: " + expenseId,
                         "ERR_EXPENSE_NOT_FOUND"
                 ));
+
+        log.info(
+                "[EXPENSE-DETAIL-SUCCESS] expenseId={} | userId={} | projectId={} | stage={} | approvalStatus={} | paymentStatus={}",
+                expense.getId(),
+                userId,
+                expense.getProject() != null ? expense.getProject().getId() : null,
+                expense.getApprovalStage(),
+                expense.getApprovalStatus(),
+                expense.getPaymentStatus()
+        );
 
         return mapToExpenseDto(expense);
     }
@@ -846,6 +1141,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long projectId,
             Pageable pageable
     ) {
+
+        log.info(
+                "[ACTIVITY-LIST-START] projectId={} | requestedPage={} | requestedSize={}",
+                projectId,
+                pageable != null ? pageable.getPageNumber() : null,
+                pageable != null ? pageable.getPageSize() : null
+        );
 
         validateProject(projectId);
 
@@ -884,6 +1186,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         .filter(Objects::nonNull)
                         .toList();
 
+        log.info(
+                "[ACTIVITY-LIST-SUCCESS] projectId={} | page={} | size={} | returnedCount={} | totalElements={}",
+                projectId,
+                normalizedPageable.getPageNumber(),
+                normalizedPageable.getPageSize(),
+                content.size(),
+                page.getTotalElements()
+        );
+
         return new PageImpl<>(
                 content,
                 normalizedPageable,
@@ -899,9 +1210,21 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Pageable pageable
     ) {
 
+        log.info(
+                "[ACTIVITY-BY-TYPE-START] projectId={} | activityType={} | requestedPage={} | requestedSize={}",
+                projectId,
+                type,
+                pageable != null ? pageable.getPageNumber() : null,
+                pageable != null ? pageable.getPageSize() : null
+        );
+
         validateProject(projectId);
 
         if (type == null) {
+            log.warn(
+                    "[ACTIVITY-BY-TYPE-VALIDATION-FAILED] projectId={} | reason=activity-type-null",
+                    projectId
+            );
             throw new ValidationException(
                     "Activity type is required",
                     "ERR_ACTIVITY_TYPE_REQUIRED"
@@ -911,9 +1234,19 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         Pageable normalizedPageable =
                 normalizePageable(pageable);
 
+        Page<ProjectActivityResponseDto> response;
+
         if (type == ActivityType.COMMENT) {
-            return activityRepository
+            response = activityRepository
                     .findParentCommentActivities(
+                            projectId,
+                            type,
+                            normalizedPageable
+                    )
+                    .map(this::mapTimeline);
+        } else {
+            response = activityRepository
+                    .findByProjectIdAndActivityTypeAndDeletedFalseOrderByActivityDateDesc(
                             projectId,
                             type,
                             normalizedPageable
@@ -921,13 +1254,16 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                     .map(this::mapTimeline);
         }
 
-        return activityRepository
-                .findByProjectIdAndActivityTypeAndDeletedFalseOrderByActivityDateDesc(
-                        projectId,
-                        type,
-                        normalizedPageable
-                )
-                .map(this::mapTimeline);
+        log.info(
+                "[ACTIVITY-BY-TYPE-SUCCESS] projectId={} | activityType={} | page={} | returnedCount={} | totalElements={}",
+                projectId,
+                type,
+                response.getNumber(),
+                response.getNumberOfElements(),
+                response.getTotalElements()
+        );
+
+        return response;
     }
 
     @Override
@@ -939,9 +1275,24 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Pageable pageable
     ) {
 
+        log.info(
+                "[ACTIVITY-DATE-RANGE-START] projectId={} | startDate={} | endDate={} | requestedPage={} | requestedSize={}",
+                projectId,
+                startDate,
+                endDate,
+                pageable != null ? pageable.getPageNumber() : null,
+                pageable != null ? pageable.getPageSize() : null
+        );
+
         validateProject(projectId);
 
         if (startDate == null || endDate == null) {
+            log.warn(
+                    "[ACTIVITY-DATE-RANGE-VALIDATION-FAILED] projectId={} | startDate={} | endDate={} | reason=date-null",
+                    projectId,
+                    startDate,
+                    endDate
+            );
             throw new ValidationException(
                     "Start date and end date are required",
                     "ERR_DATE_RANGE_REQUIRED"
@@ -949,6 +1300,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (startDate.isAfter(endDate)) {
+            log.warn(
+                    "[ACTIVITY-DATE-RANGE-VALIDATION-FAILED] projectId={} | startDate={} | endDate={} | reason=start-after-end",
+                    projectId,
+                    startDate,
+                    endDate
+            );
             throw new ValidationException(
                     "Start date cannot be after end date",
                     "ERR_INVALID_DATE_RANGE"
@@ -992,6 +1349,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         .filter(Objects::nonNull)
                         .toList();
 
+        log.info(
+                "[ACTIVITY-DATE-RANGE-SUCCESS] projectId={} | startDate={} | endDate={} | returnedCount={} | totalElements={}",
+                projectId,
+                startDate,
+                endDate,
+                content.size(),
+                page.getTotalElements()
+        );
+
         return new PageImpl<>(
                 content,
                 normalizedPageable,
@@ -1005,36 +1371,65 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
     private User validateActiveUser(Long userId) {
 
+        log.debug(
+                "[USER-VALIDATION-START] userId={}",
+                userId
+        );
+
         if (userId == null) {
+            log.warn("[USER-VALIDATION-FAILED] reason=user-id-null");
             throw new ValidationException(
                     "User ID is required",
                     "ERR_USER_ID_REQUIRED"
             );
         }
 
-        return userRepository
+        User user = userRepository
                 .findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Active user not found with id: " + userId,
                         "ERR_USER_NOT_FOUND"
                 ));
+
+        log.debug(
+                "[USER-VALIDATION-SUCCESS] userId={}",
+                user.getId()
+        );
+
+        return user;
     }
 
     private Project validateProject(Long projectId) {
 
+        log.debug(
+                "[PROJECT-VALIDATION-START] projectId={}",
+                projectId
+        );
+
         if (projectId == null) {
+            log.warn("[PROJECT-VALIDATION-FAILED] reason=project-id-null");
             throw new ValidationException(
                     "Project ID is required",
                     "ERR_PROJECT_ID_REQUIRED"
             );
         }
 
-        return projectRepository
+        Project project = projectRepository
                 .findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Project not found with id: " + projectId,
                         "ERR_PROJECT_NOT_FOUND"
                 ));
+
+        log.debug(
+                "[PROJECT-VALIDATION-SUCCESS] projectId={} | active={} | deleted={} | cancelled={}",
+                project.getId(),
+                project.isActive(),
+                project.isDeleted(),
+                project.isCancelled()
+        );
+
+        return project;
     }
 
     private Project validateActiveProject(Long projectId) {
@@ -1042,6 +1437,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         Project project = validateProject(projectId);
 
         if (project.isDeleted()) {
+            log.warn(
+                    "[ACTIVE-PROJECT-VALIDATION-FAILED] projectId={} | reason=deleted",
+                    projectId
+            );
             throw new ValidationException(
                     "Expense cannot be raised for a deleted project",
                     "ERR_PROJECT_DELETED"
@@ -1049,6 +1448,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (!project.isActive()) {
+            log.warn(
+                    "[ACTIVE-PROJECT-VALIDATION-FAILED] projectId={} | reason=inactive",
+                    projectId
+            );
             throw new ValidationException(
                     "Expense cannot be raised for an inactive project",
                     "ERR_PROJECT_INACTIVE"
@@ -1056,11 +1459,20 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (project.isCancelled()) {
+            log.warn(
+                    "[ACTIVE-PROJECT-VALIDATION-FAILED] projectId={} | reason=cancelled",
+                    projectId
+            );
             throw new ValidationException(
                     "Expense cannot be raised for a cancelled project",
                     "ERR_PROJECT_CANCELLED"
             );
         }
+
+        log.debug(
+                "[ACTIVE-PROJECT-VALIDATION-SUCCESS] projectId={}",
+                projectId
+        );
 
         return project;
     }
@@ -1070,7 +1482,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long expenseId
     ) {
 
+        log.debug(
+                "[EXPENSE-VALIDATION-START] projectId={} | expenseId={}",
+                project != null ? project.getId() : null,
+                expenseId
+        );
+
         if (expenseId == null) {
+            log.warn(
+                    "[EXPENSE-VALIDATION-FAILED] projectId={} | reason=expense-id-null",
+                    project != null ? project.getId() : null
+            );
             throw new ValidationException(
                     "Expense ID is required",
                     "ERR_EXPENSE_ID_REQUIRED"
@@ -1087,11 +1509,25 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (expense.getProject() == null ||
                 !expense.getProject().getId().equals(project.getId())) {
 
+            log.warn(
+                    "[EXPENSE-VALIDATION-FAILED] selectedProjectId={} | expenseId={} | actualProjectId={} | reason=project-mismatch",
+                    project.getId(),
+                    expenseId,
+                    expense.getProject() != null ? expense.getProject().getId() : null
+            );
             throw new ValidationException(
                     "Expense does not belong to the selected project",
                     "ERR_EXPENSE_PROJECT_MISMATCH"
             );
         }
+
+        log.debug(
+                "[EXPENSE-VALIDATION-SUCCESS] projectId={} | expenseId={} | stage={} | approvalStatus={}",
+                project.getId(),
+                expense.getId(),
+                expense.getApprovalStage(),
+                expense.getApprovalStatus()
+        );
 
         return expense;
     }
@@ -1101,7 +1537,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long departmentId
     ) {
 
+        log.debug(
+                "[DEPARTMENT-VALIDATION-START] userId={} | departmentId={}",
+                user != null ? user.getId() : null,
+                departmentId
+        );
+
         if (departmentId == null) {
+            log.warn(
+                    "[DEPARTMENT-VALIDATION-FAILED] userId={} | reason=department-id-null",
+                    user != null ? user.getId() : null
+            );
             throw new ValidationException(
                     "Department ID is required",
                     "ERR_DEPARTMENT_REQUIRED"
@@ -1109,34 +1555,53 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (user.getDepartments() == null) {
+            log.warn(
+                    "[DEPARTMENT-VALIDATION-FAILED] userId={} | departmentId={} | reason=no-user-departments",
+                    user.getId(),
+                    departmentId
+            );
             throw new ValidationException(
                     "User is not assigned to any department",
                     "ERR_USER_DEPARTMENT_NOT_FOUND"
             );
         }
 
-        return user.getDepartments()
+        Department department = user.getDepartments()
                 .stream()
                 .filter(Objects::nonNull)
-                .filter(department ->
+                .filter(userDepartment ->
                         Objects.equals(
-                                department.getId(),
+                                userDepartment.getId(),
                                 departmentId
                         )
                 )
-                .filter(department -> !department.isDeleted())
+                .filter(userDepartment -> !userDepartment.isDeleted())
                 .findFirst()
                 .orElseThrow(() -> new ValidationException(
                         "User does not belong to the selected department",
                         "ERR_USER_DEPARTMENT_MISMATCH"
                 ));
+
+        log.debug(
+                "[DEPARTMENT-VALIDATION-SUCCESS] userId={} | departmentId={}",
+                user.getId(),
+                department.getId()
+        );
+
+        return department;
     }
 
     private ApprovalStatus validateDecisionStatus(
             ApprovalStatus status
     ) {
 
+        log.debug(
+                "[DECISION-STATUS-VALIDATION-START] status={}",
+                status
+        );
+
         if (status == null) {
+            log.warn("[DECISION-STATUS-VALIDATION-FAILED] reason=status-null");
             throw new ValidationException(
                     "Decision status is required",
                     "ERR_DECISION_STATUS_REQUIRED"
@@ -1144,11 +1609,21 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (!ALLOWED_DECISION_STATUSES.contains(status)) {
+            log.warn(
+                    "[DECISION-STATUS-VALIDATION-FAILED] status={} | allowedStatuses={}",
+                    status,
+                    ALLOWED_DECISION_STATUSES
+            );
             throw new ValidationException(
                     "Allowed decision statuses are APPROVED, REJECTED and ON_HOLD",
                     "ERR_INVALID_DECISION_STATUS"
             );
         }
+
+        log.debug(
+                "[DECISION-STATUS-VALIDATION-SUCCESS] status={}",
+                status
+        );
 
         return status;
     }
@@ -1162,6 +1637,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 status == ApprovalStatus.ON_HOLD) &&
                 remark == null) {
 
+            log.warn(
+                    "[DECISION-REMARK-VALIDATION-FAILED] status={} | reason=remark-required",
+                    status
+            );
             throw new ValidationException(
                     "Decision remark is required for REJECTED or ON_HOLD status",
                     "ERR_DECISION_REMARK_REQUIRED"
@@ -1182,9 +1661,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         user,
                         "CUSTOMER RELATIONSHIP"
                 )) {
+            log.debug(
+                    "[CRT-AUTHORIZATION-SUCCESS] userId={}",
+                    user.getId()
+            );
             return;
         }
 
+        log.warn(
+                "[CRT-AUTHORIZATION-FAILED] userId={}",
+                user.getId()
+        );
         throw new ValidationException(
                 "User is not authorized to take a CRT expense decision",
                 "ERR_CRT_APPROVAL_UNAUTHORIZED"
@@ -1198,9 +1685,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 hasRoleContaining(user, "FINANCE") ||
                 hasDepartmentContaining(user, "ACCOUNT") ||
                 hasDepartmentContaining(user, "FINANCE")) {
+            log.debug(
+                    "[ACCOUNTS-AUTHORIZATION-SUCCESS] userId={}",
+                    user.getId()
+            );
             return;
         }
 
+        log.warn(
+                "[ACCOUNTS-AUTHORIZATION-FAILED] userId={}",
+                user.getId()
+        );
         throw new ValidationException(
                 "User is not authorized to take an Accounts expense decision",
                 "ERR_ACCOUNTS_APPROVAL_UNAUTHORIZED"
@@ -1279,6 +1774,14 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             boolean systemGenerated
     ) {
 
+        log.debug(
+                "[ACTIVITY-BUILD-START] projectId={} | type={} | userId={} | systemGenerated={}",
+                project.getId(),
+                type,
+                user.getId(),
+                systemGenerated
+        );
+
         LocalDateTime now = LocalDateTime.now();
 
         ProjectActivity activity = new ProjectActivity();
@@ -1294,6 +1797,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         activity.setCreatedDate(now);
         activity.setUpdatedDate(now);
 
+        log.debug(
+                "[ACTIVITY-BUILD-SUCCESS] projectId={} | type={} | userId={}",
+                project.getId(),
+                type,
+                user.getId()
+        );
+
         return activity;
     }
 
@@ -1304,6 +1814,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             String approvalLevel,
             ApprovalStatus status
     ) {
+
+        log.debug(
+                "[EXPENSE-DECISION-ACTIVITY-START] projectId={} | expenseId={} | approvalLevel={} | status={} | userId={}",
+                project.getId(),
+                expense.getId(),
+                approvalLevel,
+                status,
+                user.getId()
+        );
 
         String currencyCode =
                 expense.getCurrencyCode() != null
@@ -1368,7 +1887,16 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 true
         );
 
-        activityRepository.save(activity);
+        activity = activityRepository.save(activity);
+
+        log.info(
+                "[EXPENSE-DECISION-ACTIVITY-SAVED] projectId={} | expenseId={} | activityId={} | approvalLevel={} | status={}",
+                project.getId(),
+                expense.getId(),
+                activity.getId(),
+                approvalLevel,
+                status
+        );
     }
 
     // =========================================================
@@ -1600,29 +2128,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getCreatedByUserName()
         );
 
-        dto.setExpensePaidBy(
-                expense.getExpensePaidBy()
-        );
-
-        dto.setAccountPostingStatus(
-                expense.getAccountPostingStatus()
-        );
-
-        dto.setAccountVoucherId(
-                expense.getAccountVoucherId()
-        );
-
-        dto.setAccountVoucherNumber(
-                expense.getAccountVoucherNumber()
-        );
-
-        dto.setAccountPostedAt(
-                expense.getAccountPostedAt()
-        );
-
-        dto.setAccountPostingError(
-                expense.getAccountPostingError()
-        );
         dto.setCreatedDate(expense.getCreatedDate());
         dto.setUpdatedDate(expense.getUpdatedDate());
 
@@ -1659,6 +2164,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         if (amount == null ||
                 amount.compareTo(BigDecimal.ZERO) <= 0) {
 
+            log.warn(
+                    "[AMOUNT-VALIDATION-FAILED] amount={} | errorCode={}",
+                    amount,
+                    errorCode
+            );
             throw new ValidationException(
                     message,
                     errorCode
@@ -1681,6 +2191,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 normalizeOptionalText(value);
 
         if (normalized == null) {
+            log.warn(
+                    "[TEXT-VALIDATION-FAILED] errorCode={}",
+                    errorCode
+            );
             throw new ValidationException(
                     message,
                     errorCode
@@ -1711,6 +2225,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         : value.trim().toUpperCase(Locale.ROOT);
 
         if (!currencyCode.matches("^[A-Z]{3}$")) {
+            log.warn(
+                    "[CURRENCY-VALIDATION-FAILED] currencyCode={}",
+                    currencyCode
+            );
             throw new ValidationException(
                     "Currency code must contain exactly three letters",
                     "ERR_INVALID_CURRENCY_CODE"
@@ -1723,6 +2241,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     private Pageable normalizePageable(Pageable pageable) {
 
         if (pageable == null) {
+            log.debug(
+                    "[PAGEABLE-NORMALIZED] source=null | page=0 | size=20"
+            );
             return PageRequest.of(0, 20);
         }
 
@@ -1732,10 +2253,22 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 100
         );
 
-        return PageRequest.of(
+        Pageable normalized = PageRequest.of(
                 page,
                 size,
                 pageable.getSort()
         );
+
+        log.debug(
+                "[PAGEABLE-NORMALIZED] requestedPage={} | requestedSize={} | normalizedPage={} | normalizedSize={}",
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                normalized.getPageNumber(),
+                normalized.getPageSize()
+        );
+
+        return normalized;
     }
 }
+
+
