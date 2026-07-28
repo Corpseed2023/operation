@@ -1,3 +1,4 @@
+
 package com.doc.impl.project;
 
 
@@ -23,9 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ExpenseAccountPostingServiceImpl
         implements ExpenseAccountPostingService {
 
@@ -39,6 +40,11 @@ public class ExpenseAccountPostingServiceImpl
             propagation = Propagation.REQUIRES_NEW
     )
     public void postGovernmentFeeExpense(Long expenseId) {
+
+        log.info(
+                "[GOVERNMENT-FEE-POSTING-START] expenseId={}",
+                expenseId
+        );
 
         ProjectExpense expense = expenseRepository
                 .findById(expenseId)
@@ -54,7 +60,14 @@ public class ExpenseAccountPostingServiceImpl
                     AccountPostingStatus.NOT_REQUIRED
             );
 
+            expense.setAccountPostingError(null);
             expenseRepository.save(expense);
+
+            log.info(
+                    "[GOVERNMENT-FEE-POSTING-NOT-REQUIRED] expenseId={} | category={}",
+                    expenseId,
+                    expense.getExpenseCategory()
+            );
             return;
         }
 
@@ -69,9 +82,24 @@ public class ExpenseAccountPostingServiceImpl
                     ExpensePaymentStatus.CLIENT_PAID
             );
 
+            expense.setPaidAmount(
+                    expense.getApprovedAmount()
+            );
+
+            if (expense.getPaymentCompletedDate() == null) {
+                expense.setPaymentCompletedDate(
+                        LocalDateTime.now()
+                );
+            }
+
             expense.setAccountPostingError(null);
 
             expenseRepository.save(expense);
+
+            log.info(
+                    "[GOVERNMENT-FEE-POSTING-SKIPPED] expenseId={} | reason=client-paid",
+                    expenseId
+            );
             return;
         }
 
@@ -84,6 +112,15 @@ public class ExpenseAccountPostingServiceImpl
             );
         }
 
+        if (expense.getPaymentStatus() !=
+                ExpensePaymentStatus.PAID) {
+
+            throw new ValidationException(
+                    "Only paid expenses can be posted to Account Service",
+                    "ERR_EXPENSE_NOT_PAID"
+            );
+        }
+
         /*
          * Already successfully posted.
          */
@@ -91,6 +128,12 @@ public class ExpenseAccountPostingServiceImpl
                 AccountPostingStatus.POSTED
                 && expense.getAccountVoucherId() != null) {
 
+            log.info(
+                    "[GOVERNMENT-FEE-POSTING-ALREADY-COMPLETED] expenseId={} | voucherId={} | voucherNumber={}",
+                    expenseId,
+                    expense.getAccountVoucherId(),
+                    expense.getAccountVoucherNumber()
+            );
             return;
         }
 
@@ -163,8 +206,11 @@ public class ExpenseAccountPostingServiceImpl
                 return;
             }
 
+            String postingStatus =
+                    response.getPostingStatus();
+
             if ("SKIPPED_CLIENT_PAID".equalsIgnoreCase(
-                    response.getPostingStatus()
+                    postingStatus
             )) {
 
                 expense.setAccountPostingStatus(
@@ -181,7 +227,11 @@ public class ExpenseAccountPostingServiceImpl
 
                 expense.setAccountPostingError(null);
 
-            } else {
+            } else if (
+                    "POSTED".equalsIgnoreCase(postingStatus)
+                            || "ALREADY_POSTED"
+                            .equalsIgnoreCase(postingStatus)
+            ) {
 
                 expense.setAccountPostingStatus(
                         AccountPostingStatus.POSTED
@@ -202,9 +252,25 @@ public class ExpenseAccountPostingServiceImpl
                 );
 
                 expense.setAccountPostingError(null);
+
+            } else {
+                markFailed(
+                        expense,
+                        "Unsupported Account Service posting status: "
+                                + postingStatus
+                );
+                return;
             }
 
             expenseRepository.save(expense);
+
+            log.info(
+                    "[GOVERNMENT-FEE-POSTING-SUCCESS] expenseId={} | accountPostingStatus={} | voucherId={} | voucherNumber={}",
+                    expenseId,
+                    expense.getAccountPostingStatus(),
+                    expense.getAccountVoucherId(),
+                    expense.getAccountVoucherNumber()
+            );
 
         } catch (FeignException exception) {
 
@@ -215,8 +281,9 @@ public class ExpenseAccountPostingServiceImpl
                             + exception.getMessage();
 
             log.error(
-                    "Government fee posting failed | expenseId={} | error={}",
+                    "[GOVERNMENT-FEE-POSTING-FEIGN-FAILED] expenseId={} | httpStatus={} | error={}",
                     expenseId,
+                    exception.status(),
                     error,
                     exception
             );
@@ -226,7 +293,7 @@ public class ExpenseAccountPostingServiceImpl
         } catch (Exception exception) {
 
             log.error(
-                    "Unexpected government fee posting failure | expenseId={}",
+                    "[GOVERNMENT-FEE-POSTING-FAILED] expenseId={}",
                     expenseId,
                     exception
             );
@@ -276,6 +343,24 @@ public class ExpenseAccountPostingServiceImpl
             );
         }
 
+        if (expense.getApprovalStatus() !=
+                ApprovalStatus.APPROVED) {
+
+            throw new ValidationException(
+                    "Only approved expenses can be retried",
+                    "ERR_EXPENSE_NOT_APPROVED"
+            );
+        }
+
+        if (expense.getPaymentStatus() !=
+                ExpensePaymentStatus.PAID) {
+
+            throw new ValidationException(
+                    "Only paid expenses can be retried",
+                    "ERR_EXPENSE_NOT_PAID"
+            );
+        }
+
         postGovernmentFeeExpense(expenseId);
 
         ProjectExpense refreshed = expenseRepository
@@ -310,7 +395,7 @@ public class ExpenseAccountPostingServiceImpl
 
         Project project = expense.getProject();
 
-        return "Government fee approved for project "
+        return "Government fee paid for project "
                 + (project != null
                 ? project.getProjectNo()
                 : "N/A")
@@ -376,5 +461,7 @@ public class ExpenseAccountPostingServiceImpl
         );
 
         return dto;
+
     }
+
 }

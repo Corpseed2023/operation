@@ -11,6 +11,7 @@ import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
 import com.doc.em.ApprovalStatus;
 import com.doc.em.ExpenseApprovalStage;
+import com.doc.em.ExpensePaidBy;
 import com.doc.em.ExpensePaymentStatus;
 import com.doc.entity.department.Department;
 import com.doc.entity.project.Project;
@@ -28,6 +29,7 @@ import com.doc.repository.projectRepo.activity.ProjectActivityRepository;
 import com.doc.repository.projectRepo.activity.ProjectCommentRepository;
 import com.doc.repository.projectRepo.activity.ProjectExpenseRepository;
 import com.doc.repository.projectRepo.activity.ProjectNoteRepository;
+import com.doc.service.ExpenseAccountPostingService;
 import com.doc.service.ProjectActivityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -74,6 +78,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     private final ProjectNoteRepository noteRepository;
     private final ProjectCommentRepository commentRepository;
     private final ProjectExpenseRepository expenseRepository;
+
+    private final ExpenseAccountPostingService
+            expenseAccountPostingService;
 
     // =========================================================
     // NOTE
@@ -856,6 +863,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 decision
         );
 
+        if (decision == ApprovalStatus.APPROVED
+                && expense.getPaymentStatus()
+                == ExpensePaymentStatus.PAID) {
+
+            scheduleAccountPostingAfterCommit(
+                    expense.getId()
+            );
+        }
+
         log.info(
                 "[ACCOUNTS-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
                 projectId,
@@ -923,6 +939,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
         /*
+         * Accounts approval means the company has paid this expense.
+         * Default older/null records to COMPANY so the Feign request has
+         * a valid paidBy value.
+         */
+        if (expense.getExpensePaidBy() == null) {
+            expense.setExpensePaidBy(
+                    ExpensePaidBy.COMPANY
+            );
+        }
+
+        /*
          * In this workflow, Accounts approval confirms that the payment
          * has actually been completed.
          */
@@ -939,6 +966,70 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getPaymentStatus(),
                 expense.getPaymentCompletedDate()
         );
+    }
+
+    /**
+     * Calls ExpenseAccountPostingServiceImpl through its interface after the
+     * Accounts approval transaction commits. The implementation uses
+     * REQUIRES_NEW and can therefore read the committed PAID expense.
+     */
+    private void scheduleAccountPostingAfterCommit(
+            Long expenseId
+    ) {
+
+        Runnable postingTask = () -> {
+            try {
+                log.info(
+                        "[EXPENSE-ACCOUNT-POSTING-CALL-START] expenseId={}",
+                        expenseId
+                );
+
+                /*
+                 * ACTUAL METHOD CALL:
+                 * Spring injects ExpenseAccountPostingServiceImpl because it
+                 * implements ExpenseAccountPostingService and is a @Service.
+                 */
+                expenseAccountPostingService
+                        .postGovernmentFeeExpense(expenseId);
+
+                log.info(
+                        "[EXPENSE-ACCOUNT-POSTING-CALL-SUCCESS] expenseId={}",
+                        expenseId
+                );
+
+            } catch (Exception exception) {
+                log.error(
+                        "[EXPENSE-ACCOUNT-POSTING-CALL-FAILED] expenseId={}",
+                        expenseId,
+                        exception
+                );
+            }
+        };
+
+        if (TransactionSynchronizationManager
+                .isSynchronizationActive()) {
+
+            TransactionSynchronizationManager
+                    .registerSynchronization(
+                            new TransactionSynchronization() {
+                                @Override
+                                public void afterCommit() {
+                                    postingTask.run();
+                                }
+                            }
+                    );
+
+            log.info(
+                    "[EXPENSE-ACCOUNT-POSTING-SCHEDULED-AFTER-COMMIT] expenseId={}",
+                    expenseId
+            );
+
+        } else {
+            /*
+             * Fallback for execution without a Spring-managed transaction.
+             */
+            postingTask.run();
+        }
     }
 
     // =========================================================
@@ -2036,6 +2127,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getExpenseCategory()
         );
 
+        dto.setExpensePaidBy(
+                expense.getExpensePaidBy()
+        );
+
         dto.setRequestedAmount(
                 expense.getRequestedAmount()
         );
@@ -2118,6 +2213,26 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         dto.setPaymentCompletedDate(
                 expense.getPaymentCompletedDate()
+        );
+
+        dto.setAccountPostingStatus(
+                expense.getAccountPostingStatus()
+        );
+
+        dto.setAccountVoucherId(
+                expense.getAccountVoucherId()
+        );
+
+        dto.setAccountVoucherNumber(
+                expense.getAccountVoucherNumber()
+        );
+
+        dto.setAccountPostedAt(
+                expense.getAccountPostedAt()
+        );
+
+        dto.setAccountPostingError(
+                expense.getAccountPostingError()
         );
 
         dto.setCreatedByUserId(
@@ -2270,5 +2385,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return normalized;
     }
 }
+
+
+
+
+
 
 
