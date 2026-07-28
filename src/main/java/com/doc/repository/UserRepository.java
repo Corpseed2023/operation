@@ -99,7 +99,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
                 INNER JOIN user_department_map udm
                         ON udm.user_id = u.id
                 INNER JOIN departments d
-                        ON d.id = udm.department_id
+                        ON d.id = udm.dept_id
                 WHERE u.id = :userId
                   AND u.is_active = 1
                   AND u.is_deleted = 0

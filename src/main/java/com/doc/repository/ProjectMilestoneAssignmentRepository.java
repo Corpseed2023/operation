@@ -207,118 +207,157 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     );
 
     @Query("""
-            SELECT
-                m.id AS milestoneId,
-                m.name AS milestoneName,
+        SELECT
+            m.id AS milestoneId,
+            m.name AS milestoneName,
 
-                COUNT(DISTINCT p.id) AS totalProjects,
+            COUNT(DISTINCT p.id) AS totalProjects,
 
-                COUNT(
-                    DISTINCT CASE
-                        WHEN s.id = 3 THEN p.id
-                        ELSE NULL
-                    END
-                ) AS completedProjects
+            COUNT(
+                DISTINCT CASE
+                    WHEN s.id = 3 THEN p.id
+                    ELSE NULL
+                END
+            ) AS completedProjects
 
-            FROM ProjectMilestoneAssignment pma
-            JOIN pma.project p
-            JOIN pma.milestone m
-            JOIN pma.status s
+        FROM ProjectMilestoneAssignment pma
 
-            WHERE pma.isDeleted = false
-              AND pma.isVisible = true
-              AND p.isDeleted = false
+        JOIN pma.project p
+        JOIN pma.milestone m
+        JOIN pma.status s
 
-            GROUP BY
-                m.id,
-                m.name
+        JOIN pma.assignedUser u
+        JOIN u.departments d
 
-            ORDER BY m.id
-            """)
-    List<MilestoneOverviewProjection> getMilestoneOverview();
+        WHERE pma.isDeleted = false
+          AND pma.isVisible = true
+          AND p.isDeleted = false
+          AND pma.assignedUser IS NOT NULL
+
+          AND (
+                :departmentId IS NULL
+                OR d.id = :departmentId
+          )
+
+        GROUP BY
+            m.id,
+            m.name
+
+        ORDER BY m.id
+        """)
+    List<MilestoneOverviewProjection> getMilestoneOverview(
+            @Param("departmentId") Long departmentId
+    );
 
     @Query("""
-            SELECT
-                d.id AS departmentId,
-                d.name AS departmentName,
+        SELECT
+            d.id AS departmentId,
+            d.name AS departmentName,
 
-                COUNT(pma.id) AS assignedCount,
+            COUNT(pma.id) AS assignedCount,
 
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN pma.status.id = 3 THEN 1
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ) AS completedCount
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN pma.status.id = 3 THEN 1
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS completedCount
 
-            FROM ProjectMilestoneAssignment pma
-            JOIN pma.assignedUser u
-            JOIN u.departments d
-            JOIN pma.project p
+        FROM ProjectMilestoneAssignment pma
+        JOIN pma.assignedUser u
+        JOIN u.departments d
+        JOIN pma.project p
 
-            WHERE pma.isDeleted = false
-              AND p.isDeleted = false
-              AND pma.assignedUser IS NOT NULL
+        WHERE pma.isDeleted = false
+          AND p.isDeleted = false
+          AND pma.assignedUser IS NOT NULL
 
-            GROUP BY
-                d.id,
-                d.name
+          AND (
+                :departmentId IS NULL
+                OR d.id = :departmentId
+          )
 
-            ORDER BY d.name
-            """)
-    List<TeamWorkloadProjection> getTeamWorkload();
+        GROUP BY
+            d.id,
+            d.name
+
+        ORDER BY d.name
+        """)
+    List<TeamWorkloadProjection> getTeamWorkload(
+            @Param("departmentId") Long departmentId
+    );
 
 
     @Query(
             value = """
-                    SELECT
-                        p.id AS projectId,
-                        c.name AS companyName,
-                        p.project_no AS projectNumber,
-                        m.id AS milestoneId,
-                        m.name AS milestoneName,
-                        pma.date AS dueDate,
-                        u.id AS ownerId,
-                        u.full_name AS ownerName,
-                        p.priority AS priority
-                    FROM project_milestone_assignment pma
-                    INNER JOIN project p
-                            ON p.id = pma.project_id
-                    INNER JOIN milestones m
-                            ON m.id = pma.milestone_id
-                    INNER JOIN company c
-                            ON c.id = p.company_id
-                    LEFT JOIN users u
-                           ON u.id = pma.assigned_user_id
-                    WHERE pma.is_deleted = 0
-                      AND p.is_deleted = 0
-                      AND pma.is_visible = 1
-                      AND pma.date IS NOT NULL
-                      AND pma.status_id <> 3
-                      AND pma.date <= DATE_ADD(
-                          CURDATE(),
-                          INTERVAL :upcomingDays DAY
-                      )
-                    ORDER BY
-                        CASE
-                            WHEN pma.date < CURDATE() THEN 0
-                            ELSE 1
-                        END,
-                        CASE p.priority
-                            WHEN 'CRITICAL' THEN 0
-                            WHEN 'HIGH' THEN 1
-                            WHEN 'STANDARD' THEN 2
-                            ELSE 3
-                        END,
-                        pma.date ASC
-                    LIMIT :recordLimit
-                    """,
+                SELECT
+                    p.id AS projectId,
+                    c.name AS companyName,
+                    p.project_no AS projectNumber,
+                    m.id AS milestoneId,
+                    m.name AS milestoneName,
+                    pma.date AS dueDate,
+                    u.id AS ownerId,
+                    u.full_name AS ownerName,
+                    p.priority AS priority
+
+                FROM project_milestone_assignment pma
+
+                INNER JOIN project p
+                        ON p.id = pma.project_id
+
+                INNER JOIN milestones m
+                        ON m.id = pma.milestone_id
+
+                INNER JOIN company c
+                        ON c.id = p.company_id
+
+                LEFT JOIN users u
+                       ON u.id = pma.assigned_user_id
+
+                LEFT JOIN user_department_map udm
+                       ON udm.user_id = pma.assigned_user_id
+
+                WHERE pma.is_deleted = 0
+                  AND p.is_deleted = 0
+                  AND pma.is_visible = 1
+                  AND pma.date IS NOT NULL
+                  AND pma.status_id <> 3
+
+                  AND (
+                        :departmentId IS NULL
+                        OR udm.dept_id = :departmentId
+                  )
+
+                  AND pma.date <= DATE_ADD(
+                      CURDATE(),
+                      INTERVAL :upcomingDays DAY
+                  )
+
+                ORDER BY
+                    CASE
+                        WHEN pma.date < CURDATE() THEN 0
+                        ELSE 1
+                    END,
+
+                    CASE p.priority
+                        WHEN 'CRITICAL' THEN 0
+                        WHEN 'HIGH' THEN 1
+                        WHEN 'STANDARD' THEN 2
+                        ELSE 3
+                    END,
+
+                    pma.date ASC
+
+                LIMIT :recordLimit
+                """,
             nativeQuery = true
     )
     List<DueRiskQueueProjection> findDueRiskQueue(
+            @Param("departmentId") Long departmentId,
             @Param("upcomingDays") Integer upcomingDays,
             @Param("recordLimit") Integer recordLimit
     );
