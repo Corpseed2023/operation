@@ -121,5 +121,6 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
             Long quotationId
     );
 
-
+    Optional<VendorFinalization>
+    findFirstByVendor_IdOrderByIdDesc(Long vendorId);
 }

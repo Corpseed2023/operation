@@ -1,28 +1,29 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.vendor.ProcurementPaymentActionRequestDto;
-import com.doc.dto.vendor.ProcurementPaymentRequestDto;
-import com.doc.dto.vendor.ProcurementPaymentRequestResponseDto;
+import com.doc.dto.vendor.*;
 import com.doc.entity.project.Project;
-import com.doc.entity.vendor.PaymentRequestStatus;
-import com.doc.entity.vendor.ProcurementOrder;
-import com.doc.entity.vendor.ProcurementOrderStatus;
-import com.doc.entity.vendor.ProcurementPaymentRequest;
-import com.doc.entity.vendor.Vendor;
+import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.feign.AccountFeignClient;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.ProcurementPaymentRequestRepository;
 import com.doc.repository.vendor.PurchaseOrderRepository;
+import com.doc.repository.vendor.VendorAccountsSubmissionRepository;
+import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.service.vendor.ProcurementPaymentRequestService;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Date;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentRequestService {
@@ -30,6 +31,9 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
     private final ProcurementPaymentRequestRepository paymentRequestRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final UserRepository userRepository;
+    private final VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository;
+    private final VendorFinalizationRepository vendorFinalizationRepository;
+    private final AccountFeignClient accountFeignClient;
 
     @Override
     @Transactional
@@ -225,10 +229,12 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
     ) {
         validateUser(userId);
 
-        ProcurementPaymentRequest paymentRequest = getActivePaymentRequest(paymentRequestId);
+        ProcurementPaymentRequest paymentRequest =
+                getActivePaymentRequest(paymentRequestId);
 
         if (paymentRequest.getStatus() != PaymentRequestStatus.PENDING
                 && paymentRequest.getStatus() != PaymentRequestStatus.UNDER_REVIEW) {
+
             throw new ValidationException(
                     "Only PENDING or UNDER_REVIEW payment request can be approved. Current status: "
                             + paymentRequest.getStatus(),
@@ -236,18 +242,159 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
+        Date currentDate = new Date();
+
         paymentRequest.setStatus(PaymentRequestStatus.APPROVED);
         paymentRequest.setApprovedBy(userId);
-        paymentRequest.setApprovedDate(new Date());
-        paymentRequest.setUpdatedDate(new Date());
+        paymentRequest.setApprovedDate(currentDate);
+        paymentRequest.setUpdatedDate(currentDate);
 
-        if (request != null && request.getComment() != null && !request.getComment().trim().isEmpty()) {
-            paymentRequest.setCompletionRemarks(request.getComment().trim());
+        if (request != null
+                && request.getComment() != null
+                && !request.getComment().trim().isEmpty()) {
+
+            paymentRequest.setCompletionRemarks(
+                    request.getComment().trim()
+            );
         }
 
-        ProcurementPaymentRequest saved = paymentRequestRepository.save(paymentRequest);
+        /*
+         * saveAndFlush ensures that the payment request update is executed
+         * before calling Account Service.
+         */
+        ProcurementPaymentRequest saved =
+                paymentRequestRepository.saveAndFlush(paymentRequest);
+
+        /*
+         * Synchronise the vendor with Account Service after approval.
+         */
+        syncVendorWithAccountService(saved, userId);
 
         return mapToResponse(saved);
+    }
+
+    private void syncVendorWithAccountService(
+            ProcurementPaymentRequest paymentRequest,
+            Long approvedByUserId
+    ) {
+        if (paymentRequest.getVendor() == null) {
+            throw new ValidationException(
+                    "Vendor is not available against payment request ID: "
+                            + paymentRequest.getId(),
+                    "ERR_PAYMENT_REQUEST_VENDOR_NOT_FOUND"
+            );
+        }
+
+        Vendor vendor = paymentRequest.getVendor();
+        Long vendorId = vendor.getId();
+
+        VendorAccountsSubmission accountsSubmission =
+                vendorAccountsSubmissionRepository
+                        .findFirstByVendor_IdOrderByIdDesc(vendorId)
+                        .orElseThrow(() -> new ValidationException(
+                                "Vendor accounts submission not found for vendor ID: "
+                                        + vendorId,
+                                "ERR_VENDOR_ACCOUNTS_SUBMISSION_NOT_FOUND"
+                        ));
+
+        VendorFinalization vendorFinalization =
+                vendorFinalizationRepository
+                        .findFirstByVendor_IdOrderByIdDesc(vendorId)
+                        .orElseThrow(() -> new ValidationException(
+                                "Vendor finalization not found for vendor ID: "
+                                        + vendorId,
+                                "ERR_VENDOR_FINALIZATION_NOT_FOUND"
+                        ));
+
+        LocalDateTime currentDateTime = LocalDateTime.now();
+
+        AccountVendorSyncRequestDto syncRequest =
+                AccountVendorSyncRequestDto.builder()
+                        .operationVendorId(vendorId)
+
+                        .vendorAccountsSubmissionId(accountsSubmission.getId())
+                        .vendorFinalizationId(vendorFinalization.getId())
+
+                        .vendorName(vendor.getName())
+                        .email(vendor.getEmail())
+                        .mobile(vendor.getMobile())
+                        .pan(vendor.getPanNumber())
+                        .gstNumber(vendor.getGstNumber())
+
+                        .gstRegistrationType(
+                                vendor.getGstRegistrationType() != null
+                                        ? vendor.getGstRegistrationType().name()
+                                        : null
+                        )
+
+                        .accountHolderName(
+                                accountsSubmission.getAccountHolderName()
+                        )
+                        .bankAccountNumber(
+                                accountsSubmission.getAccountNumber()
+                        )
+                        .ifscCode(
+                                accountsSubmission.getIfsc()
+                        )
+//                        .bankName(
+//                                accountsSubmission.getBankName()
+//                        )
+                        .branchAddress(
+                                accountsSubmission.getBranchAddress()
+                        )
+
+                        .fullAddress(accountsSubmission.getBranchAddress())
+                        .city(vendor.getCity())
+                        .state(vendor.getState())
+                        .country(vendor.getCountry())
+
+                        .active(
+                                vendor.getStatus() != VendorStatus.ACTIVE
+                                        ? Boolean.FALSE
+                                        : Boolean.TRUE
+                        )
+
+                        .approvedByOperationUserId(approvedByUserId)
+                        .approvedAt(currentDateTime)
+                        .operationUpdatedAt(currentDateTime)
+                        .build();
+
+        try {
+            AccountVendorSyncResponseDto response =
+                    accountFeignClient.syncVendor(syncRequest);
+
+            if (response == null) {
+                throw new ValidationException(
+                        "Account Service returned an empty response for vendor ID: "
+                                + vendorId,
+                        "ERR_EMPTY_ACCOUNT_VENDOR_SYNC_RESPONSE"
+                );
+            }
+
+            log.info(
+                    "Vendor synced with Account Service successfully. " +
+                            "paymentRequestId={}, vendorId={}, accountsSubmissionId={}, vendorFinalizationId={}",
+                    paymentRequest.getId(),
+                    vendorId,
+                    accountsSubmission.getId(),
+                    vendorFinalization.getId()
+            );
+
+        } catch (FeignException exception) {
+            log.error(
+                    "Vendor sync failed. paymentRequestId={}, vendorId={}, status={}, response={}",
+                    paymentRequest.getId(),
+                    vendorId,
+                    exception.status(),
+                    exception.contentUTF8(),
+                    exception
+            );
+
+            throw new ValidationException(
+                    "Unable to synchronise vendor with Account Service",
+                    "ERR_ACCOUNT_VENDOR_SYNC_FAILED"
+            );
+        }
     }
 
     @Override

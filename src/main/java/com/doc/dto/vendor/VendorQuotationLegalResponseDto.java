@@ -23,6 +23,9 @@ public class VendorQuotationLegalResponseDto {
     private String statusReason;
     private String status;
 
+    private Long validityDays;
+    private Date expiryDate;
+
     private Long assignedToLegal;
 
     private Long createdBy;
@@ -37,3 +40,4 @@ public class VendorQuotationLegalResponseDto {
 
     private List<VendorQuotationDocumentResponseDto> documents;
 }
+

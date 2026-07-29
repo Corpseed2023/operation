@@ -77,6 +77,11 @@ public class VendorQuotationLegalRequest {
     @Temporal(TemporalType.TIMESTAMP)
     private Date sentToProcurementDate;
 
+    private Long validityDays;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date expiryDate;
+
     private Long decisionBy;
 
     @Temporal(TemporalType.TIMESTAMP)
