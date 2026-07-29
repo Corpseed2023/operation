@@ -1,5 +1,6 @@
 package com.doc.impl.project;
 
+import com.doc.constants.StatusConstants;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
 import com.doc.dto.ProjectMilestoneassignment.SendBackToPreviousMilestoneDto;
@@ -831,31 +832,84 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     }
 
 
-    private void updateProjectStatus(Project project, Long updatedById) {
-        List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository
-                .findByProjectIdAndIsDeletedFalse(project.getId());
+    private void updateProjectStatus(
+            Project project,
+            Long updatedById
+    ) {
+        if (project == null || project.getStatus() == null) {
+            return;
+        }
+
+        Long currentProjectStatusId =
+                project.getStatus().getId();
+
+        /*
+         * Do not allow milestone calculation to overwrite
+         * administrative/terminal project statuses.
+         */
+        if (StatusConstants.PROJECT_FORCE_CLOSED_ID
+                .equals(currentProjectStatusId)
+                || StatusConstants.PROJECT_CANCELLED_ID
+                .equals(currentProjectStatusId)
+                || StatusConstants.PROJECT_REFUNDED_ID
+                .equals(currentProjectStatusId)) {
+
+            logger.info(
+                    "Skipping automatic project status update. projectId={}, currentStatus={}",
+                    project.getId(),
+                    project.getStatus().getName()
+            );
+
+            return;
+        }
+
+        List<ProjectMilestoneAssignment> assignments =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(
+                                project.getId()
+                        );
 
         String newStatusName;
 
         if (assignments.isEmpty()) {
             newStatusName = "OPEN";
-        } else if (assignments.stream().allMatch(a ->
-                "COMPLETED".equals(a.getStatus().getName())
+
+        } else if (assignments.stream().allMatch(assignment ->
+                assignment.getStatus() != null
+                        && "COMPLETED".equalsIgnoreCase(
+                        assignment.getStatus().getName()
+                )
         )) {
             newStatusName = "COMPLETED";
-        } else if (assignments.stream().anyMatch(a ->
-                List.of("IN_PROGRESS", "ON_HOLD", "REWORK").contains(a.getStatus().getName())
+
+        } else if (assignments.stream().anyMatch(assignment ->
+                assignment.getStatus() != null
+                        && List.of(
+                        "IN_PROGRESS",
+                        "ON_HOLD",
+                        "REWORK"
+                ).contains(
+                        assignment.getStatus()
+                                .getName()
+                                .toUpperCase()
+                )
         )) {
             newStatusName = "IN_PROGRESS";
+
         } else {
             newStatusName = "OPEN";
         }
 
-        ProjectStatus status = projectStatusRepository.findByName(newStatusName)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project status not found: " + newStatusName,
-                        "STATUS_NOT_FOUND"
-                ));
+        ProjectStatus status =
+                projectStatusRepository
+                        .findByName(newStatusName)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Project status not found: "
+                                                + newStatusName,
+                                        "STATUS_NOT_FOUND"
+                                )
+                        );
 
         project.setStatus(status);
         project.setUpdatedBy(updatedById);
@@ -864,6 +918,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         updateProjectProgress(project);
 
         projectRepository.save(project);
+
     }
 
     private void updateProjectProgress(Project project) {
@@ -1073,6 +1128,53 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         milestoneStatusHistoryRepository.save(history);
     }
 
+    private void validateProjectAllowsMilestoneMutation(
+            Project project
+    ) {
+        if (project == null) {
+            throw new ValidationException(
+                    "Project is required",
+                    "ERR_PROJECT_REQUIRED"
+            );
+        }
+
+        if (project.getStatus() == null) {
+            throw new ValidationException(
+                    "Project status is missing",
+                    "ERR_PROJECT_STATUS_MISSING"
+            );
+        }
+
+        Long projectStatusId = project.getStatus().getId();
+
+        if (StatusConstants.PROJECT_FORCE_CLOSED_ID
+                .equals(projectStatusId)) {
+
+            throw new ValidationException(
+                    "Milestones cannot be changed because project is FORCE_CLOSED",
+                    "ERR_FORCE_CLOSED_PROJECT_MILESTONE_MUTATION_NOT_ALLOWED"
+            );
+        }
+
+        if (StatusConstants.PROJECT_CANCELLED_ID
+                .equals(projectStatusId)
+                || project.isCancelled()) {
+
+            throw new ValidationException(
+                    "Milestones cannot be changed because project is CANCELLED",
+                    "ERR_CANCELLED_PROJECT_MILESTONE_MUTATION_NOT_ALLOWED"
+            );
+        }
+
+        if (StatusConstants.PROJECT_REFUNDED_ID
+                .equals(projectStatusId)) {
+
+            throw new ValidationException(
+                    "Milestones cannot be changed because project is REFUNDED",
+                    "ERR_REFUNDED_PROJECT_MILESTONE_MUTATION_NOT_ALLOWED"
+            );
+        }
+    }
 
 
 

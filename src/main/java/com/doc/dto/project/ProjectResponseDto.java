@@ -53,5 +53,9 @@ public class ProjectResponseDto {
 
     private Boolean poBillingEligible;
 
+    private boolean forceClosed;
+    private boolean reopened;
+    private boolean lifecycleActionAllowed;
+
 
 }

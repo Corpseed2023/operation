@@ -47,7 +47,6 @@ import com.doc.validator.request.ProjectRequestValidator;
 import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
@@ -83,15 +82,12 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectDocumentUploadRepository projectDocumentUploadRepository;
     private final MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
     private final MilestoneStatusRepository milestoneStatusRepository;
-    private final DocumentStatusRepository documentStatusRepository;
     private final ProjectStatusRepository projectStatusRepository;
-    private final DepartmentAutoConfigRepository departmentAutoConfigRepository;
     private final AutoAssignmentService autoAssignmentService;
     private final ProjectRequestValidator projectRequestValidator;
     private final VendorRepository vendorRepository;
     private final CompanyUnitRepository companyUnitRepository;
     private final ProductDocumentMappingRepository productDocumentMappingRepository;
-    private final ProjectMilestoneAssignmentService projectMilestoneAssignmentService;
     private final ApplicantTypeRepository applicantTypeRepository;
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final ProjectMailService projectMailService;
@@ -148,15 +144,12 @@ public class ProjectServiceImpl implements ProjectService {
         this.projectDocumentUploadRepository = projectDocumentUploadRepository;
         this.milestoneStatusHistoryRepository = milestoneStatusHistoryRepository;
         this.milestoneStatusRepository = milestoneStatusRepository;
-        this.documentStatusRepository = documentStatusRepository;
         this.projectStatusRepository = projectStatusRepository;
-        this.departmentAutoConfigRepository = departmentAutoConfigRepository;
         this.autoAssignmentService = autoAssignmentService;
         this.projectRequestValidator = projectRequestValidator;
         this.vendorRepository = vendorRepository;
         this.companyUnitRepository = companyUnitRepository;
         this.productDocumentMappingRepository = productDocumentMappingRepository;
-        this.projectMilestoneAssignmentService = projectMilestoneAssignmentService;
         this.applicantTypeRepository = applicantTypeRepository;
         this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
         this.projectMailService = projectMailService;
@@ -708,56 +701,390 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public void updateMilestoneVisibilities(Project project, Long updatedById) {
-        double totalAmount = project.getPaymentDetail().getTotalAmount();
-        double paidAmount = totalAmount - project.getPaymentDetail().getDueAmount();
-        double paidPercentage = totalAmount > 0 ? (paidAmount / totalAmount) * 100.0 : 0.0;
-        String paymentTypeName = project.getPaymentDetail().getPaymentType().getName();
+    public void updateMilestoneVisibilities(
+            Project project,
+            Long updatedById
+    ) {
+        /*
+         * Basic null protection.
+         */
+        if (project == null) {
+            logger.warn(
+                    "Skipping milestone visibility update because project is null"
+            );
+            return;
+        }
 
-        List<ProjectMilestoneAssignment> assignments = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
-        if (assignments.isEmpty()) return;
+        if (project.getStatus() == null) {
+            logger.warn(
+                    "Skipping milestone visibility update because project status is null. projectId={}",
+                    project.getId()
+            );
+            return;
+        }
 
-        assignments.sort(Comparator.comparing(a -> a.getProductMilestoneMap().getOrder()));
+        /*
+         * Do not update milestone visibility for administratively
+         * locked or terminal projects.
+         *
+         * REOPENED is intentionally not included because milestone
+         * workflow must continue after reopening.
+         */
+        Long projectStatusId = project.getStatus().getId();
 
-        MilestoneStatus completedStatus = milestoneStatusRepository.findById(StatusConstants.MILESTONE_COMPLETED_ID).orElse(null);
+        boolean isForceClosed =
+                StatusConstants.PROJECT_FORCE_CLOSED_ID.equals(
+                        projectStatusId
+                );
 
-        if ("Purchase Order Payment".equalsIgnoreCase(paymentTypeName)) {
-            for (ProjectMilestoneAssignment assignment : assignments) {
-                ProductMilestoneMap map = assignment.getProductMilestoneMap();
-                boolean isCertification = "Certification".equalsIgnoreCase(map.getMilestone().getName());
-                boolean allPriorCompleted = assignments.stream()
-                        .filter(a -> a.getProductMilestoneMap().getOrder() < map.getOrder())
-                        .allMatch(a -> completedStatus != null && completedStatus.equals(a.getStatus()));
-                boolean isVisible = isCertification
-                        ? allPriorCompleted && Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01
-                        : true;
-                String reason = isVisible ? null : (allPriorCompleted ? "Full payment required" : "Prior milestones incomplete");
-                updateVisibilityAndAutoAssign(assignment, isVisible, reason, map, project, updatedById);
-            }
-        } else {
-            double cumulative = 0.0;
-            for (ProjectMilestoneAssignment assignment : assignments) {
-                ProductMilestoneMap map = assignment.getProductMilestoneMap();
-                cumulative += map.getPaymentPercentage();
+        boolean isCancelled =
+                StatusConstants.PROJECT_CANCELLED_ID.equals(
+                        projectStatusId
+                ) || project.isCancelled();
 
-                boolean allPrevCompleted = assignments.stream()
-                        .filter(a -> a.getProductMilestoneMap().getOrder() < map.getOrder())
-                        .allMatch(a -> completedStatus != null && completedStatus.equals(a.getStatus()));
+        boolean isRefunded =
+                StatusConstants.PROJECT_REFUNDED_ID.equals(
+                        projectStatusId
+                );
 
-                boolean isCertification = "Certification".equalsIgnoreCase(map.getMilestone().getName());
+        if (isForceClosed || isCancelled || isRefunded) {
+            logger.info(
+                    "Skipping milestone visibility update because project is locked. projectId={}, statusId={}, statusName={}",
+                    project.getId(),
+                    projectStatusId,
+                    project.getStatus().getName()
+            );
+            return;
+        }
+
+        /*
+         * Payment details are required for visibility calculation.
+         */
+        if (project.getPaymentDetail() == null) {
+            logger.warn(
+                    "Skipping milestone visibility update because payment detail is missing. projectId={}",
+                    project.getId()
+            );
+            return;
+        }
+
+        if (project.getPaymentDetail().getPaymentType() == null) {
+            logger.warn(
+                    "Skipping milestone visibility update because payment type is missing. projectId={}",
+                    project.getId()
+            );
+            return;
+        }
+
+        double totalAmount =
+                project.getPaymentDetail().getTotalAmount();
+
+        double dueAmount =
+                project.getPaymentDetail().getDueAmount();
+
+        double paidAmount =
+                totalAmount - dueAmount;
+
+        double paidPercentage =
+                totalAmount > 0
+                        ? (paidAmount / totalAmount) * 100.0
+                        : 0.0;
+
+        String paymentTypeName =
+                project.getPaymentDetail()
+                        .getPaymentType()
+                        .getName();
+
+        List<ProjectMilestoneAssignment> assignments =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(
+                                project.getId()
+                        );
+
+        if (assignments == null || assignments.isEmpty()) {
+            logger.info(
+                    "No milestone assignments found for visibility update. projectId={}",
+                    project.getId()
+            );
+            return;
+        }
+
+        /*
+         * Remove invalid assignments before sorting/calculation.
+         */
+        List<ProjectMilestoneAssignment> validAssignments =
+                assignments.stream()
+                        .filter(Objects::nonNull)
+                        .filter(assignment ->
+                                assignment.getProductMilestoneMap() != null
+                        )
+                        .filter(assignment ->
+                                assignment.getProductMilestoneMap()
+                                        .getMilestone() != null
+                        )
+                        .sorted(
+                                Comparator.comparingInt(
+                                        assignment ->
+                                                assignment
+                                                        .getProductMilestoneMap()
+                                                        .getOrder()
+                                )
+                        )
+                        .toList();
+
+        if (validAssignments.isEmpty()) {
+            logger.warn(
+                    "No valid milestone assignments found for project. projectId={}",
+                    project.getId()
+            );
+            return;
+        }
+
+        MilestoneStatus completedStatus =
+                milestoneStatusRepository
+                        .findById(
+                                StatusConstants.MILESTONE_COMPLETED_ID
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "System milestone status COMPLETED is missing",
+                                        "ERR_COMPLETED_MILESTONE_STATUS_MISSING"
+                                )
+                        );
+
+        logger.info(
+                "Updating milestone visibility. projectId={}, paymentType={}, totalAmount={}, paidAmount={}, dueAmount={}, paidPercentage={}",
+                project.getId(),
+                paymentTypeName,
+                totalAmount,
+                paidAmount,
+                dueAmount,
+                paidPercentage
+        );
+
+        boolean isPurchaseOrderPayment =
+                "PURCHASE_ORDER".equalsIgnoreCase(
+                        paymentTypeName
+                )
+                        || "Purchase Order Payment".equalsIgnoreCase(
+                        paymentTypeName
+                );
+
+        if (isPurchaseOrderPayment) {
+            /*
+             * Purchase Order flow:
+             *
+             * All non-certification milestones remain visible.
+             * Certification becomes visible only when:
+             * 1. All previous milestones are completed.
+             * 2. Full payment has been received.
+             */
+            for (ProjectMilestoneAssignment assignment :
+                    validAssignments) {
+
+                ProductMilestoneMap map =
+                        assignment.getProductMilestoneMap();
+
+                String milestoneName =
+                        map.getMilestone().getName();
+
+                int currentOrder =
+                        map.getOrder();
+
+                boolean isCertification =
+                        milestoneName != null
+                                && "Certification".equalsIgnoreCase(
+                                milestoneName.trim()
+                        );
+
+                boolean allPriorCompleted =
+                        validAssignments.stream()
+                                .filter(previousAssignment ->
+                                        previousAssignment
+                                                .getProductMilestoneMap()
+                                                .getOrder() < currentOrder
+                                )
+                                .allMatch(previousAssignment ->
+                                        previousAssignment.getStatus() != null
+                                                && completedStatus
+                                                .getId()
+                                                .equals(
+                                                        previousAssignment
+                                                                .getStatus()
+                                                                .getId()
+                                                )
+                                );
+
+                boolean fullPaymentReceived =
+                        Math.abs(dueAmount) < 0.01;
+
                 boolean isVisible;
-                String reason;
+
+                String visibilityReason;
 
                 if (isCertification) {
-                    isVisible = allPrevCompleted && Math.abs(project.getPaymentDetail().getDueAmount()) < 0.01;
-                    reason = isVisible ? null : (allPrevCompleted ? "Full payment required" : "Prior incomplete");
+                    isVisible =
+                            allPriorCompleted
+                                    && fullPaymentReceived;
+
+                    if (isVisible) {
+                        visibilityReason = null;
+                    } else if (!allPriorCompleted) {
+                        visibilityReason =
+                                "Prior milestones incomplete";
+                    } else {
+                        visibilityReason =
+                                "Full payment required";
+                    }
                 } else {
-                    isVisible = allPrevCompleted && paidPercentage >= cumulative;
-                    reason = !isVisible ? (allPrevCompleted ? "Insufficient payment" : "Previous incomplete") : null;
+                    /*
+                     * Existing PO behaviour:
+                     * all non-certification milestones remain visible.
+                     */
+                    isVisible = true;
+                    visibilityReason = null;
                 }
-                System.out.println("isVisible:  "+isVisible);
-                updateVisibilityAndAutoAssign(assignment, isVisible, reason, map, project, updatedById);
+
+                logger.debug(
+                        "PO milestone visibility calculated. projectId={}, assignmentId={}, milestone={}, order={}, allPriorCompleted={}, fullPaymentReceived={}, visible={}, reason={}",
+                        project.getId(),
+                        assignment.getId(),
+                        milestoneName,
+                        currentOrder,
+                        allPriorCompleted,
+                        fullPaymentReceived,
+                        isVisible,
+                        visibilityReason
+                );
+
+                updateVisibilityAndAutoAssign(
+                        assignment,
+                        isVisible,
+                        visibilityReason,
+                        map,
+                        project,
+                        updatedById
+                );
             }
+
+            return;
+        }
+
+        /*
+         * Full, Partial, and Installment payment flows.
+         *
+         * Visibility is based on:
+         * 1. Previous milestones being completed.
+         * 2. Required cumulative payment percentage.
+         *
+         * Certification additionally requires complete payment.
+         */
+        double cumulativePaymentPercentage = 0.0;
+
+        for (ProjectMilestoneAssignment assignment :
+                validAssignments) {
+
+            ProductMilestoneMap map =
+                    assignment.getProductMilestoneMap();
+
+            String milestoneName =
+                    map.getMilestone().getName();
+
+            int currentOrder =
+                    map.getOrder();
+
+            double milestonePaymentPercentage =
+                    map.getPaymentPercentage();
+
+            cumulativePaymentPercentage +=
+                    milestonePaymentPercentage;
+
+            boolean allPreviousCompleted =
+                    validAssignments.stream()
+                            .filter(previousAssignment ->
+                                    previousAssignment
+                                            .getProductMilestoneMap()
+                                            .getOrder() < currentOrder
+                            )
+                            .allMatch(previousAssignment ->
+                                    previousAssignment.getStatus() != null
+                                            && completedStatus
+                                            .getId()
+                                            .equals(
+                                                    previousAssignment
+                                                            .getStatus()
+                                                            .getId()
+                                            )
+                            );
+
+            boolean isCertification =
+                    milestoneName != null
+                            && "Certification".equalsIgnoreCase(
+                            milestoneName.trim()
+                    );
+
+            boolean isVisible;
+            String visibilityReason;
+
+            if (isCertification) {
+                boolean fullPaymentReceived =
+                        Math.abs(dueAmount) < 0.01;
+
+                isVisible =
+                        allPreviousCompleted
+                                && fullPaymentReceived;
+
+                if (isVisible) {
+                    visibilityReason = null;
+                } else if (!allPreviousCompleted) {
+                    visibilityReason =
+                            "Prior milestones incomplete";
+                } else {
+                    visibilityReason =
+                            "Full payment required";
+                }
+            } else {
+                boolean sufficientPaymentReceived =
+                        paidPercentage + 0.0001
+                                >= cumulativePaymentPercentage;
+
+                isVisible =
+                        allPreviousCompleted
+                                && sufficientPaymentReceived;
+
+                if (isVisible) {
+                    visibilityReason = null;
+                } else if (!allPreviousCompleted) {
+                    visibilityReason =
+                            "Previous milestones incomplete";
+                } else {
+                    visibilityReason =
+                            "Insufficient payment";
+                }
+            }
+
+            logger.debug(
+                    "Milestone visibility calculated. projectId={}, assignmentId={}, milestone={}, order={}, milestonePaymentPercentage={}, cumulativePaymentPercentage={}, paidPercentage={}, allPreviousCompleted={}, visible={}, reason={}",
+                    project.getId(),
+                    assignment.getId(),
+                    milestoneName,
+                    currentOrder,
+                    milestonePaymentPercentage,
+                    cumulativePaymentPercentage,
+                    paidPercentage,
+                    allPreviousCompleted,
+                    isVisible,
+                    visibilityReason
+            );
+
+            updateVisibilityAndAutoAssign(
+                    assignment,
+                    isVisible,
+                    visibilityReason,
+                    map,
+                    project,
+                    updatedById
+            );
         }
     }
 
@@ -1505,7 +1832,7 @@ public class ProjectServiceImpl implements ProjectService {
         return dto;
     }
 
-    //
+
 
     @Override
     @Transactional
@@ -1516,7 +1843,46 @@ public class ProjectServiceImpl implements ProjectService {
         return addPaymentTransaction(project.getId(), dto);
     }
 
+    private void validateProjectAllowsPayment(
+            Project project
+    ) {
+        if (project == null || project.getStatus() == null) {
+            throw new ValidationException(
+                    "Project status is missing",
+                    "ERR_PROJECT_STATUS_MISSING"
+            );
+        }
 
+        Long statusId = project.getStatus().getId();
+
+        if (StatusConstants.PROJECT_FORCE_CLOSED_ID
+                .equals(statusId)) {
+
+            throw new ValidationException(
+                    "Payment cannot be added because project is FORCE_CLOSED",
+                    "ERR_FORCE_CLOSED_PROJECT_PAYMENT_NOT_ALLOWED"
+            );
+        }
+
+        if (StatusConstants.PROJECT_CANCELLED_ID
+                .equals(statusId)
+                || project.isCancelled()) {
+
+            throw new ValidationException(
+                    "Payment cannot be added because project is CANCELLED",
+                    "ERR_CANCELLED_PROJECT_PAYMENT_NOT_ALLOWED"
+            );
+        }
+
+        if (StatusConstants.PROJECT_REFUNDED_ID
+                .equals(statusId)) {
+
+            throw new ValidationException(
+                    "Payment cannot be added because project is REFUNDED",
+                    "ERR_REFUNDED_PROJECT_PAYMENT_NOT_ALLOWED"
+            );
+        }
+    }
     @Override
     public List<DocumentChecklistDTO> getDocumentChecklist(Long projectId) {
         logger.info("Fetching document checklist for project ID: {}", projectId);
