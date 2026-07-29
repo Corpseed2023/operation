@@ -1,5 +1,7 @@
 package com.doc.entity.project;
 
+import com.doc.em.CertificationTenureUnit;
+import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.product.ProductMilestoneMap;
@@ -19,7 +21,9 @@ import java.util.Date;
         @Index(name = "idx_milestone_id", columnList = "milestone_id"),
         @Index(name = "idx_assigned_user_id", columnList = "assigned_user_id"),
         @Index(name = "idx_status_id", columnList = "status_id"),
-        @Index(name = "idx_is_visible", columnList = "is_visible")
+        @Index(name = "idx_is_visible", columnList = "is_visible"),
+        @Index(name = "idx_certificate_expiry_date", columnList = "certificate_expiry_date"),
+        @Index(name = "idx_renewal_due_date", columnList = "renewal_due_date")
 })
 @Getter
 @Setter
@@ -33,7 +37,6 @@ public class ProjectMilestoneAssignment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
-
     @Comment("Associated project")
     private Project project;
 
@@ -58,19 +61,19 @@ public class ProjectMilestoneAssignment {
     private MilestoneStatus status;
 
     @Column(name = "status_reason", length = 1000)
-    @Comment("Reason for current status (required for ON_HOLD, REJECTED, COMPLETED)")
+    @Comment("Reason for current status")
     private String statusReason;
 
     @Column(name = "is_visible", nullable = false)
-    @Comment("Visibility flag: true if milestone is accessible, false if not")
+    @Comment("Visibility flag")
     private boolean isVisible = false;
 
     @Column(name = "visibility_reason", length = 1000)
-    @Comment("Reason for visibility status, e.g., Insufficient payment or Previous milestone incomplete")
+    @Comment("Reason for visibility status")
     private String visibilityReason;
 
     @Column(name = "rework_attempts", nullable = false)
-    @Comment("Number of rework attempts for this milestone")
+    @Comment("Number of rework attempts")
     private int reworkAttempts = 0;
 
     @Temporal(TemporalType.TIMESTAMP)
@@ -78,12 +81,39 @@ public class ProjectMilestoneAssignment {
     private Date visibleDate;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Comment("Date when the milestone was started (set to IN_PROGRESS)")
+    @Comment("Date when the milestone was started")
     private Date startedDate;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Comment("Date when the milestone was completed")
     private Date completedDate;
+
+    /*
+     * Certification-specific fields.
+     * These remain null for all non-Certification milestones.
+     */
+
+    @Column(name = "certification_tenure")
+    @Comment("Certificate validity quantity, for example 3")
+    private Integer certificationTenure;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "certification_tenure_unit", length = 20)
+    @Comment("Certificate validity unit: DAYS, MONTHS or YEARS")
+    private CertificationTenureUnit certificationTenureUnit;
+
+    @Column(name = "certificate_expiry_date")
+    @Comment("Valid-till date printed on the certificate")
+    private LocalDate certificateExpiryDate;
+
+    @Column(name = "renewal_due_date")
+    @Comment("Date from which certificate renewal should begin")
+    private LocalDate renewalDueDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "certificate_document_id")
+    @Comment("Certificate attachment from project_document_upload")
+    private ProjectDocumentUpload certificateDocument;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(updatable = false)
@@ -103,5 +133,4 @@ public class ProjectMilestoneAssignment {
     @Column(name = "is_deleted", nullable = false)
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
-
 }

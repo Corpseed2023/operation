@@ -1676,18 +1676,25 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    @Transactional
-    public ProjectResponseDto getProjectByUnbilledNumber(String unbilledNumber){
+    @Transactional(readOnly = true)
+    public ProjectResponseDto getProjectByUnbilledNumber(String unbilledNumber) {
+
+        if (unbilledNumber == null || unbilledNumber.trim().isEmpty()) {
+            throw new ValidationException(
+                    "Unbilled number is required",
+                    "ERR_UNBILLED_NUMBER_REQUIRED"
+            );
+        }
 
         Project project = projectRepository
-                .findByUnbilledNumberAndIsDeletedFalse(unbilledNumber)
+                .findByUnbilledNumberAndIsDeletedFalse(unbilledNumber.trim())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Project not found",
                         "ERR_PROJECT_NOT_FOUND"
                 ));
 
-        return mapToResponseDto(project);
 
+        return mapToResponseDto(project);
     }
 
     @Override
