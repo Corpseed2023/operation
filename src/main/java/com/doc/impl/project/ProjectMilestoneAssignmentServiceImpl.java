@@ -400,6 +400,15 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
+        if (updateDto.getCertificationAttachmentUrl() == null
+                || updateDto.getCertificationAttachmentUrl().isBlank()) {
+
+            throw new ValidationException(
+                    "Certification attachment is required",
+                    "ERR_CERTIFICATION_ATTACHMENT_REQUIRED"
+            );
+        }
+
         LocalDate renewalDueDate =
                 updateDto.getCertificateExpiryDate()
                         .minusDays(DEFAULT_RENEWAL_LEAD_DAYS);
@@ -418,6 +427,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         assignment.setRenewalDueDate(
                 renewalDueDate
+        );
+
+        assignment.setCertificationAttachmentUrl(
+                updateDto.getCertificationAttachmentUrl().trim()
         );
     }
 
