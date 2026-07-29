@@ -367,9 +367,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             ProjectMilestoneAssignment assignment
     ) {
 
-        /*
-         * Validate tenure.
-         */
         if (updateDto.getCertificationTenure() == null
                 || updateDto.getCertificationTenure() <= 0) {
 
@@ -379,9 +376,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
-        /*
-         * Validate tenure unit.
-         */
         if (updateDto.getCertificationTenureUnit() == null) {
 
             throw new ValidationException(
@@ -390,9 +384,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
-        /*
-         * Validate expiry date.
-         */
         if (updateDto.getCertificateExpiryDate() == null) {
 
             throw new ValidationException(
@@ -401,8 +392,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
-        if (updateDto.getCertificateExpiryDate()
-                .isBefore(LocalDate.now())) {
+        if (updateDto.getCertificateExpiryDate().isBefore(LocalDate.now())) {
 
             throw new ValidationException(
                     "Certification expiry date cannot be in the past",
@@ -410,77 +400,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
-        /*
-         * Validate certificate attachment.
-         */
-        if (updateDto.getCertificateDocumentId() == null) {
-
-            throw new ValidationException(
-                    "Certification attachment is required",
-                    "ERR_CERTIFICATE_ATTACHMENT_REQUIRED"
-            );
-        }
-
-        /*
-         * Fetch uploaded certificate document.
-         */
-        ProjectDocumentUpload certificateDocument =
-                projectDocumentUploadRepository
-                        .findActiveUserById(
-                                updateDto.getCertificateDocumentId()
-                        )
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Certificate attachment not found",
-                                        "ERR_CERTIFICATE_DOCUMENT_NOT_FOUND"
-                                )
-                        );
-
-        /*
-         * Attachment must belong to the same project.
-         */
-        if (certificateDocument.getProject() == null
-                || certificateDocument.getProject().getId() == null
-                || assignment.getProject() == null
-                || assignment.getProject().getId() == null
-                || !certificateDocument.getProject()
-                .getId()
-                .equals(
-                        assignment.getProject().getId()
-                )) {
-
-            throw new ValidationException(
-                    "Certificate attachment does not belong to this project",
-                    "ERR_CERTIFICATE_PROJECT_MISMATCH"
-            );
-        }
-
-        /*
-         * Validate actual uploaded file URL.
-         */
-        if (certificateDocument.getFileUrl() == null
-                || certificateDocument.getFileUrl().isBlank()) {
-
-            throw new ValidationException(
-                    "Certificate attachment file URL is missing",
-                    "ERR_CERTIFICATE_FILE_URL_MISSING"
-            );
-        }
-
-        /*
-         * Renewal action starts 30 days before certificate expiry.
-         *
-         * Example:
-         * Expiry: 2029-07-01
-         * Renewal due: 2029-06-01
-         */
         LocalDate renewalDueDate =
                 updateDto.getCertificateExpiryDate()
                         .minusDays(DEFAULT_RENEWAL_LEAD_DAYS);
 
-        /*
-         * Set Certification details on milestone assignment.
-         */
         assignment.setCertificationTenure(
                 updateDto.getCertificationTenure()
         );
@@ -496,39 +419,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         assignment.setRenewalDueDate(
                 renewalDueDate
         );
-
-        assignment.setCertificateDocument(
-                certificateDocument
-        );
-
-        /*
-         * Keep document expiry synchronized with milestone expiry.
-         *
-         * ProjectDocumentUpload currently uses java.util.Date.
-         */
-        certificateDocument.setExpiryDate(
-                java.sql.Date.valueOf(
-                        updateDto.getCertificateExpiryDate()
-                )
-        );
-
-        certificateDocument.setUpdatedBy(
-                updateDto.getChangedById()
-        );
-
-        certificateDocument.setUpdatedDate(
-                new Date()
-        );
-
-        projectDocumentUploadRepository.save(
-                certificateDocument
-        );
     }
 
     private boolean isFilingMilestone(String milestoneName) {
         return "Filing".equalsIgnoreCase(milestoneName)
                 || "Filling".equalsIgnoreCase(milestoneName);
     }
+
+
     private void validateProcurementMilestoneBeforeCompletion(ProjectMilestoneAssignment assignment) {
 
         ProcurementMilestoneAssignment procurementAssignment =

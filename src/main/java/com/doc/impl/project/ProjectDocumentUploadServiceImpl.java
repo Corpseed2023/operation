@@ -59,14 +59,6 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         this.companyDocumentRepository = companyDocumentRepository;
     }
 
-    private String buildResponseFileUrl(String fileName) {
-        if (!StringUtils.hasText(fileName)) {
-            return null;
-        }
-
-        String basePath = awsPath.endsWith("/") ? awsPath : awsPath + "/";
-        return basePath + fileName;
-    }
 
     @Override
     public DocumentResponseDto uploadDocument(ProjectDocumentUploadRequestDto requestDto) {

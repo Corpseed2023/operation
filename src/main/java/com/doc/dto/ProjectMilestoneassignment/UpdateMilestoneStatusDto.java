@@ -35,11 +35,13 @@ public class UpdateMilestoneStatusDto {
      * newStatusName = COMPLETED
      */
 
+
     private Integer certificationTenure;
 
     private CertificationTenureUnit certificationTenureUnit;
 
     private LocalDate certificateExpiryDate;
 
-    private Long certificateDocumentId;
+
+
 }
