@@ -1,18 +1,27 @@
 package com.doc.dto.vendor;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class AccountVendorSyncRequestDto {
 
+    @NotNull(message = "Operation vendor ID is required")
+    @Positive(message = "Operation vendor ID must be greater than zero")
     private Long operationVendorId;
 
+    private Long vendorAccountsSubmissionId;
+
+    private Long vendorFinalizationId;
+
+    @NotBlank(message = "Vendor name is required")
     private String vendorName;
 
     private String email;
@@ -23,8 +32,11 @@ public class AccountVendorSyncRequestDto {
 
     private String gstNumber;
 
-    /**
-     * Send enum as String to avoid coupling both services.
+    /*
+     * REGISTERED
+     * UNREGISTERED
+     * SEZ
+     * INTERNATIONAL
      */
     private String gstRegistrationType;
 
@@ -32,11 +44,26 @@ public class AccountVendorSyncRequestDto {
 
     private String bankAccountNumber;
 
-    private String bankName;
-
     private String ifscCode;
 
+    private String bankName;
+
+    private String branchAddress;
+
+    private String fullAddress;
+
+    private String city;
+
+    private String state;
+
+    private String country;
+
+    @NotNull(message = "Vendor active status is required")
     private Boolean active;
+
+    private Long approvedByOperationUserId;
+
+    private LocalDateTime approvedAt;
 
     private LocalDateTime operationUpdatedAt;
 }

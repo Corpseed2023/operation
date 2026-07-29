@@ -46,5 +46,6 @@ public interface VendorAccountsSubmissionRepository
             @Param("status") VendorAccountsSubmissionStatus status
     );
 
-
+    Optional<VendorAccountsSubmission>
+    findFirstByVendor_IdOrderByIdDesc(Long vendorId);
 }

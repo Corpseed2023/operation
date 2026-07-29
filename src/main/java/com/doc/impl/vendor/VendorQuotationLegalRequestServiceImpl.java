@@ -110,6 +110,8 @@ public class VendorQuotationLegalRequestServiceImpl
         legalRequest.setStatus(
                 VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT
         );
+        legalRequest.setExpiryDate(requestDto.getExpiryDate());
+        legalRequest.setValidityDays(requestDto.getValidityDays());
 
         VendorQuotation quotation = legalRequest.getVendorQuotation();
 
@@ -231,6 +233,8 @@ public class VendorQuotationLegalRequestServiceImpl
         response.setCreatedDate(legalRequest.getCreatedDate());
         response.setUpdatedDate(legalRequest.getUpdatedDate());
         response.setDeleted(legalRequest.isDeleted());
+        response.setExpiryDate(legalRequest.getExpiryDate());
+        response.setValidityDays(legalRequest.getValidityDays());
 
         return response;
     }

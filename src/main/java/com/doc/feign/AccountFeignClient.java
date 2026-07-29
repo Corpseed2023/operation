@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 @FeignClient(
         name = "account-service",
-        path = "/accountService/api/internal/vendors"
+        path = "/accountService/api/v1/internal/vendors"
 )
 public interface AccountFeignClient {
 
