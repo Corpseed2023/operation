@@ -1,6 +1,5 @@
-package com.doc.dto.vendor;
+package com.doc.dto.account.vendor;
 
-import com.doc.dto.account.vendor.VendorVoucherRequestDto;
 import lombok.*;
 
 import java.time.LocalDateTime;
