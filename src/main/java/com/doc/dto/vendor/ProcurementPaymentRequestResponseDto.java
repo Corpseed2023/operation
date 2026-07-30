@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
@@ -28,7 +29,7 @@ public class ProcurementPaymentRequestResponseDto {
     private BigDecimal payableAmount;
 
     private String invoiceNumber;
-    private Date invoiceDate;
+    private LocalDate invoiceDate;
     private Date submissionDate;
 
     private String completionRemarks;

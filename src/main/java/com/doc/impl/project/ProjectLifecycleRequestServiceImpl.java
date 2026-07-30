@@ -14,8 +14,7 @@ import com.doc.repository.projectRepo.ProjectLifecycleRequestRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.service.ProjectLifecycleRequestService;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,11 +26,9 @@ import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
+@Log4j2
 public class ProjectLifecycleRequestServiceImpl
         implements ProjectLifecycleRequestService {
-
-    private static final Logger logger =
-            LoggerFactory.getLogger(ProjectLifecycleRequestServiceImpl.class);
 
     private static final String CRT_ROLE = "CRT";
     private static final String ADMIN_ROLE = "ADMIN";
@@ -52,6 +49,11 @@ public class ProjectLifecycleRequestServiceImpl
     public ProjectLifecycleResponseDto createRequest(
             CreateProjectLifecycleRequestDto requestDto
     ) {
+        log.info("[LIFECYCLE-CREATE-START] projectId={}, actionType={}, requestedById={}",
+                requestDto != null ? requestDto.getProjectId() : null,
+                requestDto != null ? requestDto.getActionType() : null,
+                requestDto != null ? requestDto.getRequestedById() : null);
+
         validateCreateDto(requestDto);
 
         User requestedBy = userRepository
@@ -118,8 +120,8 @@ public class ProjectLifecycleRequestServiceImpl
         ProjectLifecycleRequest savedRequest =
                 lifecycleRequestRepository.save(request);
 
-        logger.info(
-                "Project lifecycle request created. requestId={}, projectId={}, action={}, requestedBy={}",
+        log.info(
+                "[LIFECYCLE-CREATE-COMPLETED] requestId={}, projectId={}, action={}, requestedBy={}",
                 savedRequest.getId(),
                 project.getId(),
                 savedRequest.getActionType(),
@@ -138,6 +140,11 @@ public class ProjectLifecycleRequestServiceImpl
             Long requestId,
             ProjectLifecycleDecisionDto decisionDto
     ) {
+        log.info("[LIFECYCLE-REVIEW-START] requestId={}, decision={}, reviewedById={}",
+                requestId,
+                decisionDto != null ? decisionDto.getDecision() : null,
+                decisionDto != null ? decisionDto.getReviewedById() : null);
+
         if (requestId == null) {
             throw new ValidationException(
                     "Request ID is required",
@@ -223,8 +230,8 @@ public class ProjectLifecycleRequestServiceImpl
             ProjectLifecycleRequest rejectedRequest =
                     lifecycleRequestRepository.save(request);
 
-            logger.info(
-                    "Project lifecycle request rejected. requestId={}, projectId={}, action={}, reviewedBy={}",
+            log.info(
+                    "[LIFECYCLE-REVIEW-REJECTED] requestId={}, projectId={}, action={}, reviewedBy={}",
                     request.getId(),
                     project.getId(),
                     request.getActionType(),
@@ -249,8 +256,8 @@ public class ProjectLifecycleRequestServiceImpl
         ProjectLifecycleRequest approvedRequest =
                 lifecycleRequestRepository.save(request);
 
-        logger.info(
-                "Project lifecycle request approved. requestId={}, projectId={}, action={}, newStatus={}, reviewedBy={}",
+        log.info(
+                "[LIFECYCLE-REVIEW-APPROVED] requestId={}, projectId={}, action={}, newStatus={}, reviewedBy={}",
                 request.getId(),
                 project.getId(),
                 request.getActionType(),
@@ -270,6 +277,9 @@ public class ProjectLifecycleRequestServiceImpl
             int page,
             int size
     ) {
+        log.debug("[LIFECYCLE-PENDING-LIST-START] adminUserId={}, page={}, size={}",
+                adminUserId, page, size);
+
         User adminUser = userRepository
                 .findActiveUserById(adminUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -289,6 +299,9 @@ public class ProjectLifecycleRequestServiceImpl
                 )
         );
 
+        log.debug("[LIFECYCLE-PENDING-LIST-QUERY] status={}, page={}, size={}",
+                ProjectLifecycleRequestStatus.PENDING, page, size);
+
         return lifecycleRequestRepository
                 .findByRequestStatusAndDeletedFalseOrderByRequestedAtDesc(
                         ProjectLifecycleRequestStatus.PENDING,
@@ -304,6 +317,9 @@ public class ProjectLifecycleRequestServiceImpl
             int page,
             int size
     ) {
+        log.debug("[LIFECYCLE-MY-REQUESTS-START] userId={}, page={}, size={}",
+                userId, page, size);
+
         User user = userRepository
                 .findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -322,6 +338,9 @@ public class ProjectLifecycleRequestServiceImpl
                 )
         );
 
+        log.debug("[LIFECYCLE-MY-REQUESTS-QUERY] userId={}, page={}, size={}",
+                user.getId(), page, size);
+
         return lifecycleRequestRepository
                 .findByRequestedByIdAndDeletedFalseOrderByRequestedAtDesc(
                         user.getId(),
@@ -336,6 +355,8 @@ public class ProjectLifecycleRequestServiceImpl
             Long projectId,
             Long userId
     ) {
+        log.debug("[LIFECYCLE-HISTORY-START] projectId={}, userId={}", projectId, userId);
+
         if (projectId == null) {
             throw new ValidationException(
                     "Project ID is required",
@@ -369,6 +390,8 @@ public class ProjectLifecycleRequestServiceImpl
             );
         }
 
+        log.debug("[LIFECYCLE-HISTORY-QUERY] projectId={}", projectId);
+
         return lifecycleRequestRepository
                 .findByProjectIdAndDeletedFalseOrderByRequestedAtDesc(
                         projectId
@@ -384,6 +407,8 @@ public class ProjectLifecycleRequestServiceImpl
             Long requestId,
             Long userId
     ) {
+        log.debug("[LIFECYCLE-GET-BY-ID-START] requestId={}, userId={}", requestId, userId);
+
         User user = userRepository
                 .findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -415,6 +440,9 @@ public class ProjectLifecycleRequestServiceImpl
             );
         }
 
+        log.debug("[LIFECYCLE-GET-BY-ID-COMPLETED] requestId={}, status={}",
+                request.getId(), request.getRequestStatus());
+
         return mapToResponseDto(request);
     }
 
@@ -425,6 +453,9 @@ public class ProjectLifecycleRequestServiceImpl
     ) {
         ProjectLifecycleAction action =
                 request.getActionType();
+
+        log.info("[LIFECYCLE-APPLY-ACTION] requestId={}, projectId={}, action={}, reviewedBy={}",
+                request.getId(), project.getId(), action, reviewedBy.getId());
 
         if (action == ProjectLifecycleAction.FORCE_CLOSE) {
             applyForceClose(project, reviewedBy);
@@ -446,6 +477,11 @@ public class ProjectLifecycleRequestServiceImpl
             Project project,
             User reviewedBy
     ) {
+        log.info("[PROJECT-FORCE-CLOSE-START] projectId={}, currentStatusId={}, reviewedBy={}",
+                project.getId(),
+                project.getStatus() != null ? project.getStatus().getId() : null,
+                reviewedBy.getId());
+
         validateProjectForForceClose(project);
 
         ProjectStatus forceClosedStatus =
@@ -474,12 +510,20 @@ public class ProjectLifecycleRequestServiceImpl
 
         project.setUpdatedBy(reviewedBy.getId());
         project.setUpdatedDate(new java.util.Date());
+
+        log.info("[PROJECT-FORCE-CLOSE-COMPLETED] projectId={}, newStatusId={}, active={}",
+                project.getId(), forceClosedStatus.getId(), project.isActive());
     }
 
     private void applyReopen(
             Project project,
             User reviewedBy
     ) {
+        log.info("[PROJECT-REOPEN-START] projectId={}, currentStatusId={}, reviewedBy={}",
+                project.getId(),
+                project.getStatus() != null ? project.getStatus().getId() : null,
+                reviewedBy.getId());
+
         validateProjectForReopen(project);
 
         ProjectStatus reopenedStatus =
@@ -501,6 +545,9 @@ public class ProjectLifecycleRequestServiceImpl
 
         project.setUpdatedBy(reviewedBy.getId());
         project.setUpdatedDate(new java.util.Date());
+
+        log.info("[PROJECT-REOPEN-COMPLETED] projectId={}, newStatusId={}, active={}",
+                project.getId(), reopenedStatus.getId(), project.isActive());
     }
 
     private void validateProjectForNewRequest(

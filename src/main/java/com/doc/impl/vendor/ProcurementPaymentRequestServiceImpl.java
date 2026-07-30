@@ -1,8 +1,6 @@
 package com.doc.impl.vendor;
 
-import com.doc.dto.account.vendor.*;
 import com.doc.dto.vendor.*;
-import com.doc.dto.vendor.AccountVendorSyncRequestDto;
 import com.doc.entity.project.Project;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
@@ -21,12 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -316,20 +311,26 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 );
 
         /*
-         * Approval creates/updates the vendor and vendor ledger.
-         *
-         * It does not create PAYMENT voucher because payment
-         * has not yet been released.
+         * Operation sends only raw commercial inputs.
+         * Account Service calculates GST/TDS and creates
+         * the PURCHASE_INVOICE voucher and voucher entries.
          */
+        VendorPaymentApprovalRequestDto paymentApproval =
+                buildPaymentApprovalRequest(
+                        saved,
+                        userId,
+                        request
+                );
+
         AccountVendorSyncResponseDto accountResponse =
                 syncVendorWithAccountService(
                         saved,
                         userId,
-                        null
+                        paymentApproval
                 );
 
         log.info(
-                "Payment request approved and vendor synchronized. "
+                "Payment request approved and Account voucher synchronized. "
                         + "paymentRequestId={}, vendorId={}, "
                         + "externalVendorId={}, vendorLedgerId={}, "
                         + "voucherCreated={}",
@@ -346,7 +347,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
     private AccountVendorSyncResponseDto syncVendorWithAccountService(
             ProcurementPaymentRequest paymentRequest,
             Long operationUserId,
-            VendorVoucherRequestDto voucherDetails
+            VendorPaymentApprovalRequestDto paymentApproval
     ) {
         if (paymentRequest == null
                 || paymentRequest.getId() == null) {
@@ -485,8 +486,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                          * Null during approval.
                          * PAYMENT voucher during release.
                          */
-                        .voucherDetails(voucherDetails)
-
+                        .paymentApproval(paymentApproval)
                         .build();
 
         try {
@@ -518,13 +518,13 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                     "Vendor synchronized with Account Service. "
                             + "paymentRequestId={}, vendorId={}, "
                             + "externalVendorId={}, ledgerId={}, "
-                            + "voucherRequested={}, voucherCreated={}, "
+                            + "paymentApprovalSent={}, voucherCreated={}, "
                             + "voucherId={}",
                     paymentRequest.getId(),
                     vendorId,
                     response.getExternalVendorId(),
                     response.getLedgerId(),
-                    voucherDetails != null,
+                    paymentApproval != null,
                     response.getVoucherCreated(),
                     response.getVoucherId()
             );
@@ -621,25 +621,35 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        validatePaymentVoucherDetails(
-                paymentRequest,
-                request
-        );
-
-        Date currentDate =
-                new Date();
+        Date currentDate = new Date();
 
         paymentRequest.setStatus(
                 PaymentRequestStatus.PAYMENT_RELEASED
         );
 
-        paymentRequest.setInvoiceNumber(
-                clean(request.getInvoiceNumber())
-        );
+        if (hasText(request.getInvoiceNumber())) {
+            paymentRequest.setInvoiceNumber(
+                    request.getInvoiceNumber().trim()
+            );
+        }
 
-        paymentRequest.setInvoiceDate(
-                request.getInvoiceDate()
-        );
+        if (request.getInvoiceDate() != null) {
+            paymentRequest.setInvoiceDate(
+                    request.getInvoiceDate()
+            );
+        }
+
+        if (hasText(request.getTransactionReference())) {
+            paymentRequest.setTransactionReference(
+                    request.getTransactionReference().trim()
+            );
+        }
+
+        if (hasText(request.getPaymentProof())) {
+            paymentRequest.setPaymentProof(
+                    request.getPaymentProof().trim()
+            );
+        }
 
         paymentRequest.setPaymentReleasedBy(userId);
         paymentRequest.setPaymentReleasedDate(currentDate);
@@ -651,148 +661,220 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
+        /*
+         * This method updates only the Operation-side payment status.
+         *
+         * The current Account vendor-sync contract creates the
+         * PURCHASE_INVOICE voucher during approval. A separate
+         * Account Service bank-payment endpoint is required later
+         * for:
+         *
+         * Vendor Ledger Dr
+         *      To Bank Ledger
+         */
         ProcurementPaymentRequest saved =
                 paymentRequestRepository.saveAndFlush(
                         paymentRequest
                 );
 
-        VendorVoucherRequestDto voucherDetails =
-                buildVendorPaymentVoucher(
-                        saved,
-                        request
-                );
-
-        AccountVendorSyncResponseDto accountResponse =
-                syncVendorWithAccountService(
-                        saved,
-                        userId,
-                        voucherDetails
-                );
-
-        if (!Boolean.TRUE.equals(
-                accountResponse.getVoucherCreated()
-        )) {
-            throw new ValidationException(
-                    "Account Service did not create the vendor payment voucher",
-                    "ERR_VENDOR_PAYMENT_VOUCHER_NOT_CREATED"
-            );
-        }
-
         log.info(
-                "Vendor payment released and voucher posted. "
+                "Payment released in Operation Service. "
                         + "paymentRequestId={}, vendorId={}, "
-                        + "voucherId={}, voucherNumber={}, "
-                        + "totalDebit={}, totalCredit={}",
+                        + "transactionReference={}",
                 saved.getId(),
                 saved.getVendor() != null
                         ? saved.getVendor().getId()
                         : null,
-                accountResponse.getVoucherId(),
-                accountResponse.getVoucherNumber(),
-                accountResponse.getTotalDebit(),
-                accountResponse.getTotalCredit()
+                saved.getTransactionReference()
         );
 
         return mapToResponse(saved);
     }
 
-    private void validatePaymentVoucherDetails(
+    private VendorPaymentApprovalRequestDto buildPaymentApprovalRequest(
             ProcurementPaymentRequest paymentRequest,
-            ProcurementPaymentActionRequestDto request
+            Long operationUserId,
+            ProcurementPaymentActionRequestDto actionRequest
     ) {
-        if (paymentRequest.getPayableAmount() == null
-                || paymentRequest.getPayableAmount()
-                .compareTo(BigDecimal.ZERO) <= 0) {
+        Vendor vendor = paymentRequest.getVendor();
 
+        if (vendor == null) {
             throw new ValidationException(
-                    "Valid payable amount is required",
-                    "ERR_INVALID_PAYABLE_AMOUNT"
+                    "Vendor is required for payment approval synchronization",
+                    "ERR_PAYMENT_REQUEST_VENDOR_NOT_FOUND"
             );
         }
 
-        if (request.getBankLedgerId() == null
-                || request.getBankLedgerId() <= 0) {
+        String gstRegistrationType =
+                vendor.getGstRegistrationType() != null
+                        ? vendor.getGstRegistrationType().name()
+                        : null;
+
+        BigDecimal basicPrice =
+                resolveBasicPrice(paymentRequest);
+
+        String invoiceNumber =
+                paymentRequest.getInvoiceNumber();
+
+        LocalDate invoiceDate =
+                paymentRequest.getInvoiceDate();
+
+        if (actionRequest != null) {
+            if (hasText(actionRequest.getInvoiceNumber())) {
+                invoiceNumber =
+                        actionRequest.getInvoiceNumber().trim();
+            }
+
+            if (actionRequest.getInvoiceDate() != null) {
+                invoiceDate =
+                        actionRequest.getInvoiceDate();
+            }
+        }
+
+        if (actionRequest != null
+                && actionRequest.getInvoiceDate() != null) {
+
+            invoiceDate =
+                    actionRequest.getInvoiceDate();
+        }
+
+
+
+        return VendorPaymentApprovalRequestDto.builder()
+                .procurementPaymentRequestId(
+                        paymentRequest.getId()
+                )
+                .procurementOrderId(
+                        paymentRequest.getProcurementOrder() != null
+                                ? paymentRequest
+                                .getProcurementOrder()
+                                .getId()
+                                : null
+                )
+                .purchaseOrderNumber(
+                        paymentRequest.getProcurementOrder() != null
+                                ? paymentRequest
+                                .getProcurementOrder()
+                                .getPoNumber()
+                                : null
+                )
+                .invoiceNumber(invoiceNumber)
+                .invoiceDate(invoiceDate)
+                .price(basicPrice)
+                .gstRegistrationType(
+                        gstRegistrationType
+                )
+                /*
+                 * Legacy Operation field gstType now represents
+                 * supply type: INTRA_STATE or INTER_STATE.
+                 */
+                .gstSupplyType(
+                        normalizeSupplyType(
+                                paymentRequest.getGstType()
+                        )
+                )
+                .gstStateCode(
+                        paymentRequest.getGstStateCode()
+                )
+                .gstPercentage(
+                        defaultAmount(
+                                paymentRequest.getGstPercentage()
+                        )
+                )
+                .tdsActive(
+                        Boolean.TRUE.equals(
+                                paymentRequest.getTdsActive()
+                        )
+                )
+                .tdsPercentage(
+                        defaultAmount(
+                                paymentRequest.getTdsPercentage()
+                        )
+                )
+                .approvedByOperationUserId(
+                        operationUserId
+                )
+                .approvedDate(
+                        toLocalDate(
+                                paymentRequest.getApprovedDate()
+                        )
+                )
+                .approvalComment(
+                        actionRequest != null
+                                && hasText(actionRequest.getComment())
+                                ? actionRequest.getComment().trim()
+                                : clean(
+                                paymentRequest.getCompletionRemarks()
+                        )
+                )
+                .build();
+    }
+
+    private BigDecimal resolveBasicPrice(
+            ProcurementPaymentRequest paymentRequest
+    ) {
+        if (paymentRequest.getAmount() != null
+                && paymentRequest.getAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
+
+            return paymentRequest.getAmount();
+        }
+
+        if (paymentRequest.getInvoiceAmount() != null
+                && paymentRequest.getInvoiceAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
+
+            return paymentRequest.getInvoiceAmount();
+        }
+
+        throw new ValidationException(
+                "Basic vendor price is required for Account Service accounting",
+                "ERR_VENDOR_BASIC_PRICE_REQUIRED"
+        );
+    }
+
+    private BigDecimal defaultAmount(
+            BigDecimal value
+    ) {
+        return value == null
+                ? BigDecimal.ZERO
+                : value;
+    }
+
+    private String normalizeSupplyType(
+            Object value
+    ) {
+        if (value == null) {
+            return null;
+        }
+
+        String normalized =
+                value.toString()
+                        .trim()
+                        .toUpperCase();
+
+        if (!"INTRA_STATE".equals(normalized)
+                && !"INTER_STATE".equals(normalized)) {
 
             throw new ValidationException(
-                    "Valid Account Service bank ledger ID is required",
-                    "ERR_BANK_LEDGER_ID_REQUIRED"
+                    "GST supply type must be INTRA_STATE or INTER_STATE",
+                    "ERR_INVALID_GST_SUPPLY_TYPE"
             );
         }
 
-        BigDecimal grossSettlementAmount =
-                money(paymentRequest.getPayableAmount());
+        return normalized;
+    }
 
-        BigDecimal bankPaymentAmount =
-                money(request.getBankPaymentAmount());
-
-        BigDecimal tdsAmount =
-                money(request.getTdsAmount());
-
-        if (bankPaymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ValidationException(
-                    "Bank payment amount must be greater than zero",
-                    "ERR_INVALID_BANK_PAYMENT_AMOUNT"
-            );
-        }
-
-        if (tdsAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ValidationException(
-                    "TDS amount cannot be negative",
-                    "ERR_INVALID_TDS_AMOUNT"
-            );
-        }
-
-        if (tdsAmount.compareTo(BigDecimal.ZERO) > 0
-                && (request.getTdsPayableLedgerId() == null
-                || request.getTdsPayableLedgerId() <= 0)) {
-
-            throw new ValidationException(
-                    "TDS Payable ledger ID is required "
-                            + "when TDS amount is greater than zero",
-                    "ERR_TDS_PAYABLE_LEDGER_ID_REQUIRED"
-            );
-        }
-
-        BigDecimal totalCredit =
-                bankPaymentAmount
-                        .add(tdsAmount)
-                        .setScale(
-                                2,
-                                RoundingMode.HALF_UP
-                        );
-
-        if (grossSettlementAmount.compareTo(totalCredit) != 0) {
-            throw new ValidationException(
-                    "Payable amount must equal bank payment amount "
-                            + "plus TDS amount. Payable amount: "
-                            + grossSettlementAmount
-                            + ", bank amount: "
-                            + bankPaymentAmount
-                            + ", TDS amount: "
-                            + tdsAmount,
-                    "ERR_VENDOR_PAYMENT_AMOUNT_MISMATCH"
-            );
-        }
-
-        if (Boolean.TRUE.equals(
-                paymentRequest.getTdsActive()
-        ) && tdsAmount.compareTo(BigDecimal.ZERO) <= 0) {
-
-            throw new ValidationException(
-                    "TDS amount is required because TDS is active",
-                    "ERR_TDS_AMOUNT_REQUIRED"
-            );
-        }
-
-        if (!Boolean.TRUE.equals(
-                paymentRequest.getTdsActive()
-        ) && tdsAmount.compareTo(BigDecimal.ZERO) > 0) {
-
-            throw new ValidationException(
-                    "TDS amount cannot be supplied because TDS is inactive",
-                    "ERR_TDS_NOT_ACTIVE"
-            );
-        }
+    private LocalDate toLocalDate(
+            Date value
+    ) {
+        return value == null
+                ? null
+                : value.toInstant()
+                .atZone(
+                        java.time.ZoneId.systemDefault()
+                )
+                .toLocalDate();
     }
 
     private ProcurementPaymentRequest getActivePaymentRequest(Long paymentRequestId) {
@@ -832,177 +914,6 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                         "User not found",
                         "ERR_USER_NOT_FOUND"
                 ));
-    }
-
-    private VendorVoucherRequestDto buildVendorPaymentVoucher(
-            ProcurementPaymentRequest paymentRequest,
-            ProcurementPaymentActionRequestDto request
-    ) {
-        BigDecimal grossSettlementAmount =
-                money(paymentRequest.getPayableAmount());
-
-        BigDecimal bankPaymentAmount =
-                money(request.getBankPaymentAmount());
-
-        BigDecimal tdsAmount =
-                money(request.getTdsAmount());
-
-        List<VendorVoucherEntryRequestDto> entries =
-                new ArrayList<>();
-
-        /*
-         * Dr Vendor Ledger
-         *
-         * Vendor liability is reduced.
-         */
-        entries.add(
-                VendorVoucherEntryRequestDto.builder()
-                        .ledgerSource(
-                                VendorVoucherLedgerSource
-                                        .VENDOR_LEDGER
-                        )
-                        .ledgerId(null)
-                        .debitAmount(
-                                grossSettlementAmount
-                        )
-                        .creditAmount(zero())
-                        .narration(
-                                "Vendor payable settled against payment request "
-                                        + paymentRequest.getId()
-                        )
-                        .build()
-        );
-
-        /*
-         * Cr Bank Ledger
-         *
-         * Money leaves company bank account.
-         */
-        entries.add(
-                VendorVoucherEntryRequestDto.builder()
-                        .ledgerSource(
-                                VendorVoucherLedgerSource
-                                        .EXISTING_LEDGER
-                        )
-                        .ledgerId(
-                                request.getBankLedgerId()
-                        )
-                        .debitAmount(zero())
-                        .creditAmount(
-                                bankPaymentAmount
-                        )
-                        .narration(
-                                buildBankNarration(request)
-                        )
-                        .build()
-        );
-
-        /*
-         * Cr TDS Payable only when TDS is deducted.
-         */
-        if (tdsAmount.compareTo(BigDecimal.ZERO) > 0) {
-            entries.add(
-                    VendorVoucherEntryRequestDto.builder()
-                            .ledgerSource(
-                                    VendorVoucherLedgerSource
-                                            .EXISTING_LEDGER
-                            )
-                            .ledgerId(
-                                    request.getTdsPayableLedgerId()
-                            )
-                            .debitAmount(zero())
-                            .creditAmount(tdsAmount)
-                            .narration(
-                                    "TDS deducted from vendor payment"
-                            )
-                            .build()
-            );
-        }
-
-        return VendorVoucherRequestDto.builder()
-                .voucherType(
-                        AccountVoucherType.PAYMENT
-                )
-                .sourceType(
-                        AccountVoucherSourceType
-                                .PROCUREMENT_VENDOR_PAYMENT
-                )
-                .sourceId(
-                        paymentRequest.getId()
-                )
-                .voucherDate(
-                        LocalDate.now()
-                )
-                .narration(
-                        buildVoucherNarration(
-                                paymentRequest,
-                                request
-                        )
-                )
-                .entries(entries)
-                .build();
-    }
-
-
-    private String buildBankNarration(
-            ProcurementPaymentActionRequestDto request
-    ) {
-        String narration =
-                "Vendor payment released through bank";
-
-        if (hasText(request.getTransactionReference())) {
-            narration += ", transaction reference: "
-                    + request.getTransactionReference().trim();
-        }
-
-        return narration;
-    }
-
-    private String buildVoucherNarration(
-            ProcurementPaymentRequest paymentRequest,
-            ProcurementPaymentActionRequestDto request
-    ) {
-        String vendorName =
-                paymentRequest.getVendor() != null
-                        && hasText(paymentRequest.getVendor().getName())
-                        ? paymentRequest.getVendor().getName().trim()
-                        : "Vendor";
-
-        String narration =
-                "Payment released to "
-                        + vendorName
-                        + " against payment request "
-                        + paymentRequest.getId();
-
-        if (hasText(request.getInvoiceNumber())) {
-            narration += ", invoice: "
-                    + request.getInvoiceNumber().trim();
-        }
-
-        if (hasText(request.getTransactionReference())) {
-            narration += ", transaction reference: "
-                    + request.getTransactionReference().trim();
-        }
-
-        return narration;
-    }
-
-    private BigDecimal money(
-            BigDecimal value
-    ) {
-        return value == null
-                ? zero()
-                : value.setScale(
-                2,
-                RoundingMode.HALF_UP
-        );
-    }
-
-    private BigDecimal zero() {
-        return BigDecimal.ZERO.setScale(
-                2,
-                RoundingMode.HALF_UP
-        );
     }
 
     private boolean hasText(

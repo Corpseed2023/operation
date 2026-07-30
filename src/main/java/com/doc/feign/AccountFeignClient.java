@@ -12,6 +12,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 )
 public interface AccountFeignClient {
 
+    /*
+     * Same endpoint is used for:
+     *
+     * 1. Vendor onboarding:
+     *    request.paymentApproval == null
+     *
+     * 2. Vendor payment approval:
+     *    request.paymentApproval != null
+     *
+     * Account Service calculates GST/TDS and creates the voucher entries.
+     */
     @PostMapping("/sync")
     AccountVendorSyncResponseDto syncVendor(
             @RequestBody AccountVendorSyncRequestDto request

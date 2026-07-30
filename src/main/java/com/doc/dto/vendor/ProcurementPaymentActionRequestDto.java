@@ -1,9 +1,11 @@
 package com.doc.dto.vendor;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.util.Date;
+import java.time.LocalDate;
 
 @Data
 @Builder
@@ -11,40 +13,30 @@ import java.util.Date;
 @AllArgsConstructor
 public class ProcurementPaymentActionRequestDto {
 
+    /*
+     * Approval or release comment.
+     */
     private String comment;
 
+    /*
+     * Required when rejecting the payment request.
+     */
     private String reason;
 
+    /*
+     * Vendor invoice details.
+     */
     private String invoiceNumber;
 
-    private Date invoiceDate;
+    private LocalDate invoiceDate;
 
     /*
-     * Existing Account Service bank ledger ID.
-     *
-     * Required when releasing payment.
+     * Payment transaction reference supplied during release.
      */
-    private Long bankLedgerId;
-
-    /*
-     * Existing Account Service TDS Payable ledger ID.
-     *
-     * Required only when tdsAmount > 0.
-     */
-    private Long tdsPayableLedgerId;
-
-    /*
-     * Actual amount transferred through the bank.
-     */
-    private BigDecimal bankPaymentAmount;
-
-    /*
-     * Exact TDS amount deducted.
-     *
-     * Do not recalculate it from percentage at this stage.
-     */
-    @Builder.Default
-    private BigDecimal tdsAmount = BigDecimal.ZERO;
-
     private String transactionReference;
+
+    /*
+     * Payment proof URL or document reference.
+     */
+    private String paymentProof;
 }

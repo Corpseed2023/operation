@@ -681,38 +681,202 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             Vendor vendor,
             VendorAccountsSubmission submission
     ) {
+        if (vendor == null || vendor.getId() == null) {
+            throw new ValidationException(
+                    "Vendor is required for Account Service synchronization",
+                    "ERR_VENDOR_REQUIRED_FOR_ACCOUNT_SYNC"
+            );
+        }
+
+        if (submission == null || submission.getId() == null) {
+            throw new ValidationException(
+                    "Vendor accounts submission is required for Account Service synchronization",
+                    "ERR_VENDOR_ACCOUNTS_SUBMISSION_REQUIRED"
+            );
+        }
+
+        VendorFinalization finalization =
+                submission.getVendorFinalization();
+
+        LocalDateTime operationUpdatedAt =
+                vendor.getUpdatedDate() != null
+                        ? vendor.getUpdatedDate()
+                        .toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime()
+                        : LocalDateTime.now();
+
+        LocalDateTime approvedAt =
+                submission.getAccountsVerifiedDate() != null
+                        ? submission.getAccountsVerifiedDate()
+                        .toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime()
+                        : LocalDateTime.now();
+
+        String gstNumber =
+                hasText(submission.getGstNumber())
+                        ? submission.getGstNumber().trim()
+                        : clean(vendor.getGstNumber());
+
+        String gstRegistrationType =
+                submission.getGstRegistrationType() != null
+                        ? submission.getGstRegistrationType().name()
+                        : vendor.getGstRegistrationType() != null
+                        ? vendor.getGstRegistrationType().name()
+                        : null;
+
+        String vendorName =
+                hasText(vendor.getName())
+                        ? vendor.getName().trim()
+                        : hasText(submission.getName())
+                        ? submission.getName().trim()
+                        : null;
+
+        String email =
+                hasText(vendor.getEmail())
+                        ? vendor.getEmail().trim()
+                        : clean(submission.getEmail());
+
+        String mobile =
+                hasText(vendor.getMobile())
+                        ? vendor.getMobile().trim()
+                        : clean(submission.getNumber());
+
+        String fullAddress =
+                hasText(vendor.getFullAddress())
+                        ? vendor.getFullAddress().trim()
+                        : clean(submission.getBranchAddress());
+
         return AccountVendorSyncRequestDto.builder()
 
-                // Data from Operations Vendor
-                .operationVendorId(vendor.getId())
-                .vendorName(vendor.getName())
-                .email(vendor.getEmail())
-                .mobile(vendor.getMobile())
-                .pan(vendor.getPanNumber())
-                .active(vendor.getStatus() == VendorStatus.ACTIVE)
-                .operationUpdatedAt(
-                        vendor.getUpdatedDate() != null
-                                ? vendor.getUpdatedDate()
-                                .toInstant()
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDateTime()
-                                : LocalDateTime.now()
+                /*
+                 * Operation Service references.
+                 */
+                .operationVendorId(
+                        vendor.getId()
                 )
-                // Data from Vendor Accounts Submission
-                .gstNumber(vendor.getGstNumber())
-                .gstRegistrationType(
-                        submission.getGstRegistrationType() != null
-                                ? submission.getGstRegistrationType().name()
+
+                .vendorAccountsSubmissionId(
+                        submission.getId()
+                )
+
+                .vendorFinalizationId(
+                        finalization != null
+                                ? finalization.getId()
                                 : null
                 )
-                .accountHolderName(submission.getAccountHolderName())
-                .bankAccountNumber(submission.getAccountNumber())
-                .ifscCode(submission.getIfsc())
 
-                // Not available in the current submission entity
+                /*
+                 * Vendor master information.
+                 */
+                .vendorName(vendorName)
+                .email(email)
+                .mobile(mobile)
+                .pan(
+                        clean(vendor.getPanNumber())
+                )
+
+                /*
+                 * GST information.
+                 */
+                .gstNumber(gstNumber)
+                .gstRegistrationType(
+                        gstRegistrationType
+                )
+
+                /*
+                 * Vendor bank information.
+                 */
+                .accountHolderName(
+                        clean(
+                                submission.getAccountHolderName()
+                        )
+                )
+
+                .bankAccountNumber(
+                        clean(
+                                submission.getAccountNumber()
+                        )
+                )
+
+                .ifscCode(
+                        clean(
+                                submission.getIfsc()
+                        )
+                )
+
+                /*
+                 * Bank name is not currently available in
+                 * VendorAccountsSubmission.
+                 */
                 .bankName(null)
+
+                .branchAddress(
+                        clean(
+                                submission.getBranchAddress()
+                        )
+                )
+
+                /*
+                 * Vendor address information.
+                 */
+                .fullAddress(fullAddress)
+
+                .city(
+                        clean(vendor.getCity())
+                )
+
+                .state(
+                        clean(vendor.getState())
+                )
+
+                .country(
+                        clean(vendor.getCountry())
+                )
+
+                /*
+                 * Vendor status.
+                 */
+                .active(
+                        vendor.getStatus()
+                                == VendorStatus.ACTIVE
+                )
+
+                /*
+                 * Approval metadata.
+                 */
+                .approvedByOperationUserId(
+                        submission.getAccountsVerifiedBy()
+                )
+
+                .approvedAt(approvedAt)
+
+                .operationUpdatedAt(
+                        operationUpdatedAt
+                )
+
+                /*
+                 * Normal vendor onboarding does not contain
+                 * procurement payment information.
+                 *
+                 * Populate this field separately only when a
+                 * procurement payment request is approved.
+                 */
+                .paymentApproval(null)
 
                 .build();
     }
+    private boolean hasText(String value) {
+        return value != null
+                && !value.trim().isEmpty();
+    }
+
+    private String clean(String value) {
+        return hasText(value)
+                ? value.trim()
+                : null;
+    }
+
 
 }
