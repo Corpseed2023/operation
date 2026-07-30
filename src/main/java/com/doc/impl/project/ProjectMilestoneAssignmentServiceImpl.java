@@ -5,7 +5,6 @@ import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
 import com.doc.dto.ProjectMilestoneassignment.SendBackToPreviousMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
-import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.milestone.MilestoneStatusHistory;
@@ -939,6 +938,47 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         double progress = (completedCount * 100.0) / assignments.size();
 
 //        project.setProgressPercentage(progress);
+    }
+
+    private void validateProjectAllowsPayment(
+            Project project
+    ) {
+        if (project == null || project.getStatus() == null) {
+            throw new ValidationException(
+                    "Project status is missing",
+                    "ERR_PROJECT_STATUS_MISSING"
+            );
+        }
+
+        Long statusId = project.getStatus().getId();
+
+        if (StatusConstants.PROJECT_FORCE_CLOSED_ID
+                .equals(statusId)) {
+
+            throw new ValidationException(
+                    "Payment cannot be added because project is FORCE_CLOSED",
+                    "ERR_FORCE_CLOSED_PROJECT_PAYMENT_NOT_ALLOWED"
+            );
+        }
+
+        if (StatusConstants.PROJECT_CANCELLED_ID
+                .equals(statusId)
+                || project.isCancelled()) {
+
+            throw new ValidationException(
+                    "Payment cannot be added because project is CANCELLED",
+                    "ERR_CANCELLED_PROJECT_PAYMENT_NOT_ALLOWED"
+            );
+        }
+
+        if (StatusConstants.PROJECT_REFUNDED_ID
+                .equals(statusId)) {
+
+            throw new ValidationException(
+                    "Payment cannot be added because project is REFUNDED",
+                    "ERR_REFUNDED_PROJECT_PAYMENT_NOT_ALLOWED"
+            );
+        }
     }
 
     @Override

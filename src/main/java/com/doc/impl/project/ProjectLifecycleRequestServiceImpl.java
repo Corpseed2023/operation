@@ -23,6 +23,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -60,7 +61,7 @@ public class ProjectLifecycleRequestServiceImpl
                         "ERR_REQUESTING_USER_NOT_FOUND"
                 ));
 
-        validateCrtUser(requestedBy);
+        validateCrtOrAdminUser(requestedBy);
 
         Project project = projectRepository
                 .findByIdForLifecycleUpdate(requestDto.getProjectId())
@@ -649,14 +650,49 @@ public class ProjectLifecycleRequestServiceImpl
         }
     }
 
-    private void validateCrtUser(User user) {
-        if (!hasRole(user, CRT_ROLE)) {
+    private void validateCrtOrAdminUser(User user) {
+
+        if (user == null) {
             throw new ValidationException(
-                    "Only CRT department user can submit force-close or reopen request",
-                    "ERR_ONLY_CRT_CAN_CREATE_LIFECYCLE_REQUEST"
+                    "User is required",
+                    "ERR_USER_REQUIRED"
+            );
+        }
+
+        boolean isCrtDepartment =
+                user.getDepartments() != null
+                        && user.getDepartments()
+                        .stream()
+                        .anyMatch(department ->
+                                department != null
+                                        && !department.isDeleted()
+                                        && department.getName() != null
+                                        && "CRT".equalsIgnoreCase(
+                                        department.getName().trim()
+                                )
+                        );
+
+        boolean isAdmin =
+                user.getRoles() != null
+                        && user.getRoles()
+                        .stream()
+                        .anyMatch(role ->
+                                role != null
+                                        && !role.isDeleted()
+                                        && role.getName() != null
+                                        && "ADMIN".equalsIgnoreCase(
+                                        role.getName().trim()
+                                )
+                        );
+
+        if (!isCrtDepartment && !isAdmin) {
+            throw new ValidationException(
+                    "Only CRT department users or ADMIN users can submit force-close or reopen requests",
+                    "ERR_ONLY_CRT_OR_ADMIN_CAN_CREATE_LIFECYCLE_REQUEST"
             );
         }
     }
+
 
     private void validateAdminUser(User user) {
         if (!hasRole(user, ADMIN_ROLE)) {

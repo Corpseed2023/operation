@@ -28,7 +28,7 @@ public class ProjectLifecycleRequestController {
 
     @PostMapping
     @Operation(
-            summary = "CRT submits project force-close or reopen request"
+            summary = "CRT or ADMIN submits project force-close or reopen request"
     )
     @ApiResponses({
             @ApiResponse(
@@ -41,7 +41,7 @@ public class ProjectLifecycleRequestController {
             ),
             @ApiResponse(
                     responseCode = "403",
-                    description = "Only CRT user can submit request"
+                    description = "Only CRT department users or ADMIN users can submit request"
             ),
             @ApiResponse(
                     responseCode = "404",
