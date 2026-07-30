@@ -72,14 +72,16 @@ public class ProcurementPaymentRequest {
     private Date updatedDate;
 
     private boolean isDeleted = false;
-    @Column(name = "tds_active")
-    private String tdsActive;
+    @Column(name = "tds_active", nullable = false)
+    private Boolean tdsActive = false;
 
     @Column(name = "tds_percentage")
     private BigDecimal tdsPercentage;
 
-    @Column(name = "gst_active")
-    private String gstActive;
+
+
+    @Column(name = "gst_active", nullable = false)
+    private Boolean gstActive = false;
 
     @Column(name = "gst_state_code")
     private String gstStateCode;
@@ -98,5 +100,32 @@ public class ProcurementPaymentRequest {
 
     @Column(name = "total_gst_amount")
     private BigDecimal totalGstAmount;
+
+    @Column(name = "payment_amount", precision = 19, scale = 2)
+    private BigDecimal amount;
+
+    @Column(name = "payment_mode", length = 50)
+    private String paymentMode;
+
+    @Column(name = "bank_ledger_id")
+    private Long bankLedgerId;
+
+    @Column(name = "ledger_id")
+    private Long ledgerId;
+
+    @Column(name = "ledger_type", length = 50)
+    private String ledgerType;
+
+    @Column(name = "transaction_reference", length = 150)
+    private String transactionReference;
+
+    @Column(name = "payment_proof", length = 1000)
+    private String paymentProof;
+
+    @Column(name = "gst_type", length = 30)
+    private String gstType;
+
+    @Column(name = "tds_amount", precision = 19, scale = 2)
+    private BigDecimal tdsAmount;
 
 }

@@ -46,10 +46,11 @@ public class ProcurementPaymentRequestResponseDto {
     private Date createdDate;
     private Date updatedDate;
 
-    private String tdsActive;
+    private Boolean tdsActive;
     private BigDecimal tdsPercentage;
 
-    private String gstActive;
+
+    private Boolean gstActive;
     private String gstStateCode;
     private BigDecimal gstPercentage;
 
@@ -58,5 +59,16 @@ public class ProcurementPaymentRequestResponseDto {
     private BigDecimal igstAmount;
     private BigDecimal totalGstAmount;
 
+    private BigDecimal amount;
+
+    private String paymentMode;
+    private Long bankLedgerId;
+    private Long ledgerId;
+    private String ledgerType;
+
+    private String transactionReference;
+    private String paymentProof;
+    private BigDecimal tdsAmount;
+    private String gstType;
 
 }

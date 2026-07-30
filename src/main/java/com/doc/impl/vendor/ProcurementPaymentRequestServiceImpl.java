@@ -154,6 +154,29 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         paymentRequest.setIgstAmount(requestDto.getIgstAmount());
         paymentRequest.setTotalGstAmount(requestDto.getTotalGstAmount());
 
+        paymentRequest.setAmount(requestDto.getAmount());
+        paymentRequest.setPaymentMode(requestDto.getPaymentMode());
+
+        paymentRequest.setBankLedgerId(requestDto.getBankLedgerId());
+        paymentRequest.setLedgerId(requestDto.getLedgerId());
+        paymentRequest.setLedgerType(requestDto.getLedgerType());
+
+        paymentRequest.setTransactionReference(
+                requestDto.getTransactionReference()
+        );
+
+        paymentRequest.setPaymentProof(
+                requestDto.getPaymentProof()
+        );
+
+        paymentRequest.setGstType(
+                requestDto.getGstType()
+        );
+
+        paymentRequest.setTdsAmount(
+                requestDto.getTdsAmount()
+        );
+
         ProcurementPaymentRequest saved = paymentRequestRepository.save(paymentRequest);
 
         return mapToResponse(saved);
@@ -1068,6 +1091,18 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 .sgstAmount(request.getSgstAmount())
                 .igstAmount(request.getIgstAmount())
                 .totalGstAmount(request.getTotalGstAmount())
+                .amount(request.getAmount())
+                .paymentMode(request.getPaymentMode())
+
+                .bankLedgerId(request.getBankLedgerId())
+                .ledgerId(request.getLedgerId())
+                .ledgerType(request.getLedgerType())
+
+                .transactionReference(request.getTransactionReference())
+                .paymentProof(request.getPaymentProof())
+
+                .tdsAmount(request.getTdsAmount())
+                .gstType(request.getGstType())
                 .build();
     }
 }
