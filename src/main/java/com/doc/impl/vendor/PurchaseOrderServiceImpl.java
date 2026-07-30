@@ -826,6 +826,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         : null
         );
 
+        dto.setVendorGSTNumber(po.getVendor() != null ? po.getVendor().getGstNumber() : null);
+
         dto.setFinalAmount(po.getFinalAmount());
 
         dto.setGstRate(po.getGstRate());

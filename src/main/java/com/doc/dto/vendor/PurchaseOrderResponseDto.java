@@ -24,6 +24,7 @@ public class PurchaseOrderResponseDto {
 
     private Long vendorId;
     private String vendorName;
+    private String vendorGSTNumber;
     private VendorGSTRegistrationType vendorGSTRegistrationType;
     private BigDecimal finalAmount;
 
