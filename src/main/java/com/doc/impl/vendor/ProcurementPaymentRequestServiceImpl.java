@@ -772,8 +772,6 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         }
     }
 
-
-
     private ProcurementPaymentRequest getActivePaymentRequest(Long paymentRequestId) {
         if (paymentRequestId == null) {
             throw new ValidationException(

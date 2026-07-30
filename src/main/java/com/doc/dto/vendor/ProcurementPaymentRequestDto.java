@@ -12,14 +12,11 @@ public class ProcurementPaymentRequestDto {
     private BigDecimal invoiceAmount;
     private BigDecimal payableAmount;
 
-
-
     private String completionRemarks;
 
     private List<String> proofAttachmentUrls;
 
     private Long createdBy;
-
 
     private String tdsActive;
     private BigDecimal tdsPercentage;
