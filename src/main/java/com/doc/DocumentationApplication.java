@@ -97,6 +97,13 @@ public class DocumentationApplication {
 					"Milestone permanently rejected"
 			);
 
+			createProjectStatusIfMissing(
+					projectStatusRepository,
+					7L,
+					"FORCE_CLOSED",
+					"Project force-closed after ADMIN approval on CRT request"
+			);
+
 			// === DOCUMENT STATUSES ===
 			createDocumentStatusIfMissing(
 					documentStatusRepository,

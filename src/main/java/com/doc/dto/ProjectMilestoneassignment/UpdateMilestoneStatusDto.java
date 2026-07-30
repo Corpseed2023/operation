@@ -42,6 +42,7 @@ public class UpdateMilestoneStatusDto {
 
     private LocalDate certificateExpiryDate;
 
+    private String certificationAttachmentUrl;
 
 
 }

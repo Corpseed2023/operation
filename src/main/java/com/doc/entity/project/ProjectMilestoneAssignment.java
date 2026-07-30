@@ -115,6 +115,9 @@ public class ProjectMilestoneAssignment {
     @Comment("Certificate attachment from project_document_upload")
     private ProjectDocumentUpload certificateDocument;
 
+    @Column(name = "certification_attachment_url", length = 2000)
+    private String certificationAttachmentUrl;
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(updatable = false)
     private Date createdDate;
@@ -133,4 +136,5 @@ public class ProjectMilestoneAssignment {
     @Column(name = "is_deleted", nullable = false)
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
+
 }
