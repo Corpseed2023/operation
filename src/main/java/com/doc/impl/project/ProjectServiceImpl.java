@@ -558,6 +558,8 @@ public class ProjectServiceImpl implements ProjectService {
         Project project = projectRepository.findActiveUserById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
 
+        validateProjectAllowsPayment(project);
+
         ProjectPaymentDetail paymentDetail = projectPaymentDetailRepository.findByProjectIdAndIsDeletedFalse(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment detail not found", "ERR_PAYMENT_DETAIL_NOT_FOUND"));
 
