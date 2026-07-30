@@ -769,9 +769,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                  * supply type: INTRA_STATE or INTER_STATE.
                  */
                 .gstSupplyType(
-                        normalizeSupplyType(
-                                paymentRequest.getGstType()
-                        )
+                        resolveGstSupplyType(paymentRequest)
                 )
                 .gstStateCode(
                         paymentRequest.getGstStateCode()
@@ -809,6 +807,53 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 )
                 .build();
     }
+    private String resolveGstSupplyType(
+            ProcurementPaymentRequest paymentRequest
+    ) {
+        if (!Boolean.TRUE.equals(paymentRequest.getGstActive())) {
+            return null;
+        }
+
+        if (paymentRequest.getIgstAmount() != null
+                && paymentRequest.getIgstAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
+
+            return "INTER_STATE";
+        }
+
+        boolean hasCgst =
+                paymentRequest.getCgstAmount() != null
+                        && paymentRequest.getCgstAmount()
+                        .compareTo(BigDecimal.ZERO) > 0;
+
+        boolean hasSgst =
+                paymentRequest.getSgstAmount() != null
+                        && paymentRequest.getSgstAmount()
+                        .compareTo(BigDecimal.ZERO) > 0;
+
+        if (hasCgst || hasSgst) {
+            return "INTRA_STATE";
+        }
+
+        if (paymentRequest.getGstType() != null) {
+            String gstType = paymentRequest.getGstType()
+                    .toString()
+                    .trim()
+                    .toUpperCase();
+
+            if ("INTRA_STATE".equals(gstType)
+                    || "INTER_STATE".equals(gstType)) {
+                return gstType;
+            }
+        }
+
+        throw new ValidationException(
+                "GST supply type could not be determined. "
+                        + "Provide IGST for inter-state or CGST/SGST for intra-state",
+                "ERR_GST_SUPPLY_TYPE_REQUIRED"
+        );
+    }
+
 
     private BigDecimal resolveBasicPrice(
             ProcurementPaymentRequest paymentRequest
