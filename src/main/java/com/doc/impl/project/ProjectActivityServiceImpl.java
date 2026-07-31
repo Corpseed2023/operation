@@ -12,6 +12,7 @@ import com.doc.em.ActivityType;
 import com.doc.em.AccountPostingStatus;
 import com.doc.em.ApprovalStatus;
 import com.doc.em.ExpenseApprovalStage;
+import com.doc.em.ExpenseCategory;
 import com.doc.em.ExpensePaidBy;
 import com.doc.em.ExpensePaymentStatus;
 import com.doc.entity.department.Department;
@@ -942,6 +943,24 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 decision
         );
 
+        /*
+         * Account Service books the approved Government Fee as:
+         *
+         * Government Fee Expense Dr
+         *     Government Fee Payable Cr
+         *
+         * This is an approval-time payable posting. The actual company
+         * payment remains PENDING and is handled separately.
+         */
+        if (decision == ApprovalStatus.APPROVED
+                && expense.getExpensePaidBy() == ExpensePaidBy.COMPANY
+                && expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE) {
+
+            scheduleAccountPostingAfterCommit(
+                    expense.getId()
+            );
+        }
+
         log.info(
                 "[ACCOUNTS-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
                 projectId,
@@ -1091,7 +1110,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     /**
      * Calls ExpenseAccountPostingServiceImpl through its interface after the
      * Accounts approval transaction commits. The implementation uses
-     * REQUIRES_NEW and can therefore read the committed PAID expense.
+     * REQUIRES_NEW and can therefore read the committed approved expense.
      */
     private void scheduleAccountPostingAfterCommit(
             Long expenseId

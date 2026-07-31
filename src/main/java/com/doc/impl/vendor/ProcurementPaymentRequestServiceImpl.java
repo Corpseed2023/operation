@@ -800,7 +800,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 .approvalComment(
                         actionRequest != null
                                 && hasText(actionRequest.getComment())
-                                ? actionRequest.getComment().trim()
+                                ? actionRequest .getComment().trim()
                                 : clean(
                                 paymentRequest.getCompletionRemarks()
                         )
@@ -886,29 +886,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 : value;
     }
 
-    private String normalizeSupplyType(
-            Object value
-    ) {
-        if (value == null) {
-            return null;
-        }
 
-        String normalized =
-                value.toString()
-                        .trim()
-                        .toUpperCase();
-
-        if (!"INTRA_STATE".equals(normalized)
-                && !"INTER_STATE".equals(normalized)) {
-
-            throw new ValidationException(
-                    "GST supply type must be INTRA_STATE or INTER_STATE",
-                    "ERR_INVALID_GST_SUPPLY_TYPE"
-            );
-        }
-
-        return normalized;
-    }
 
     private LocalDate toLocalDate(
             Date value

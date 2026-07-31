@@ -112,12 +112,12 @@ public class ExpenseAccountPostingServiceImpl
             );
         }
 
-        if (expense.getPaymentStatus() !=
-                ExpensePaymentStatus.PAID) {
+        if (expense.getExpensePaidBy() !=
+                ExpensePaidBy.COMPANY) {
 
             throw new ValidationException(
-                    "Only paid expenses can be posted to Account Service",
-                    "ERR_EXPENSE_NOT_PAID"
+                    "Only company-paid expenses can be posted to Account Service",
+                    "ERR_INVALID_EXPENSE_PAID_BY"
             );
         }
 
@@ -349,15 +349,6 @@ public class ExpenseAccountPostingServiceImpl
             throw new ValidationException(
                     "Only approved expenses can be retried",
                     "ERR_EXPENSE_NOT_APPROVED"
-            );
-        }
-
-        if (expense.getPaymentStatus() !=
-                ExpensePaymentStatus.PAID) {
-
-            throw new ValidationException(
-                    "Only paid expenses can be retried",
-                    "ERR_EXPENSE_NOT_PAID"
             );
         }
 
