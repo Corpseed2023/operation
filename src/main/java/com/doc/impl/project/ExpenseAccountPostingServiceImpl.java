@@ -174,10 +174,13 @@ public class ExpenseAccountPostingServiceImpl
                         .currencyCode(
                                 expense.getCurrencyCode()
                         )
+                        /*
+                         * For the Government Fee approval voucher, expenseDate carries
+                         * the accounting approval date selected by Accounts.
+                         */
                         .expenseDate(
-                                expense.getExpenseDate() != null
-                                        ? expense.getExpenseDate()
-                                        .toLocalDate()
+                                expense.getAccountsActionDate() != null
+                                        ? expense.getAccountsActionDate().toLocalDate()
                                         : LocalDate.now()
                         )
                         .paidBy(expense.getExpensePaidBy())

@@ -44,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.time.LocalTime;
 
 @Slf4j
 @Service
@@ -851,7 +853,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 decisionRemark
         );
 
-        LocalDateTime actionTime = LocalDateTime.now();
+        LocalDateTime actionTime =
+                request.getApprovalDate() != null
+                        ? request.getApprovalDate().atTime(LocalTime.now())
+                        : LocalDateTime.now();
 
         log.info(
                 "[ACCOUNTS-DECISION-PROCESSING] expenseId={} | decision={} | userId={}",
@@ -958,6 +963,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
             scheduleAccountPostingAfterCommit(
                     expense.getId()
+            );
+        }
+
+        if (request.getApprovalDate() != null
+                && request.getApprovalDate().isAfter(LocalDate.now())) {
+
+            throw new ValidationException(
+                    "Approval date cannot be in the future",
+                    "ERR_FUTURE_ACCOUNTS_APPROVAL_DATE"
             );
         }
 

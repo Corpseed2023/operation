@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -19,6 +20,12 @@ public class AccountsExpenseDecisionRequestDto {
      * Required when Accounts approves.
      */
     private BigDecimal approvedAmount;
+
+    /**
+     * Accounting date selected by the Accounts team.
+     * This date will be used while creating the Government Fee voucher.
+     */
+    private LocalDate approvalDate;
 
     @Size(
             max = 2000,
