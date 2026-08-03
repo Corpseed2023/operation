@@ -7,58 +7,47 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
+/**
+ * Payload sent to Account Service inside AccountVendorSyncRequestDto.
+ *
+ * Account Service is responsible for calculating:
+ *
+ * price
+ * + GST
+ * - TDS
+ * = vendor net payable
+ *
+ * and creating the PURCHASE_INVOICE voucher.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class VendorPaymentApprovalRequestDto {
 
-    /*
-     * Operation Service payment-request ID.
-     *
-     * Account Service uses this as the idempotent
-     * voucher source ID.
-     */
     private Long procurementPaymentRequestId;
 
-    /*
-     * Procurement order details.
-     */
     private Long procurementOrderId;
 
     private String purchaseOrderNumber;
 
-    /*
-     * Vendor invoice details.
-     */
     private String invoiceNumber;
 
     private LocalDate invoiceDate;
 
-    /*
-     * Basic price before GST.
+    /**
+     * Basic / taxable purchase value.
+     *
+     * Account Service expects this field as `price`.
      */
     private BigDecimal price;
 
-    /*
-     * Vendor GST registration category:
-     *
-     * REGISTERED
-     * UNREGISTERED
-     * SEZ
-     * INTERNATIONAL
-     */
     private String gstRegistrationType;
 
-    /*
-     * GST supply category:
-     *
-     * INTRA_STATE
-     * INTER_STATE
-     *
-     * Not required for SEZ or INTERNATIONAL because
-     * those registration types are zero-rated.
+    /**
+     * INTRA_STATE or INTER_STATE.
      */
     private String gstSupplyType;
 
@@ -66,19 +55,30 @@ public class VendorPaymentApprovalRequestDto {
 
     private BigDecimal gstPercentage;
 
-    /*
-     * TDS calculation inputs.
-     */
     private Boolean tdsActive;
 
     private BigDecimal tdsPercentage;
 
-    /*
-     * Approval metadata.
-     */
     private Long approvedByOperationUserId;
 
     private LocalDate approvedDate;
 
     private String approvalComment;
+
+    private BigDecimal tdsAmount;
+    private Long tdsPayableLedgerId;
+
+    private LocalDate paymentDate;
+    private BigDecimal bankPaymentAmount;
+    private String paymentMode;
+    private Long bankLedgerId;
+    private Long ledgerId;
+    private String ledgerType;
+    private String transactionReference;
+    private String paymentProof;
+    private List<String> proofAttachmentUrls;
+
+    private Long paymentReleasedByOperationUserId;
+    private LocalDate paymentReleasedDate;
+    private String releaseComment;
 }

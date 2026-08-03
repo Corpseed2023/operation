@@ -14,21 +14,22 @@ import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.service.vendor.ProcurementPaymentRequestService;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
 
-import lombok.extern.slf4j.Slf4j;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentRequestService {
+public class ProcurementPaymentRequestServiceImpl
+        implements ProcurementPaymentRequestService {
 
     private final ProcurementPaymentRequestRepository paymentRequestRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -70,11 +71,12 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                         "ERR_USER_NOT_FOUND"
                 ));
 
-        ProcurementOrder order = purchaseOrderRepository.findById(procurementOrderId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Procurement order not found",
-                        "ERR_PROCUREMENT_ORDER_NOT_FOUND"
-                ));
+        ProcurementOrder order =
+                purchaseOrderRepository.findById(procurementOrderId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Procurement order not found",
+                                "ERR_PROCUREMENT_ORDER_NOT_FOUND"
+                        ));
 
         if (order.isDeleted()) {
             throw new ValidationException(
@@ -83,9 +85,8 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-
-
-        paymentRequestRepository.findByProcurementOrderAndIsDeletedFalse(order)
+        paymentRequestRepository
+                .findByProcurementOrderAndIsDeletedFalse(order)
                 .ifPresent(existing -> {
                     throw new ValidationException(
                             "Payment request already exists for this procurement order",
@@ -94,7 +95,9 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 });
 
         if (requestDto.getInvoiceAmount() == null
-                || requestDto.getInvoiceAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                || requestDto.getInvoiceAmount()
+                .compareTo(BigDecimal.ZERO) <= 0) {
+
             throw new ValidationException(
                     "Invoice amount must be greater than zero",
                     "ERR_INVALID_INVOICE_AMOUNT"
@@ -102,59 +105,118 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         }
 
         if (requestDto.getPayableAmount() == null
-                || requestDto.getPayableAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                || requestDto.getPayableAmount()
+                .compareTo(BigDecimal.ZERO) <= 0) {
+
             throw new ValidationException(
                     "Payable amount must be greater than zero",
                     "ERR_INVALID_PAYABLE_AMOUNT"
             );
         }
 
-        if (requestDto.getPayableAmount().compareTo(requestDto.getInvoiceAmount()) > 0) {
+        if (requestDto.getPayableAmount()
+                .compareTo(requestDto.getInvoiceAmount()) > 0) {
+
             throw new ValidationException(
                     "Payable amount cannot be greater than invoice amount",
                     "ERR_PAYABLE_AMOUNT_EXCEEDS_INVOICE_AMOUNT"
             );
         }
 
-        ProcurementPaymentRequest paymentRequest = new ProcurementPaymentRequest();
+        ProcurementPaymentRequest paymentRequest =
+                new ProcurementPaymentRequest();
+
         paymentRequest.setProcurementOrder(order);
         paymentRequest.setProject(order.getProject());
         paymentRequest.setVendor(order.getVendor());
 
-        paymentRequest.setInvoiceAmount(requestDto.getInvoiceAmount());
-        paymentRequest.setPayableAmount(requestDto.getPayableAmount());
+        paymentRequest.setInvoiceAmount(
+                requestDto.getInvoiceAmount()
+        );
+
+        paymentRequest.setPayableAmount(
+                requestDto.getPayableAmount()
+        );
+
         paymentRequest.setSubmissionDate(new Date());
 
-        paymentRequest.setCompletionRemarks(requestDto.getCompletionRemarks());
+        paymentRequest.setCompletionRemarks(
+                requestDto.getCompletionRemarks()
+        );
 
         if (requestDto.getProofAttachmentUrls() != null) {
-            paymentRequest.setProofAttachmentUrls(requestDto.getProofAttachmentUrls());
+            paymentRequest.setProofAttachmentUrls(
+                    requestDto.getProofAttachmentUrls()
+            );
         }
 
-        paymentRequest.setStatus(PaymentRequestStatus.PENDING);
-        paymentRequest.setCreatedBy(requestDto.getCreatedBy());
+        paymentRequest.setStatus(
+                PaymentRequestStatus.PENDING
+        );
+
+        paymentRequest.setCreatedBy(
+                requestDto.getCreatedBy()
+        );
+
         paymentRequest.setCreatedDate(new Date());
         paymentRequest.setUpdatedDate(new Date());
         paymentRequest.setDeleted(false);
 
-        paymentRequest.setTdsActive(requestDto.getTdsActive());
-        paymentRequest.setTdsPercentage(requestDto.getTdsPercentage());
+        paymentRequest.setTdsActive(
+                requestDto.getTdsActive()
+        );
 
-        paymentRequest.setGstActive(requestDto.getGstActive());
-        paymentRequest.setGstStateCode(requestDto.getGstStateCode());
-        paymentRequest.setGstPercentage(requestDto.getGstPercentage());
+        paymentRequest.setTdsPercentage(
+                requestDto.getTdsPercentage()
+        );
 
-        paymentRequest.setCgstAmount(requestDto.getCgstAmount());
-        paymentRequest.setSgstAmount(requestDto.getSgstAmount());
-        paymentRequest.setIgstAmount(requestDto.getIgstAmount());
-        paymentRequest.setTotalGstAmount(requestDto.getTotalGstAmount());
+        paymentRequest.setGstActive(
+                requestDto.getGstActive()
+        );
 
-        paymentRequest.setAmount(requestDto.getAmount());
-        paymentRequest.setPaymentMode(requestDto.getPaymentMode());
+        paymentRequest.setGstStateCode(
+                requestDto.getGstStateCode()
+        );
 
-        paymentRequest.setBankLedgerId(requestDto.getBankLedgerId());
-        paymentRequest.setLedgerId(requestDto.getLedgerId());
-        paymentRequest.setLedgerType(requestDto.getLedgerType());
+        paymentRequest.setGstPercentage(
+                requestDto.getGstPercentage()
+        );
+
+        paymentRequest.setCgstAmount(
+                requestDto.getCgstAmount()
+        );
+
+        paymentRequest.setSgstAmount(
+                requestDto.getSgstAmount()
+        );
+
+        paymentRequest.setIgstAmount(
+                requestDto.getIgstAmount()
+        );
+
+        paymentRequest.setTotalGstAmount(
+                requestDto.getTotalGstAmount()
+        );
+
+        paymentRequest.setAmount(
+                requestDto.getAmount()
+        );
+
+        paymentRequest.setPaymentMode(
+                requestDto.getPaymentMode()
+        );
+
+        paymentRequest.setBankLedgerId(
+                requestDto.getBankLedgerId()
+        );
+
+        paymentRequest.setLedgerId(
+                requestDto.getLedgerId()
+        );
+
+        paymentRequest.setLedgerType(
+                requestDto.getLedgerType()
+        );
 
         paymentRequest.setTransactionReference(
                 requestDto.getTransactionReference()
@@ -172,39 +234,52 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 requestDto.getTdsAmount()
         );
 
-        ProcurementPaymentRequest saved = paymentRequestRepository.save(paymentRequest);
+        ProcurementPaymentRequest saved =
+                paymentRequestRepository.save(paymentRequest);
 
         return mapToResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProcurementPaymentRequestResponseDto> getPaymentRequestsByStatus(
+    public Page<ProcurementPaymentRequestResponseDto>
+    getPaymentRequestsByStatus(
             PaymentRequestStatus status,
             int page,
             int size
     ) {
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, "createdDate")
-        );
+        Pageable pageable =
+                PageRequest.of(
+                        page,
+                        size,
+                        Sort.by(
+                                Sort.Direction.DESC,
+                                "createdDate"
+                        )
+                );
 
         Page<ProcurementPaymentRequest> requests;
 
         if (status == null) {
-            requests = paymentRequestRepository.findByIsDeletedFalse(pageable);
+            requests =
+                    paymentRequestRepository
+                            .findByIsDeletedFalse(pageable);
         } else {
-            requests = paymentRequestRepository.findByStatusAndIsDeletedFalse(status, pageable);
+            requests =
+                    paymentRequestRepository
+                            .findByStatusAndIsDeletedFalse(
+                                    status,
+                                    pageable
+                            );
         }
 
         return requests.map(this::mapToResponse);
     }
 
-
     @Override
     @Transactional(readOnly = true)
-    public Page<ProcurementPaymentRequestResponseDto> getPaymentRequestsByProcurementOrderId(
+    public Page<ProcurementPaymentRequestResponseDto>
+    getPaymentRequestsByProcurementOrderId(
             Long procurementOrderId,
             int page,
             int size
@@ -216,11 +291,12 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        ProcurementOrder order = purchaseOrderRepository.findById(procurementOrderId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Procurement order not found",
-                        "ERR_PROCUREMENT_ORDER_NOT_FOUND"
-                ));
+        ProcurementOrder order =
+                purchaseOrderRepository.findById(procurementOrderId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Procurement order not found",
+                                "ERR_PROCUREMENT_ORDER_NOT_FOUND"
+                        ));
 
         if (order.isDeleted()) {
             throw new ValidationException(
@@ -229,22 +305,39 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, "createdDate")
-        );
+        Pageable pageable =
+                PageRequest.of(
+                        page,
+                        size,
+                        Sort.by(
+                                Sort.Direction.DESC,
+                                "createdDate"
+                        )
+                );
 
         Page<ProcurementPaymentRequest> requests =
-                paymentRequestRepository.findByProcurementOrder_IdAndIsDeletedFalse(
-                        procurementOrderId,
-                        pageable
-                );
+                paymentRequestRepository
+                        .findByProcurementOrder_IdAndIsDeletedFalse(
+                                procurementOrderId,
+                                pageable
+                        );
 
         return requests.map(this::mapToResponse);
     }
 
-
+    /*
+     * ================================================================
+     * APPROVE
+     * ================================================================
+     *
+     * IMPORTANT:
+     *
+     * Accounts Service is NOT called here.
+     *
+     * Approval only changes the Operation-side status.
+     *
+     * Accounts Service will be called only during RELEASE.
+     */
     @Override
     @Transactional
     public ProcurementPaymentRequestResponseDto approvePaymentRequest(
@@ -286,8 +379,27 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        Date currentDate =
-                new Date();
+        Date currentDate = new Date();
+
+        /*
+         * Invoice details can still be captured during approval.
+         * They are stored in Operation only.
+         */
+        if (request != null
+                && hasText(request.getInvoiceNumber())) {
+
+            paymentRequest.setInvoiceNumber(
+                    request.getInvoiceNumber().trim()
+            );
+        }
+
+        if (request != null
+                && request.getInvoiceDate() != null) {
+
+            paymentRequest.setInvoiceDate(
+                    request.getInvoiceDate()
+            );
+        }
 
         paymentRequest.setStatus(
                 PaymentRequestStatus.APPROVED
@@ -311,39 +423,30 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 );
 
         /*
-         * Operation sends only raw commercial inputs.
-         * Account Service calculates GST/TDS and creates
-         * the PURCHASE_INVOICE voucher and voucher entries.
+         * NO ACCOUNT SERVICE CALL HERE.
+         *
+         * The Accounts Service is called only after the payment
+         * is actually released.
          */
-        VendorPaymentApprovalRequestDto paymentApproval =
-                buildPaymentApprovalRequest(
-                        saved,
-                        userId,
-                        request
-                );
-
-        AccountVendorSyncResponseDto accountResponse =
-                syncVendorWithAccountService(
-                        saved,
-                        userId,
-                        paymentApproval
-                );
 
         log.info(
-                "Payment request approved and Account voucher synchronized. "
-                        + "paymentRequestId={}, vendorId={}, "
-                        + "externalVendorId={}, vendorLedgerId={}, "
-                        + "voucherCreated={}",
+                "Payment request approved in Operation Service only. "
+                        + "Accounts synchronization will happen on release. "
+                        + "paymentRequestId={}, vendorId={}",
                 saved.getId(),
-                saved.getVendor().getId(),
-                accountResponse.getExternalVendorId(),
-                accountResponse.getLedgerId(),
-                accountResponse.getVoucherCreated()
+                saved.getVendor() != null
+                        ? saved.getVendor().getId()
+                        : null
         );
 
         return mapToResponse(saved);
     }
 
+    /*
+     * ================================================================
+     * ACCOUNT SERVICE VENDOR SYNC
+     * ================================================================
+     */
     private AccountVendorSyncResponseDto syncVendorWithAccountService(
             ProcurementPaymentRequest paymentRequest,
             Long operationUserId,
@@ -452,10 +555,6 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                                 accountsSubmission.getIfsc()
                         )
 
-                        /*
-                         * Bank name is currently not available
-                         * in VendorAccountsSubmission.
-                         */
                         .bankName(null)
 
                         .branchAddress(
@@ -483,13 +582,25 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                         .operationUpdatedAt(currentDateTime)
 
                         /*
-                         * Null during approval.
-                         * PAYMENT voucher during release.
+                         * IMPORTANT:
+                         *
+                         * During RELEASE this contains the complete
+                         * invoice + payment information.
                          */
                         .paymentApproval(paymentApproval)
+
                         .build();
 
         try {
+            log.info(
+                    "Calling Account Service. "
+                            + "paymentRequestId={}, vendorId={}, "
+                            + "paymentApprovalPresent={}",
+                    paymentRequest.getId(),
+                    vendorId,
+                    paymentApproval != null
+            );
+
             AccountVendorSyncResponseDto response =
                     accountFeignClient.syncVendor(
                             syncRequest
@@ -515,16 +626,14 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             }
 
             log.info(
-                    "Vendor synchronized with Account Service. "
+                    "Account Service synchronization successful. "
                             + "paymentRequestId={}, vendorId={}, "
                             + "externalVendorId={}, ledgerId={}, "
-                            + "paymentApprovalSent={}, voucherCreated={}, "
-                            + "voucherId={}",
+                            + "voucherCreated={}, voucherId={}",
                     paymentRequest.getId(),
                     vendorId,
                     response.getExternalVendorId(),
                     response.getLedgerId(),
-                    paymentApproval != null,
                     response.getVoucherCreated(),
                     response.getVoucherId()
             );
@@ -532,8 +641,9 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             return response;
 
         } catch (FeignException exception) {
+
             log.error(
-                    "Vendor synchronization failed. "
+                    "Account Service synchronization failed. "
                             + "paymentRequestId={}, vendorId={}, "
                             + "status={}, response={}",
                     paymentRequest.getId(),
@@ -559,18 +669,25 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
     ) {
         validateUser(userId);
 
-        ProcurementPaymentRequest paymentRequest = getActivePaymentRequest(paymentRequestId);
+        ProcurementPaymentRequest paymentRequest =
+                getActivePaymentRequest(paymentRequestId);
 
         if (paymentRequest.getStatus() != PaymentRequestStatus.PENDING
-                && paymentRequest.getStatus() != PaymentRequestStatus.UNDER_REVIEW) {
+                && paymentRequest.getStatus()
+                != PaymentRequestStatus.UNDER_REVIEW) {
+
             throw new ValidationException(
-                    "Only PENDING or UNDER_REVIEW payment request can be rejected. Current status: "
+                    "Only PENDING or UNDER_REVIEW payment request can be rejected. "
+                            + "Current status: "
                             + paymentRequest.getStatus(),
                     "ERR_INVALID_PAYMENT_REQUEST_STATUS"
             );
         }
 
-        String reason = request != null ? request.getReason() : null;
+        String reason =
+                request != null
+                        ? request.getReason()
+                        : null;
 
         if (reason == null || reason.trim().isEmpty()) {
             throw new ValidationException(
@@ -579,16 +696,42 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        paymentRequest.setStatus(PaymentRequestStatus.REJECTED);
+        paymentRequest.setStatus(
+                PaymentRequestStatus.REJECTED
+        );
+
         paymentRequest.setApprovedBy(userId);
         paymentRequest.setUpdatedDate(new Date());
-        paymentRequest.setCompletionRemarks(reason.trim());
 
-        ProcurementPaymentRequest saved = paymentRequestRepository.save(paymentRequest);
+        paymentRequest.setCompletionRemarks(
+                reason.trim()
+        );
+
+        ProcurementPaymentRequest saved =
+                paymentRequestRepository.save(paymentRequest);
 
         return mapToResponse(saved);
     }
 
+    /*
+     * ================================================================
+     * RELEASE PAYMENT
+     * ================================================================
+     *
+     * THIS is now where Accounts Service is called.
+     *
+     * Flow:
+     *
+     * APPROVED
+     *     ↓
+     * Operation captures payment details
+     *     ↓
+     * AccountVendorSyncRequestDto
+     *     ↓
+     * Account Service
+     *     ↓
+     * Invoice + Payment accounting
+     */
     @Override
     @Transactional
     public ProcurementPaymentRequestResponseDto releasePayment(
@@ -621,11 +764,40 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
+        /*
+         * Validate payment details before changing the status.
+         */
+        if (request.getBankPaymentAmount() == null
+                || request.getBankPaymentAmount()
+                .compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Bank payment amount must be greater than zero",
+                    "ERR_INVALID_BANK_PAYMENT_AMOUNT"
+            );
+        }
+
+        if (request.getBankLedgerId() == null) {
+            throw new ValidationException(
+                    "Bank/Cash ledger id is required for payment release",
+                    "ERR_BANK_LEDGER_REQUIRED"
+            );
+        }
+
+        if (request.getLedgerId() == null) {
+            throw new ValidationException(
+                    "Vendor ledger id is required for payment release",
+                    "ERR_VENDOR_LEDGER_REQUIRED"
+            );
+        }
+
         Date currentDate = new Date();
 
-        paymentRequest.setStatus(
-                PaymentRequestStatus.PAYMENT_RELEASED
-        );
+        /*
+         * ------------------------------------------------------------
+         * Capture release details in Operation
+         * ------------------------------------------------------------
+         */
 
         if (hasText(request.getInvoiceNumber())) {
             paymentRequest.setInvoiceNumber(
@@ -651,56 +823,150 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        paymentRequest.setPaymentReleasedBy(userId);
-        paymentRequest.setPaymentReleasedDate(currentDate);
-        paymentRequest.setUpdatedDate(currentDate);
+        if (request.getPaymentMode() != null) {
+            paymentRequest.setPaymentMode(
+                    request.getPaymentMode()
+            );
+        }
+
+        paymentRequest.setBankLedgerId(
+                request.getBankLedgerId()
+        );
+
+        paymentRequest.setLedgerId(
+                request.getLedgerId()
+        );
+
+        if (hasText(request.getLedgerType())) {
+            paymentRequest.setLedgerType(
+                    request.getLedgerType().trim()
+            );
+        }
+
+        /*
+         * Actual amount paid to vendor.
+         */
+        paymentRequest.setAmount(
+                money(request.getBankPaymentAmount())
+        );
+
+        /*
+         * TDS details captured during release if provided.
+         */
+        if (hasText(request.getTdsActive().toString())) {
+            paymentRequest.setTdsActive(
+                    request.getTdsActive()
+            );
+        }
+
+        if (request.getTdsPercentage() != null) {
+            paymentRequest.setTdsPercentage(
+                    request.getTdsPercentage()
+            );
+        }
+
+        if (request.getTdsAmount() != null) {
+            paymentRequest.setTdsAmount(
+                    money(request.getTdsAmount())
+            );
+        }
 
         if (hasText(request.getComment())) {
             paymentRequest.setCompletionRemarks(
                     request.getComment().trim()
             );
+        } else if (hasText(request.getRemarks())) {
+            paymentRequest.setCompletionRemarks(
+                    request.getRemarks().trim()
+            );
         }
 
+        if (request.getProofAttachmentUrls() != null) {
+            paymentRequest.setProofAttachmentUrls(
+                    request.getProofAttachmentUrls()
+            );
+        }
+
+        paymentRequest.setPaymentReleasedBy(userId);
+        paymentRequest.setPaymentReleasedDate(currentDate);
+        paymentRequest.setUpdatedDate(currentDate);
+
         /*
-         * This method updates only the Operation-side payment status.
-         *
-         * The current Account vendor-sync contract creates the
-         * PURCHASE_INVOICE voucher during approval. A separate
-         * Account Service bank-payment endpoint is required later
-         * for:
-         *
-         * Vendor Ledger Dr
-         *      To Bank Ledger
+         * Mark as released before Account synchronization.
          */
+        paymentRequest.setStatus(
+                PaymentRequestStatus.PAYMENT_RELEASED
+        );
+
         ProcurementPaymentRequest saved =
                 paymentRequestRepository.saveAndFlush(
                         paymentRequest
                 );
 
+        /*
+         * ------------------------------------------------------------
+         * BUILD ACCOUNT PAYMENT REQUEST
+         * ------------------------------------------------------------
+         *
+         * This contains BOTH:
+         *
+         * 1. Invoice/commercial details
+         * 2. Actual payment/bank details
+         *
+         * Accounts Service is called ONLY here.
+         */
+        VendorPaymentApprovalRequestDto paymentApproval =
+                buildPaymentReleaseRequest(
+                        saved,
+                        userId,
+                        request
+                );
+
+        /*
+         * ------------------------------------------------------------
+         * CALL ACCOUNT SERVICE DURING RELEASE
+         * ------------------------------------------------------------
+         */
+        AccountVendorSyncResponseDto accountResponse =
+                syncVendorWithAccountService(
+                        saved,
+                        userId,
+                        paymentApproval
+                );
+
         log.info(
-                "Payment released in Operation Service. "
+                "Payment released and Account Service synchronized. "
                         + "paymentRequestId={}, vendorId={}, "
-                        + "transactionReference={}",
+                        + "transactionReference={}, "
+                        + "voucherCreated={}, voucherId={}",
                 saved.getId(),
                 saved.getVendor() != null
                         ? saved.getVendor().getId()
                         : null,
-                saved.getTransactionReference()
+                saved.getTransactionReference(),
+                accountResponse.getVoucherCreated(),
+                accountResponse.getVoucherId()
         );
 
         return mapToResponse(saved);
     }
 
-    private VendorPaymentApprovalRequestDto buildPaymentApprovalRequest(
+    /*
+     * ================================================================
+     * BUILD RELEASE REQUEST FOR ACCOUNTS
+     * ================================================================
+     */
+    private VendorPaymentApprovalRequestDto buildPaymentReleaseRequest(
             ProcurementPaymentRequest paymentRequest,
             Long operationUserId,
             ProcurementPaymentActionRequestDto actionRequest
     ) {
-        Vendor vendor = paymentRequest.getVendor();
+        Vendor vendor =
+                paymentRequest.getVendor();
 
         if (vendor == null) {
             throw new ValidationException(
-                    "Vendor is required for payment approval synchronization",
+                    "Vendor is required for payment release synchronization",
                     "ERR_PAYMENT_REQUEST_VENDOR_NOT_FOUND"
             );
         }
@@ -720,6 +986,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 paymentRequest.getInvoiceDate();
 
         if (actionRequest != null) {
+
             if (hasText(actionRequest.getInvoiceNumber())) {
                 invoiceNumber =
                         actionRequest.getInvoiceNumber().trim();
@@ -731,19 +998,87 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             }
         }
 
-        if (actionRequest != null
-                && actionRequest.getInvoiceDate() != null) {
+        /*
+         * Actual bank payment date.
+         *
+         * If frontend doesn't send it, use today.
+         */
+        LocalDate paymentDate =
+                actionRequest != null
+                        && actionRequest.getPaymentDate() != null
+                        ? actionRequest.getPaymentDate()
+                        : LocalDate.now();
 
-            invoiceDate =
-                    actionRequest.getInvoiceDate();
-        }
+        BigDecimal bankPaymentAmount =
+                actionRequest != null
+                        && actionRequest.getBankPaymentAmount() != null
+                        ? money(actionRequest.getBankPaymentAmount())
+                        : money(paymentRequest.getAmount());
 
+        String paymentMode =
+                actionRequest != null
+                        && hasText(actionRequest.getPaymentMode())
+                        ? actionRequest.getPaymentMode().trim()
+                        : paymentRequest.getPaymentMode();
 
+        Long bankLedgerId =
+                actionRequest != null
+                        && actionRequest.getBankLedgerId() != null
+                        ? actionRequest.getBankLedgerId()
+                        : paymentRequest.getBankLedgerId();
+
+        Long ledgerId =
+                actionRequest != null
+                        && actionRequest.getLedgerId() != null
+                        ? actionRequest.getLedgerId()
+                        : paymentRequest.getLedgerId();
+
+        String ledgerType =
+                actionRequest != null
+                        && hasText(actionRequest.getLedgerType())
+                        ? actionRequest.getLedgerType().trim()
+                        : paymentRequest.getLedgerType();
+
+        String transactionReference =
+                actionRequest != null
+                        && hasText(actionRequest.getTransactionReference())
+                        ? actionRequest.getTransactionReference().trim()
+                        : paymentRequest.getTransactionReference();
+
+        String paymentProof =
+                actionRequest != null
+                        && hasText(actionRequest.getPaymentProof())
+                        ? actionRequest.getPaymentProof().trim()
+                        : paymentRequest.getPaymentProof();
+
+        BigDecimal tdsAmount =
+                actionRequest != null
+                        && actionRequest.getTdsAmount() != null
+                        ? money(actionRequest.getTdsAmount())
+                        : paymentRequest.getTdsAmount();
+
+        Long tdsPayableLedgerId =
+                actionRequest != null
+                        ? actionRequest.getTdsPayableLedgerId()
+                        : null;
+
+        String releaseComment =
+                actionRequest != null
+                        && hasText(actionRequest.getComment())
+                        ? actionRequest.getComment().trim()
+                        : clean(
+                        paymentRequest.getCompletionRemarks()
+                );
 
         return VendorPaymentApprovalRequestDto.builder()
+
+                /*
+                 * References
+                 */
                 .procurementPaymentRequestId(
                         paymentRequest.getId()
                 )
+
                 .procurementOrderId(
                         paymentRequest.getProcurementOrder() != null
                                 ? paymentRequest
@@ -751,6 +1086,7 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                                 .getId()
                                 : null
                 )
+
                 .purchaseOrderNumber(
                         paymentRequest.getProcurementOrder() != null
                                 ? paymentRequest
@@ -758,59 +1094,137 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                                 .getPoNumber()
                                 : null
                 )
+
+                /*
+                 * Invoice / commercial information
+                 */
                 .invoiceNumber(invoiceNumber)
                 .invoiceDate(invoiceDate)
+
+                /*
+                 * Accounts expects price as taxable/basic amount.
+                 */
                 .price(basicPrice)
+
                 .gstRegistrationType(
                         gstRegistrationType
                 )
-                /*
-                 * Legacy Operation field gstType now represents
-                 * supply type: INTRA_STATE or INTER_STATE.
-                 */
+
                 .gstSupplyType(
                         resolveGstSupplyType(paymentRequest)
                 )
+
                 .gstStateCode(
                         paymentRequest.getGstStateCode()
                 )
+
                 .gstPercentage(
                         defaultAmount(
                                 paymentRequest.getGstPercentage()
                         )
                 )
+
                 .tdsActive(
-                        Boolean.TRUE.equals(
-                                paymentRequest.getTdsActive()
+                        parseBoolean(
+                                paymentRequest.getTdsActive().toString()
                         )
                 )
+
                 .tdsPercentage(
                         defaultAmount(
                                 paymentRequest.getTdsPercentage()
                         )
                 )
-                .approvedByOperationUserId(
-                        operationUserId
+
+                .tdsAmount(tdsAmount)
+
+                .tdsPayableLedgerId(
+                        tdsPayableLedgerId
                 )
+
+                /*
+                 * ----------------------------------------------------
+                 * ACTUAL PAYMENT INFORMATION
+                 * ----------------------------------------------------
+                 */
+                .paymentDate(
+                        paymentDate
+                )
+
+                .bankPaymentAmount(
+                        bankPaymentAmount
+                )
+
+                .paymentMode(
+                        paymentMode
+                )
+
+                .bankLedgerId(
+                        bankLedgerId
+                )
+
+                .ledgerId(
+                        ledgerId
+                )
+
+                .ledgerType(
+                        ledgerType
+                )
+
+                .transactionReference(
+                        transactionReference
+                )
+
+                .paymentProof(
+                        paymentProof
+                )
+
+                .proofAttachmentUrls(
+                        actionRequest != null
+                                ? actionRequest.getProofAttachmentUrls()
+                                : paymentRequest.getProofAttachmentUrls()
+                )
+
+                /*
+                 * Audit
+                 */
+                .approvedByOperationUserId(
+                        paymentRequest.getApprovedBy()
+                )
+
                 .approvedDate(
                         toLocalDate(
                                 paymentRequest.getApprovedDate()
                         )
                 )
+
                 .approvalComment(
-                        actionRequest != null
-                                && hasText(actionRequest.getComment())
-                                ? actionRequest .getComment().trim()
-                                : clean(
+                        clean(
                                 paymentRequest.getCompletionRemarks()
                         )
                 )
+
+                .paymentReleasedByOperationUserId(
+                        operationUserId
+                )
+
+                .paymentReleasedDate(
+                        paymentDate
+                )
+
+                .releaseComment(
+                        releaseComment
+                )
+
                 .build();
     }
+
     private String resolveGstSupplyType(
             ProcurementPaymentRequest paymentRequest
     ) {
-        if (!Boolean.TRUE.equals(paymentRequest.getGstActive())) {
+        if (!Boolean.TRUE.equals(
+                paymentRequest.getGstActive()
+        )) {
             return null;
         }
 
@@ -836,13 +1250,16 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         }
 
         if (paymentRequest.getGstType() != null) {
-            String gstType = paymentRequest.getGstType()
-                    .toString()
-                    .trim()
-                    .toUpperCase();
+
+            String gstType =
+                    paymentRequest.getGstType()
+                            .toString()
+                            .trim()
+                            .toUpperCase();
 
             if ("INTRA_STATE".equals(gstType)
                     || "INTER_STATE".equals(gstType)) {
+
                 return gstType;
             }
         }
@@ -854,27 +1271,50 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         );
     }
 
-
     private BigDecimal resolveBasicPrice(
             ProcurementPaymentRequest paymentRequest
     ) {
-        if (paymentRequest.getAmount() != null
-                && paymentRequest.getAmount()
-                .compareTo(BigDecimal.ZERO) > 0) {
+        BigDecimal finalAmount =
+                resolveFinalAmount(paymentRequest);
 
-            return paymentRequest.getAmount();
+        if (!Boolean.TRUE.equals(
+                paymentRequest.getGstActive()
+        )) {
+            return money(finalAmount);
         }
 
-        if (paymentRequest.getInvoiceAmount() != null
-                && paymentRequest.getInvoiceAmount()
-                .compareTo(BigDecimal.ZERO) > 0) {
+        BigDecimal gstPercentage =
+                paymentRequest.getGstPercentage() != null
+                        ? paymentRequest.getGstPercentage()
+                        : BigDecimal.ZERO;
 
-            return paymentRequest.getInvoiceAmount();
+        if (gstPercentage.compareTo(BigDecimal.ZERO) <= 0) {
+            return money(finalAmount);
         }
 
-        throw new ValidationException(
-                "Basic vendor price is required for Account Service accounting",
-                "ERR_VENDOR_BASIC_PRICE_REQUIRED"
+        /*
+         * Operation amount is GST-inclusive.
+         *
+         * Example:
+         *
+         * Final amount = 56
+         * GST = 18%
+         *
+         * Basic price = 56 / 1.18 = 47.46
+         */
+        BigDecimal divisor =
+                BigDecimal.ONE.add(
+                        gstPercentage.divide(
+                                BigDecimal.valueOf(100),
+                                6,
+                                RoundingMode.HALF_UP
+                        )
+                );
+
+        return finalAmount.divide(
+                divisor,
+                2,
+                RoundingMode.HALF_UP
         );
     }
 
@@ -886,7 +1326,62 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 : value;
     }
 
+    private BigDecimal resolveFinalAmount(
+            ProcurementPaymentRequest paymentRequest
+    ) {
+        if (paymentRequest.getAmount() != null
+                && paymentRequest.getAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
 
+            return money(paymentRequest.getAmount());
+        }
+
+        if (paymentRequest.getPayableAmount() != null
+                && paymentRequest.getPayableAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
+
+            return money(paymentRequest.getPayableAmount());
+        }
+
+        if (paymentRequest.getInvoiceAmount() != null
+                && paymentRequest.getInvoiceAmount()
+                .compareTo(BigDecimal.ZERO) > 0) {
+
+            return money(paymentRequest.getInvoiceAmount());
+        }
+
+        throw new ValidationException(
+                "Final payment amount is required",
+                "ERR_FINAL_PAYMENT_AMOUNT_REQUIRED"
+        );
+    }
+
+    private BigDecimal money(
+            BigDecimal value
+    ) {
+        return value == null
+                ? BigDecimal.ZERO
+                : value.setScale(
+                2,
+                RoundingMode.HALF_UP
+        );
+    }
+
+    private Boolean parseBoolean(
+            String value
+    ) {
+        if (!hasText(value)) {
+            return false;
+        }
+
+        String normalized =
+                value.trim().toUpperCase();
+
+        return "YES".equals(normalized)
+                || "TRUE".equals(normalized)
+                || "Y".equals(normalized)
+                || "1".equals(normalized);
+    }
 
     private LocalDate toLocalDate(
             Date value
@@ -900,7 +1395,9 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 .toLocalDate();
     }
 
-    private ProcurementPaymentRequest getActivePaymentRequest(Long paymentRequestId) {
+    private ProcurementPaymentRequest getActivePaymentRequest(
+            Long paymentRequestId
+    ) {
         if (paymentRequestId == null) {
             throw new ValidationException(
                     "Payment request id is required",
@@ -908,11 +1405,16 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
             );
         }
 
-        ProcurementPaymentRequest paymentRequest = paymentRequestRepository.findById(paymentRequestId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Procurement payment request not found",
-                        "ERR_PAYMENT_REQUEST_NOT_FOUND"
-                ));
+        ProcurementPaymentRequest paymentRequest =
+                paymentRequestRepository.findById(
+                                paymentRequestId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Procurement payment request not found",
+                                        "ERR_PAYMENT_REQUEST_NOT_FOUND"
+                                )
+                        );
 
         if (paymentRequest.isDeleted()) {
             throw new ValidationException(
@@ -924,7 +1426,9 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         return paymentRequest;
     }
 
-    private void validateUser(Long userId) {
+    private void validateUser(
+            Long userId
+    ) {
         if (userId == null) {
             throw new ValidationException(
                     "User id is required",
@@ -933,10 +1437,12 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
         }
 
         userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found",
-                        "ERR_USER_NOT_FOUND"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found",
+                                "ERR_USER_NOT_FOUND"
+                        )
+                );
     }
 
     private boolean hasText(
@@ -975,68 +1481,196 @@ public class ProcurementPaymentRequestServiceImpl implements ProcurementPaymentR
                 + exception.status();
     }
 
-    private ProcurementPaymentRequestResponseDto mapToResponse(ProcurementPaymentRequest request) {
-        ProcurementOrder order = request.getProcurementOrder();
-        Project project = request.getProject();
-        Vendor vendor = request.getVendor();
+    private ProcurementPaymentRequestResponseDto mapToResponse(
+            ProcurementPaymentRequest request
+    ) {
+        ProcurementOrder order =
+                request.getProcurementOrder();
+
+        Project project =
+                request.getProject();
+
+        Vendor vendor =
+                request.getVendor();
 
         return ProcurementPaymentRequestResponseDto.builder()
                 .id(request.getId())
 
-                .procurementOrderId(order != null ? order.getId() : null)
-                .poNumber(order != null ? order.getPoNumber() : null)
+                .procurementOrderId(
+                        order != null
+                                ? order.getId()
+                                : null
+                )
 
-                .projectId(project != null ? project.getId() : null)
-                .projectName(project != null ? project.getName() : null)
-                .projectNo(project != null ? project.getProjectNo() : null)
+                .poNumber(
+                        order != null
+                                ? order.getPoNumber()
+                                : null
+                )
 
-                .vendorId(vendor != null ? vendor.getId() : null)
-                .vendorName(vendor != null ? vendor.getName() : null)
+                .projectId(
+                        project != null
+                                ? project.getId()
+                                : null
+                )
 
-                .invoiceAmount(request.getInvoiceAmount())
-                .payableAmount(request.getPayableAmount())
+                .projectName(
+                        project != null
+                                ? project.getName()
+                                : null
+                )
 
-                .invoiceNumber(request.getInvoiceNumber())
-                .invoiceDate(request.getInvoiceDate())
-                .submissionDate(request.getSubmissionDate())
+                .projectNo(
+                        project != null
+                                ? project.getProjectNo()
+                                : null
+                )
 
-                .completionRemarks(request.getCompletionRemarks())
-                .proofAttachmentUrls(request.getProofAttachmentUrls())
+                .vendorId(
+                        vendor != null
+                                ? vendor.getId()
+                                : null
+                )
 
-                .status(request.getStatus())
+                .vendorName(
+                        vendor != null
+                                ? vendor.getName()
+                                : null
+                )
 
-                .approvedDate(request.getApprovedDate())
-                .paymentReleasedDate(request.getPaymentReleasedDate())
+                .invoiceAmount(
+                        request.getInvoiceAmount()
+                )
 
-                .createdBy(request.getCreatedBy())
-                .approvedBy(request.getApprovedBy())
-                .paymentReleasedBy(request.getPaymentReleasedBy())
+                .payableAmount(
+                        request.getPayableAmount()
+                )
 
-                .createdDate(request.getCreatedDate())
-                .updatedDate(request.getUpdatedDate())
-                .tdsActive(request.getTdsActive())
-                .tdsPercentage(request.getTdsPercentage())
+                .invoiceNumber(
+                        request.getInvoiceNumber()
+                )
 
-                .gstActive(request.getGstActive())
-                .gstStateCode(request.getGstStateCode())
-                .gstPercentage(request.getGstPercentage())
+                .invoiceDate(
+                        request.getInvoiceDate()
+                )
 
-                .cgstAmount(request.getCgstAmount())
-                .sgstAmount(request.getSgstAmount())
-                .igstAmount(request.getIgstAmount())
-                .totalGstAmount(request.getTotalGstAmount())
-                .amount(request.getAmount())
-                .paymentMode(request.getPaymentMode())
+                .submissionDate(
+                        request.getSubmissionDate()
+                )
 
-                .bankLedgerId(request.getBankLedgerId())
-                .ledgerId(request.getLedgerId())
-                .ledgerType(request.getLedgerType())
+                .completionRemarks(
+                        request.getCompletionRemarks()
+                )
 
-                .transactionReference(request.getTransactionReference())
-                .paymentProof(request.getPaymentProof())
+                .proofAttachmentUrls(
+                        request.getProofAttachmentUrls()
+                )
 
-                .tdsAmount(request.getTdsAmount())
-                .gstType(request.getGstType())
+                .status(
+                        request.getStatus()
+                )
+
+                .approvedDate(
+                        request.getApprovedDate()
+                )
+
+                .paymentReleasedDate(
+                        request.getPaymentReleasedDate()
+                )
+
+                .createdBy(
+                        request.getCreatedBy()
+                )
+
+                .approvedBy(
+                        request.getApprovedBy()
+                )
+
+                .paymentReleasedBy(
+                        request.getPaymentReleasedBy()
+                )
+
+                .createdDate(
+                        request.getCreatedDate()
+                )
+
+                .updatedDate(
+                        request.getUpdatedDate()
+                )
+
+                .tdsActive(
+                        request.getTdsActive()
+                )
+
+                .tdsPercentage(
+                        request.getTdsPercentage()
+                )
+
+                .gstActive(
+                        request.getGstActive()
+                )
+
+                .gstStateCode(
+                        request.getGstStateCode()
+                )
+
+                .gstPercentage(
+                        request.getGstPercentage()
+                )
+
+                .cgstAmount(
+                        request.getCgstAmount()
+                )
+
+                .sgstAmount(
+                        request.getSgstAmount()
+                )
+
+                .igstAmount(
+                        request.getIgstAmount()
+                )
+
+                .totalGstAmount(
+                        request.getTotalGstAmount()
+                )
+
+                .amount(
+                        request.getAmount()
+                )
+
+                .paymentMode(
+                        request.getPaymentMode()
+                )
+
+                .bankLedgerId(
+                        request.getBankLedgerId()
+                )
+
+                .ledgerId(
+                        request.getLedgerId()
+                )
+
+                .ledgerType(
+                        request.getLedgerType()
+                )
+
+                .transactionReference(
+                        request.getTransactionReference()
+                )
+
+                .paymentProof(
+                        request.getPaymentProof()
+                )
+
+                .tdsAmount(
+                        request.getTdsAmount()
+                )
+
+                .gstType(
+                        request.getGstType()
+                )
+
                 .build();
     }
 }
+
