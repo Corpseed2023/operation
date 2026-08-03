@@ -509,8 +509,7 @@ public class ProcurementPaymentRequestServiceImpl
                 buildPaymentReleaseRequest(
                         paymentRequest,
                         operationUserId,
-                        actionRequest,
-                        accountsSubmission
+                        actionRequest
                 );
 
         LocalDateTime currentDateTime = LocalDateTime.now();
@@ -876,8 +875,7 @@ public class ProcurementPaymentRequestServiceImpl
     private VendorPaymentApprovalRequestDto buildPaymentReleaseRequest(
             ProcurementPaymentRequest paymentRequest,
             Long operationUserId,
-            ProcurementPaymentActionRequestDto actionRequest,
-            VendorAccountsSubmission accountsSubmission
+            ProcurementPaymentActionRequestDto actionRequest
     ) {
         Vendor vendor = paymentRequest.getVendor();
 
@@ -888,96 +886,84 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
-        String gstRegistrationType =
-                accountsSubmission != null
-                        && accountsSubmission.getGstRegistrationType() != null
-                        ? accountsSubmission.getGstRegistrationType().name()
-                        : vendor.getGstRegistrationType() != null
-                        ? vendor.getGstRegistrationType().name()
-                        : null;
+        GstPayload gstPayload =
+                resolveGstPayload(
+                        paymentRequest,
+                        vendor
+                );
 
-        BigDecimal basicPrice = resolveBasicPrice(paymentRequest);
+        BigDecimal basicPrice =
+                resolveBasicPrice(
+                        paymentRequest,
+                        gstPayload.gstActive(),
+                        gstPayload.gstPercentage()
+                );
 
-        String invoiceNumber = paymentRequest.getInvoiceNumber();
-        LocalDate invoiceDate = paymentRequest.getInvoiceDate();
+        String invoiceNumber =
+                hasText(actionRequest.getInvoiceNumber())
+                        ? actionRequest.getInvoiceNumber().trim()
+                        : paymentRequest.getInvoiceNumber();
 
-        if (actionRequest != null) {
-            if (hasText(actionRequest.getInvoiceNumber())) {
-                invoiceNumber = actionRequest.getInvoiceNumber().trim();
-            }
-
-            if (actionRequest.getInvoiceDate() != null) {
-                invoiceDate = actionRequest.getInvoiceDate();
-            }
-        }
+        LocalDate invoiceDate =
+                actionRequest.getInvoiceDate() != null
+                        ? actionRequest.getInvoiceDate()
+                        : paymentRequest.getInvoiceDate();
 
         LocalDate paymentDate =
-                actionRequest != null
-                        && actionRequest.getPaymentDate() != null
+                actionRequest.getPaymentDate() != null
                         ? actionRequest.getPaymentDate()
                         : LocalDate.now();
 
         BigDecimal bankPaymentAmount =
-                actionRequest != null
-                        && actionRequest.getBankPaymentAmount() != null
-                        ? money(actionRequest.getBankPaymentAmount())
-                        : money(paymentRequest.getAmount());
+                money(actionRequest.getBankPaymentAmount());
 
         String paymentMode =
-                actionRequest != null
-                        && hasText(actionRequest.getPaymentMode())
+                hasText(actionRequest.getPaymentMode())
                         ? actionRequest.getPaymentMode().trim()
                         : paymentRequest.getPaymentMode();
 
         Long bankLedgerId =
-                actionRequest != null
-                        && actionRequest.getBankLedgerId() != null
+                actionRequest.getBankLedgerId() != null
                         ? actionRequest.getBankLedgerId()
                         : paymentRequest.getBankLedgerId();
 
         Long ledgerId =
-                actionRequest != null
-                        && actionRequest.getLedgerId() != null
+                actionRequest.getLedgerId() != null
                         ? actionRequest.getLedgerId()
                         : paymentRequest.getLedgerId();
 
         String ledgerType =
-                actionRequest != null
-                        && hasText(actionRequest.getLedgerType())
+                hasText(actionRequest.getLedgerType())
                         ? actionRequest.getLedgerType().trim()
                         : paymentRequest.getLedgerType();
 
         String transactionReference =
-                actionRequest != null
-                        && hasText(actionRequest.getTransactionReference())
+                hasText(actionRequest.getTransactionReference())
                         ? actionRequest.getTransactionReference().trim()
                         : paymentRequest.getTransactionReference();
 
         String paymentProof =
-                actionRequest != null
-                        && hasText(actionRequest.getPaymentProof())
+                hasText(actionRequest.getPaymentProof())
                         ? actionRequest.getPaymentProof().trim()
                         : paymentRequest.getPaymentProof();
 
         BigDecimal tdsAmount =
-                actionRequest != null
-                        && actionRequest.getTdsAmount() != null
+                actionRequest.getTdsAmount() != null
                         ? money(actionRequest.getTdsAmount())
-                        : paymentRequest.getTdsAmount();
+                        : money(paymentRequest.getTdsAmount());
 
         Long tdsPayableLedgerId =
-                actionRequest != null
-                        ? actionRequest.getTdsPayableLedgerId()
-                        : null;
+                actionRequest.getTdsPayableLedgerId();
 
         String releaseComment =
-                actionRequest != null
-                        && hasText(actionRequest.getComment())
+                hasText(actionRequest.getComment())
                         ? actionRequest.getComment().trim()
                         : clean(paymentRequest.getCompletionRemarks());
 
         return VendorPaymentApprovalRequestDto.builder()
-                .procurementPaymentRequestId(paymentRequest.getId())
+                .procurementPaymentRequestId(
+                        paymentRequest.getId()
+                )
                 .procurementOrderId(
                         paymentRequest.getProcurementOrder() != null
                                 ? paymentRequest.getProcurementOrder().getId()
@@ -988,28 +974,35 @@ public class ProcurementPaymentRequestServiceImpl
                                 ? paymentRequest.getProcurementOrder().getPoNumber()
                                 : null
                 )
-
                 .invoiceNumber(invoiceNumber)
                 .invoiceDate(invoiceDate)
-
-                /* Taxable/basic amount, not the bank-paid amount. */
                 .price(basicPrice)
 
-                .gstActive(
-                        Boolean.TRUE.equals(paymentRequest.getGstActive())
+                .gstRegistrationType(
+                        gstPayload.gstRegistrationType()
                 )
-                .gstRegistrationType(gstRegistrationType)
-                .gstSupplyType(resolveGstSupplyType(paymentRequest))
-                .gstStateCode(paymentRequest.getGstStateCode())
+                .gstActive(
+                        gstPayload.gstActive()
+                )
+                .gstSupplyType(
+                        gstPayload.gstSupplyType()
+                )
+                .gstStateCode(
+                        gstPayload.gstStateCode()
+                )
                 .gstPercentage(
-                        defaultAmount(paymentRequest.getGstPercentage())
+                        gstPayload.gstPercentage()
                 )
 
                 .tdsActive(
-                        Boolean.TRUE.equals(paymentRequest.getTdsActive())
+                        Boolean.TRUE.equals(
+                                paymentRequest.getTdsActive()
+                        )
                 )
                 .tdsPercentage(
-                        defaultAmount(paymentRequest.getTdsPercentage())
+                        defaultAmount(
+                                paymentRequest.getTdsPercentage()
+                        )
                 )
                 .tdsAmount(tdsAmount)
                 .tdsPayableLedgerId(tdsPayableLedgerId)
@@ -1018,15 +1011,12 @@ public class ProcurementPaymentRequestServiceImpl
                 .bankPaymentAmount(bankPaymentAmount)
                 .paymentMode(paymentMode)
                 .bankLedgerId(bankLedgerId)
-
-                /* Optional only; Account Service resolves the real vendor ledger. */
                 .ledgerId(ledgerId)
                 .ledgerType(ledgerType)
-
                 .transactionReference(transactionReference)
                 .paymentProof(paymentProof)
                 .proofAttachmentUrls(
-                        actionRequest != null
+                        actionRequest.getProofAttachmentUrls() != null
                                 ? actionRequest.getProofAttachmentUrls()
                                 : paymentRequest.getProofAttachmentUrls()
                 )
@@ -1035,13 +1025,18 @@ public class ProcurementPaymentRequestServiceImpl
                         paymentRequest.getApprovedBy()
                 )
                 .approvedDate(
-                        toLocalDate(paymentRequest.getApprovedDate())
+                        toLocalDate(
+                                paymentRequest.getApprovedDate()
+                        )
                 )
                 .approvalComment(
-                        clean(paymentRequest.getCompletionRemarks())
+                        clean(
+                                paymentRequest.getCompletionRemarks()
+                        )
                 )
-
-                .paymentReleasedByOperationUserId(operationUserId)
+                .paymentReleasedByOperationUserId(
+                        operationUserId
+                )
                 .paymentReleasedDate(paymentDate)
                 .releaseComment(releaseComment)
                 .build();
@@ -1109,36 +1104,46 @@ public class ProcurementPaymentRequestServiceImpl
     }
 
     private BigDecimal resolveBasicPrice(
-            ProcurementPaymentRequest paymentRequest
+            ProcurementPaymentRequest paymentRequest,
+            boolean gstActive,
+            BigDecimal gstPercentage
     ) {
-        BigDecimal invoiceGrossAmount =
-                resolveInvoiceGrossAmount(paymentRequest);
+        BigDecimal invoiceAmount =
+                paymentRequest.getInvoiceAmount();
 
-        if (!Boolean.TRUE.equals(paymentRequest.getGstActive())) {
-            return money(invoiceGrossAmount);
+        if (invoiceAmount == null
+                || invoiceAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Invoice amount must be greater than zero",
+                    "ERR_INVALID_INVOICE_AMOUNT"
+            );
         }
 
-        BigDecimal gstPercentage =
-                defaultAmount(paymentRequest.getGstPercentage());
+        BigDecimal finalAmount =
+                money(invoiceAmount);
 
-        /*
-         * Zero-rated supplies (for example SEZ) legitimately use 0% GST.
-         * Account Service performs the final registration-type validation.
-         */
-        if (gstPercentage.compareTo(BigDecimal.ZERO) <= 0) {
-            return money(invoiceGrossAmount);
+        if (!gstActive) {
+            return finalAmount;
+        }
+
+        BigDecimal safeGstPercentage =
+                defaultAmount(gstPercentage);
+
+        if (safeGstPercentage.compareTo(BigDecimal.ZERO) <= 0) {
+            return finalAmount;
         }
 
         BigDecimal divisor =
                 BigDecimal.ONE.add(
-                        gstPercentage.divide(
+                        safeGstPercentage.divide(
                                 BigDecimal.valueOf(100),
                                 6,
                                 RoundingMode.HALF_UP
                         )
                 );
 
-        return invoiceGrossAmount.divide(
+        return finalAmount.divide(
                 divisor,
                 2,
                 RoundingMode.HALF_UP
@@ -1495,6 +1500,85 @@ public class ProcurementPaymentRequestServiceImpl
                 )
 
                 .build();
+    }
+
+    private record GstPayload(
+            Boolean gstActive,
+            String gstRegistrationType,
+            String gstSupplyType,
+            String gstStateCode,
+            BigDecimal gstPercentage
+    ) {
+    }
+
+
+    private GstPayload resolveGstPayload(
+            ProcurementPaymentRequest paymentRequest,
+            Vendor vendor
+    ) {
+        boolean gstActive =
+                Boolean.TRUE.equals(
+                        paymentRequest.getGstActive()
+                );
+
+        String registrationType =
+                vendor.getGstRegistrationType() != null
+                        ? vendor.getGstRegistrationType()
+                        .name()
+                        : null;
+
+        BigDecimal gstPercentage =
+                defaultAmount(
+                        paymentRequest.getGstPercentage()
+                );
+
+        /*
+         * INTERNATIONAL and SEZ are zero-rated in Account Service.
+         */
+        boolean zeroRated =
+                "INTERNATIONAL".equalsIgnoreCase(
+                        registrationType
+                )
+                        || "SEZ".equalsIgnoreCase(
+                        registrationType
+                );
+
+        if (!gstActive || zeroRated) {
+            return new GstPayload(
+                    false,
+                    registrationType,
+                    null,
+                    clean(
+                            paymentRequest.getGstStateCode()
+                    ),
+                    BigDecimal.ZERO.setScale(
+                            2,
+                            RoundingMode.HALF_UP
+                    )
+            );
+        }
+
+        if (gstPercentage.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException(
+                    "GST percentage must be greater than zero when GST is active",
+                    "ERR_GST_PERCENTAGE_REQUIRED"
+            );
+        }
+
+        String supplyType =
+                resolveGstSupplyType(
+                        paymentRequest
+                );
+
+        return new GstPayload(
+                true,
+                registrationType,
+                supplyType,
+                clean(
+                        paymentRequest.getGstStateCode()
+                ),
+                gstPercentage
+        );
     }
 }
 
