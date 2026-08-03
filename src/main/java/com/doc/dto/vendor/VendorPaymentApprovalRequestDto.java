@@ -81,4 +81,5 @@ public class VendorPaymentApprovalRequestDto {
     private Long paymentReleasedByOperationUserId;
     private LocalDate paymentReleasedDate;
     private String releaseComment;
+    private Boolean gstActive;
 }

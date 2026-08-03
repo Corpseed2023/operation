@@ -68,19 +68,7 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
             @Param("statuses") List<VendorFinalizationStatus> statuses
     );
 
-    @Query("""
-        SELECT COUNT(DISTINCT v.id)
-        FROM ProductVendorMapping m
-        JOIN m.product p
-        JOIN m.vendor v
-        WHERE p.id = :productId
-          AND m.isDeleted = false
-          AND m.isActive = true
-          AND p.isDeleted = false
-          AND p.isActive = true
-          AND v.isDeleted = false
-        """)
-    Long countActiveVendorsByProductId(@Param("productId") Long productId);
+
 
     @Query("""
         SELECT vf
@@ -102,20 +90,7 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
             Pageable pageable
     );
 
-    @Query("""
-        SELECT vf
-        FROM VendorFinalization vf
-        WHERE vf.rfq.product.id = :productId
-          AND vf.vendor.id = :vendorId
-          AND vf.status = :status
-          AND vf.isDeleted = false
-        ORDER BY vf.createdDate DESC
-        """)
-    List<VendorFinalization> findLatestFinalizationByProductAndVendorAndStatus(
-            @Param("productId") Long productId,
-            @Param("vendorId") Long vendorId,
-            @Param("status") VendorFinalizationStatus status
-    );
+
 
     List<VendorFinalization> findByQuotation_IdAndIsDeletedFalse(
             Long quotationId
@@ -123,4 +98,6 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
 
     Optional<VendorFinalization>
     findFirstByVendor_IdOrderByIdDesc(Long vendorId);
+
+
 }
