@@ -22,10 +22,10 @@ public interface ProcurementPaymentRequestRepository extends JpaRepository<Procu
             Pageable pageable
     );
 
-    Optional<ProcurementPaymentRequest> findByProcurementOrderAndIsDeletedFalse(
+    Optional<ProcurementPaymentRequest>
+    findFirstByProcurementOrderAndIsDeletedFalseOrderByCreatedDateAsc(
             ProcurementOrder procurementOrder
     );
-
 
     Page<ProcurementPaymentRequest> findByProcurementOrder_IdAndIsDeletedFalse(
             Long procurementOrderId,
