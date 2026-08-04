@@ -1,10 +1,7 @@
 package com.doc.controller.project;
 
 import com.doc.dto.project.activity.ProjectActivityResponseDto;
-import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
-import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
-import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
-import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
+import com.doc.dto.project.activity.expense.*;
 import com.doc.em.ApprovalStatus;
 import com.doc.em.ExpenseApprovalStage;
 import com.doc.em.ExpensePaymentStatus;
@@ -76,12 +73,14 @@ public class ProjectExpenseController {
     ) {
 
         log.info(
-                "[CRT-DECISION-REQUEST] projectId={} | expenseId={} | userId={} | decision={} | expensePaidBy={}",
+                "[CRT-DECISION-REQUEST] projectId={} | expenseId={} | userId={} | decision={} | expensePaidBy={} | paymentMode={} | bankLedgerId={}",
                 projectId,
                 expenseId,
                 userId,
                 request.getStatus(),
-                request.getExpensePaidBy()
+                request.getExpensePaidBy(),
+                request.getClientPaymentMode(),
+                request.getClientPaymentBankLedgerId()
         );
 
         ProjectExpenseResponseDto response =
@@ -94,7 +93,6 @@ public class ProjectExpenseController {
 
         return ResponseEntity.ok(response);
     }
-
     @PutMapping("/{expenseId}/accounts-decision")
     public ResponseEntity<ProjectExpenseResponseDto> takeAccountsDecision(
             @PathVariable
@@ -133,6 +131,47 @@ public class ProjectExpenseController {
 
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{expenseId}/fund-transfer")
+    public ResponseEntity<ProjectExpenseResponseDto>
+    transferGovernmentFeeFunds(
+            @PathVariable
+            @Positive(message = "Expense ID must be greater than zero")
+            Long expenseId,
+
+            @RequestParam
+            @Positive(message = "Project ID must be greater than zero")
+            Long projectId,
+
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId,
+
+            @Valid
+            @RequestBody
+            GovernmentFeeFundTransferRequestDto request
+    ) {
+
+        log.info(
+                "[GOVERNMENT-FEE-FUND-TRANSFER] projectId={} | expenseId={} | userId={} | fromLedgerId={} | toLedgerId={} | amount={}",
+                projectId,
+                expenseId,
+                userId,
+                request.getFromBankLedgerId(),
+                request.getToBankLedgerId(),
+                request.getAmount()
+        );
+
+        return ResponseEntity.ok(
+                activityService.transferGovernmentFeeFunds(
+                        projectId,
+                        expenseId,
+                        userId,
+                        request
+                )
+        );
+    }
+
 
     @GetMapping("/approval-queue")
     public ResponseEntity<List<ProjectExpenseResponseDto>> getApprovalQueue(

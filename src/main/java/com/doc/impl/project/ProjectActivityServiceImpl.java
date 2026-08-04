@@ -7,6 +7,7 @@ import com.doc.dto.project.activity.ProjectCommentResponseDto;
 import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
+import com.doc.dto.project.activity.expense.GovernmentFeeFundTransferRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
 import com.doc.em.AccountPostingStatus;
@@ -85,6 +86,34 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
     private final ExpenseAccountPostingService
             expenseAccountPostingService;
+
+    private static final Set<String> ALLOWED_CLIENT_PAYMENT_MODES =
+            Set.of(
+                    "CASH",
+                    "CASH_DEPOSIT",
+                    "CHEQUE",
+                    "DEMAND_DRAFT",
+                    "NEFT",
+                    "RTGS",
+                    "IMPS",
+                    "UPI",
+                    "CARD",
+                    "BANK_TRANSFER",
+                    "OTHER"
+            );
+
+    private static final Set<String> BANK_DETAILS_REQUIRED_PAYMENT_MODES =
+            Set.of(
+                    "CASH_DEPOSIT",
+                    "CHEQUE",
+                    "DEMAND_DRAFT",
+                    "NEFT",
+                    "RTGS",
+                    "IMPS",
+                    "UPI",
+                    "CARD",
+                    "BANK_TRANSFER"
+            );
 
     // =========================================================
     // NOTE
@@ -361,6 +390,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 request.getDepartmentId()
         );
 
+        validateGovernmentFeeRaiser(
+                department,
+                request.getExpenseCategory()
+        );
+
         log.debug(
                 "[EXPENSE-CREATE-CONTEXT-VALIDATED] projectId={} | userId={} | departmentId={}",
                 project.getId(),
@@ -377,6 +411,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             throw new ValidationException(
                     "Expense category is required",
                     "ERR_EXPENSE_CATEGORY_REQUIRED"
+            );
+        }
+
+        String attachmentUrl =
+                normalizeOptionalText(request.getAttachmentUrl());
+
+        if (request.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE
+                && attachmentUrl == null) {
+
+            throw new ValidationException(
+                    "Portal challan attachment is required for government fee expense",
+                    "ERR_GOVERNMENT_FEE_ATTACHMENT_REQUIRED"
             );
         }
 
@@ -462,9 +508,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         : LocalDateTime.now()
         );
 
-        expense.setAttachmentUrl(
-                normalizeOptionalText(request.getAttachmentUrl())
-        );
+        expense.setAttachmentUrl(attachmentUrl);
 
         expense.setExternalReference(
                 normalizeOptionalText(request.getExternalReference())
@@ -511,6 +555,30 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
     }
 
+    private void validateGovernmentFeeRaiser(
+            Department department,
+            ExpenseCategory expenseCategory
+    ) {
+
+        if (expenseCategory != ExpenseCategory.GOVERNMENT_FEE) {
+            return;
+        }
+
+        String departmentName =
+                department.getName() == null
+                        ? ""
+                        : department.getName()
+                        .trim()
+                        .toUpperCase(Locale.ROOT);
+
+        if (!departmentName.contains("TECHNICAL")) {
+            throw new ValidationException(
+                    "Government fee expense can only be raised by the Technical department",
+                    "ERR_GOVERNMENT_FEE_TECHNICAL_ONLY"
+            );
+        }
+    }
+
     // =========================================================
     // CRT DECISION
     // =========================================================
@@ -525,80 +593,56 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     ) {
 
         log.info(
-                "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | requestedDecision={}",
+                "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | paymentMode={}",
                 projectId,
                 expenseId,
                 userId,
-                request != null ? request.getStatus() : null
-        );
-
-        User user = validateActiveUser(userId);
-        validateCrtApprover(user);
-
-        Project project = validateProject(projectId);
-        ProjectExpense expense = validateExpense(
-                project,
-                expenseId
-        );
-
-        log.debug(
-                "[CRT-EXPENSE-LOADED] expenseId={} | currentStage={} | approvalStatus={} | crtStatus={} | paymentStatus={}",
-                expense.getId(),
-                expense.getApprovalStage(),
-                expense.getApprovalStatus(),
-                expense.getCrtApprovalStatus(),
-                expense.getPaymentStatus()
+                request != null ? request.getStatus() : null,
+                request != null ? request.getExpensePaidBy() : null,
+                request != null ? request.getClientPaymentMode() : null
         );
 
         if (request == null) {
-            log.warn(
-                    "[CRT-DECISION-VALIDATION-FAILED] projectId={} | expenseId={} | userId={} | reason=request-null",
-                    projectId,
-                    expenseId,
-                    userId
-            );
             throw new ValidationException(
                     "CRT decision request is required",
                     "ERR_CRT_DECISION_REQUIRED"
             );
         }
 
-        ApprovalStatus decision = validateDecisionStatus(
-                request.getStatus()
+        User user = validateActiveUser(userId);
+        validateCrtApprover(user);
+
+        Project project = validateActiveProject(projectId);
+
+        ProjectExpense expense = validateExpense(
+                project,
+                expenseId
         );
 
-        if (expense.getApprovalStage() !=
-                ExpenseApprovalStage.CRT_REVIEW) {
+        ApprovalStatus decision =
+                validateDecisionStatus(request.getStatus());
 
-            log.warn(
-                    "[CRT-DECISION-VALIDATION-FAILED] expenseId={} | currentStage={} | expectedStage={}",
-                    expenseId,
-                    expense.getApprovalStage(),
-                    ExpenseApprovalStage.CRT_REVIEW
-            );
+        if (expense.getApprovalStage()
+                != ExpenseApprovalStage.CRT_REVIEW) {
+
             throw new ValidationException(
                     "Expense is not pending at CRT review stage",
                     "ERR_INVALID_APPROVAL_STAGE"
             );
         }
 
-        if (expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
-                expense.getApprovalStatus() == ApprovalStatus.APPROVED) {
+        if (expense.getApprovalStatus() == ApprovalStatus.APPROVED
+                || expense.getApprovalStatus() == ApprovalStatus.REJECTED
+                || expense.getApprovalStatus() == ApprovalStatus.CANCELLED) {
 
-            log.warn(
-                    "[CRT-DECISION-VALIDATION-FAILED] expenseId={} | approvalStatus={} | reason=workflow-completed",
-                    expenseId,
-                    expense.getApprovalStatus()
-            );
             throw new ValidationException(
                     "Expense approval workflow is already completed",
                     "ERR_EXPENSE_ALREADY_COMPLETED"
             );
         }
 
-        String decisionRemark = normalizeOptionalText(
-                request.getRemark()
-        );
+        String decisionRemark =
+                normalizeOptionalText(request.getRemark());
 
         validateDecisionRemark(
                 decision,
@@ -606,13 +650,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         LocalDateTime actionTime = LocalDateTime.now();
-
-        log.info(
-                "[CRT-DECISION-PROCESSING] expenseId={} | decision={} | userId={}",
-                expenseId,
-                decision,
-                user.getId()
-        );
 
         expense.setCrtApprovalStatus(decision);
         expense.setCrtActionByUserId(user.getId());
@@ -622,109 +659,23 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         switch (decision) {
 
-            case APPROVED -> {
+            case APPROVED -> processCrtApproval(
+                    expense,
+                    request,
+                    actionTime
+            );
 
-                if (request.getExpensePaidBy() == null) {
-                    throw new ValidationException(
-                            "Expense paid by is required when CRT approves the expense",
-                            "ERR_EXPENSE_PAID_BY_REQUIRED"
-                    );
-                }
+            case REJECTED -> processCrtRejection(expense);
 
-                expense.setExpensePaidBy(
-                        request.getExpensePaidBy()
-                );
+            case ON_HOLD -> processCrtOnHold(expense);
 
-                if (request.getExpensePaidBy() == ExpensePaidBy.CLIENT) {
-
-                    /*
-                     * Client-paid expense completes at CRT approval.
-                     */
-                    expense.setApprovalStatus(
-                            ApprovalStatus.APPROVED
-                    );
-
-                    expense.setApprovalStage(
-                            ExpenseApprovalStage.COMPLETED
-                    );
-
-                    expense.setAccountsApprovalStatus(
-                            ApprovalStatus.CANCELLED
-                    );
-
-                    expense.setApprovedAmount(
-                            expense.getRequestedAmount()
-                    );
-
-                    expense.setPaidAmount(
-                            expense.getRequestedAmount()
-                    );
-
-                    expense.setPaymentStatus(
-                            ExpensePaymentStatus.CLIENT_PAID
-                    );
-
-                    expense.setPaymentCompletedDate(
-                            actionTime
-                    );
-
-                    expense.setAccountPostingStatus(
-                            AccountPostingStatus.NOT_REQUIRED
-                    );
-
-                    expense.setAccountVoucherId(null);
-                    expense.setAccountVoucherNumber(null);
-                    expense.setAccountPostedAt(null);
-                    expense.setAccountPostingError(null);
-
-                } else {
-
-                    /*
-                     * Company-paid expense proceeds to Accounts.
-                     */
-                    expense.setApprovalStatus(
-                            ApprovalStatus.PENDING
-                    );
-
-                    expense.setApprovalStage(
-                            ExpenseApprovalStage.ACCOUNTS_REVIEW
-                    );
-
-                    expense.setAccountsApprovalStatus(
-                            ApprovalStatus.PENDING
-                    );
-
-                    expense.setApprovedAmount(null);
-                    expense.setPaidAmount(BigDecimal.ZERO);
-
-                    expense.setPaymentStatus(
-                            ExpensePaymentStatus.NOT_INITIATED
-                    );
-
-                    expense.setPaymentCompletedDate(null);
-
-                    expense.setAccountPostingStatus(
-                            AccountPostingStatus.NOT_REQUIRED
-                    );
-
-                    expense.setAccountVoucherId(null);
-                    expense.setAccountVoucherNumber(null);
-                    expense.setAccountPostedAt(null);
-                    expense.setAccountPostingError(null);
-                }
-            }
+            default -> throw new ValidationException(
+                    "Invalid CRT decision",
+                    "ERR_INVALID_CRT_DECISION"
+            );
         }
 
         expense = expenseRepository.save(expense);
-
-        log.info(
-                "[CRT-EXPENSE-SAVED] expenseId={} | decision={} | newStage={} | approvalStatus={} | paymentStatus={}",
-                expense.getId(),
-                decision,
-                expense.getApprovalStage(),
-                expense.getApprovalStatus(),
-                expense.getPaymentStatus()
-        );
 
         createExpenseDecisionActivity(
                 project,
@@ -735,14 +686,359 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         log.info(
-                "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={}",
+                "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | stage={} | paymentStatus={} | accountingCalled=false",
                 projectId,
                 expense.getId(),
                 user.getId(),
-                decision
+                decision,
+                expense.getExpensePaidBy(),
+                expense.getApprovalStage(),
+                expense.getPaymentStatus()
         );
 
         return mapToExpenseDto(expense);
+    }
+
+    private void processCrtApproval(
+            ProjectExpense expense,
+            CrtExpenseDecisionRequestDto request,
+            LocalDateTime actionTime
+    ) {
+
+        ExpensePaidBy paidBy = request.getExpensePaidBy();
+
+        if (paidBy == null) {
+            throw new ValidationException(
+                    "Expense paid by is required when CRT approves the expense",
+                    "ERR_EXPENSE_PAID_BY_REQUIRED"
+            );
+        }
+
+        expense.setExpensePaidBy(paidBy);
+
+        if (paidBy == ExpensePaidBy.CLIENT_TO_COMPANY) {
+
+            validateClientToCompanyDetails(request);
+
+            String paymentMode = normalizePaymentMode(
+                    request.getClientPaymentMode()
+            );
+
+            expense.setClientPaymentMode(
+                    paymentMode
+            );
+
+            if ("CASH".equals(paymentMode)) {
+                expense.setClientPaymentBankLedgerId(null);
+                expense.setClientPaymentBankName(null);
+            } else {
+                expense.setClientPaymentBankLedgerId(
+                        request.getClientPaymentBankLedgerId()
+                );
+
+                expense.setClientPaymentBankName(
+                        normalizeOptionalText(
+                                request.getClientPaymentBankName()
+                        )
+                );
+            }
+
+            expense.setClientPaymentDate(
+                    request.getClientPaymentDate()
+            );
+
+            expense.setClientPaymentReference(
+                    requireText(
+                            request.getClientPaymentReference(),
+                            "Client payment reference is required",
+                            "ERR_CLIENT_PAYMENT_REFERENCE_REQUIRED"
+                    )
+            );
+
+            expense.setClientPaymentProofUrl(
+                    requireText(
+                            request.getClientPaymentProofUrl(),
+                            "Client payment proof is required",
+                            "ERR_CLIENT_PAYMENT_PROOF_REQUIRED"
+                    )
+            );
+
+            moveExpenseToAccountsReview(expense);
+            return;
+        }
+
+        if (paidBy == ExpensePaidBy.COMPANY) {
+
+            clearClientFundingDetails(expense);
+            moveExpenseToAccountsReview(expense);
+            return;
+        }
+
+        if (isClientDirect(paidBy)) {
+
+            clearClientFundingDetails(expense);
+
+            expense.setApprovalStatus(
+                    ApprovalStatus.APPROVED
+            );
+
+            expense.setApprovalStage(
+                    ExpenseApprovalStage.COMPLETED
+            );
+
+            expense.setAccountsApprovalStatus(
+                    ApprovalStatus.CANCELLED
+            );
+
+            expense.setApprovedAmount(
+                    expense.getRequestedAmount()
+            );
+
+            expense.setPaidAmount(
+                    expense.getRequestedAmount()
+            );
+
+            expense.setPaymentStatus(
+                    ExpensePaymentStatus.CLIENT_PAID
+            );
+
+            expense.setPaymentCompletedDate(actionTime);
+
+            expense.setAccountPostingStatus(
+                    AccountPostingStatus.SKIPPED
+            );
+
+            clearAccountVoucherDetails(expense);
+            return;
+        }
+
+        throw new ValidationException(
+                "Unsupported expense paid by value",
+                "ERR_UNSUPPORTED_EXPENSE_PAID_BY"
+        );
+    }
+
+    private void moveExpenseToAccountsReview(
+            ProjectExpense expense
+    ) {
+
+        expense.setApprovalStatus(
+                ApprovalStatus.PENDING
+        );
+
+        expense.setApprovalStage(
+                ExpenseApprovalStage.ACCOUNTS_REVIEW
+        );
+
+        expense.setAccountsApprovalStatus(
+                ApprovalStatus.PENDING
+        );
+
+        expense.setApprovedAmount(null);
+        expense.setPaidAmount(BigDecimal.ZERO);
+
+        expense.setPaymentStatus(
+                ExpensePaymentStatus.NOT_INITIATED
+        );
+
+        expense.setPaymentCompletedDate(null);
+
+        /*
+         * CRT only declared the transaction.
+         * Accounts has not verified or posted it.
+         */
+        expense.setAccountPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
+        );
+
+        clearAccountVoucherDetails(expense);
+    }
+
+    private void validateClientToCompanyDetails(
+            CrtExpenseDecisionRequestDto request
+    ) {
+
+        String paymentMode =
+                normalizePaymentMode(
+                        request.getClientPaymentMode()
+                );
+
+        if (paymentMode == null) {
+            throw new ValidationException(
+                    "Client payment mode is required",
+                    "ERR_CLIENT_PAYMENT_MODE_REQUIRED"
+            );
+        }
+
+        if (BANK_DETAILS_REQUIRED_PAYMENT_MODES.contains(paymentMode)) {
+
+            if (request.getClientPaymentBankLedgerId() == null
+                    || request.getClientPaymentBankLedgerId() <= 0) {
+
+                throw new ValidationException(
+                        "Receiving company bank is required for payment mode "
+                                + paymentMode,
+                        "ERR_CLIENT_PAYMENT_BANK_REQUIRED"
+                );
+            }
+
+            requireText(
+                    request.getClientPaymentBankName(),
+                    "Client payment bank name is required",
+                    "ERR_CLIENT_PAYMENT_BANK_NAME_REQUIRED"
+            );
+        }
+
+        if (request.getClientPaymentDate() == null) {
+            throw new ValidationException(
+                    "Client payment date is required",
+                    "ERR_CLIENT_PAYMENT_DATE_REQUIRED"
+            );
+        }
+
+        if (request.getClientPaymentDate().isAfter(LocalDate.now())) {
+            throw new ValidationException(
+                    "Client payment date cannot be in the future",
+                    "ERR_FUTURE_CLIENT_PAYMENT_DATE"
+            );
+        }
+
+        requireText(
+                request.getClientPaymentReference(),
+                "Client payment reference is required",
+                "ERR_CLIENT_PAYMENT_REFERENCE_REQUIRED"
+        );
+
+        requireText(
+                request.getClientPaymentProofUrl(),
+                "Client payment proof is required",
+                "ERR_CLIENT_PAYMENT_PROOF_REQUIRED"
+        );
+    }
+
+    private void processCrtRejection(
+            ProjectExpense expense
+    ) {
+
+        expense.setExpensePaidBy(null);
+        clearClientFundingDetails(expense);
+
+        expense.setApprovalStatus(
+                ApprovalStatus.REJECTED
+        );
+
+        expense.setApprovalStage(
+                ExpenseApprovalStage.COMPLETED
+        );
+
+        expense.setAccountsApprovalStatus(
+                ApprovalStatus.CANCELLED
+        );
+
+        expense.setApprovedAmount(null);
+        expense.setPaidAmount(BigDecimal.ZERO);
+
+        expense.setPaymentStatus(
+                ExpensePaymentStatus.CANCELLED
+        );
+
+        expense.setPaymentCompletedDate(null);
+
+        expense.setAccountPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
+        );
+
+        clearAccountVoucherDetails(expense);
+    }
+
+    private void processCrtOnHold(
+            ProjectExpense expense
+    ) {
+
+        expense.setApprovalStatus(
+                ApprovalStatus.ON_HOLD
+        );
+
+        expense.setApprovalStage(
+                ExpenseApprovalStage.CRT_REVIEW
+        );
+
+        expense.setAccountsApprovalStatus(
+                ApprovalStatus.PENDING
+        );
+
+        expense.setApprovedAmount(null);
+        expense.setPaidAmount(BigDecimal.ZERO);
+
+        expense.setPaymentStatus(
+                ExpensePaymentStatus.NOT_INITIATED
+        );
+
+        expense.setPaymentCompletedDate(null);
+
+        expense.setAccountPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
+        );
+
+        clearAccountVoucherDetails(expense);
+    }
+
+    private String normalizePaymentMode(
+            String value
+    ) {
+
+        String paymentMode = normalizeOptionalText(value);
+
+        if (paymentMode == null) {
+            return null;
+        }
+
+        paymentMode = paymentMode
+                .toUpperCase(Locale.ROOT)
+                .replace(" ", "_")
+                .replace("-", "_");
+
+        if (!ALLOWED_CLIENT_PAYMENT_MODES.contains(paymentMode)) {
+            throw new ValidationException(
+                    "Unsupported client payment mode: " + paymentMode,
+                    "ERR_INVALID_CLIENT_PAYMENT_MODE"
+            );
+        }
+
+        return paymentMode;
+    }
+
+    private void clearClientFundingDetails(
+            ProjectExpense expense
+    ) {
+
+        expense.setClientPaymentMode(null);
+        expense.setClientPaymentBankLedgerId(null);
+        expense.setClientPaymentBankName(null);
+        expense.setClientPaymentDate(null);
+        expense.setClientPaymentReference(null);
+        expense.setClientPaymentProofUrl(null);
+    }
+
+    private void clearAccountVoucherDetails(
+            ProjectExpense expense
+    ) {
+
+        expense.setAccountVoucherId(null);
+        expense.setAccountVoucherNumber(null);
+        expense.setAccountPostedAt(null);
+        expense.setAccountPostingError(null);
+        expense.setReceiptVoucherId(null);
+        expense.setReceiptVoucherNumber(null);
+        expense.setInitialJournalVoucherId(null);
+        expense.setInitialJournalVoucherNumber(null);
+    }
+
+    private boolean isClientDirect(
+            ExpensePaidBy paidBy
+    ) {
+        return paidBy == ExpensePaidBy.CLIENT_DIRECT
+                || paidBy == ExpensePaidBy.CLIENT;
     }
 
     // =========================================================
@@ -795,6 +1091,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             throw new ValidationException(
                     "Accounts decision request is required",
                     "ERR_ACCOUNTS_DECISION_REQUIRED"
+            );
+        }
+
+        if (request.getApprovalDate() != null
+                && request.getApprovalDate().isAfter(LocalDate.now())) {
+
+            throw new ValidationException(
+                    "Approval date cannot be in the future",
+                    "ERR_FUTURE_ACCOUNTS_APPROVAL_DATE"
             );
         }
 
@@ -959,20 +1264,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          * payment remains PENDING and is handled separately.
          */
         if (decision == ApprovalStatus.APPROVED
-                && expense.getExpensePaidBy() == ExpensePaidBy.COMPANY
+                && requiresApprovalPosting(expense.getExpensePaidBy())
                 && expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE) {
 
             scheduleAccountPostingAfterCommit(
                     expense.getId()
-            );
-        }
-
-        if (request.getApprovalDate() != null
-                && request.getApprovalDate().isAfter(LocalDate.now())) {
-
-            throw new ValidationException(
-                    "Approval date cannot be in the future",
-                    "ERR_FUTURE_ACCOUNTS_APPROVAL_DATE"
             );
         }
 
@@ -987,19 +1283,20 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return mapToExpenseDto(expense);
     }
 
+
+    private boolean requiresApprovalPosting(
+            ExpensePaidBy paidBy
+    ) {
+        return paidBy == ExpensePaidBy.COMPANY
+                || paidBy == ExpensePaidBy.CLIENT_TO_COMPANY;
+    }
+
+
     private void approveExpenseByAccounts(
             ProjectExpense expense,
             AccountsExpenseDecisionRequestDto request,
             String decisionRemark
     ) {
-
-        log.debug(
-                "[ACCOUNTS-APPROVAL-AMOUNT-VALIDATION] expenseId={} | requestedAmount={} | submittedApprovedAmount={} | expensePaidBy={}",
-                expense.getId(),
-                expense.getRequestedAmount(),
-                request.getApprovedAmount(),
-                expense.getExpensePaidBy()
-        );
 
         BigDecimal approvedAmount = normalizePositiveAmount(
                 request.getApprovedAmount(),
@@ -1007,41 +1304,27 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 "ERR_INVALID_APPROVED_AMOUNT"
         );
 
-        if (approvedAmount.compareTo(
-                expense.getRequestedAmount()
-        ) > 0) {
-
-            log.warn(
-                    "[ACCOUNTS-APPROVAL-VALIDATION-FAILED] expenseId={} | requestedAmount={} | approvedAmount={} | reason=approved-exceeds-requested",
-                    expense.getId(),
-                    expense.getRequestedAmount(),
-                    approvedAmount
-            );
+        if (approvedAmount.compareTo(expense.getRequestedAmount()) > 0) {
             throw new ValidationException(
                     "Approved amount cannot exceed requested amount",
                     "ERR_APPROVED_AMOUNT_EXCEEDS_REQUESTED"
             );
         }
 
-        if (approvedAmount.compareTo(
-                expense.getRequestedAmount()
-        ) != 0 && decisionRemark == null) {
+        if (approvedAmount.compareTo(expense.getRequestedAmount()) != 0
+                && decisionRemark == null) {
 
-            log.warn(
-                    "[ACCOUNTS-APPROVAL-VALIDATION-FAILED] expenseId={} | requestedAmount={} | approvedAmount={} | reason=partial-approval-remark-missing",
-                    expense.getId(),
-                    expense.getRequestedAmount(),
-                    approvedAmount
-            );
             throw new ValidationException(
-                    "Decision remark is required when approved amount differs from requested amount",
+                    "Remark is required when approved amount differs from requested amount",
                     "ERR_PARTIAL_APPROVAL_REMARK_REQUIRED"
             );
         }
 
-        if (expense.getExpensePaidBy() == null) {
+        ExpensePaidBy paidBy = expense.getExpensePaidBy();
+
+        if (paidBy == null) {
             throw new ValidationException(
-                    "CRT must decide whether the expense is paid by CLIENT or COMPANY",
+                    "CRT must decide who will fund the expense",
                     "ERR_EXPENSE_PAID_BY_NOT_DECIDED"
             );
         }
@@ -1050,75 +1333,58 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setApprovalStatus(ApprovalStatus.APPROVED);
         expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
-        if (expense.getExpensePaidBy() == ExpensePaidBy.CLIENT) {
+        /*
+         * Client paid the government directly.
+         * Nothing enters company books.
+         */
+        if (paidBy == ExpensePaidBy.CLIENT_DIRECT
+                || paidBy == ExpensePaidBy.CLIENT) {
 
-            /*
-             * Client paid expense:
-             * - Accounts only verifies/approves.
-             * - No company payment queue.
-             * - No Feign accounting call.
-             * - No ledger/voucher creation.
-             */
             expense.setPaidAmount(approvedAmount);
             expense.setPaymentStatus(
                     ExpensePaymentStatus.CLIENT_PAID
             );
+
             expense.setPaymentCompletedDate(
                     LocalDateTime.now()
             );
 
             expense.setAccountPostingStatus(
-                    AccountPostingStatus.NOT_REQUIRED
-            );
-            expense.setAccountVoucherId(null);
-            expense.setAccountVoucherNumber(null);
-            expense.setAccountPostedAt(null);
-            expense.setAccountPostingError(null);
-
-            log.info(
-                    "[CLIENT-PAID-EXPENSE-APPROVED] expenseId={} | approvedAmount={} | ledgerPosting=false",
-                    expense.getId(),
-                    approvedAmount
+                    AccountPostingStatus.SKIPPED
             );
 
-        } else {
+            clearAccountVoucherDetails(expense);
+            return;
+        }
 
-            /*
-             * Company paid expense:
-             * Accounts approval does not mean payment is completed.
-             * Move it to the payment queue. A separate payment-completion
-             * API must set PAID and then schedule account posting.
-             */
+        /*
+         * COMPANY and CLIENT_TO_COMPANY both require
+         * approval-time accounting.
+         *
+         * Actual government payment has not happened yet.
+         */
+        if (paidBy == ExpensePaidBy.COMPANY
+                || paidBy == ExpensePaidBy.CLIENT_TO_COMPANY) {
+
             expense.setPaidAmount(BigDecimal.ZERO);
+
             expense.setPaymentStatus(
                     ExpensePaymentStatus.PENDING
             );
+
             expense.setPaymentCompletedDate(null);
 
             expense.setAccountPostingStatus(
-                    AccountPostingStatus.NOT_REQUIRED
+                    AccountPostingStatus.PENDING
             );
-            expense.setAccountVoucherId(null);
-            expense.setAccountVoucherNumber(null);
-            expense.setAccountPostedAt(null);
-            expense.setAccountPostingError(null);
 
-            log.info(
-                    "[COMPANY-PAID-EXPENSE-APPROVED] expenseId={} | approvedAmount={} | paymentStatus=PENDING",
-                    expense.getId(),
-                    approvedAmount
-            );
+            clearAccountVoucherDetails(expense);
+            return;
         }
 
-        log.debug(
-                "[ACCOUNTS-APPROVAL-STATE-UPDATED] expenseId={} | expensePaidBy={} | approvedAmount={} | paidAmount={} | approvalStatus={} | paymentStatus={} | accountPostingStatus={}",
-                expense.getId(),
-                expense.getExpensePaidBy(),
-                expense.getApprovedAmount(),
-                expense.getPaidAmount(),
-                expense.getApprovalStatus(),
-                expense.getPaymentStatus(),
-                expense.getAccountPostingStatus()
+        throw new ValidationException(
+                "Unsupported expense paid by value: " + paidBy,
+                "ERR_UNSUPPORTED_EXPENSE_PAID_BY"
         );
     }
 
@@ -1184,6 +1450,63 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
              */
             postingTask.run();
         }
+    }
+
+    // =========================================================
+    // STEP 4 - GOVERNMENT-FEE FUND TRANSFER
+    // =========================================================
+
+    @Override
+    public ProjectExpenseResponseDto transferGovernmentFeeFunds(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            GovernmentFeeFundTransferRequestDto request
+    ) {
+
+        log.info(
+                "[GOVERNMENT-FEE-FUND-TRANSFER-START] projectId={} | expenseId={} | userId={} | fromBankLedgerId={} | toBankLedgerId={} | amount={}",
+                projectId,
+                expenseId,
+                userId,
+                request != null ? request.getFromBankLedgerId() : null,
+                request != null ? request.getToBankLedgerId() : null,
+                request != null ? request.getAmount() : null
+        );
+
+        if (request == null) {
+            throw new ValidationException(
+                    "Government-fee fund transfer request is required",
+                    "ERR_FUND_TRANSFER_REQUEST_REQUIRED"
+            );
+        }
+
+        Project project = validateActiveProject(projectId);
+
+        /*
+         * Verifies that expenseId exists and belongs to projectId.
+         * Detailed approval/payment/bank validation is performed by
+         * ExpenseAccountPostingServiceImpl.
+         */
+        validateExpense(project, expenseId);
+
+        ProjectExpenseResponseDto response =
+                expenseAccountPostingService.transferGovernmentFeeFunds(
+                        expenseId,
+                        userId,
+                        request
+                );
+
+        log.info(
+                "[GOVERNMENT-FEE-FUND-TRANSFER-END] projectId={} | expenseId={} | paymentStatus={} | fundTransferPostingStatus={} | contraVoucherId={}",
+                projectId,
+                expenseId,
+                response.getPaymentStatus(),
+                response.getFundTransferPostingStatus(),
+                response.getFundTransferVoucherId()
+        );
+
+        return response;
     }
 
     // =========================================================
@@ -2348,6 +2671,30 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getCrtDecisionRemark()
         );
 
+        dto.setClientPaymentMode(
+                expense.getClientPaymentMode()
+        );
+
+        dto.setClientPaymentBankLedgerId(
+                expense.getClientPaymentBankLedgerId()
+        );
+
+        dto.setClientPaymentBankName(
+                expense.getClientPaymentBankName()
+        );
+
+        dto.setClientPaymentDate(
+                expense.getClientPaymentDate()
+        );
+
+        dto.setClientPaymentReference(
+                expense.getClientPaymentReference()
+        );
+
+        dto.setClientPaymentProofUrl(
+                expense.getClientPaymentProofUrl()
+        );
+
         dto.setAccountsApprovalStatus(
                 expense.getAccountsApprovalStatus()
         );
@@ -2398,6 +2745,81 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         dto.setAccountPostingError(
                 expense.getAccountPostingError()
+        );
+
+        // Step 3 voucher audit
+        dto.setReceiptVoucherId(
+                expense.getReceiptVoucherId()
+        );
+
+        dto.setReceiptVoucherNumber(
+                expense.getReceiptVoucherNumber()
+        );
+
+        dto.setInitialJournalVoucherId(
+                expense.getInitialJournalVoucherId()
+        );
+
+        dto.setInitialJournalVoucherNumber(
+                expense.getInitialJournalVoucherNumber()
+        );
+
+        // Step 4 fund-transfer audit and CONTRA voucher
+        dto.setFundTransferPostingStatus(
+                expense.getFundTransferPostingStatus()
+        );
+
+        dto.setFundTransferFromBankLedgerId(
+                expense.getFundTransferFromBankLedgerId()
+        );
+
+        dto.setFundTransferFromBankName(
+                expense.getFundTransferFromBankName()
+        );
+
+        dto.setFundTransferToBankLedgerId(
+                expense.getFundTransferToBankLedgerId()
+        );
+
+        dto.setFundTransferToBankName(
+                expense.getFundTransferToBankName()
+        );
+
+        dto.setFundTransferAmount(
+                expense.getFundTransferAmount()
+        );
+
+        dto.setFundTransferDate(
+                expense.getFundTransferDate()
+        );
+
+        dto.setFundTransferReference(
+                expense.getFundTransferReference()
+        );
+
+        dto.setFundTransferProofUrl(
+                expense.getFundTransferProofUrl()
+        );
+
+        dto.setFundTransferVoucherId(
+                expense.getFundTransferVoucherId()
+        );
+
+        dto.setFundTransferVoucherNumber(
+                expense.getFundTransferVoucherNumber()
+        );
+
+        dto.setFundTransferPostingError(
+                expense.getFundTransferPostingError()
+        );
+
+        // Destination bank retained for Step 5.
+        dto.setPaymentBankLedgerId(
+                expense.getPaymentBankLedgerId()
+        );
+
+        dto.setPaymentBankName(
+                expense.getPaymentBankName()
         );
 
         dto.setCreatedByUserId(

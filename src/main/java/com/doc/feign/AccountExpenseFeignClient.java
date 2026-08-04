@@ -1,5 +1,7 @@
 package com.doc.feign;
 
+import com.doc.dto.GovernmentFeeFundTransferPostingRequestDto;
+import com.doc.dto.GovernmentFeeFundTransferPostingResponseDto;
 import com.doc.dto.GovernmentFeePostingRequestDto;
 import com.doc.dto.GovernmentFeePostingResponseDto;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -18,5 +20,11 @@ public interface AccountExpenseFeignClient {
             @RequestBody GovernmentFeePostingRequestDto request
     );
 
+    @PostMapping("/government-fee/fund-transfer")
+    GovernmentFeeFundTransferPostingResponseDto
+    postGovernmentFeeFundTransfer(
+            @RequestBody
+            GovernmentFeeFundTransferPostingRequestDto request
+    );
 
 }

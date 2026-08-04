@@ -1,12 +1,7 @@
 package com.doc.dto.project.activity.expense;
 
 import com.doc.em.ExpenseCategory;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PastOrPresent;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -16,6 +11,7 @@ import java.time.LocalDateTime;
 public class CreateExpenseRequestDto {
 
     @NotNull(message = "Department ID is required")
+    @Positive(message = "Department ID must be greater than zero")
     private Long departmentId;
 
     @NotNull(message = "Expense category is required")
@@ -26,6 +22,11 @@ public class CreateExpenseRequestDto {
             value = "0.01",
             message = "Expense amount must be greater than zero"
     )
+    @Digits(
+            integer = 12,
+            fraction = 2,
+            message = "Expense amount can contain up to 12 digits and 2 decimal places"
+    )
     private BigDecimal amount;
 
     @NotBlank(message = "Expense remark is required")
@@ -35,16 +36,11 @@ public class CreateExpenseRequestDto {
     )
     private String remark;
 
-    @PastOrPresent(
-            message = "Expense date cannot be in the future"
-    )
+    @PastOrPresent(message = "Expense date cannot be in the future")
     private LocalDateTime expenseDate;
 
-    /**
-     * In a production-standard application this should preferably
-     * be obtained from the authenticated JWT user.
-     */
     @NotNull(message = "Created by user ID is required")
+    @Positive(message = "Created by user ID must be greater than zero")
     private Long createdByUserId;
 
     @Size(
@@ -53,10 +49,6 @@ public class CreateExpenseRequestDto {
     )
     private String attachmentUrl;
 
-    /**
-     * Optional FSSAI application number, challan number,
-     * portal ID or another external reference.
-     */
     @Size(
             max = 150,
             message = "External reference cannot exceed 150 characters"

@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -331,6 +332,106 @@ public class ProjectExpense {
     @Column(name = "account_posting_error", length = 2000)
     private String accountPostingError;
 
+    // ================= STEP 3 VOUCHER AUDIT =================
+
+    /** Entry A: Dr receiving bank/cash, Cr client government-fee advance. */
+    @Column(name = "receipt_voucher_id")
+    private Long receiptVoucherId;
+
+    @Column(name = "receipt_voucher_number", length = 100)
+    private String receiptVoucherNumber;
+
+    /** Entry B: approval-time government-fee accrual JOURNAL. */
+    @Column(name = "initial_journal_voucher_id")
+    private Long initialJournalVoucherId;
+
+    @Column(name = "initial_journal_voucher_number", length = 100)
+    private String initialJournalVoucherNumber;
+
+// =========================================================
+// CLIENT FUNDING DECLARATION
+// =========================================================
+
+    /**
+     * How client deposited money into the company.
+     *
+     * CASH, CASH_DEPOSIT, CHEQUE, DEMAND_DRAFT,
+     * NEFT, RTGS, IMPS, UPI, CARD, BANK_TRANSFER, OTHER
+     */
+    @Column(name = "client_payment_mode", length = 30)
+    private String clientPaymentMode;
+
+    /**
+     * Account Service bank ledger ID where client money was received.
+     */
+    @Column(name = "client_payment_bank_ledger_id")
+    private Long clientPaymentBankLedgerId;
+
+    /**
+     * Bank ledger name snapshot for display.
+     */
+    @Column(name = "client_payment_bank_name", length = 150)
+    private String clientPaymentBankName;
+
+    @Column(name = "client_payment_date")
+    private LocalDate clientPaymentDate;
+
+    /**
+     * UTR, cheque number, deposit slip number or transaction ID.
+     */
+    @Column(name = "client_payment_reference", length = 100)
+    private String clientPaymentReference;
+
+    @Column(name = "client_payment_proof_url", length = 1000)
+    private String clientPaymentProofUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fund_transfer_posting_status", length = 30)
+    private AccountPostingStatus fundTransferPostingStatus =
+            AccountPostingStatus.NOT_REQUIRED;
+
+    @Column(name = "fund_transfer_from_bank_ledger_id")
+    private Long fundTransferFromBankLedgerId;
+
+    @Column(name = "fund_transfer_from_bank_name", length = 150)
+    private String fundTransferFromBankName;
+
+    @Column(name = "fund_transfer_to_bank_ledger_id")
+    private Long fundTransferToBankLedgerId;
+
+    @Column(name = "fund_transfer_to_bank_name", length = 150)
+    private String fundTransferToBankName;
+
+    @Column(name = "fund_transfer_amount", precision = 15, scale = 3)
+    private BigDecimal fundTransferAmount;
+
+    @Column(name = "fund_transfer_date")
+    private LocalDate fundTransferDate;
+
+    @Column(name = "fund_transfer_reference", length = 150)
+    private String fundTransferReference;
+
+    @Column(name = "fund_transfer_proof_url", length = 1000)
+    private String fundTransferProofUrl;
+
+    @Column(name = "fund_transfer_voucher_id")
+    private Long fundTransferVoucherId;
+
+    @Column(name = "fund_transfer_voucher_number", length = 100)
+    private String fundTransferVoucherNumber;
+
+    @Column(name = "fund_transfer_posting_error", length = 2000)
+    private String fundTransferPostingError;
+
+    /** Destination bank retained for the final government payment in Step 5. */
+    @Column(name = "payment_bank_ledger_id")
+    private Long paymentBankLedgerId;
+
+    @Column(name = "payment_bank_name", length = 150)
+    private String paymentBankName;
+
+
+
     @PrePersist
     protected void onCreate() {
 
@@ -374,6 +475,14 @@ public class ProjectExpense {
 
         if (paymentStatus == null) {
             paymentStatus = ExpensePaymentStatus.NOT_INITIATED;
+        }
+
+        if (accountPostingStatus == null) {
+            accountPostingStatus = AccountPostingStatus.NOT_REQUIRED;
+        }
+
+        if (fundTransferPostingStatus == null) {
+            fundTransferPostingStatus = AccountPostingStatus.NOT_REQUIRED;
         }
     }
 
