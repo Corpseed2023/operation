@@ -1,7 +1,9 @@
 package com.doc.dto.project.activity.expense;
 
 import com.doc.em.ApprovalStatus;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,15 +18,19 @@ public class AccountsExpenseDecisionRequestDto {
     @NotNull(message = "Accounts decision status is required")
     private ApprovalStatus status;
 
-    /**
-     * Required when Accounts approves.
+    /*
+     * Conditionally required when status = APPROVED.
+     * Service-level validation still remains necessary.
      */
+    @DecimalMin(
+            value = "0.01",
+            message = "Approved amount must be greater than zero"
+    )
     private BigDecimal approvedAmount;
 
-    /**
-     * Accounting date selected by the Accounts team.
-     * This date will be used while creating the Government Fee voucher.
-     */
+    @PastOrPresent(
+            message = "Approval date cannot be in the future"
+    )
     private LocalDate approvalDate;
 
     @Size(
