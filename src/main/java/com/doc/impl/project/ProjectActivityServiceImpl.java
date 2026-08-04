@@ -268,6 +268,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             }
         }
 
+
         String commentText = request.getCommentText().trim();
 
         ProjectActivity activity = createActivity(
