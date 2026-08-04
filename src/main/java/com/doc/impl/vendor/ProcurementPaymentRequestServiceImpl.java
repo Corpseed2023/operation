@@ -85,6 +85,29 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
+        if (requestDto.getAmount() == null
+                || requestDto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Amount must be greater than zero",
+                    "ERR_INVALID_AMOUNT"
+            );
+        }
+
+        if (order.getFinalAmount() == null) {
+            throw new ValidationException(
+                    "Final amount is not configured for this procurement order",
+                    "ERR_PO_FINAL_AMOUNT_MISSING"
+            );
+        }
+
+        if (requestDto.getAmount().compareTo(order.getFinalAmount()) > 0) {
+            throw new ValidationException(
+                    "Payment request amount cannot be greater than procurement order final amount",
+                    "ERR_PAYMENT_AMOUNT_EXCEEDS_PO_FINAL_AMOUNT"
+            );
+        }
+
         paymentRequestRepository
                 .findByProcurementOrderAndIsDeletedFalse(order)
                 .ifPresent(existing -> {

@@ -212,8 +212,7 @@ public class ProcurementPaymentRequest {
      * TDS inputs.
      */
     @Column(
-            name = "tds_active",
-            nullable = false
+            name = "tds_active"
     )
     private Boolean tdsActive = false;
 
