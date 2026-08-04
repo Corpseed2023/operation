@@ -574,12 +574,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         .trim()
                         .toUpperCase(Locale.ROOT);
 
-        if (!departmentName.contains("TECHNICAL")) {
-            throw new ValidationException(
-                    "Government fee expense can only be raised by the Technical department",
-                    "ERR_GOVERNMENT_FEE_TECHNICAL_ONLY"
-            );
-        }
+
     }
 
     // =========================================================

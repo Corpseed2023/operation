@@ -465,7 +465,10 @@ public class ProjectExpense {
     @Column(name = "government_payment_remark", length = 2000)
     private String governmentPaymentRemark;
 
-    @Column(name = "government_payment_verification_remark", length = 2000)
+    @Column(
+            name = "government_payment_verification_remark",
+            columnDefinition = "TEXT"
+    )
     private String governmentPaymentVerificationRemark;
 
     @Column(name = "government_payment_voucher_id")
