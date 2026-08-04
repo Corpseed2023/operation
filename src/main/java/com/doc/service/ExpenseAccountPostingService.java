@@ -1,47 +1,37 @@
 package com.doc.service;
 
 import com.doc.dto.project.activity.expense.GovernmentFeeFundTransferRequestDto;
+import com.doc.dto.project.activity.expense.GovernmentFeePaymentRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 
 public interface ExpenseAccountPostingService {
 
-    /**
-     * Step 3:
-     * Creates approval-time accounting entries.
-     *
-     * CLIENT_TO_COMPANY:
-     * - RECEIPT voucher
-     * - JOURNAL voucher
-     *
-     * COMPANY:
-     * - JOURNAL voucher
-     */
-    void postGovernmentFeeExpense(
-            Long expenseId
-    );
+    /** Step 3: posts approval-time government-fee vouchers. */
+    void postGovernmentFeeExpense(Long expenseId);
 
-    /**
-     * Retries a failed Step 3 Account Service posting.
-     */
+    /** Retries only a failed Step 3 Account Service posting. */
     ProjectExpenseResponseDto retryGovernmentFeePosting(
             Long expenseId,
             Long userId
     );
 
     /**
-     * Step 4:
-     * Transfers government-fee funds between company banks.
-     *
-     * Example:
-     * Dr Axis Bank
-     *    Cr HDFC Bank
-     *
-     * On success, payment status changes from PENDING
-     * to PROCESSING.
+     * Step 4: creates the inter-bank CONTRA voucher and changes payment status
+     * from PENDING to PROCESSING after Account Service confirms the posting.
      */
     ProjectExpenseResponseDto transferGovernmentFeeFunds(
             Long expenseId,
             Long userId,
             GovernmentFeeFundTransferRequestDto request
+    );
+
+    /**
+     * Step 5: posts the final PAYMENT voucher and marks the expense PAID only
+     * after Account Service confirms the voucher.
+     */
+    ProjectExpenseResponseDto completeGovernmentFeePayment(
+            Long expenseId,
+            Long userId,
+            GovernmentFeePaymentRequestDto request
     );
 }

@@ -8,6 +8,8 @@ import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.GovernmentFeeFundTransferRequestDto;
+import com.doc.dto.project.activity.expense.GovernmentFeePaymentRequestDto;
+import com.doc.dto.project.activity.expense.GovernmentFeePaymentDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
 import com.doc.em.AccountPostingStatus;
@@ -16,6 +18,7 @@ import com.doc.em.ExpenseApprovalStage;
 import com.doc.em.ExpenseCategory;
 import com.doc.em.ExpensePaidBy;
 import com.doc.em.ExpensePaymentStatus;
+import com.doc.em.GovernmentPaymentVerificationStatus;
 import com.doc.entity.department.Department;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
@@ -1032,6 +1035,46 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setReceiptVoucherNumber(null);
         expense.setInitialJournalVoucherId(null);
         expense.setInitialJournalVoucherNumber(null);
+
+        expense.setFundTransferPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
+        );
+        expense.setFundTransferFromBankLedgerId(null);
+        expense.setFundTransferFromBankName(null);
+        expense.setFundTransferToBankLedgerId(null);
+        expense.setFundTransferToBankName(null);
+        expense.setFundTransferAmount(null);
+        expense.setFundTransferDate(null);
+        expense.setFundTransferReference(null);
+        expense.setFundTransferProofUrl(null);
+        expense.setFundTransferVoucherId(null);
+        expense.setFundTransferVoucherNumber(null);
+        expense.setFundTransferPostingError(null);
+        expense.setPaymentBankLedgerId(null);
+        expense.setPaymentBankName(null);
+
+        expense.setGovernmentPaymentPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
+        );
+        expense.setGovernmentPaymentVerificationStatus(
+                GovernmentPaymentVerificationStatus.NOT_SUBMITTED
+        );
+        expense.setGovernmentPaymentMode(null);
+        expense.setGovernmentPaymentAmount(null);
+        expense.setGovernmentPaymentDate(null);
+        expense.setGovernmentPaymentReference(null);
+        expense.setGovernmentPaymentReceiptUrl(null);
+        expense.setGovernmentPaymentRemark(null);
+        expense.setGovernmentPaymentVerificationRemark(null);
+        expense.setGovernmentPaymentVoucherId(null);
+        expense.setGovernmentPaymentVoucherNumber(null);
+        expense.setGovernmentPaymentPostingError(null);
+        expense.setGovernmentPaymentMarkedByUserId(null);
+        expense.setGovernmentPaymentMarkedByUserName(null);
+        expense.setGovernmentPaymentMarkedAt(null);
+        expense.setGovernmentPaymentSubmittedByUserId(null);
+        expense.setGovernmentPaymentSubmittedByUserName(null);
+        expense.setGovernmentPaymentSubmittedAt(null);
     }
 
     private boolean isClientDirect(
@@ -1483,6 +1526,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         Project project = validateActiveProject(projectId);
 
+        User accountsUser = validateActiveUser(userId);
+        validateAccountsApprover(accountsUser);
+
         /*
          * Verifies that expenseId exists and belongs to projectId.
          * Detailed approval/payment/bank validation is performed by
@@ -1507,6 +1553,200 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         return response;
+    }
+
+    // =========================================================
+    // STEP 5A - TECHNICAL SUBMITS GOVERNMENT PAYMENT PROOF
+    // =========================================================
+
+    @Override
+    @Transactional
+    public ProjectExpenseResponseDto submitGovernmentFeePaymentProof(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            GovernmentFeePaymentRequestDto request
+    ) {
+        log.info(
+                "[GOVERNMENT-FEE-PAYMENT-PROOF-START] projectId={} | expenseId={} | userId={} | amount={} | paymentDate={}",
+                projectId,
+                expenseId,
+                userId,
+                request != null ? request.getAmount() : null,
+                request != null ? request.getPaymentDate() : null
+        );
+
+        if (request == null) {
+            throw new ValidationException(
+                    "Government payment proof request is required",
+                    "ERR_GOVERNMENT_PAYMENT_REQUEST_REQUIRED"
+            );
+        }
+
+        Project project = validateActiveProject(projectId);
+        User technicalUser = validateActiveUser(userId);
+        ProjectExpense expense = validateExpense(project, expenseId);
+
+        validateTechnicalPaymentSubmitter(technicalUser, expense);
+        validateGovernmentPaymentProof(expense, request);
+
+        expense.setGovernmentPaymentMode(
+                requireText(request.getPaymentMode(),
+                        "Payment mode is required",
+                        "ERR_PAYMENT_MODE_REQUIRED")
+                        .toUpperCase(Locale.ROOT)
+        );
+        expense.setGovernmentPaymentAmount(request.getAmount());
+        expense.setGovernmentPaymentDate(request.getPaymentDate());
+        expense.setGovernmentPaymentReference(
+                requireText(
+                        request.getPaymentReference(),
+                        "Payment reference is required",
+                        "ERR_PAYMENT_REFERENCE_REQUIRED"
+                )
+        );
+        expense.setGovernmentPaymentReceiptUrl(
+                requireText(
+                        request.getPaymentReceiptUrl(),
+                        "Payment receipt is required",
+                        "ERR_PAYMENT_RECEIPT_REQUIRED"
+                )
+        );
+        expense.setGovernmentPaymentRemark(
+                normalizeOptionalText(request.getRemark())
+        );
+        expense.setGovernmentPaymentVerificationStatus(
+                GovernmentPaymentVerificationStatus.PENDING
+        );
+        expense.setGovernmentPaymentVerificationRemark(null);
+        expense.setGovernmentPaymentPostingStatus(
+                AccountPostingStatus.NOT_REQUIRED
+        );
+        expense.setGovernmentPaymentPostingError(null);
+        expense.setGovernmentPaymentSubmittedByUserId(
+                technicalUser.getId()
+        );
+        expense.setGovernmentPaymentSubmittedByUserName(
+                technicalUser.getFullName()
+        );
+        expense.setGovernmentPaymentSubmittedAt(LocalDateTime.now());
+
+        expense = expenseRepository.save(expense);
+
+        ProjectExpenseResponseDto response = mapToExpenseDto(expense);
+
+        log.info(
+                "[GOVERNMENT-FEE-PAYMENT-PROOF-END] projectId={} | expenseId={} | paymentStatus={} | verificationStatus={}",
+                projectId,
+                expenseId,
+                response.getPaymentStatus(),
+                response.getGovernmentPaymentVerificationStatus()
+        );
+
+        return response;
+    }
+
+    // =========================================================
+    // STEP 5B - ACCOUNTS VERIFIES AND POSTS PAYMENT
+    // =========================================================
+
+    @Override
+    @Transactional
+    public ProjectExpenseResponseDto takeGovernmentFeePaymentDecision(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            GovernmentFeePaymentDecisionRequestDto request
+    ) {
+        if (request == null || request.getStatus() == null) {
+            throw new ValidationException(
+                    "Government payment verification decision is required",
+                    "ERR_PAYMENT_DECISION_REQUIRED"
+            );
+        }
+
+        if (request.getStatus() != ApprovalStatus.APPROVED
+                && request.getStatus() != ApprovalStatus.REJECTED) {
+            throw new ValidationException(
+                    "Payment decision must be APPROVED or REJECTED",
+                    "ERR_INVALID_PAYMENT_DECISION"
+            );
+        }
+
+        Project project = validateActiveProject(projectId);
+        User accountsUser = validateActiveUser(userId);
+        validateAccountsApprover(accountsUser);
+        ProjectExpense expense = validateExpense(project, expenseId);
+
+        if (expense.getGovernmentPaymentVerificationStatus()
+                == GovernmentPaymentVerificationStatus.APPROVED
+                && expense.getGovernmentPaymentVoucherId() != null) {
+            return mapToExpenseDto(expense);
+        }
+
+        if (expense.getGovernmentPaymentVerificationStatus()
+                != GovernmentPaymentVerificationStatus.PENDING) {
+            throw new ValidationException(
+                    "No government payment proof is pending Accounts verification",
+                    "ERR_PAYMENT_PROOF_NOT_PENDING"
+            );
+        }
+
+        String verificationRemark =
+                normalizeOptionalText(request.getRemark());
+
+        if (request.getStatus() == ApprovalStatus.REJECTED) {
+            if (verificationRemark == null) {
+                throw new ValidationException(
+                        "Remark is required when payment proof is rejected",
+                        "ERR_PAYMENT_REJECTION_REMARK_REQUIRED"
+                );
+            }
+
+            expense.setGovernmentPaymentVerificationStatus(
+                    GovernmentPaymentVerificationStatus.REJECTED
+            );
+            expense.setGovernmentPaymentVerificationRemark(
+                    verificationRemark
+            );
+            expense.setGovernmentPaymentMarkedByUserId(
+                    accountsUser.getId()
+            );
+            expense.setGovernmentPaymentMarkedByUserName(
+                    accountsUser.getFullName()
+            );
+            expense.setGovernmentPaymentMarkedAt(LocalDateTime.now());
+            expense.setGovernmentPaymentPostingStatus(
+                    AccountPostingStatus.NOT_REQUIRED
+            );
+            expense.setGovernmentPaymentPostingError(null);
+
+            return mapToExpenseDto(expenseRepository.save(expense));
+        }
+
+        GovernmentFeePaymentRequestDto submittedProof =
+                new GovernmentFeePaymentRequestDto();
+        submittedProof.setAmount(expense.getGovernmentPaymentAmount());
+        submittedProof.setPaymentDate(expense.getGovernmentPaymentDate());
+        submittedProof.setPaymentMode(expense.getGovernmentPaymentMode());
+        submittedProof.setPaymentReference(
+                expense.getGovernmentPaymentReference()
+        );
+        submittedProof.setPaymentReceiptUrl(
+                expense.getGovernmentPaymentReceiptUrl()
+        );
+        submittedProof.setRemark(expense.getGovernmentPaymentRemark());
+
+        expense.setGovernmentPaymentVerificationRemark(
+                verificationRemark
+        );
+        expenseRepository.save(expense);
+
+        return expenseAccountPostingService.completeGovernmentFeePayment(
+                expenseId,
+                userId,
+                submittedProof
+        );
     }
 
     // =========================================================
@@ -2277,6 +2517,131 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
     }
 
+    private void validateTechnicalPaymentSubmitter(
+            User user,
+            ProjectExpense expense
+    ) {
+        if (isAdministrator(user)
+                || Objects.equals(
+                user.getId(),
+                expense.getCreatedByUserId())
+                || hasRoleContaining(user, "TECHNICAL")
+                || hasDepartmentContaining(user, "TECHNICAL")) {
+            return;
+        }
+
+        throw new ValidationException(
+                "Only the Technical team can submit government payment proof",
+                "ERR_GOVERNMENT_PAYMENT_PROOF_UNAUTHORIZED"
+        );
+    }
+
+    private void validateGovernmentPaymentProof(
+            ProjectExpense expense,
+            GovernmentFeePaymentRequestDto request
+    ) {
+        if (expense.getExpenseCategory() != ExpenseCategory.GOVERNMENT_FEE) {
+            throw new ValidationException(
+                    "Payment proof can be submitted only for a government-fee expense",
+                    "ERR_INVALID_EXPENSE_CATEGORY"
+            );
+        }
+
+        if (expense.getApprovalStatus() != ApprovalStatus.APPROVED
+                || expense.getAccountPostingStatus()
+                != AccountPostingStatus.POSTED) {
+            throw new ValidationException(
+                    "Accounts approval and Step 3 posting must be completed first",
+                    "ERR_APPROVAL_POSTING_NOT_COMPLETED"
+            );
+        }
+
+        if (expense.getFundTransferPostingStatus()
+                != AccountPostingStatus.POSTED
+                || expense.getFundTransferVoucherId() == null) {
+            throw new ValidationException(
+                    "Step 4 fund transfer must be posted before payment proof submission",
+                    "ERR_FUND_TRANSFER_NOT_COMPLETED"
+            );
+        }
+
+        if (expense.getPaymentStatus() != ExpensePaymentStatus.PROCESSING) {
+            throw new ValidationException(
+                    "Payment proof can be submitted only when payment status is PROCESSING",
+                    "ERR_INVALID_PAYMENT_STATUS"
+            );
+        }
+
+        if (expense.getGovernmentPaymentVerificationStatus()
+                == GovernmentPaymentVerificationStatus.PENDING) {
+            throw new ValidationException(
+                    "Payment proof is already pending Accounts verification",
+                    "ERR_PAYMENT_PROOF_ALREADY_PENDING"
+            );
+        }
+
+        if (expense.getGovernmentPaymentVerificationStatus()
+                == GovernmentPaymentVerificationStatus.APPROVED) {
+            throw new ValidationException(
+                    "Government payment is already verified",
+                    "ERR_PAYMENT_ALREADY_VERIFIED"
+            );
+        }
+
+        if (request.getAmount() == null
+                || request.getAmount().compareTo(BigDecimal.ZERO) <= 0
+                || expense.getApprovedAmount() == null
+                || request.getAmount().compareTo(
+                expense.getApprovedAmount()) != 0) {
+            throw new ValidationException(
+                    "Payment amount must equal the approved amount",
+                    "ERR_PAYMENT_AMOUNT_MISMATCH"
+            );
+        }
+
+        if (expense.getFundTransferAmount() != null
+                && request.getAmount().compareTo(
+                expense.getFundTransferAmount()) != 0) {
+            throw new ValidationException(
+                    "Payment amount must equal the Step 4 transfer amount",
+                    "ERR_PAYMENT_TRANSFER_AMOUNT_MISMATCH"
+            );
+        }
+
+        if (request.getPaymentDate() == null
+                || request.getPaymentDate().isAfter(LocalDate.now())) {
+            throw new ValidationException(
+                    "Payment date is required and cannot be in the future",
+                    "ERR_INVALID_PAYMENT_DATE"
+            );
+        }
+
+        if (expense.getFundTransferDate() != null
+                && request.getPaymentDate().isBefore(
+                expense.getFundTransferDate())) {
+            throw new ValidationException(
+                    "Payment date cannot be before the Step 4 fund-transfer date",
+                    "ERR_PAYMENT_BEFORE_FUND_TRANSFER"
+            );
+        }
+
+        requireText(
+                request.getPaymentMode(),
+                "Payment mode is required",
+                "ERR_PAYMENT_MODE_REQUIRED"
+        );
+        requireText(
+                request.getPaymentReference(),
+                "Payment reference is required",
+                "ERR_PAYMENT_REFERENCE_REQUIRED"
+        );
+        requireText(
+                request.getPaymentReceiptUrl(),
+                "Payment receipt is required",
+                "ERR_PAYMENT_RECEIPT_REQUIRED"
+        );
+    }
+
     private boolean isAdministrator(User user) {
         return hasRoleContaining(user, "ADMIN");
     }
@@ -2820,6 +3185,79 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         dto.setPaymentBankName(
                 expense.getPaymentBankName()
+        );
+
+        // Step 5 final government-payment audit and PAYMENT voucher
+        dto.setGovernmentPaymentPostingStatus(
+                expense.getGovernmentPaymentPostingStatus()
+        );
+
+        dto.setGovernmentPaymentVerificationStatus(
+                expense.getGovernmentPaymentVerificationStatus()
+        );
+
+        dto.setGovernmentPaymentMode(
+                expense.getGovernmentPaymentMode()
+        );
+
+        dto.setGovernmentPaymentAmount(
+                expense.getGovernmentPaymentAmount()
+        );
+
+        dto.setGovernmentPaymentDate(
+                expense.getGovernmentPaymentDate()
+        );
+
+        dto.setGovernmentPaymentReference(
+                expense.getGovernmentPaymentReference()
+        );
+
+        dto.setGovernmentPaymentReceiptUrl(
+                expense.getGovernmentPaymentReceiptUrl()
+        );
+
+        dto.setGovernmentPaymentRemark(
+                expense.getGovernmentPaymentRemark()
+        );
+
+        dto.setGovernmentPaymentVerificationRemark(
+                expense.getGovernmentPaymentVerificationRemark()
+        );
+
+        dto.setGovernmentPaymentVoucherId(
+                expense.getGovernmentPaymentVoucherId()
+        );
+
+        dto.setGovernmentPaymentVoucherNumber(
+                expense.getGovernmentPaymentVoucherNumber()
+        );
+
+        dto.setGovernmentPaymentPostingError(
+                expense.getGovernmentPaymentPostingError()
+        );
+
+        dto.setGovernmentPaymentMarkedByUserId(
+                expense.getGovernmentPaymentMarkedByUserId()
+        );
+
+        dto.setGovernmentPaymentMarkedByUserName(
+                expense.getGovernmentPaymentMarkedByUserName()
+        );
+
+        dto.setGovernmentPaymentMarkedAt(
+                expense.getGovernmentPaymentMarkedAt()
+        );
+
+        dto.setGovernmentPaymentSubmittedByUserId(
+                expense.getGovernmentPaymentSubmittedByUserId()
+        );
+
+        dto.setGovernmentPaymentSubmittedByUserName(
+                expense.getGovernmentPaymentSubmittedByUserName()
+        );
+
+        dto.setGovernmentPaymentSubmittedAt(
+                expense.getGovernmentPaymentSubmittedAt()
         );
 
         dto.setCreatedByUserId(

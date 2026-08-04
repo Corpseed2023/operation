@@ -430,6 +430,71 @@ public class ProjectExpense {
     @Column(name = "payment_bank_name", length = 150)
     private String paymentBankName;
 
+    // ================= STEP 5 GOVERNMENT PAYMENT =================
+
+    /**
+     * Posting state of Entry D:
+     * Dr Government Fee Payable / Cr payment bank.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "government_payment_posting_status", length = 30)
+    private AccountPostingStatus governmentPaymentPostingStatus =
+            AccountPostingStatus.NOT_REQUIRED;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "government_payment_verification_status", length = 30)
+    private GovernmentPaymentVerificationStatus
+            governmentPaymentVerificationStatus =
+            GovernmentPaymentVerificationStatus.NOT_SUBMITTED;
+
+    @Column(name = "government_payment_mode", length = 30)
+    private String governmentPaymentMode;
+
+    @Column(name = "government_payment_amount", precision = 15, scale = 3)
+    private BigDecimal governmentPaymentAmount;
+
+    @Column(name = "government_payment_date")
+    private LocalDate governmentPaymentDate;
+
+    @Column(name = "government_payment_reference", length = 150)
+    private String governmentPaymentReference;
+
+    @Column(name = "government_payment_receipt_url", length = 1000)
+    private String governmentPaymentReceiptUrl;
+
+    @Column(name = "government_payment_remark", length = 2000)
+    private String governmentPaymentRemark;
+
+    @Column(name = "government_payment_verification_remark", length = 2000)
+    private String governmentPaymentVerificationRemark;
+
+    @Column(name = "government_payment_voucher_id")
+    private Long governmentPaymentVoucherId;
+
+    @Column(name = "government_payment_voucher_number", length = 100)
+    private String governmentPaymentVoucherNumber;
+
+    @Column(name = "government_payment_posting_error", length = 2000)
+    private String governmentPaymentPostingError;
+
+    @Column(name = "government_payment_marked_by_user_id")
+    private Long governmentPaymentMarkedByUserId;
+
+    @Column(name = "government_payment_marked_by_user_name", length = 150)
+    private String governmentPaymentMarkedByUserName;
+
+    @Column(name = "government_payment_marked_at")
+    private LocalDateTime governmentPaymentMarkedAt;
+
+    @Column(name = "government_payment_submitted_by_user_id")
+    private Long governmentPaymentSubmittedByUserId;
+
+    @Column(name = "government_payment_submitted_by_user_name", length = 150)
+    private String governmentPaymentSubmittedByUserName;
+
+    @Column(name = "government_payment_submitted_at")
+    private LocalDateTime governmentPaymentSubmittedAt;
+
 
 
     @PrePersist
@@ -483,6 +548,15 @@ public class ProjectExpense {
 
         if (fundTransferPostingStatus == null) {
             fundTransferPostingStatus = AccountPostingStatus.NOT_REQUIRED;
+        }
+
+        if (governmentPaymentPostingStatus == null) {
+            governmentPaymentPostingStatus = AccountPostingStatus.NOT_REQUIRED;
+        }
+
+        if (governmentPaymentVerificationStatus == null) {
+            governmentPaymentVerificationStatus =
+                    GovernmentPaymentVerificationStatus.NOT_SUBMITTED;
         }
     }
 

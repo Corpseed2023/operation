@@ -15,30 +15,21 @@ import java.time.LocalDate;
 public class GovernmentFeeFundTransferPostingRequestDto {
 
     private Long operationExpenseId;
-
     private Long projectId;
-
     private String projectNo;
 
     private Long fromBankLedgerId;
-
     private String fromBankName;
 
     private Long toBankLedgerId;
-
     private String toBankName;
 
     private BigDecimal amount;
-
     private LocalDate transferDate;
-
     private String transferReference;
-
     private String transferProofUrl;
 
     private Long transferredByUserId;
-
     private String transferredByUserName;
-
     private String narration;
 }

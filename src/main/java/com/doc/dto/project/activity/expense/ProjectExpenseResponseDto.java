@@ -6,6 +6,7 @@ import com.doc.em.ExpenseApprovalStage;
 import com.doc.em.ExpenseCategory;
 import com.doc.em.ExpensePaidBy;
 import com.doc.em.ExpensePaymentStatus;
+import com.doc.em.GovernmentPaymentVerificationStatus;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -115,4 +116,27 @@ public class ProjectExpenseResponseDto {
     // Destination bank retained for Step 5 payment
     private Long paymentBankLedgerId;
     private String paymentBankName;
+
+    // =========================================================
+    // STEP 5 - FINAL GOVERNMENT PAYMENT
+    // =========================================================
+
+    private AccountPostingStatus governmentPaymentPostingStatus;
+    private GovernmentPaymentVerificationStatus governmentPaymentVerificationStatus;
+    private String governmentPaymentMode;
+    private BigDecimal governmentPaymentAmount;
+    private LocalDate governmentPaymentDate;
+    private String governmentPaymentReference;
+    private String governmentPaymentReceiptUrl;
+    private String governmentPaymentRemark;
+    private String governmentPaymentVerificationRemark;
+    private Long governmentPaymentVoucherId;
+    private String governmentPaymentVoucherNumber;
+    private String governmentPaymentPostingError;
+    private Long governmentPaymentMarkedByUserId;
+    private String governmentPaymentMarkedByUserName;
+    private LocalDateTime governmentPaymentMarkedAt;
+    private Long governmentPaymentSubmittedByUserId;
+    private String governmentPaymentSubmittedByUserName;
+    private LocalDateTime governmentPaymentSubmittedAt;
 }

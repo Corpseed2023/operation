@@ -7,6 +7,8 @@ import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.GovernmentFeeFundTransferRequestDto;
+import com.doc.dto.project.activity.expense.GovernmentFeePaymentRequestDto;
+import com.doc.dto.project.activity.expense.GovernmentFeePaymentDecisionRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ActivityType;
 import com.doc.em.ApprovalStatus;
@@ -20,10 +22,6 @@ import java.util.List;
 
 public interface ProjectActivityService {
 
-    // =========================================================
-    // NOTES AND COMMENTS
-    // =========================================================
-
     ProjectActivityResponseDto addNote(
             Long projectId,
             CreateNoteRequestDto request
@@ -34,26 +32,10 @@ public interface ProjectActivityService {
             CreateCommentRequestDto request
     );
 
-    // =========================================================
-    // EXPENSE CREATION — STEP 1
-    // =========================================================
-
-    /**
-     * Technical/originating department raises an expense.
-     *
-     * Initial state:
-     * approvalStage = CRT_REVIEW
-     * approvalStatus = PENDING
-     * paymentStatus = NOT_INITIATED
-     */
     ProjectActivityResponseDto addExpense(
             Long projectId,
             CreateExpenseRequestDto request
     );
-
-    // =========================================================
-    // PROJECT ACTIVITY LISTING
-    // =========================================================
 
     Page<ProjectActivityResponseDto> getAllActivities(
             Long projectId,
@@ -73,22 +55,6 @@ public interface ProjectActivityService {
             Pageable pageable
     );
 
-    // =========================================================
-    // CRT DECISION — STEP 2
-    // =========================================================
-
-    /**
-     * CRT declares how the government fee will be funded.
-     *
-     * CLIENT_TO_COMPANY:
-     * Client deposited money into a company bank.
-     *
-     * COMPANY:
-     * Company will fund the fee.
-     *
-     * CLIENT_DIRECT:
-     * Client paid the government portal directly.
-     */
     ProjectExpenseResponseDto takeCrtExpenseDecision(
             Long projectId,
             Long expenseId,
@@ -96,54 +62,12 @@ public interface ProjectActivityService {
             CrtExpenseDecisionRequestDto request
     );
 
-    // =========================================================
-    // ACCOUNTS DECISION — STEP 3
-    // =========================================================
-
-    /**
-     * Accounts verifies and approves/rejects the expense.
-     *
-     * CLIENT_TO_COMPANY creates:
-     * - RECEIPT voucher
-     * - JOURNAL voucher
-     *
-     * COMPANY creates:
-     * - JOURNAL voucher
-     */
     ProjectExpenseResponseDto takeAccountsExpenseDecision(
             Long projectId,
             Long expenseId,
             Long userId,
             AccountsExpenseDecisionRequestDto request
     );
-
-    // =========================================================
-    // FUND TRANSFER — STEP 4
-    // =========================================================
-
-    /**
-     * Transfers money between company banks.
-     *
-     * Example:
-     * Dr Axis Bank
-     *    Cr HDFC Bank
-     *
-     * After successful CONTRA posting:
-     * paymentStatus = PROCESSING
-     *
-     * This does not pay the government and does not modify
-     * Government Fee Payable.
-     */
-    ProjectExpenseResponseDto transferGovernmentFeeFunds(
-            Long projectId,
-            Long expenseId,
-            Long userId,
-            GovernmentFeeFundTransferRequestDto request
-    );
-
-    // =========================================================
-    // EXPENSE QUEUES
-    // =========================================================
 
     List<ProjectExpenseResponseDto> getExpenseApprovalQueue(
             Long userId,
@@ -156,10 +80,6 @@ public interface ProjectActivityService {
             ExpensePaymentStatus paymentStatus
     );
 
-    // =========================================================
-    // EXPENSE RETRIEVAL
-    // =========================================================
-
     List<ProjectExpenseResponseDto> getExpensesByProject(
             Long projectId,
             Long userId
@@ -168,5 +88,29 @@ public interface ProjectActivityService {
     ProjectExpenseResponseDto getExpenseById(
             Long expenseId,
             Long userId
+    );
+
+    /** Step 4 project-level entry point used by ProjectExpenseController. */
+    ProjectExpenseResponseDto transferGovernmentFeeFunds(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            GovernmentFeeFundTransferRequestDto request
+    );
+
+    /** Step 5A: Technical submits portal payment details and receipt. */
+    ProjectExpenseResponseDto submitGovernmentFeePaymentProof(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            GovernmentFeePaymentRequestDto request
+    );
+
+    /** Step 5B: Accounts verifies or rejects the submitted payment proof. */
+    ProjectExpenseResponseDto takeGovernmentFeePaymentDecision(
+            Long projectId,
+            Long expenseId,
+            Long userId,
+            GovernmentFeePaymentDecisionRequestDto request
     );
 }
