@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 public interface ProcurementPaymentRequestRepository extends JpaRepository<ProcurementPaymentRequest, Long> {
@@ -109,5 +110,15 @@ public interface ProcurementPaymentRequestRepository extends JpaRepository<Procu
     VendorPaymentSummaryProjection getVendorPaymentSummary(
             @Param("vendorId") Long vendorId,
             @Param("productId") Long productId
+    );
+
+    @Query("""
+    SELECT COALESCE(SUM(p.amount), 0)
+    FROM ProcurementPaymentRequest p
+    WHERE p.procurementOrder = :order
+      AND p.isDeleted = false
+""")
+    BigDecimal sumAmountByProcurementOrderAndIsDeletedFalse(
+            @Param("order") ProcurementOrder order
     );
 }

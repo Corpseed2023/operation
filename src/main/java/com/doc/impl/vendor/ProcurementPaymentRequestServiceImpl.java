@@ -108,14 +108,6 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
-        paymentRequestRepository
-                .findByProcurementOrderAndIsDeletedFalse(order)
-                .ifPresent(existing -> {
-                    throw new ValidationException(
-                            "Payment request already exists for this procurement order",
-                            "ERR_PAYMENT_REQUEST_ALREADY_EXISTS"
-                    );
-                });
 
         if (requestDto.getInvoiceAmount() == null
                 || requestDto.getInvoiceAmount()
@@ -143,6 +135,30 @@ public class ProcurementPaymentRequestServiceImpl
             throw new ValidationException(
                     "Payable amount cannot be greater than invoice amount",
                     "ERR_PAYABLE_AMOUNT_EXCEEDS_INVOICE_AMOUNT"
+            );
+        }
+        BigDecimal existingPaymentAmount =
+                paymentRequestRepository
+                        .sumAmountByProcurementOrderAndIsDeletedFalse(order);
+
+        BigDecimal newPaymentAmount = requestDto.getAmount();
+
+        if (newPaymentAmount == null
+                || newPaymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Payment amount must be greater than zero",
+                    "ERR_INVALID_PAYMENT_AMOUNT"
+            );
+        }
+
+        BigDecimal totalPaymentAmount =
+                existingPaymentAmount.add(newPaymentAmount);
+
+        if (totalPaymentAmount.compareTo(order.getFinalAmount()) > 0) {
+            throw new ValidationException(
+                    "Total payment request amount cannot exceed procurement order final amount",
+                    "ERR_PAYMENT_REQUEST_AMOUNT_EXCEEDS_PO"
             );
         }
 
@@ -1068,60 +1084,55 @@ public class ProcurementPaymentRequestServiceImpl
     private String resolveGstSupplyType(
             ProcurementPaymentRequest paymentRequest
     ) {
-        if (!Boolean.TRUE.equals(
-                paymentRequest.getGstActive()
-        )) {
+        if (!Boolean.TRUE.equals(paymentRequest.getGstActive())) {
             return null;
         }
 
-        /*
-         * Zero-rated supplies may be marked GST-active with 0% GST.
-         * Supply type is not required for the zero amount calculation.
-         */
         if (defaultAmount(paymentRequest.getGstPercentage())
                 .compareTo(BigDecimal.ZERO) <= 0) {
             return null;
         }
 
-        if (paymentRequest.getIgstAmount() != null
-                && paymentRequest.getIgstAmount()
-                .compareTo(BigDecimal.ZERO) > 0) {
+        if (hasText(paymentRequest.getGstType())) {
+            String gstType = paymentRequest.getGstType()
+                    .trim()
+                    .toUpperCase()
+                    .replace("-", "_")
+                    .replace(" ", "_");
 
+            if ("INTRA_STATE".equals(gstType)
+                    || "CGST_SGST".equals(gstType)
+                    || "CGST+SGST".equals(gstType)
+                    || "CGST_AND_SGST".equals(gstType)) {
+                return "INTRA_STATE";
+            }
+
+            if ("INTER_STATE".equals(gstType)
+                    || "IGST".equals(gstType)) {
+                return "INTER_STATE";
+            }
+        }
+
+
+        if (defaultAmount(paymentRequest.getIgstAmount())
+                .compareTo(BigDecimal.ZERO) > 0) {
             return "INTER_STATE";
         }
 
-        boolean hasCgst =
-                paymentRequest.getCgstAmount() != null
-                        && paymentRequest.getCgstAmount()
-                        .compareTo(BigDecimal.ZERO) > 0;
+        boolean hasCgst = defaultAmount(paymentRequest.getCgstAmount())
+                .compareTo(BigDecimal.ZERO) > 0;
 
-        boolean hasSgst =
-                paymentRequest.getSgstAmount() != null
-                        && paymentRequest.getSgstAmount()
-                        .compareTo(BigDecimal.ZERO) > 0;
+        boolean hasSgst = defaultAmount(paymentRequest.getSgstAmount())
+                .compareTo(BigDecimal.ZERO) > 0;
 
         if (hasCgst || hasSgst) {
             return "INTRA_STATE";
         }
 
-        if (paymentRequest.getGstType() != null) {
-
-            String gstType =
-                    paymentRequest.getGstType()
-                            .toString()
-                            .trim()
-                            .toUpperCase();
-
-            if ("INTRA_STATE".equals(gstType)
-                    || "INTER_STATE".equals(gstType)) {
-
-                return gstType;
-            }
-        }
-
         throw new ValidationException(
                 "GST supply type could not be determined. "
-                        + "Provide IGST for inter-state or CGST/SGST for intra-state",
+                        + "Use INTRA_STATE/CGST_SGST for CGST and SGST, "
+                        + "or INTER_STATE/IGST for IGST",
                 "ERR_GST_SUPPLY_TYPE_REQUIRED"
         );
     }
