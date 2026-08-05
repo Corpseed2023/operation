@@ -1478,7 +1478,7 @@ public class ProcurementPaymentRequestServiceImpl
                 )
 
                 .gstPercentage(
-                        request.getGstPercentage()
+                        order.getGstRate()
                 )
 
                 .cgstAmount(
