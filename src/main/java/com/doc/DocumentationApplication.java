@@ -28,6 +28,7 @@ public class DocumentationApplication {
 		SpringApplication.run(DocumentationApplication.class, args);
 	}
 
+
 	/**
 	 * Initializes predefined statuses and pay  ment types.
 	 *
