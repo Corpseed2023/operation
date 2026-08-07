@@ -1,61 +1,77 @@
 package com.doc.dto.vendor;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 @Getter
 @Setter
 public class PurchaseOrderRequestDto {
 
-    @NotNull(message = "Procurement Assignment ID is required")
     private Long procurementAssignmentId;
 
-    @NotNull(message = "Vendor ID is required")
     private Long vendorId;
 
-    private String poReferenceNumber;           // Vendor quotation / reference number
+    private String poReferenceNumber;
 
-    @NotNull(message = "Final Amount is required")
-    @Positive(message = "Final amount must be positive")
+    @NotNull(message = "Final amount is required")
+    @DecimalMin(
+            value = "0.01",
+            message = "Final amount must be greater than zero"
+    )
     private BigDecimal finalAmount;
 
-    // ==================== GST BREAKUP ====================
-    private BigDecimal gstRate;                 // e.g., 18.0
+    /**
+     * Total GST %
+     *
+     * Example:
+     * 18 = 18%
+     */
+    @DecimalMin(value = "0.00")
+    @DecimalMax(value = "100.00")
+    private BigDecimal gstRate;
 
-    private BigDecimal cgstAmount;
-    private BigDecimal sgstAmount;
-    private BigDecimal igstAmount;
-
+    /**
+     * TDS %
+     *
+     * Example:
+     * 10 = 10%
+     */
+    @DecimalMin(value = "0.00")
+    @DecimalMax(value = "100.00")
     private BigDecimal tdsPercentage;
 
-    private BigDecimal totalTaxAmount;
-    private BigDecimal grandTotal;              // Most important - final payable amount
+    /**
+     * Place of supply / buyer state GST code.
+     *
+     * Example:
+     * UP = 09
+     * Delhi = 07
+     */
+    private String placeOfSupplyStateCode;
 
-    // ==================== COMMERCIAL DETAILS ====================
-    @NotBlank(message = "Scope of Work is required")
     private String scopeOfWork;
 
     private String termsAndConditions;
 
     private String remarks;
 
-    private LocalDate validTillDate;
-
-    // Payment Type
-    private String paymentTypeName;             // e.g., "FULL", "PARTIAL", "INSTALLMENT"
-
-    // Attachments (URLs after uploading files)
     private List<String> attachmentUrls;
 
-    @NotNull(message = "CreatedBy user ID is required")
+    private String paymentTypeName;
+
+    /**
+     * Required during CREATE.
+     */
     private Long createdBy;
 
+    /**
+     * Used during UPDATE.
+     */
     private Long userId;
 }
