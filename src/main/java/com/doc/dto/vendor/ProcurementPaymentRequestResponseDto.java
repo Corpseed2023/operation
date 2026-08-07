@@ -27,6 +27,13 @@ public class ProcurementPaymentRequestResponseDto {
 
     private BigDecimal invoiceAmount;
     private BigDecimal payableAmount;
+    private BigDecimal bankPaymentAmount;
+    private BigDecimal settlementAmount;
+    private LocalDate paymentDate;
+    private String calculationVersion;
+
+
+
 
     private String invoiceNumber;
     private LocalDate invoiceDate;

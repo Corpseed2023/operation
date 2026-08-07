@@ -16,104 +16,73 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ProcurementPaymentRequestController {
 
-    private final ProcurementPaymentRequestService procurementPaymentRequestService;
+    private final ProcurementPaymentRequestService service;
 
     @PostMapping("/procurement-order/{procurementOrderId}")
     public ResponseEntity<ProcurementPaymentRequestResponseDto> createPaymentRequest(
             @PathVariable Long procurementOrderId,
-            @RequestBody ProcurementPaymentRequestDto requestDto
+            @RequestBody ProcurementPaymentRequestDto request
     ) {
-        ProcurementPaymentRequestResponseDto response =
-                procurementPaymentRequestService.createPaymentRequest(
-                        procurementOrderId,
-                        requestDto
-                );
-
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.createPaymentRequest(procurementOrderId, request));
     }
 
     @GetMapping
-    public ResponseEntity<Page<ProcurementPaymentRequestResponseDto>> getPaymentRequestsByStatus(
+    public ResponseEntity<Page<ProcurementPaymentRequestResponseDto>> getPaymentRequests(
             @RequestParam(required = false) PaymentRequestStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Page<ProcurementPaymentRequestResponseDto> response =
-                procurementPaymentRequestService.getPaymentRequestsByStatus(
-                        status,
-                        page,
-                        size
-                );
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                service.getPaymentRequestsByStatus(status, page, size)
+        );
     }
 
-
     @GetMapping("/byPurchaseOrderId/{procurementOrderId}")
-    public ResponseEntity<Page<ProcurementPaymentRequestResponseDto>> getPaymentRequestsByProcurementOrderId(
+    public ResponseEntity<Page<ProcurementPaymentRequestResponseDto>> getByOrder(
             @PathVariable Long procurementOrderId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Page<ProcurementPaymentRequestResponseDto> response =
-                procurementPaymentRequestService.getPaymentRequestsByProcurementOrderId(
+        return ResponseEntity.ok(
+                service.getPaymentRequestsByProcurementOrderId(
                         procurementOrderId,
                         page,
                         size
-                );
-
-        return ResponseEntity.ok(response);
+                )
+        );
     }
 
     @PutMapping("/{paymentRequestId}/approve/{userId}")
-    public ResponseEntity<ProcurementPaymentRequestResponseDto> approvePaymentRequest(
+    public ResponseEntity<ProcurementPaymentRequestResponseDto> approve(
             @PathVariable Long paymentRequestId,
             @PathVariable Long userId,
             @RequestBody(required = false) ProcurementPaymentActionRequestDto request
     ) {
-        ProcurementPaymentRequestResponseDto response =
-                procurementPaymentRequestService.approvePaymentRequest(
-                        paymentRequestId,
-                        userId,
-                        request
-                );
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                service.approvePaymentRequest(paymentRequestId, userId, request)
+        );
     }
 
     @PutMapping("/{paymentRequestId}/reject/{userId}")
-    public ResponseEntity<ProcurementPaymentRequestResponseDto> rejectPaymentRequest(
+    public ResponseEntity<ProcurementPaymentRequestResponseDto> reject(
             @PathVariable Long paymentRequestId,
             @PathVariable Long userId,
             @RequestBody ProcurementPaymentActionRequestDto request
     ) {
-        ProcurementPaymentRequestResponseDto response =
-                procurementPaymentRequestService.rejectPaymentRequest(
-                        paymentRequestId,
-                        userId,
-                        request
-                );
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                service.rejectPaymentRequest(paymentRequestId, userId, request)
+        );
     }
 
     @PutMapping("/{paymentRequestId}/release-payment/{userId}")
-    public ResponseEntity<ProcurementPaymentRequestResponseDto> releasePayment(
+    public ResponseEntity<ProcurementPaymentRequestResponseDto> release(
             @PathVariable Long paymentRequestId,
             @PathVariable Long userId,
-            @RequestBody(required = false) ProcurementPaymentActionRequestDto request
+            @RequestBody ProcurementPaymentActionRequestDto request
     ) {
-        ProcurementPaymentRequestResponseDto response =
-                procurementPaymentRequestService.releasePayment(
-                        paymentRequestId,
-                        userId,
-                        request
-                );
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                service.releasePayment(paymentRequestId, userId, request)
+        );
     }
-
-
-
-
 }
