@@ -37,25 +37,15 @@ public interface ProcurementPaymentRequestRepository
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-        SELECT p
-        FROM ProcurementPaymentRequest p
-        WHERE p.id = :id
-          AND p.isDeleted = false
-    """)
+            SELECT p
+            FROM ProcurementPaymentRequest p
+            WHERE p.id = :paymentRequestId
+              AND p.isDeleted = false
+            """)
     Optional<ProcurementPaymentRequest> findActiveByIdForUpdate(
-            @Param("id") Long id
+            @Param("paymentRequestId") Long paymentRequestId
     );
 
-    boolean existsByVendor_IdAndInvoiceNumberIgnoreCaseAndIdNotAndIsDeletedFalse(
-            Long vendorId,
-            String invoiceNumber,
-            Long excludedId
-    );
-
-    boolean existsByVendor_IdAndInvoiceNumberIgnoreCaseAndIsDeletedFalse(
-            Long vendorId,
-            String invoiceNumber
-    );
 
     /**
      * PO finalAmount is the taxable/basic PO value, therefore reservation is
@@ -153,4 +143,9 @@ public interface ProcurementPaymentRequestRepository
     ) {
         return sumReservedTaxableAmountByOrder(order);
     }
+
+
+
+
+
 }

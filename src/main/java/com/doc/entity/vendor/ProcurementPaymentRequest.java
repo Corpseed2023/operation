@@ -29,8 +29,8 @@ import java.util.List;
                         columnList = "procurement_order_id,status,is_deleted"
                 ),
                 @Index(
-                        name = "idx_proc_payment_vendor_invoice",
-                        columnList = "vendor_id,invoice_number,is_deleted"
+                        name = "idx_proc_payment_vendor",
+                        columnList = "vendor_id,is_deleted"
                 )
         }
 )
@@ -90,11 +90,11 @@ public class ProcurementPaymentRequest {
     )
     private BigDecimal bankPaymentAmount;
 
-    @Column(name = "invoice_number", length = 100)
-    private String invoiceNumber;
-
-    @Column(name = "invoice_date")
-    private LocalDate invoiceDate;
+//    @Column(name = "invoice_number", length = 100)
+//    private String invoiceNumber;
+//
+//    @Column(name = "invoice_date")
+//    private LocalDate invoiceDate;
 
     @Column(name = "payment_date")
     private LocalDate paymentDate;
