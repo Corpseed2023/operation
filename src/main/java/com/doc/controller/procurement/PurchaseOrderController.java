@@ -19,7 +19,6 @@ public class PurchaseOrderController {
     @Autowired
     private PurchaseOrderService purchaseOrderService;
 
-    // while
 
     @PostMapping
     @Operation(summary = "Create new Purchase Order (starts as DRAFT)")
@@ -148,5 +147,24 @@ public class PurchaseOrderController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{poId}/admin-approve")
+    @Operation(summary = "Admin approves a Purchase Order that exceeds project value (DRAFT -> ADMIN_APPROVED)")
+    public ResponseEntity<PurchaseOrderResponseDto> adminApprovePurchaseOrder(
+            @PathVariable Long poId,
+            @RequestParam @Parameter(description = "Admin user ID approving the PO") Long adminUserId,
+            @RequestParam(required = false) String comment) {
+
+        return ResponseEntity.ok(purchaseOrderService.adminApprovePurchaseOrder(poId, adminUserId, comment));
+    }
+
+    @PutMapping("/{poId}/admin-reject")
+    @Operation(summary = "Admin rejects a Purchase Order that exceeds project value (DRAFT -> ADMIN_REJECTED)")
+    public ResponseEntity<PurchaseOrderResponseDto> adminRejectPurchaseOrder(
+            @PathVariable Long poId,
+            @RequestParam @Parameter(description = "Admin user ID rejecting the PO") Long adminUserId,
+            @RequestParam @Parameter(description = "Reason for rejection") String reason) {
+
+        return ResponseEntity.ok(purchaseOrderService.adminRejectPurchaseOrder(poId, adminUserId, reason));
+    }
 
 }

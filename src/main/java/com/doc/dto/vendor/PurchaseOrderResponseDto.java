@@ -50,6 +50,8 @@ public class PurchaseOrderResponseDto {
     private Date poApprovedDate;
     private Date poReleasedDate;
 
+    private boolean requiresAdminApproval;
+
     private Long createdBy;
     private Long approvedBy;
     private Date createdDate;

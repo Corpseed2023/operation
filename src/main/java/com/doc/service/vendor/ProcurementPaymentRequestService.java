@@ -25,7 +25,6 @@ public interface ProcurementPaymentRequestService {
             int size
     );
 
-
     ProcurementPaymentRequestResponseDto approvePaymentRequest(
             Long paymentRequestId,
             Long userId,

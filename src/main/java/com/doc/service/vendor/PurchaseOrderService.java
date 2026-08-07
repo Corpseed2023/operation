@@ -14,6 +14,10 @@ public interface PurchaseOrderService {
 
     PurchaseOrderResponseDto releasePurchaseOrder(Long poId, Long userId);
 
+    PurchaseOrderResponseDto adminApprovePurchaseOrder(Long poId, Long adminUserId, String comment);
+
+    PurchaseOrderResponseDto adminRejectPurchaseOrder(Long poId, Long adminUserId, String reason);
+
     PurchaseOrderResponseDto getByProcurementAssignmentId(Long procurementAssignmentId);
 
 

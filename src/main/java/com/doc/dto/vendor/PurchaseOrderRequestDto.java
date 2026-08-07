@@ -48,6 +48,8 @@ public class PurchaseOrderRequestDto {
 
     private LocalDate validTillDate;
 
+    private boolean requiresAdminApproval;
+
     // Payment Type
     private String paymentTypeName;             // e.g., "FULL", "PARTIAL", "INSTALLMENT"
 

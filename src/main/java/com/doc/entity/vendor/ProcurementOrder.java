@@ -51,6 +51,9 @@ public class ProcurementOrder {
     @Column(length = 50)
     private VendorGSTRegistrationType vendorGSTRegistrationType;
 
+    @Column(nullable = false)
+    private boolean requiresAdminApproval = false;
+
     // ==================== AMOUNT & TAX BREAKUP ====================
 
     private BigDecimal finalAmount;           // Base amount before tax

@@ -55,6 +55,9 @@ public class ProcurementOrderResponseDto {
     private Long paymentTypeId;
     private String paymentTypeName;
 
+    private boolean requiresAdminApproval;
+
+
     private Long createdBy;
     private Long updatedBy;
     private Long approvedBy;
