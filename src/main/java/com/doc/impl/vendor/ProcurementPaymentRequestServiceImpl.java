@@ -736,6 +736,10 @@ public class ProcurementPaymentRequestServiceImpl
             ProcurementPaymentActionRequestDto request
     ) {
 
+        // ============================================================
+        // 1. USER VALIDATION
+        // ============================================================
+
         validateUser(userId);
 
         if (request == null) {
@@ -746,16 +750,24 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
+
+        // ============================================================
+        // 2. LOCK PAYMENT REQUEST
+        // ============================================================
         /*
-         * PESSIMISTIC LOCK:
-         *
-         * Prevents two users/requests releasing the same vendor payment
-         * at the same time.
+         * Prevent concurrent payment releases for the same
+         * Procurement Payment Request.
          */
+
         ProcurementPaymentRequest paymentRequest =
                 getActivePaymentRequestForUpdate(
                         paymentRequestId
                 );
+
+
+        // ============================================================
+        // 3. STATUS VALIDATION
+        // ============================================================
 
         if (paymentRequest.getStatus()
                 != PaymentRequestStatus.APPROVED
@@ -770,6 +782,11 @@ public class ProcurementPaymentRequestServiceImpl
                     "ERR_INVALID_PAYMENT_REQUEST_STATUS"
             );
         }
+
+
+        // ============================================================
+        // 4. VENDOR CONTEXT
+        // ============================================================
 
         VendorSyncContext vendorContext =
                 resolveVendorSyncContext(
@@ -788,11 +805,10 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
-        /*
-         * ================================================================
-         * RELEASE INPUT VALIDATION
-         * ================================================================
-         */
+
+        // ============================================================
+        // 5. RELEASE INPUT VALIDATION
+        // ============================================================
 
         if (request.getBankLedgerId() == null
                 || request.getBankLedgerId() <= 0) {
@@ -813,20 +829,39 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
+
+        // ============================================================
+        // 6. APPLY RELEASE-TIME TDS CONFIGURATION
+        // ============================================================
         /*
-         * ================================================================
-         * BACKEND TAX CALCULATION
-         * ================================================================
+         * IMPORTANT FIX.
          *
-         * Frontend sends NO:
+         * Accounts may select:
          *
-         * bankPaymentAmount
-         * GST amounts
-         * TDS amount
-         * TDS percentage
-         * vendor ledger
-         * TDS ledger
+         * tdsActive=true
+         * tdsPercentage=10
+         *
+         * during payment release.
+         *
+         * These values MUST be copied to the persisted
+         * ProcurementPaymentRequest BEFORE calculatePayment().
+         *
+         * We deliberately DO NOT use:
+         *
+         * request.bankPaymentAmount
+         *
+         * Backend calculates the actual bank payment.
          */
+
+        applyReleaseTdsConfiguration(
+                paymentRequest,
+                request
+        );
+
+
+        // ============================================================
+        // 7. RESOLVE GST
+        // ============================================================
 
         GstPayload gstPayload =
                 resolveGstPayload(
@@ -834,20 +869,31 @@ public class ProcurementPaymentRequestServiceImpl
                         vendorContext.gstRegistrationType()
                 );
 
+
+        // ============================================================
+        // 8. BACKEND AUTHORITATIVE CALCULATION
+        // ============================================================
+
         PaymentCalculation calculation =
                 calculatePayment(
                         paymentRequest,
                         gstPayload
                 );
 
-        /*
-         * Persist Operation-side calculation.
-         */
+
+        // ============================================================
+        // 9. APPLY OPERATION CALCULATION
+        // ============================================================
+
         applyOperationCalculation(
                 paymentRequest,
                 calculation
         );
 
+
+        // ============================================================
+        // 10. STORE ACTUAL PAYMENT INFORMATION
+        // ============================================================
 
         paymentRequest.setBankLedgerId(
                 request.getBankLedgerId()
@@ -857,6 +903,7 @@ public class ProcurementPaymentRequestServiceImpl
                 request.getPaymentMode()
                         .trim()
         );
+
 
         if (hasText(
                 request.getTransactionReference()
@@ -868,6 +915,7 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
+
         if (hasText(
                 request.getPaymentProof()
         )) {
@@ -878,12 +926,14 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
+
         if (request.getProofAttachmentUrls() != null) {
 
             paymentRequest.setProofAttachmentUrls(
                     request.getProofAttachmentUrls()
             );
         }
+
 
         if (hasText(
                 request.getComment()
@@ -895,11 +945,18 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
+
         /*
-         * Operation does not own vendor ledger selection.
+         * Operation Service does not own vendor ledger resolution.
+         * Account Service owns vendor ledger selection.
          */
         paymentRequest.setLedgerId(null);
         paymentRequest.setLedgerType(null);
+
+
+        // ============================================================
+        // 11. MOVE TO PROCESSING
+        // ============================================================
 
         paymentRequest.setStatus(
                 PaymentRequestStatus.PAYMENT_PROCESSING
@@ -909,20 +966,29 @@ public class ProcurementPaymentRequestServiceImpl
                 new Date()
         );
 
+
         ProcurementPaymentRequest processing =
                 paymentRequestRepository
                         .saveAndFlush(
                                 paymentRequest
                         );
 
+
+        // ============================================================
+        // 12. CALCULATION LOG
+        // ============================================================
+
         log.info(
                 "[VENDOR-PAYMENT-CALCULATED] "
                         + "paymentRequestId={} | vendorId={} | "
+                        + "tdsActive={} | tdsPercentage={} | "
                         + "basic={} | cgst={} | sgst={} | igst={} | "
                         + "totalGst={} | grossInvoice={} | "
-                        + "tds={} | bankPayment={}",
+                        + "tds={} | vendorNetPayable={} | bankPayment={}",
                 processing.getId(),
                 vendor.getId(),
+                processing.getTdsActive(),
+                processing.getTdsPercentage(),
                 calculation.basicAmount(),
                 calculation.cgstAmount(),
                 calculation.sgstAmount(),
@@ -930,16 +996,14 @@ public class ProcurementPaymentRequestServiceImpl
                 calculation.totalGstAmount(),
                 calculation.grossInvoiceAmount(),
                 calculation.tdsAmount(),
+                calculation.vendorNetPayableAmount(),
                 calculation.bankPaymentAmount()
         );
 
-        /*
-         * ================================================================
-         * ACCOUNT SERVICE
-         * ================================================================
-         *
-         * Existing Account Service is not changed.
-         */
+
+        // ============================================================
+        // 13. SEND AUTHORITATIVE CALCULATION TO ACCOUNT SERVICE
+        // ============================================================
 
         AccountVendorSyncResponseDto accountResponse =
                 syncVendorWithAccountService(
@@ -951,32 +1015,44 @@ public class ProcurementPaymentRequestServiceImpl
                         calculation
                 );
 
+
+        // ============================================================
+        // 14. CROSS-SERVICE CALCULATION VALIDATION
+        // ============================================================
         /*
-         * Optional but important:
-         *
-         * Account also calculates the accounting amounts.
-         * Reject the transaction if its calculation differs from Operation.
+         * Operation and Account calculations must match.
          */
+
         validateAccountCalculation(
                 calculation,
                 accountResponse
         );
 
-        /*
-         * Use Account response as final reconciliation result.
-         */
+
+        // ============================================================
+        // 15. APPLY ACCOUNT RESPONSE
+        // ============================================================
+
         applyAccountCalculatedAmounts(
                 processing,
                 accountResponse
         );
 
+
         /*
-         * Operation-calculated bank amount remains authoritative
-         * for the actual payment being released.
+         * Actual cash/bank payment calculated by Operation remains
+         * authoritative.
+         *
+         * NEVER overwrite it using frontend bankPaymentAmount.
          */
         processing.setBankPaymentAmount(
                 calculation.bankPaymentAmount()
         );
+
+
+        // ============================================================
+        // 16. FINAL RELEASE
+        // ============================================================
 
         Date releasedAt =
                 new Date();
@@ -997,20 +1073,30 @@ public class ProcurementPaymentRequestServiceImpl
                 PaymentRequestStatus.PAYMENT_RELEASED
         );
 
+
         ProcurementPaymentRequest saved =
                 paymentRequestRepository
                         .saveAndFlush(
                                 processing
                         );
 
+
+        // ============================================================
+        // 17. SUCCESS LOG
+        // ============================================================
+
         log.info(
                 "[VENDOR-PAYMENT-RELEASED] "
                         + "paymentRequestId={} | vendorId={} | "
+                        + "tdsActive={} | tdsPercentage={} | "
                         + "basicAmount={} | grossInvoice={} | "
-                        + "totalGst={} | tds={} | bankPayment={} | "
+                        + "totalGst={} | tds={} | "
+                        + "bankPayment={} | "
                         + "invoiceVoucherId={} | paymentVoucherId={}",
                 saved.getId(),
                 vendor.getId(),
+                saved.getTdsActive(),
+                saved.getTdsPercentage(),
                 saved.getAmount(),
                 saved.getInvoiceAmount(),
                 saved.getTotalGstAmount(),
@@ -1019,6 +1105,7 @@ public class ProcurementPaymentRequestServiceImpl
                 accountResponse.getVoucherId(),
                 accountResponse.getPaymentVoucherId()
         );
+
 
         return mapToResponse(saved);
     }
@@ -1747,8 +1834,11 @@ public class ProcurementPaymentRequestServiceImpl
                 )
 
                 /*
+                 * ============================================================
                  * TDS
+                 * ============================================================
                  */
+
                 .tdsActive(
                         Boolean.TRUE.equals(
                                 paymentRequest.getTdsActive()
@@ -1763,7 +1853,9 @@ public class ProcurementPaymentRequestServiceImpl
                         Boolean.TRUE.equals(
                                 paymentRequest.getTdsActive()
                         )
-                                ? money(paymentRequest.getTdsPercentage())
+                                ? money(
+                                paymentRequest.getTdsPercentage()
+                        )
                                 : zeroMoney()
                 )
 
@@ -1771,7 +1863,13 @@ public class ProcurementPaymentRequestServiceImpl
                         calculation.tdsAmount()
                 )
 
-                .tdsPayableLedgerId(null)
+                .tdsPayableLedgerId(
+                        Boolean.TRUE.equals(
+                                paymentRequest.getTdsActive()
+                        )
+                                ? actionRequest.getTdsPayableLedgerId()
+                                : null
+                )
 
                 /*
                  * Payable
@@ -2644,5 +2742,127 @@ public class ProcurementPaymentRequestServiceImpl
             String gstRegistrationType,
             String gstNumber
     ) {
+    }
+
+    /**
+     * Applies Accounts-selected TDS configuration during payment release.
+     *
+     * Rules:
+     *
+     * 1. tdsActive == null
+     *      -> do not change existing Payment Request TDS configuration.
+     *
+     * 2. tdsActive == true
+     *      -> tdsPercentage is mandatory and must be valid.
+     *
+     * 3. tdsActive == false
+     *      -> clear TDS percentage and amount.
+     *
+     * The actual TDS amount is NOT accepted from frontend.
+     * calculatePayment() calculates TDS from the taxable/basic amount.
+     */
+    private void applyReleaseTdsConfiguration(
+            ProcurementPaymentRequest paymentRequest,
+            ProcurementPaymentActionRequestDto request
+    ) {
+
+        if (paymentRequest == null) {
+            throw new ValidationException(
+                    "Payment request is required for TDS configuration",
+                    "ERR_PAYMENT_REQUEST_REQUIRED"
+            );
+        }
+
+        if (request == null) {
+            throw new ValidationException(
+                    "Payment release request is required",
+                    "ERR_PAYMENT_RELEASE_REQUEST_REQUIRED"
+            );
+        }
+
+        Boolean requestedTdsActive =
+                request.getTdsActive();
+
+        BigDecimal requestedTdsPercentage =
+                request.getTdsPercentage();
+
+        /*
+         * No release-time override.
+         *
+         * Keep whatever was configured when Procurement Payment
+         * Request was created.
+         */
+        if (requestedTdsActive == null) {
+
+            /*
+             * Percentage without active flag is ambiguous.
+             */
+            if (requestedTdsPercentage != null) {
+
+                throw new ValidationException(
+                        "tdsActive is required when tdsPercentage is provided",
+                        "ERR_TDS_ACTIVE_REQUIRED"
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * =========================================================
+         * TDS ENABLED DURING RELEASE
+         * =========================================================
+         */
+        if (Boolean.TRUE.equals(requestedTdsActive)) {
+
+            validatePercentage(
+                    requestedTdsPercentage,
+                    "TDS percentage",
+                    "ERR_TDS_PERCENTAGE_REQUIRED"
+            );
+
+            paymentRequest.setTdsActive(true);
+
+            paymentRequest.setTdsPercentage(
+                    money(requestedTdsPercentage)
+            );
+
+            /*
+             * Old calculated TDS must not be reused.
+             *
+             * calculatePayment() below will calculate it again.
+             */
+            paymentRequest.setTdsAmount(
+                    zeroMoney()
+            );
+
+        } else {
+
+            /*
+             * =====================================================
+             * TDS DISABLED DURING RELEASE
+             * =====================================================
+             */
+
+            paymentRequest.setTdsActive(false);
+
+            paymentRequest.setTdsPercentage(null);
+
+            paymentRequest.setTdsAmount(
+                    zeroMoney()
+            );
+        }
+
+        log.info(
+                "[VENDOR-PAYMENT-RELEASE-TDS-CONFIG] "
+                        + "paymentRequestId={} | "
+                        + "requestTdsActive={} | requestTdsPercentage={} | "
+                        + "effectiveTdsActive={} | effectiveTdsPercentage={}",
+                paymentRequest.getId(),
+                requestedTdsActive,
+                requestedTdsPercentage,
+                paymentRequest.getTdsActive(),
+                paymentRequest.getTdsPercentage()
+        );
     }
 }
