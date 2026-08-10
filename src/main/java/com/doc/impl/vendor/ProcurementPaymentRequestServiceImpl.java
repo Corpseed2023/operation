@@ -290,21 +290,12 @@ public class ProcurementPaymentRequestServiceImpl
         );
 
         /*
-         * Existing create contract may still supply these.
+         * invoiceAmount / payableAmount are backend-calculated values.
          *
-         * Final authoritative values are recalculated during release.
+         * Do not trust or persist client-calculated totals here.
+         * They are calculated below from the taxable/basic PR amount,
+         * GST configuration and TDS configuration.
          */
-        if (requestDto.getInvoiceAmount() != null) {
-            paymentRequest.setInvoiceAmount(
-                    money(requestDto.getInvoiceAmount())
-            );
-        }
-
-        if (requestDto.getPayableAmount() != null) {
-            paymentRequest.setPayableAmount(
-                    money(requestDto.getPayableAmount())
-            );
-        }
 
         paymentRequest.setSubmissionDate(
                 new Date()
@@ -338,7 +329,7 @@ public class ProcurementPaymentRequestServiceImpl
         paymentRequest.setDeleted(false);
 
         /*
-         * Store configuration only.
+         * Store PR tax configuration.
          */
         paymentRequest.setTdsActive(
                 tdsActive
@@ -369,12 +360,44 @@ public class ProcurementPaymentRequestServiceImpl
         );
 
         /*
-         * Final GST amounts are calculated during release.
+         * ================================================================
+         * PR-TIME GST + TDS CALCULATION
+         * ================================================================
+         *
+         * Purchase Order stores only the commercial/basic amount.
+         * Procurement Payment Request owns GST/TDS configuration.
+         *
+         * Calculate and persist the GST/TDS snapshot now so PENDING /
+         * APPROVED PR responses already expose CGST, SGST, IGST, invoice
+         * amount and payable amount.
+         *
+         * releasePayment() recalculates the same values again before
+         * posting to Account Service. That second calculation remains the
+         * final authoritative payment calculation.
          */
-        paymentRequest.setCgstAmount(null);
-        paymentRequest.setSgstAmount(null);
-        paymentRequest.setIgstAmount(null);
-        paymentRequest.setTotalGstAmount(null);
+
+        String gstRegistrationType =
+                order.getVendor() != null
+                        && order.getVendor().getGstRegistrationType() != null
+                        ? order.getVendor().getGstRegistrationType().name()
+                        : null;
+
+        GstPayload gstPayload =
+                resolveGstPayload(
+                        paymentRequest,
+                        gstRegistrationType
+                );
+
+        PaymentCalculation calculation =
+                calculatePayment(
+                        paymentRequest,
+                        gstPayload
+                );
+
+        applyPaymentRequestCreationCalculation(
+                paymentRequest,
+                calculation
+        );
 
         ProcurementPaymentRequest saved =
                 paymentRequestRepository.save(
@@ -385,15 +408,25 @@ public class ProcurementPaymentRequestServiceImpl
                 "[PROCUREMENT-PAYMENT-CREATED] "
                         + "paymentRequestId={} | procurementOrderId={} | "
                         + "basicAmount={} | gstActive={} | gstPercentage={} | "
-                        + "gstType={} | tdsActive={} | tdsPercentage={}",
+                        + "gstType={} | cgst={} | sgst={} | igst={} | "
+                        + "totalGst={} | grossInvoice={} | "
+                        + "tdsActive={} | tdsPercentage={} | tdsAmount={} | "
+                        + "payableAmount={}",
                 saved.getId(),
                 order.getId(),
                 saved.getAmount(),
                 saved.getGstActive(),
                 saved.getGstPercentage(),
                 saved.getGstType(),
+                saved.getCgstAmount(),
+                saved.getSgstAmount(),
+                saved.getIgstAmount(),
+                saved.getTotalGstAmount(),
+                saved.getInvoiceAmount(),
                 saved.getTdsActive(),
-                saved.getTdsPercentage()
+                saved.getTdsPercentage(),
+                saved.getTdsAmount(),
+                saved.getPayableAmount()
         );
 
         return mapToResponse(saved);
@@ -1171,6 +1204,59 @@ public class ProcurementPaymentRequestServiceImpl
                 tdsAmount,
                 vendorNetPayable,
                 bankPaymentAmount
+        );
+    }
+
+
+    // ================================================================
+    // PR CREATION CALCULATION SNAPSHOT
+    // ================================================================
+
+    private void applyPaymentRequestCreationCalculation(
+            ProcurementPaymentRequest paymentRequest,
+            PaymentCalculation calculation
+    ) {
+
+        /*
+         * Persist the financial snapshot as soon as the PR is created.
+         *
+         * This makes PENDING / APPROVED PR responses expose the calculated
+         * GST and TDS values without waiting for payment release.
+         *
+         * bankPaymentAmount remains null until releasePayment() because no
+         * bank/cash payment has actually been released yet.
+         */
+
+        paymentRequest.setCgstAmount(
+                calculation.cgstAmount()
+        );
+
+        paymentRequest.setSgstAmount(
+                calculation.sgstAmount()
+        );
+
+        paymentRequest.setIgstAmount(
+                calculation.igstAmount()
+        );
+
+        paymentRequest.setTotalGstAmount(
+                calculation.totalGstAmount()
+        );
+
+        paymentRequest.setInvoiceAmount(
+                calculation.grossInvoiceAmount()
+        );
+
+        paymentRequest.setTdsAmount(
+                calculation.tdsAmount()
+        );
+
+        paymentRequest.setPayableAmount(
+                calculation.vendorNetPayableAmount()
+        );
+
+        paymentRequest.setBankPaymentAmount(
+                null
         );
     }
 

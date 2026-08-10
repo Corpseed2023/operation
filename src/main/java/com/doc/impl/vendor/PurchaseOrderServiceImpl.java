@@ -32,16 +32,10 @@ import java.util.Date;
 
 @Service
 @Transactional
-public class PurchaseOrderServiceImpl
-        implements PurchaseOrderService {
+public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private static final Logger logger =
-            LoggerFactory.getLogger(
-                    PurchaseOrderServiceImpl.class
-            );
-
-    private static final BigDecimal HUNDRED =
-            new BigDecimal("100");
+            LoggerFactory.getLogger(PurchaseOrderServiceImpl.class);
 
     private static final BigDecimal TWO =
             new BigDecimal("2");
@@ -54,8 +48,7 @@ public class PurchaseOrderServiceImpl
     private PurchaseOrderRepository purchaseOrderRepository;
 
     @Autowired
-    private ProcurementMilestoneAssignmentRepository
-            procurementRepository;
+    private ProcurementMilestoneAssignmentRepository procurementRepository;
 
     @Autowired
     private VendorRepository vendorRepository;
@@ -114,7 +107,7 @@ public class PurchaseOrderServiceImpl
         );
 
         // =====================================================
-        // PROCUREMENT
+        // PROCUREMENT ASSIGNMENT
         // =====================================================
 
         ProcurementMilestoneAssignment procurement =
@@ -162,7 +155,16 @@ public class PurchaseOrderServiceImpl
                         );
 
         // =====================================================
-        // AMOUNTS
+        // PO BASIC / COMMERCIAL AMOUNT
+        //
+        // IMPORTANT:
+        // PO does NOT calculate GST/TDS.
+        //
+        // GST/TDS configuration is maintained in
+        // ProcurementPaymentRequest.
+        //
+        // Final CGST/SGST/IGST/TDS calculation happens during
+        // payment release.
         // =====================================================
 
         BigDecimal finalAmount =
@@ -170,33 +172,11 @@ public class PurchaseOrderServiceImpl
                         dto.getFinalAmount()
                 );
 
-        BigDecimal gstRate =
-                percentageOrZero(
-                        dto.getGstRate()
-                );
-
-        BigDecimal tdsPercentage =
-                percentageOrZero(
-                        dto.getTdsPercentage()
-                );
-
-        validatePercentage(
-                gstRate,
-                "GST rate",
-                "ERR_INVALID_GST_RATE"
-        );
-
-        validatePercentage(
-                tdsPercentage,
-                "TDS percentage",
-                "ERR_INVALID_TDS_PERCENTAGE"
-        );
-
         Date currentDate =
                 new Date();
 
         // =====================================================
-        // PO
+        // CREATE PO
         // =====================================================
 
         ProcurementOrder po =
@@ -223,30 +203,26 @@ public class PurchaseOrderServiceImpl
         );
 
         // =====================================================
-        // CALCULATE TAXES
+        // SET BASIC PO AMOUNT ONLY
         // =====================================================
 
-        calculateAndSetTaxes(
+        setPurchaseOrderBaseAmount(
                 po,
                 vendor,
-                finalAmount,
-                gstRate,
-                tdsPercentage,
-                dto.getPlaceOfSupplyStateCode()
+                finalAmount
         );
 
         // =====================================================
-        // VALIDATE PO VALUE AFTER TAX CALCULATION
+        // VALIDATE PO BASIC VALUE AGAINST PROJECT VALUE
         // =====================================================
 
         validatePoValueNotGreaterThanProjectValue(
-                po.getGrandTotal(),
                 po.getFinalAmount(),
                 procurement
         );
 
         // =====================================================
-        // COMMERCIAL
+        // COMMERCIAL DETAILS
         // =====================================================
 
         po.setScopeOfWork(
@@ -319,7 +295,7 @@ public class PurchaseOrderServiceImpl
                 );
 
         // =====================================================
-        // UPDATE PROCUREMENT
+        // UPDATE PROCUREMENT ASSIGNMENT
         // =====================================================
 
         procurement.setStatus(
@@ -347,12 +323,11 @@ public class PurchaseOrderServiceImpl
         );
 
         logger.info(
-                "Purchase Order created | poNumber={} | base={} | GST={} | TDS={} | grandTotal={}",
+                "Purchase Order created | poNumber={} | "
+                        + "basicAmount={} | "
+                        + "GST/TDS calculation deferred to Procurement Payment Request",
                 savedPo.getPoNumber(),
-                savedPo.getFinalAmount(),
-                savedPo.getTotalTaxAmount(),
-                savedPo.getTdsAmount(),
-                savedPo.getGrandTotal()
+                savedPo.getFinalAmount()
         );
 
         return mapToResponseDto(
@@ -363,7 +338,7 @@ public class PurchaseOrderServiceImpl
     // =========================================================
     // RELEASE
     //
-    // Existing application currently treats release as approval.
+    // Existing application treats PO release as PO approval.
     // =========================================================
 
     @Override
@@ -380,7 +355,7 @@ public class PurchaseOrderServiceImpl
     }
 
     // =========================================================
-    // GET BY PO ID
+    // GET PURCHASE ORDER BY ID
     // =========================================================
 
     @Override
@@ -421,13 +396,12 @@ public class PurchaseOrderServiceImpl
     }
 
     // =========================================================
-    // GET BY PROCUREMENT ASSIGNMENT ID
+    // GET BY PROCUREMENT ASSIGNMENT
     // =========================================================
 
     @Override
     @Transactional(readOnly = true)
-    public PurchaseOrderResponseDto
-    getByProcurementAssignmentId(
+    public PurchaseOrderResponseDto getByProcurementAssignmentId(
             Long procurementAssignmentId
     ) {
 
@@ -470,8 +444,7 @@ public class PurchaseOrderServiceImpl
 
     @Override
     @Transactional(readOnly = true)
-    public Page<PurchaseOrderResponseDto>
-    getPurchaseOrdersByProjectId(
+    public Page<PurchaseOrderResponseDto> getPurchaseOrdersByProjectId(
             Long projectId,
             int page,
             int size
@@ -521,8 +494,7 @@ public class PurchaseOrderServiceImpl
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProcurementOrderResponseDto>
-    getProcurementOrdersByStatus(
+    public Page<ProcurementOrderResponseDto> getProcurementOrdersByStatus(
             ProcurementOrderStatus status,
             int page,
             int size
@@ -577,8 +549,7 @@ public class PurchaseOrderServiceImpl
 
     @Override
     @Transactional
-    public ProcurementOrderResponseDto
-    approveProcurementOrder(
+    public ProcurementOrderResponseDto approveProcurementOrder(
             Long procurementOrderId,
             Long userId,
             String comment
@@ -609,13 +580,12 @@ public class PurchaseOrderServiceImpl
     }
 
     // =========================================================
-    // REJECT
+    // REJECT PROCUREMENT ORDER
     // =========================================================
 
     @Override
     @Transactional
-    public ProcurementOrderResponseDto
-    rejectProcurementOrder(
+    public ProcurementOrderResponseDto rejectProcurementOrder(
             Long procurementOrderId,
             Long userId,
             String reason
@@ -693,8 +663,7 @@ public class PurchaseOrderServiceImpl
         ProcurementMilestoneAssignment procurement =
                 po.getProcurementAssignment();
 
-        if (dto.getProcurementAssignmentId()
-                != null) {
+        if (dto.getProcurementAssignmentId() != null) {
 
             procurement =
                     procurementRepository
@@ -717,6 +686,14 @@ public class PurchaseOrderServiceImpl
             );
         }
 
+        if (procurement == null) {
+
+            throw new ValidationException(
+                    "Procurement assignment is required",
+                    "ERR_PROCUREMENT_ASSIGNMENT_REQUIRED"
+            );
+        }
+
         // =====================================================
         // VENDOR
         // =====================================================
@@ -724,8 +701,7 @@ public class PurchaseOrderServiceImpl
         Vendor vendor =
                 po.getVendor();
 
-        if (dto.getVendorId()
-                != null) {
+        if (dto.getVendorId() != null) {
 
             vendor =
                     vendorRepository
@@ -757,7 +733,9 @@ public class PurchaseOrderServiceImpl
         );
 
         // =====================================================
-        // RECALCULATE TAXES
+        // UPDATE PO BASIC AMOUNT ONLY
+        //
+        // GST/TDS are NOT calculated here.
         // =====================================================
 
         BigDecimal finalAmount =
@@ -765,57 +743,17 @@ public class PurchaseOrderServiceImpl
                         dto.getFinalAmount()
                 );
 
-        BigDecimal gstRate =
-                dto.getGstRate() != null
-                        ? percentageOrZero(
-                        dto.getGstRate()
-                )
-                        : percentageOrZero(
-                        po.getGstRate()
-                );
-
-        BigDecimal tdsPercentage =
-                dto.getTdsPercentage() != null
-                        ? percentageOrZero(
-                        dto.getTdsPercentage()
-                )
-                        : percentageOrZero(
-                        po.getTdsPercentage()
-                );
-
-        String placeOfSupplyStateCode =
-                dto.getPlaceOfSupplyStateCode()
-                        != null
-                        ? dto.getPlaceOfSupplyStateCode()
-                        : po.getPlaceOfSupplyStateCode();
-
-        validatePercentage(
-                gstRate,
-                "GST rate",
-                "ERR_INVALID_GST_RATE"
-        );
-
-        validatePercentage(
-                tdsPercentage,
-                "TDS percentage",
-                "ERR_INVALID_TDS_PERCENTAGE"
-        );
-
-        calculateAndSetTaxes(
+        setPurchaseOrderBaseAmount(
                 po,
                 vendor,
-                finalAmount,
-                gstRate,
-                tdsPercentage,
-                placeOfSupplyStateCode
+                finalAmount
         );
 
         // =====================================================
-        // VALIDATE AFTER SERVER CALCULATION
+        // VALIDATE BASIC PO AMOUNT
         // =====================================================
 
         validatePoValueNotGreaterThanProjectValue(
-                po.getGrandTotal(),
                 po.getFinalAmount(),
                 procurement
         );
@@ -836,8 +774,7 @@ public class PurchaseOrderServiceImpl
                 dto.getRemarks()
         );
 
-        if (dto.getAttachmentUrls()
-                != null) {
+        if (dto.getAttachmentUrls() != null) {
 
             po.setAttachmentUrls(
                     dto.getAttachmentUrls()
@@ -876,8 +813,7 @@ public class PurchaseOrderServiceImpl
         // PAYMENT TYPE
         // =====================================================
 
-        if (dto.getPaymentTypeName()
-                != null) {
+        if (dto.getPaymentTypeName() != null) {
 
             if (dto.getPaymentTypeName()
                     .trim()
@@ -906,12 +842,11 @@ public class PurchaseOrderServiceImpl
                 );
 
         logger.info(
-                "Purchase Order updated | po={} | base={} | GST={} | TDS={} | grandTotal={}",
+                "Purchase Order updated | poNumber={} | "
+                        + "basicAmount={} | "
+                        + "GST/TDS calculation deferred to Procurement Payment Request",
                 savedPo.getPoNumber(),
-                savedPo.getFinalAmount(),
-                savedPo.getTotalTaxAmount(),
-                savedPo.getTdsAmount(),
-                savedPo.getGrandTotal()
+                savedPo.getFinalAmount()
         );
 
         return mapToResponseDto(
@@ -920,13 +855,12 @@ public class PurchaseOrderServiceImpl
     }
 
     // =========================================================
-    // UPDATE STATUS
+    // UPDATE PURCHASE ORDER STATUS
     // =========================================================
 
     @Override
     @Transactional
-    public PurchaseOrderResponseDto
-    updatePurchaseOrderStatus(
+    public PurchaseOrderResponseDto updatePurchaseOrderStatus(
             Long poId,
             ProcurementOrderStatus newStatus,
             Long userId,
@@ -934,7 +868,8 @@ public class PurchaseOrderServiceImpl
     ) {
 
         logger.info(
-                "Updating Purchase Order status | poId={}, newStatus={}, userId={}",
+                "Updating Purchase Order status | "
+                        + "poId={}, newStatus={}, userId={}",
                 poId,
                 newStatus,
                 userId
@@ -978,8 +913,7 @@ public class PurchaseOrderServiceImpl
     // INTERNAL APPROVE
     // =========================================================
 
-    private PurchaseOrderResponseDto
-    approvePurchaseOrderInternal(
+    private PurchaseOrderResponseDto approvePurchaseOrderInternal(
             Long poId,
             Long userId,
             String remarks
@@ -1101,7 +1035,8 @@ public class PurchaseOrderServiceImpl
         }
 
         logger.info(
-                "Purchase Order approved | poNumber={} | approvedBy={}",
+                "Purchase Order approved | "
+                        + "poNumber={} | approvedBy={}",
                 savedPo.getPoNumber(),
                 approvedByUser.getId()
         );
@@ -1112,16 +1047,23 @@ public class PurchaseOrderServiceImpl
     }
 
     // =========================================================
-    // GST + TDS CALCULATION
+    // SET PURCHASE ORDER BASIC AMOUNT
+    //
+    // IMPORTANT:
+    //
+    // Purchase Order does NOT own GST/TDS calculation.
+    //
+    // GST/TDS configuration belongs to ProcurementPaymentRequest.
+    // Actual GST/TDS amounts are calculated during payment release.
+    //
+    // Existing PO tax fields are retained at ZERO only for
+    // database/API backwards compatibility.
     // =========================================================
 
-    private void calculateAndSetTaxes(
+    private void setPurchaseOrderBaseAmount(
             ProcurementOrder po,
             Vendor vendor,
-            BigDecimal finalAmount,
-            BigDecimal gstRate,
-            BigDecimal tdsPercentage,
-            String placeOfSupplyStateCode
+            BigDecimal finalAmount
     ) {
 
         BigDecimal zero =
@@ -1130,315 +1072,102 @@ public class PurchaseOrderServiceImpl
                         RoundingMode.HALF_UP
                 );
 
-        finalAmount =
+        BigDecimal basicAmount =
                 money(
                         finalAmount
                 );
 
-        gstRate =
-                percentageOrZero(
-                        gstRate
-                );
+        // =====================================================
+        // BASIC PO AMOUNT
+        // =====================================================
 
-        tdsPercentage =
-                percentageOrZero(
-                        tdsPercentage
-                );
-
-        validatePercentage(
-                gstRate,
-                "GST rate",
-                "ERR_INVALID_GST_RATE"
-        );
-
-        validatePercentage(
-                tdsPercentage,
-                "TDS percentage",
-                "ERR_INVALID_TDS_PERCENTAGE"
+        po.setFinalAmount(
+                basicAmount
         );
 
         // =====================================================
-        // TDS
-        //
-        // TDS = Base Amount * TDS %
+        // GST IS NOT CALCULATED AT PO STAGE
         // =====================================================
 
-        BigDecimal tdsAmount =
-                finalAmount
-                        .multiply(
-                                tdsPercentage
-                        )
-                        .divide(
-                                HUNDRED,
-                                2,
-                                RoundingMode.HALF_UP
-                        );
+        po.setGstRate(
+                zero
+        );
 
-        BigDecimal cgstAmount =
-                zero;
+        po.setCgstAmount(
+                zero
+        );
 
-        BigDecimal sgstAmount =
-                zero;
+        po.setSgstAmount(
+                zero
+        );
 
-        BigDecimal igstAmount =
-                zero;
+        po.setIgstAmount(
+                zero
+        );
 
-        // =====================================================
-        // GST APPLICABILITY
-        // =====================================================
-
-        boolean registeredVendor =
-                VendorGSTRegistrationType.REGISTERED
-                        .equals(
-                                vendor.getGstRegistrationType()
-                        );
-
-        /*
-         * Normal GST treatment:
-         * if vendor is not REGISTERED,
-         * GST is not added.
-         */
-        if (!registeredVendor) {
-
-            gstRate =
-                    zero;
-        }
+        po.setTotalTaxAmount(
+                zero
+        );
 
         // =====================================================
-        // GST CALCULATION
+        // TDS IS NOT CALCULATED AT PO STAGE
         // =====================================================
 
-        if (registeredVendor
-                && gstRate.compareTo(
-                BigDecimal.ZERO
-        ) > 0) {
+        po.setTdsPercentage(
+                zero
+        );
 
-            String gstNumber =
-                    vendor.getGstNumber();
-
-            if (gstNumber == null
-                    || gstNumber
-                    .trim()
-                    .length() != 15) {
-
-                throw new ValidationException(
-                        "A valid 15 character Vendor GSTIN is required for GST calculation",
-                        "ERR_INVALID_VENDOR_GST_NUMBER"
-                );
-            }
-
-            gstNumber =
-                    gstNumber
-                            .trim()
-                            .toUpperCase();
-
-            /*
-             * First 2 characters of GSTIN
-             * represent the state code.
-             *
-             * Example:
-             * 09GFFGH5465HFZG
-             *
-             * Supplier State = 09
-             */
-            String vendorStateCode =
-                    gstNumber.substring(
-                            0,
-                            2
-                    );
-
-            if (!vendorStateCode.matches(
-                    "\\d{2}"
-            )) {
-
-                throw new ValidationException(
-                        "Invalid Vendor GST state code",
-                        "ERR_INVALID_VENDOR_GST_STATE_CODE"
-                );
-            }
-
-            String normalizedPlaceCode =
-                    normalizeStateCode(
-                            placeOfSupplyStateCode
-                    );
-
-            if (normalizedPlaceCode == null) {
-
-                throw new ValidationException(
-                        "Place of supply state code is required when GST is applicable",
-                        "ERR_PLACE_OF_SUPPLY_REQUIRED"
-                );
-            }
-
-            // =================================================
-            // TOTAL GST
-            //
-            // Example:
-            //
-            // Base = 18000
-            // GST = 18%
-            //
-            // Total GST = 3240
-            // =================================================
-
-            BigDecimal totalGstAmount =
-                    finalAmount
-                            .multiply(
-                                    gstRate
-                            )
-                            .divide(
-                                    HUNDRED,
-                                    2,
-                                    RoundingMode.HALF_UP
-                            );
-
-            boolean sameState =
-                    vendorStateCode.equals(
-                            normalizedPlaceCode
-                    );
-
-            if (sameState) {
-
-                // =============================================
-                // INTRA-STATE
-                //
-                // 18% GST
-                //
-                // CGST = 9%
-                // SGST = 9%
-                // =============================================
-
-                cgstAmount =
-                        totalGstAmount
-                                .divide(
-                                        TWO,
-                                        2,
-                                        RoundingMode.HALF_UP
-                                );
-
-                /*
-                 * Using subtraction prevents
-                 * one-paisa rounding difference.
-                 */
-                sgstAmount =
-                        totalGstAmount
-                                .subtract(
-                                        cgstAmount
-                                )
-                                .setScale(
-                                        2,
-                                        RoundingMode.HALF_UP
-                                );
-
-            } else {
-
-                // =============================================
-                // INTER-STATE
-                //
-                // Full GST becomes IGST
-                // =============================================
-
-                igstAmount =
-                        totalGstAmount;
-            }
-
-            placeOfSupplyStateCode =
-                    normalizedPlaceCode;
-        }
-
-        // =====================================================
-        // TOTAL GST
-        // =====================================================
-
-        BigDecimal totalTaxAmount =
-                cgstAmount
-                        .add(
-                                sgstAmount
-                        )
-                        .add(
-                                igstAmount
-                        )
-                        .setScale(
-                                2,
-                                RoundingMode.HALF_UP
-                        );
+        po.setTdsAmount(
+                zero
+        );
 
         // =====================================================
         // GRAND TOTAL
         //
-        // Base + GST - TDS
+        // At PO stage:
+        //
+        // grandTotal == basic negotiated PO amount
+        //
+        // Gross invoice amount will be calculated later
+        // during Procurement Payment Request release.
         // =====================================================
-
-        BigDecimal grandTotal =
-                finalAmount
-                        .add(
-                                totalTaxAmount
-                        )
-                        .subtract(
-                                tdsAmount
-                        )
-                        .setScale(
-                                2,
-                                RoundingMode.HALF_UP
-                        );
-
-        // =====================================================
-        // SET ENTITY VALUES
-        // =====================================================
-
-        po.setFinalAmount(
-                finalAmount
-        );
-
-        po.setGstRate(
-                gstRate
-        );
-
-        po.setCgstAmount(
-                cgstAmount
-        );
-
-        po.setSgstAmount(
-                sgstAmount
-        );
-
-        po.setIgstAmount(
-                igstAmount
-        );
-
-        po.setTotalTaxAmount(
-                totalTaxAmount
-        );
-
-        po.setTdsPercentage(
-                tdsPercentage
-        );
-
-        po.setTdsAmount(
-                tdsAmount
-        );
 
         po.setGrandTotal(
-                grandTotal
+                basicAmount
         );
+
+        // =====================================================
+        // PLACE OF SUPPLY
+        //
+        // Actual GST state/supply type is selected on PR.
+        // =====================================================
 
         po.setPlaceOfSupplyStateCode(
-                normalizeStateCode(
-                        placeOfSupplyStateCode
-                )
+                null
         );
 
+        // =====================================================
+        // VENDOR GST SNAPSHOT ONLY
+        //
+        // This does NOT activate GST calculation.
+        // =====================================================
+
         po.setVendorGSTRegistrationType(
-                vendor.getGstRegistrationType()
+                vendor != null
+                        ? vendor.getGstRegistrationType()
+                        : null
         );
     }
 
     // =========================================================
-    // VALIDATE PO VALUE AGAINST PROJECT
+    // VALIDATE PO BASIC VALUE AGAINST PROJECT
+    //
+    // IMPORTANT:
+    // This compares PO basic/final amount only.
+    // GST/TDS must not affect this validation.
     // =========================================================
 
     private void validatePoValueNotGreaterThanProjectValue(
-            BigDecimal grandTotal,
             BigDecimal finalAmount,
             ProcurementMilestoneAssignment procurement
     ) {
@@ -1451,8 +1180,7 @@ public class PurchaseOrderServiceImpl
             );
         }
 
-        if (procurement.getProject()
-                == null) {
+        if (procurement.getProject() == null) {
 
             throw new ValidationException(
                     "Project not found for procurement assignment",
@@ -1462,8 +1190,7 @@ public class PurchaseOrderServiceImpl
 
         if (procurement
                 .getProject()
-                .getPaymentDetail()
-                == null) {
+                .getPaymentDetail() == null) {
 
             throw new ValidationException(
                     "Project payment detail not found",
@@ -1472,12 +1199,11 @@ public class PurchaseOrderServiceImpl
         }
 
         BigDecimal poValue =
-                grandTotal != null
-                        ? grandTotal
-                        : finalAmount;
+                money(
+                        finalAmount
+                );
 
-        if (poValue == null
-                || poValue.compareTo(
+        if (poValue.compareTo(
                 BigDecimal.ZERO
         ) <= 0) {
 
@@ -1526,8 +1252,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setProcurementAssignmentId(
-                order.getProcurementAssignment()
-                        != null
+                order.getProcurementAssignment() != null
                         ? order
                         .getProcurementAssignment()
                         .getId()
@@ -1535,8 +1260,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setProjectId(
-                order.getProject()
-                        != null
+                order.getProject() != null
                         ? order
                         .getProject()
                         .getId()
@@ -1544,8 +1268,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setProjectName(
-                order.getProject()
-                        != null
+                order.getProject() != null
                         ? order
                         .getProject()
                         .getName()
@@ -1553,8 +1276,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setVendorId(
-                order.getVendor()
-                        != null
+                order.getVendor() != null
                         ? order
                         .getVendor()
                         .getId()
@@ -1562,8 +1284,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setVendorName(
-                order.getVendor()
-                        != null
+                order.getVendor() != null
                         ? order
                         .getVendor()
                         .getName()
@@ -1571,8 +1292,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setVendorContactId(
-                order.getVendorContact()
-                        != null
+                order.getVendorContact() != null
                         ? order
                         .getVendorContact()
                         .getId()
@@ -1580,8 +1300,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setVendorContactName(
-                order.getVendorContact()
-                        != null
+                order.getVendorContact() != null
                         ? order
                         .getVendorContact()
                         .getName()
@@ -1597,31 +1316,51 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setFinalAmount(
-                order.getFinalAmount()
+                moneyOrZero(
+                        order.getFinalAmount()
+                )
         );
 
+        /*
+         * Legacy PO GST/TDS fields.
+         *
+         * New Purchase Orders store these as ZERO because
+         * ProcurementPaymentRequest owns taxation.
+         */
         dto.setGstRate(
-                order.getGstRate()
+                percentageOrZero(
+                        order.getGstRate()
+                )
         );
 
         dto.setCgstAmount(
-                order.getCgstAmount()
+                moneyOrZero(
+                        order.getCgstAmount()
+                )
         );
 
         dto.setSgstAmount(
-                order.getSgstAmount()
+                moneyOrZero(
+                        order.getSgstAmount()
+                )
         );
 
         dto.setIgstAmount(
-                order.getIgstAmount()
+                moneyOrZero(
+                        order.getIgstAmount()
+                )
         );
 
         dto.setTotalTaxAmount(
-                order.getTotalTaxAmount()
+                moneyOrZero(
+                        order.getTotalTaxAmount()
+                )
         );
 
         dto.setGrandTotal(
-                order.getGrandTotal()
+                moneyOrZero(
+                        order.getGrandTotal()
+                )
         );
 
         dto.setScopeOfWork(
@@ -1661,8 +1400,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setPaymentTypeId(
-                order.getPaymentType()
-                        != null
+                order.getPaymentType() != null
                         ? order
                         .getPaymentType()
                         .getId()
@@ -1670,8 +1408,7 @@ public class PurchaseOrderServiceImpl
         );
 
         dto.setPaymentTypeName(
-                order.getPaymentType()
-                        != null
+                order.getPaymentType() != null
                         ? order
                         .getPaymentType()
                         .getName()
@@ -1738,8 +1475,7 @@ public class PurchaseOrderServiceImpl
         // PROCUREMENT
         // =====================================================
 
-        if (po.getProcurementAssignment()
-                != null) {
+        if (po.getProcurementAssignment() != null) {
 
             dto.setProcurementAssignmentId(
                     po
@@ -1752,8 +1488,7 @@ public class PurchaseOrderServiceImpl
         // PROJECT
         // =====================================================
 
-        if (po.getProject()
-                != null) {
+        if (po.getProject() != null) {
 
             dto.setProjectId(
                     po.getProject()
@@ -1775,8 +1510,7 @@ public class PurchaseOrderServiceImpl
         // VENDOR
         // =====================================================
 
-        if (po.getVendor()
-                != null) {
+        if (po.getVendor() != null) {
 
             Vendor vendor =
                     po.getVendor();
@@ -1797,11 +1531,6 @@ public class PurchaseOrderServiceImpl
                     vendor.getMobile()
             );
 
-            // =================================================
-            // VENDOR ADDRESS
-            // Exact fields from your Vendor entity
-            // =================================================
-
             dto.setVendorAddress(
                     vendor.getFullAddress()
             );
@@ -1818,17 +1547,12 @@ public class PurchaseOrderServiceImpl
                     vendor.getCountry()
             );
 
-            // =================================================
-            // VENDOR GST
-            // =================================================
-
             dto.setVendorGSTNumber(
                     vendor.getGstNumber()
             );
 
             VendorGSTRegistrationType registrationType =
-                    po.getVendorGSTRegistrationType()
-                            != null
+                    po.getVendorGSTRegistrationType() != null
                             ? po.getVendorGSTRegistrationType()
                             : vendor.getGstRegistrationType();
 
@@ -1840,8 +1564,12 @@ public class PurchaseOrderServiceImpl
                     vendor.getPanNumber()
             );
 
-            if (vendor.getGstNumber()
-                    != null
+            /*
+             * Vendor GSTIN state code is informational only.
+             *
+             * It does not calculate GST on the PO.
+             */
+            if (vendor.getGstNumber() != null
                     && vendor
                     .getGstNumber()
                     .trim()
@@ -1859,12 +1587,15 @@ public class PurchaseOrderServiceImpl
             }
         }
 
+        /*
+         * PO doesn't own GST place-of-supply configuration.
+         */
         dto.setPlaceOfSupplyStateCode(
                 po.getPlaceOfSupplyStateCode()
         );
 
         // =====================================================
-        // AMOUNTS
+        // BASIC AMOUNT
         // =====================================================
 
         dto.setFinalAmount(
@@ -1872,6 +1603,14 @@ public class PurchaseOrderServiceImpl
                         po.getFinalAmount()
                 )
         );
+
+        // =====================================================
+        // LEGACY PO GST FIELDS
+        //
+        // These are ZERO for new POs.
+        //
+        // Actual GST exists on ProcurementPaymentRequest.
+        // =====================================================
 
         BigDecimal gstRate =
                 percentageOrZero(
@@ -1917,6 +1656,14 @@ public class PurchaseOrderServiceImpl
 
         // =====================================================
         // GST RATE BREAKUP
+        //
+        // Supports old POs which may still contain GST.
+        //
+        // New POs will return:
+        //
+        // cgstRate = 0
+        // sgstRate = 0
+        // igstRate = 0
         // =====================================================
 
         boolean hasIgst =
@@ -1985,6 +1732,9 @@ public class PurchaseOrderServiceImpl
 
         // =====================================================
         // TDS
+        //
+        // New POs contain ZERO.
+        // Actual TDS belongs to ProcurementPaymentRequest.
         // =====================================================
 
         dto.setTdsPercentage(
@@ -2001,6 +1751,9 @@ public class PurchaseOrderServiceImpl
 
         // =====================================================
         // GRAND TOTAL
+        //
+        // At PO level:
+        // grandTotal == finalAmount/basicAmount
         // =====================================================
 
         dto.setGrandTotal(
@@ -2038,11 +1791,10 @@ public class PurchaseOrderServiceImpl
         );
 
         // =====================================================
-        // PAYMENT
+        // PAYMENT TYPE
         // =====================================================
 
-        if (po.getPaymentType()
-                != null) {
+        if (po.getPaymentType() != null) {
 
             dto.setPaymentTypeName(
                     po
@@ -2099,7 +1851,7 @@ public class PurchaseOrderServiceImpl
     }
 
     // =========================================================
-    // PAYMENT TYPE HELPER
+    // PAYMENT TYPE
     // =========================================================
 
     private void setPaymentType(
@@ -2157,36 +1909,6 @@ public class PurchaseOrderServiceImpl
     }
 
     // =========================================================
-    // PERCENTAGE VALIDATION
-    // =========================================================
-
-    private void validatePercentage(
-            BigDecimal value,
-            String fieldName,
-            String errorCode
-    ) {
-
-        if (value == null) {
-            return;
-        }
-
-        if (value.compareTo(
-                BigDecimal.ZERO
-        ) < 0
-                ||
-                value.compareTo(
-                        HUNDRED
-                ) > 0) {
-
-            throw new ValidationException(
-                    fieldName
-                            + " must be between 0 and 100",
-                    errorCode
-            );
-        }
-    }
-
-    // =========================================================
     // MONEY
     // =========================================================
 
@@ -2218,11 +1940,10 @@ public class PurchaseOrderServiceImpl
 
         if (value == null) {
 
-            return BigDecimal.ZERO
-                    .setScale(
-                            2,
-                            RoundingMode.HALF_UP
-                    );
+            return BigDecimal.ZERO.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
         }
 
         return value.setScale(
@@ -2233,6 +1954,8 @@ public class PurchaseOrderServiceImpl
 
     // =========================================================
     // PERCENTAGE OR ZERO
+    //
+    // Kept only for backwards-compatible response mapping.
     // =========================================================
 
     private BigDecimal percentageOrZero(
@@ -2241,61 +1964,16 @@ public class PurchaseOrderServiceImpl
 
         if (value == null) {
 
-            return BigDecimal.ZERO
-                    .setScale(
-                            2,
-                            RoundingMode.HALF_UP
-                    );
+            return BigDecimal.ZERO.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
         }
 
         return value.setScale(
                 2,
                 RoundingMode.HALF_UP
         );
-    }
-
-    // =========================================================
-    // STATE CODE
-    // =========================================================
-
-    private String normalizeStateCode(
-            String stateCode
-    ) {
-
-        if (stateCode == null
-                || stateCode
-                .trim()
-                .isEmpty()) {
-
-            return null;
-        }
-
-        String normalized =
-                stateCode.trim();
-
-        /*
-         * Example:
-         * 9 -> 09
-         */
-        if (normalized.matches(
-                "\\d"
-        )) {
-
-            normalized =
-                    "0" + normalized;
-        }
-
-        if (!normalized.matches(
-                "\\d{2}"
-        )) {
-
-            throw new ValidationException(
-                    "State code must contain exactly 2 digits",
-                    "ERR_INVALID_STATE_CODE"
-            );
-        }
-
-        return normalized;
     }
 
     // =========================================================

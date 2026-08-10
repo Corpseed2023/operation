@@ -37,7 +37,7 @@ public class GovernmentFeePaymentRequestDto {
             regexp = "(?i)^(NET_BANKING|NEFT|RTGS|IMPS|UPI|CARD|BANK_TRANSFER|CHEQUE|DEMAND_DRAFT|OTHER)$",
             message = "Payment mode must be NET_BANKING, NEFT, RTGS, IMPS, UPI, CARD, BANK_TRANSFER, CHEQUE, DEMAND_DRAFT or OTHER"
     )
-    private String paymentMode;
+    private String paymentMode="UPI";
 
     /**
      * Account Service ledger ID of the COMPANY BANK
