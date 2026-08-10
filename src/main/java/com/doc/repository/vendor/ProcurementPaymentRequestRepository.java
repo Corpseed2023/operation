@@ -145,7 +145,23 @@ public interface ProcurementPaymentRequestRepository
     }
 
 
-
+    /**
+     * Total taxable/basic amount whose vendor payment has actually
+     * been released successfully.
+     *
+     * Used for Procurement milestone completion.
+     */
+    @Query("""
+    SELECT COALESCE(SUM(COALESCE(p.amount, 0)), 0)
+    FROM ProcurementPaymentRequest p
+    WHERE p.procurementOrder = :order
+      AND p.isDeleted = false
+      AND p.status =
+          com.doc.entity.vendor.PaymentRequestStatus.PAYMENT_RELEASED
+""")
+    BigDecimal sumReleasedTaxableAmountByOrder(
+            @Param("order") ProcurementOrder order
+    );
 
 
 }
