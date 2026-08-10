@@ -1090,39 +1090,67 @@ public class ProjectServiceImpl implements ProjectService {
         }
     }
 
-    private void updateVisibilityAndAutoAssign(ProjectMilestoneAssignment assignment,
-                                               boolean isVisible,
-                                               String reason,
-                                               ProductMilestoneMap map,
-                                               Project project,
-                                               Long updatedById)
-    {
-        Long projectId = project != null ? project.getId() : null;
-        Long milestoneId = assignment.getMilestone() != null
-                ? assignment.getMilestone().getId()
-                : null;
-        String milestoneName = assignment.getMilestone() != null
-                ? assignment.getMilestone().getName()
-                : null;
-        String paymentTypeName = project != null
-                && project.getPaymentDetail() != null
-                && project.getPaymentDetail().getPaymentType() != null
-                ? project.getPaymentDetail().getPaymentType().getName()
-                : "N/A";
-        double paidPercentage = project != null
-                && project.getPaymentDetail() != null
-                && project.getPaymentDetail().getTotalAmount() > 0
-                ? ((project.getPaymentDetail().getTotalAmount()
-                - project.getPaymentDetail().getDueAmount())
-                / project.getPaymentDetail().getTotalAmount()) * 100
-                : 0;
+    private void updateVisibilityAndAutoAssign(
+            ProjectMilestoneAssignment assignment,
+            boolean isVisible,
+            String reason,
+            ProductMilestoneMap map,
+            Project project,
+            Long updatedById
+    ) {
+
+        // =========================================================
+        // BASIC DETAILS
+        // =========================================================
+
+        Long projectId =
+                project != null
+                        ? project.getId()
+                        : null;
+
+        Long milestoneId =
+                assignment != null
+                        && assignment.getMilestone() != null
+                        ? assignment.getMilestone().getId()
+                        : null;
+
+        String milestoneName =
+                assignment != null
+                        && assignment.getMilestone() != null
+                        ? assignment.getMilestone().getName()
+                        : null;
+
+        String paymentTypeName =
+                project != null
+                        && project.getPaymentDetail() != null
+                        && project.getPaymentDetail().getPaymentType() != null
+                        ? project.getPaymentDetail()
+                        .getPaymentType()
+                        .getName()
+                        : "N/A";
+
+        double paidPercentage =
+                project != null
+                        && project.getPaymentDetail() != null
+                        && project.getPaymentDetail().getTotalAmount() > 0
+                        ? (
+                        (
+                                project.getPaymentDetail().getTotalAmount()
+                                        - project.getPaymentDetail().getDueAmount()
+                        )
+                                / project.getPaymentDetail().getTotalAmount()
+                ) * 100
+                        : 0;
 
         logger.debug(
-                "updateVisibilityAndAutoAssign started. projectId={}, milestoneId={}, milestoneName={}, currentVisible={}, requestedVisible={}, reason={}, paymentType={}, paidPercentage={}, updatedById={}",
+                "updateVisibilityAndAutoAssign started. "
+                        + "projectId={}, milestoneId={}, milestoneName={}, "
+                        + "currentVisible={}, requestedVisible={}, reason={}, "
+                        + "paymentType={}, paidPercentage={}, updatedById={}",
                 projectId,
                 milestoneId,
                 milestoneName,
-                assignment.isVisible(),
+                assignment != null && assignment.isVisible(),
                 isVisible,
                 reason,
                 paymentTypeName,
@@ -1130,51 +1158,122 @@ public class ProjectServiceImpl implements ProjectService {
                 updatedById
         );
 
-        // === Existing visibility logic ===
-        boolean visibilityChanged = assignment.isVisible() != isVisible || !Objects.equals(reason, assignment.getVisibilityReason());
+        // =========================================================
+        // NULL SAFETY
+        // =========================================================
+
+        if (assignment == null) {
+
+            logger.warn(
+                    "Skipping milestone visibility update because assignment is null. "
+                            + "projectId={}",
+                    projectId
+            );
+
+            return;
+        }
+
+        if (map == null) {
+
+            logger.warn(
+                    "Skipping milestone visibility update because "
+                            + "ProductMilestoneMap is null. "
+                            + "projectId={}, milestoneId={}",
+                    projectId,
+                    milestoneId
+            );
+
+            return;
+        }
+
+        // =========================================================
+        // 1. VISIBILITY
+        // =========================================================
+
+        boolean visibilityChanged =
+                assignment.isVisible() != isVisible
+                        || !Objects.equals(
+                        reason,
+                        assignment.getVisibilityReason()
+                );
 
         logger.debug(
-                "Milestone visibility change evaluated. projectId={}, milestoneId={}, visibilityChanged={}",
+                "Milestone visibility change evaluated. "
+                        + "projectId={}, milestoneId={}, visibilityChanged={}",
                 projectId,
                 milestoneId,
                 visibilityChanged
         );
 
         if (visibilityChanged) {
+
             logger.info(
-                    "Updating milestone visibility. projectId={}, milestoneId={}, visible={}, reason={}",
+                    "Updating milestone visibility. "
+                            + "projectId={}, milestoneId={}, visible={}, reason={}",
                     projectId,
                     milestoneId,
                     isVisible,
                     reason
             );
 
-            assignment.setVisible(isVisible);
-            assignment.setVisibilityReason(reason);
-            assignment.setVisibleDate(isVisible ? new Date() : null);
-            assignment.setUpdatedBy(updatedById);
-            assignment.setUpdatedDate(new Date());
-            projectMilestoneAssignmentRepository.save(assignment);
+            assignment.setVisible(
+                    isVisible
+            );
+
+            assignment.setVisibilityReason(
+                    reason
+            );
+
+            assignment.setVisibleDate(
+                    isVisible
+                            ? new Date()
+                            : null
+            );
+
+            assignment.setUpdatedBy(
+                    updatedById
+            );
+
+            assignment.setUpdatedDate(
+                    new Date()
+            );
+
+            projectMilestoneAssignmentRepository.save(
+                    assignment
+            );
 
             logger.info(
-                    "Milestone visibility updated successfully. projectId={}, milestoneId={}, visible={}",
+                    "Milestone visibility updated successfully. "
+                            + "projectId={}, milestoneId={}, visible={}",
                     projectId,
                     milestoneId,
                     isVisible
             );
+
         } else {
+
             logger.debug(
-                    "Milestone visibility update skipped because no change was detected. projectId={}, milestoneId={}",
+                    "Milestone visibility update skipped because "
+                            + "no change was detected. "
+                            + "projectId={}, milestoneId={}",
                     projectId,
                     milestoneId
             );
         }
 
-        // === Auto Assignment Logic (Existing) ===
-        boolean shouldAutoAssign = isVisible && !map.isAutoGenerated() && assignment.getAssignedUser() == null;
+        // =========================================================
+        // 2. AUTO ASSIGNMENT
+        // =========================================================
+
+        boolean shouldAutoAssign =
+                isVisible
+                        && !map.isAutoGenerated()
+                        && assignment.getAssignedUser() == null;
 
         logger.debug(
-                "Auto-assignment evaluated. projectId={}, milestoneId={}, shouldAutoAssign={}, visible={}, autoGenerated={}, alreadyAssigned={}",
+                "Auto-assignment evaluated. "
+                        + "projectId={}, milestoneId={}, shouldAutoAssign={}, "
+                        + "visible={}, autoGenerated={}, alreadyAssigned={}",
                 projectId,
                 milestoneId,
                 shouldAutoAssign,
@@ -1184,77 +1283,192 @@ public class ProjectServiceImpl implements ProjectService {
         );
 
         if (shouldAutoAssign) {
+
             logger.info(
-                    "Triggering milestone auto-assignment. projectId={}, milestoneId={}, milestoneName={}",
+                    "Triggering milestone auto-assignment. "
+                            + "projectId={}, milestoneId={}, milestoneName={}",
                     projectId,
                     milestoneId,
                     milestoneName
             );
 
-            AssignmentResult result = autoAssignmentService.assignMilestoneUser(map, project, updatedById);
+            AssignmentResult result =
+                    autoAssignmentService.assignMilestoneUser(
+                            map,
+                            project,
+                            updatedById
+                    );
 
-            assignment.setAssignedUser(result != null ? result.getUser() : null);
-            assignment.setStatusReason(result != null ? result.getReason() : "Auto-assign failed");
-            projectMilestoneAssignmentRepository.save(assignment);
-
-            logger.info(
-                    "Milestone auto-assignment completed. projectId={}, milestoneId={}, assignedUserId={}, assignedUserName={}, reason={}",
-                    projectId,
-                    milestoneId,
-                    result != null && result.getUser() != null ? result.getUser().getId() : null,
-                    result != null && result.getUser() != null ? result.getUser().getFullName() : null,
-                    result != null ? result.getReason() : "Auto-assign failed"
+            assignment.setAssignedUser(
+                    result != null
+                            ? result.getUser()
+                            : null
             );
 
-            ProjectAssignmentHistory history = new ProjectAssignmentHistory();
-            history.setProject(project);
-            history.setMilestoneAssignment(assignment);
-            history.setAssignedUser(result != null ? result.getUser() : null);
-            history.setAssignmentReason(result != null ? result.getReason() : "Auto-assign failed");
-            history.setCreatedDate(new Date());
-            history.setUpdatedDate(new Date());
-            history.setCreatedBy(updatedById);
-            history.setUpdatedBy(updatedById);
-            history.setDeleted(false);
-            projectAssignmentHistoryRepository.save(history);
+            assignment.setStatusReason(
+                    result != null
+                            ? result.getReason()
+                            : "Auto-assign failed"
+            );
 
-            logger.debug(
-                    "Project assignment history saved. projectId={}, milestoneId={}, assignedUserId={}",
+            assignment.setUpdatedBy(
+                    updatedById
+            );
+
+            assignment.setUpdatedDate(
+                    new Date()
+            );
+
+            projectMilestoneAssignmentRepository.save(
+                    assignment
+            );
+
+            logger.info(
+                    "Milestone auto-assignment completed. "
+                            + "projectId={}, milestoneId={}, "
+                            + "assignedUserId={}, assignedUserName={}, reason={}",
                     projectId,
                     milestoneId,
-                    result != null && result.getUser() != null ? result.getUser().getId() : null
+                    result != null
+                            && result.getUser() != null
+                            ? result.getUser().getId()
+                            : null,
+                    result != null
+                            && result.getUser() != null
+                            ? result.getUser().getFullName()
+                            : null,
+                    result != null
+                            ? result.getReason()
+                            : "Auto-assign failed"
+            );
+
+            // =====================================================
+            // ASSIGNMENT HISTORY
+            // =====================================================
+
+            ProjectAssignmentHistory history =
+                    new ProjectAssignmentHistory();
+
+            history.setProject(
+                    project
+            );
+
+            history.setMilestoneAssignment(
+                    assignment
+            );
+
+            history.setAssignedUser(
+                    result != null
+                            ? result.getUser()
+                            : null
+            );
+
+            history.setAssignmentReason(
+                    result != null
+                            ? result.getReason()
+                            : "Auto-assign failed"
+            );
+
+            history.setCreatedDate(
+                    new Date()
+            );
+
+            history.setUpdatedDate(
+                    new Date()
+            );
+
+            history.setCreatedBy(
+                    updatedById
+            );
+
+            history.setUpdatedBy(
+                    updatedById
+            );
+
+            history.setDeleted(
+                    false
+            );
+
+            projectAssignmentHistoryRepository.save(
+                    history
+            );
+
+            logger.debug(
+                    "Project assignment history saved. "
+                            + "projectId={}, milestoneId={}, assignedUserId={}",
+                    projectId,
+                    milestoneId,
+                    result != null
+                            && result.getUser() != null
+                            ? result.getUser().getId()
+                            : null
             );
         }
 
-        // === NEW: Procurement Milestone Handling ===
-        boolean isProcurement = "Procurement".equalsIgnoreCase(assignment.getMilestone().getName());
+        // =========================================================
+        // 3. PROCUREMENT MILESTONE HANDLING
+        // =========================================================
 
-        logger.debug(
-                "Procurement milestone check completed. projectId={}, milestoneId={}, isProcurement={}, visible={}",
+        boolean isProcurement =
+                milestoneName != null
+                        && "Procurement".equalsIgnoreCase(
+                        milestoneName.trim()
+                );
+
+        logger.info(
+                "Procurement milestone check. "
+                        + "projectId={}, milestoneId={}, milestoneName={}, "
+                        + "isProcurement={}, visible={}",
                 projectId,
                 milestoneId,
+                milestoneName,
                 isProcurement,
                 isVisible
         );
 
-        if (isVisible && isProcurement) {
+        /*
+         * IMPORTANT:
+         *
+         * ProcurementMilestoneAssignment is a backend workflow record.
+         *
+         * It MUST exist whenever the project contains a Procurement
+         * milestone.
+         *
+         * It must NOT depend on milestone visibility.
+         *
+         * Visibility only controls whether the milestone is currently
+         * accessible/displayed to the user.
+         */
+        if (isProcurement) {
+
             logger.info(
-                    "Visible procurement milestone detected. Creating procurement milestone assignment. projectId={}, milestoneId={}",
+                    "Ensuring ProcurementMilestoneAssignment exists. "
+                            + "projectId={}, milestoneId={}, visible={}",
                     projectId,
-                    milestoneId
+                    milestoneId,
+                    isVisible
             );
 
-            handleProcurementMilestoneCreation(assignment, updatedById);
+            handleProcurementMilestoneCreation(
+                    assignment,
+                    updatedById
+            );
 
             logger.info(
-                    "Procurement milestone handling completed. projectId={}, milestoneId={}",
+                    "ProcurementMilestoneAssignment ensured successfully. "
+                            + "projectId={}, milestoneId={}",
                     projectId,
                     milestoneId
             );
         }
 
+        // =========================================================
+        // COMPLETE
+        // =========================================================
+
         logger.debug(
-                "updateVisibilityAndAutoAssign completed. projectId={}, milestoneId={}",
+                "updateVisibilityAndAutoAssign completed. "
+                        + "projectId={}, milestoneId={}",
                 projectId,
                 milestoneId
         );
