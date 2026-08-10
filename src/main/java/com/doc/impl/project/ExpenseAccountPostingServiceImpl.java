@@ -516,6 +516,27 @@ public class ExpenseAccountPostingServiceImpl
             );
         }
 
+        /*
+         * Step 5 must confirm the same payment bank that was selected
+         * as the Step 4 destination bank. The ledger ID is authoritative;
+         * paymentBankName is only a display value.
+         */
+        if (request.getPaymentBankLedgerId() == null
+                || request.getPaymentBankLedgerId() <= 0) {
+            throw new ValidationException(
+                    "Payment bank ledger ID is required",
+                    "ERR_PAYMENT_BANK_REQUIRED"
+            );
+        }
+
+        if (!expense.getPaymentBankLedgerId()
+                .equals(request.getPaymentBankLedgerId())) {
+            throw new ValidationException(
+                    "Government payment bank does not match Step 4 destination bank",
+                    "ERR_PAYMENT_BANK_MISMATCH"
+            );
+        }
+
         if (request.getAmount() == null
                 || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException(
