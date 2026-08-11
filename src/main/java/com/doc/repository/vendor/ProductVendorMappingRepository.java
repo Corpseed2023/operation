@@ -26,74 +26,8 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
 
     Page<ProductVendorMapping> findByProductIdAndIsDeletedFalse(Long productId, Pageable pageable);
 
-    @Query("""
-            SELECT m
-            FROM ProductVendorMapping m
-            JOIN FETCH m.product p
-            JOIN FETCH m.vendor v
-            WHERE p.id = :productId
-              AND m.isDeleted = false
-              AND m.isActive = true
-              AND p.isDeleted = false
-              AND p.isActive = true
-              AND v.isDeleted = false
-            ORDER BY m.createdDate DESC
-            """)
-    List<ProductVendorMapping> findActiveVendorListByProductId(
-            @Param("productId") Long productId
-    );
 
-    @Query(
-            value = """
-                    SELECT m
-                    FROM ProductVendorMapping m
-                    JOIN m.product p
-                    JOIN m.vendor v
-                    WHERE p.id = :productId
-                      AND m.isDeleted = false
-                      AND m.isActive = true
-                      AND p.isDeleted = false
-                      AND p.isActive = true
-                      AND v.isDeleted = false
-                    """,
-            countQuery = """
-                    SELECT COUNT(m)
-                    FROM ProductVendorMapping m
-                    JOIN m.product p
-                    JOIN m.vendor v
-                    WHERE p.id = :productId
-                      AND m.isDeleted = false
-                      AND m.isActive = true
-                      AND p.isDeleted = false
-                      AND p.isActive = true
-                      AND v.isDeleted = false
-                    """
-    )
-    Page<ProductVendorMapping> findActiveVendorsByProductId(
-            @Param("productId") Long productId,
-            Pageable pageable
-    );
 
-    @Query("""
-        SELECT DISTINCT m
-        FROM ProductVendorMapping m
-        JOIN FETCH m.product p
-        JOIN FETCH m.vendor v
-        JOIN VendorFinalization vf ON vf.vendor.id = v.id
-        WHERE p.id = :productId
-          AND m.isDeleted = false
-          AND m.isActive = true
-          AND p.isDeleted = false
-          AND p.isActive = true
-          AND v.isDeleted = false
-          AND vf.isDeleted = false
-          AND vf.status = :status
-        ORDER BY m.createdDate DESC
-        """)
-    List<ProductVendorMapping> findVendorListByProductIdAndFinalizationStatus(
-            @Param("productId") Long productId,
-            @Param("status") VendorFinalizationStatus status
-    );
 
     @Query("""
         SELECT COUNT(m)
@@ -149,6 +83,38 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
     List<Vendor> findAllVendorsByProductId(
             @Param("productId") Long productId
     );
+
+
+    boolean existsByProduct_IdAndVendor_IdAndIsActiveTrueAndIsDeletedFalse(
+            Long productId,
+            Long vendorId
+    );
+
+    Optional<ProductVendorMapping>
+    findByProduct_IdAndVendor_IdAndIsDeletedFalse(
+            Long productId,
+            Long vendorId
+    );
+
+    @Query("""
+            SELECT pvm
+            FROM ProductVendorMapping pvm
+            JOIN FETCH pvm.product p
+            JOIN FETCH pvm.vendor v
+            WHERE p.id = :productId
+              AND pvm.isActive = true
+              AND pvm.isDeleted = false
+              AND p.isActive = true
+              AND p.isDeleted = false
+              AND v.isDeleted = false
+            ORDER BY v.name ASC
+            """)
+    List<ProductVendorMapping> findActiveMappingsByProductId(
+            @Param("productId") Long productId
+    );
+
+
+
 
 
 }

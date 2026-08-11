@@ -211,6 +211,10 @@ public class RFQ {
     @OneToMany(mappedBy = "rfq", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RFQVendor> vendors = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "procurement_assignment_id")
+    private ProcurementMilestoneAssignment procurementAssignment;
+
     /**
      * Automatically called before inserting record into database.
      * Sets createdDate and updatedDate.

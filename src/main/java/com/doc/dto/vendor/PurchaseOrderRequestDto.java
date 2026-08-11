@@ -13,24 +13,18 @@ import java.util.List;
 @Setter
 public class PurchaseOrderRequestDto {
 
-    @NotNull(message = "Procurement assignment ID is required")
     private Long procurementAssignmentId;
 
-    @NotNull(message = "Vendor ID is required")
     private Long vendorId;
 
     /**
-     * Finalized vendor/item used to obtain the GST percentage.
-     * GST will not be accepted manually from the frontend.
+     * Finalized vendor item used by the backend to obtain the GST percentage.
      */
     @NotNull(message = "Vendor finalization ID is required")
     private Long vendorFinalizationId;
 
     private String poReferenceNumber;
 
-    /**
-     * Basic PO amount before GST and TDS.
-     */
     @NotNull(message = "Final amount is required")
     @DecimalMin(
             value = "0.01",
@@ -38,12 +32,6 @@ public class PurchaseOrderRequestDto {
     )
     private BigDecimal finalAmount;
 
-    /**
-     * TDS percentage.
-     *
-     * Example:
-     * 10 = 10%
-     */
     @NotNull(message = "TDS percentage is required")
     @DecimalMin(
             value = "0.00",
@@ -66,7 +54,7 @@ public class PurchaseOrderRequestDto {
     private String paymentTypeName;
 
     /**
-     * Required during Purchase Order creation.
+     * Required while creating a Purchase Order.
      */
     private Long createdBy;
 
