@@ -18,8 +18,8 @@ import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.PurchaseOrderRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.vendor.PurchaseOrderService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -37,7 +37,7 @@ import java.util.Date;
 @Transactional
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
-    private static final Logger logger = LoggerFactory.getLogger(PurchaseOrderServiceImpl.class);
+    private static final Logger logger = LogManager.getLogger(PurchaseOrderServiceImpl.class);
 
     @Autowired
     private PurchaseOrderRepository purchaseOrderRepository;
@@ -55,15 +55,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private PaymentTypeRepository paymentTypeRepository;
 
     @Override
-    @Transactional
-    public PurchaseOrderResponseDto createPurchaseOrder(
-            PurchaseOrderRequestDto dto
-    ) {
+    public PurchaseOrderResponseDto createPurchaseOrder(PurchaseOrderRequestDto dto) {
 
-        logger.info(
-                "Creating Purchase Order for procurementAssignmentId: {}",
-                dto.getProcurementAssignmentId()
-        );
+        logger.info("Creating Purchase Order for procurementAssignmentId={}", dto.getProcurementAssignmentId());
 
         ProcurementMilestoneAssignment procurement = procurementRepository
                 .findById(dto.getProcurementAssignmentId())
@@ -86,17 +80,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         "ERR_USER_NOT_FOUND"
                 ));
 
-        if (dto.getFinalAmount() == null
-                || dto.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-
+        if (dto.getFinalAmount() == null || dto.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException(
                     "Final amount must be greater than zero",
                     "ERR_INVALID_AMOUNT"
             );
         }
 
-        BigDecimal finalAmount = dto.getFinalAmount()
-                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal finalAmount = dto.getFinalAmount().setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal tdsPercentage = dto.getTdsPercentage();
 
@@ -109,75 +100,47 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         if (tdsPercentage.compareTo(BigDecimal.ZERO) < 0
                 || tdsPercentage.compareTo(new BigDecimal("100")) > 0) {
-
             throw new ValidationException(
                     "TDS percentage must be between 0 and 100",
                     "ERR_INVALID_TDS_PERCENTAGE"
             );
         }
 
-        tdsPercentage = tdsPercentage.setScale(
-                2,
-                RoundingMode.HALF_UP
-        );
+        tdsPercentage = tdsPercentage.setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal tdsAmount = finalAmount
                 .multiply(tdsPercentage)
-                .divide(
-                        new BigDecimal("100"),
-                        2,
-                        RoundingMode.HALF_UP
-                );
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
 
         BigDecimal totalTaxAmount = dto.getTotalTaxAmount() != null
-                ? dto.getTotalTaxAmount().setScale(
-                2,
-                RoundingMode.HALF_UP
-        )
+                ? dto.getTotalTaxAmount().setScale(2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-        /*
-         * Existing GST calculation and breakup remain unchanged.
-         *
-         * Grand Total = Final Amount + GST - TDS
-         */
         BigDecimal grandTotal = finalAmount
                 .add(totalTaxAmount)
                 .subtract(tdsAmount)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        validatePoValueNotGreaterThanProjectValue(
-                grandTotal,
-                finalAmount,
-                procurement
-        );
+        validatePoValueNotGreaterThanProjectValue(grandTotal, finalAmount, procurement);
 
-        String poNumber = generatePoNumber();
         Date currentDate = new Date();
 
         ProcurementOrder po = new ProcurementOrder();
-
         po.setProcurementAssignment(procurement);
         po.setProject(procurement.getProject());
         po.setVendor(vendor);
 
-        po.setPoNumber(poNumber);
+        po.setPoNumber(generatePoNumber());
         po.setPoReferenceNumber(dto.getPoReferenceNumber());
 
         po.setFinalAmount(finalAmount);
-
-        po.setTdsPercentage(tdsPercentage);
-        po.setTdsAmount(tdsAmount);
-
-        /*
-         * Existing CGST, SGST and IGST logic remains unchanged.
-         */
         po.setGstRate(dto.getGstRate());
         po.setCgstAmount(dto.getCgstAmount());
         po.setSgstAmount(dto.getSgstAmount());
         po.setIgstAmount(dto.getIgstAmount());
+        po.setTdsPercentage(tdsPercentage);
+        po.setTdsAmount(tdsAmount);
         po.setTotalTaxAmount(totalTaxAmount);
-
         po.setGrandTotal(grandTotal);
 
         po.setScopeOfWork(dto.getScopeOfWork());
@@ -194,60 +157,37 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setCreatedDate(currentDate);
         po.setUpdatedDate(currentDate);
 
-        if (dto.getPaymentTypeName() != null
-                && !dto.getPaymentTypeName().trim().isEmpty()) {
-
+        if (dto.getPaymentTypeName() != null && !dto.getPaymentTypeName().trim().isEmpty()) {
             PaymentType paymentType = paymentTypeRepository
                     .findByName(dto.getPaymentTypeName().trim())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Payment type not found: "
-                                    + dto.getPaymentTypeName(),
+                            "Payment type not found: " + dto.getPaymentTypeName(),
                             "ERR_PAYMENT_TYPE_NOT_FOUND"
                     ));
 
             po.setPaymentType(paymentType);
         }
 
-        ProcurementOrder savedPo =
-                purchaseOrderRepository.save(po);
+        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
 
         procurement.setStatus(ProcurementStatus.PO_CREATED);
         procurement.setSelectedVendor(vendor);
         procurement.setPoCreatedDate(currentDate);
         procurement.setUpdatedBy(createdByUser.getId());
         procurement.setUpdatedDate(currentDate);
-
         procurementRepository.save(procurement);
 
-        logger.info(
-                "Purchase Order created successfully: {} | Project: {} | "
-                        + "Vendor: {} | Final Amount: {} | TDS: {} | "
-                        + "GST: {} | Grand Total: {}",
-                poNumber,
-                procurement.getProject() != null
-                        ? procurement.getProject().getProjectNo()
-                        : null,
-                vendor.getName(),
-                finalAmount,
-                tdsAmount,
-                totalTaxAmount,
-                grandTotal
-        );
+        logger.info("Purchase Order created successfully. poNumber={}, createdBy={}",
+                savedPo.getPoNumber(), createdByUser.getId());
 
-        return mapToResponseDto(savedPo);
-    }
-
-    /*
-     * Keeping method name because controller currently uses /release.
-     * Internally this now means APPROVE PO.
-     */
-    @Override
-    public PurchaseOrderResponseDto releasePurchaseOrder(Long poId, Long userId) {
-        return approvePurchaseOrderInternal(poId, userId, null);
+        return convertToPurchaseOrderResponseDto(savedPo);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PurchaseOrderResponseDto getPurchaseOrderById(Long id) {
+
+        logger.info("Fetching Purchase Order by id={}", id);
 
         ProcurementOrder po = purchaseOrderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -262,10 +202,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        return mapToResponseDto(po);
+        return convertToPurchaseOrderResponseDto(po);
     }
 
     @Override
+    public PurchaseOrderResponseDto releasePurchaseOrder(Long poId, Long userId) {
+        return approvePurchaseOrderInternal(poId, userId, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PurchaseOrderResponseDto getByProcurementAssignmentId(Long procurementAssignmentId) {
 
         if (procurementAssignmentId == null) {
@@ -275,7 +221,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        ProcurementOrder po = purchaseOrderRepository.findByProcurementAssignmentId(procurementAssignmentId)
+        ProcurementOrder po = purchaseOrderRepository
+                .findByProcurementAssignmentId(procurementAssignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No Purchase Order found for this procurement assignment",
                         "ERR_PO_NOT_FOUND"
@@ -288,16 +235,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        return mapToResponseDto(po);
+        return convertToPurchaseOrderResponseDto(po);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<PurchaseOrderResponseDto> getPurchaseOrdersByProjectId(
-            Long projectId,
-            int page,
-            int size
-    ) {
+    public Page<PurchaseOrderResponseDto> getPurchaseOrdersByProjectId(Long projectId, int page, int size) {
 
         if (projectId == null) {
             throw new ValidationException(
@@ -307,15 +250,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         Pageable pageable = PageRequest.of(
-                page,
-                size,
+                Math.max(page, 0),
+                size <= 0 ? 10 : size,
                 Sort.by(Sort.Direction.DESC, "createdDate")
         );
 
         Page<ProcurementOrder> purchaseOrders =
                 purchaseOrderRepository.findByProjectIdAndIsDeletedFalse(projectId, pageable);
 
-        return purchaseOrders.map(this::mapToResponseDto);
+        return purchaseOrders.map(this::convertToPurchaseOrderResponseDto);
     }
 
     @Override
@@ -327,28 +270,19 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     ) {
 
         Pageable pageable = PageRequest.of(
-                page,
-                size,
+                Math.max(page, 0),
+                size <= 0 ? 10 : size,
                 Sort.by(Sort.Direction.DESC, "createdDate")
         );
 
-        Page<ProcurementOrder> orders;
+        Page<ProcurementOrder> orders = status == null
+                ? purchaseOrderRepository.findByIsDeletedFalse(pageable)
+                : purchaseOrderRepository.findByStatusAndIsDeletedFalse(status, pageable);
 
-        if (status == null) {
-            orders = purchaseOrderRepository.findByIsDeletedFalse(pageable);
-        } else {
-            orders = purchaseOrderRepository.findByStatusAndIsDeletedFalse(status, pageable);
-        }
-
-        return orders.map(this::mapToResponse);
+        return orders.map(this::mapToProcurementOrderResponseDto);
     }
 
-    /*
-     * Kept only for compatibility if your interface/controller still calls this.
-     * This now approves DRAFT PO directly.
-     */
     @Override
-    @Transactional
     public ProcurementOrderResponseDto approveProcurementOrder(
             Long procurementOrderId,
             Long userId,
@@ -367,15 +301,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         "ERR_PO_NOT_FOUND"
                 ));
 
-        return mapToResponse(order);
+        return mapToProcurementOrderResponseDto(order);
     }
 
-    /*
-     * Rejection flow removed.
-     * Keep this only if PurchaseOrderService interface still declares it.
-     */
     @Override
-    @Transactional
     public ProcurementOrderResponseDto rejectProcurementOrder(
             Long procurementOrderId,
             Long userId,
@@ -388,10 +317,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
-    @Transactional
     public PurchaseOrderResponseDto updatePurchaseOrder(Long poId, PurchaseOrderRequestDto dto) {
 
-        logger.info("Updating Purchase Order id: {}", poId);
+        logger.info("Updating Purchase Order id={}", poId);
 
         if (poId == null) {
             throw new ValidationException(
@@ -413,11 +341,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        /*
-         * New flow:
-         * Only DRAFT PO can be edited.
-         * APPROVED PO cannot be changed.
-         */
         if (po.getStatus() != ProcurementOrderStatus.DRAFT) {
             throw new ValidationException(
                     "Only DRAFT Purchase Order can be updated. Current status: " + po.getStatus(),
@@ -462,16 +385,17 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     ));
 
             po.setVendor(vendor);
+            po.setVendorGSTRegistrationType(vendor.getGstRegistrationType());
         }
 
         po.setPoReferenceNumber(dto.getPoReferenceNumber());
-
         po.setFinalAmount(dto.getFinalAmount());
-
         po.setGstRate(dto.getGstRate());
         po.setCgstAmount(dto.getCgstAmount());
         po.setSgstAmount(dto.getSgstAmount());
         po.setIgstAmount(dto.getIgstAmount());
+        po.setTdsPercentage(dto.getTdsPercentage());
+        po.setTdsAmount(dto.getTdsAmount());
         po.setTotalTaxAmount(dto.getTotalTaxAmount());
         po.setGrandTotal(dto.getGrandTotal());
 
@@ -496,7 +420,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         if (dto.getPaymentTypeName() != null && !dto.getPaymentTypeName().trim().isEmpty()) {
-            PaymentType paymentType = paymentTypeRepository.findByName(dto.getPaymentTypeName())
+            PaymentType paymentType = paymentTypeRepository
+                    .findByName(dto.getPaymentTypeName().trim())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Payment type not found: " + dto.getPaymentTypeName(),
                             "ERR_PAYMENT_TYPE_NOT_FOUND"
@@ -509,13 +434,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         ProcurementOrder savedPo = purchaseOrderRepository.save(po);
 
-        logger.info("Purchase Order updated successfully: {}", savedPo.getPoNumber());
+        logger.info("Purchase Order updated successfully. poNumber={}", savedPo.getPoNumber());
 
-        return mapToResponseDto(savedPo);
+        return convertToPurchaseOrderResponseDto(savedPo);
     }
 
     @Override
-    @Transactional
     public PurchaseOrderResponseDto updatePurchaseOrderStatus(
             Long poId,
             ProcurementOrderStatus newStatus,
@@ -523,12 +447,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             String remarks
     ) {
 
-        logger.info(
-                "Updating Purchase Order status | poId={}, newStatus={}, userId={}",
-                poId,
-                newStatus,
-                userId
-        );
+        logger.info("Updating Purchase Order status. poId={}, newStatus={}, userId={}",
+                poId, newStatus, userId);
 
         if (poId == null) {
             throw new ValidationException(
@@ -552,6 +472,34 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         return approvePurchaseOrderInternal(poId, userId, remarks);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PurchaseOrderResponseDto> getPurchaseOrdersByUserId(Long userId, int page, int size) {
+
+        logger.info("Fetching Purchase Orders by userId={}, page={}, size={}", userId, page, size);
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                size <= 0 ? 10 : size,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+
+        Page<ProcurementOrder> orders =
+                purchaseOrderRepository.findByCreatedByAndIsDeletedFalse(userId, pageable);
+
+        logger.info("Fetched {} Purchase Orders for userId={}",
+                orders.getNumberOfElements(), userId);
+
+        return orders.map(this::convertToPurchaseOrderResponseDto);
     }
 
     private PurchaseOrderResponseDto approvePurchaseOrderInternal(
@@ -600,11 +548,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         "ERR_USER_NOT_FOUND"
                 ));
 
+        Date currentDate = new Date();
+
         po.setStatus(ProcurementOrderStatus.APPROVED);
         po.setApprovedBy(approvedByUser.getId());
-        po.setPoApprovedDate(new Date());
+        po.setPoApprovedDate(currentDate);
         po.setUpdatedBy(approvedByUser.getId());
-        po.setUpdatedDate(new Date());
+        po.setUpdatedDate(currentDate);
 
         if (remarks != null && !remarks.trim().isEmpty()) {
             po.setRemarks(remarks.trim());
@@ -617,16 +567,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (procurement != null) {
             procurement.setStatus(ProcurementStatus.PO_APPROVED);
             procurement.setUpdatedBy(approvedByUser.getId());
-            procurement.setUpdatedDate(new Date());
+            procurement.setUpdatedDate(currentDate);
+            procurementRepository.save(procurement);
         }
 
-        logger.info(
-                "Purchase Order approved successfully | poNumber={} | approvedBy={}",
-                savedPo.getPoNumber(),
-                approvedByUser.getId()
-        );
+        logger.info("Purchase Order approved successfully. poNumber={}, approvedBy={}",
+                savedPo.getPoNumber(), approvedByUser.getId());
 
-        return mapToResponseDto(savedPo);
+        return convertToPurchaseOrderResponseDto(savedPo);
     }
 
     private void validatePoValueNotGreaterThanProjectValue(
@@ -680,7 +628,100 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
     }
 
-    private ProcurementOrderResponseDto mapToResponse(ProcurementOrder order) {
+    private String generatePoNumber() {
+        int year = LocalDate.now().getYear();
+        long count = purchaseOrderRepository.count() + 1;
+        return String.format("CORP-PO-%d-%05d", year, count);
+    }
+
+    private PurchaseOrderResponseDto convertToPurchaseOrderResponseDto(ProcurementOrder po) {
+
+        PurchaseOrderResponseDto dto = new PurchaseOrderResponseDto();
+
+        dto.setId(po.getId());
+        dto.setPoNumber(po.getPoNumber());
+        dto.setPoReferenceNumber(po.getPoReferenceNumber());
+
+        dto.setProcurementAssignmentId(
+                po.getProcurementAssignment() != null
+                        ? po.getProcurementAssignment().getId()
+                        : null
+        );
+
+        dto.setProjectId(
+                po.getProject() != null
+                        ? po.getProject().getId()
+                        : null
+        );
+
+        dto.setProjectName(
+                po.getProject() != null
+                        ? po.getProject().getName()
+                        : null
+        );
+
+        dto.setProjectNo(
+                po.getProject() != null
+                        ? po.getProject().getProjectNo()
+                        : null
+        );
+
+        dto.setVendorId(
+                po.getVendor() != null
+                        ? po.getVendor().getId()
+                        : null
+        );
+
+        dto.setVendorName(
+                po.getVendor() != null
+                        ? po.getVendor().getName()
+                        : null
+        );
+
+        dto.setVendorGSTNumber(
+                po.getVendor() != null
+                        ? po.getVendor().getGstNumber()
+                        : null
+        );
+
+        dto.setVendorGSTRegistrationType(po.getVendorGSTRegistrationType());
+
+        dto.setFinalAmount(po.getFinalAmount());
+        dto.setGstRate(po.getGstRate());
+        dto.setCgstAmount(po.getCgstAmount());
+        dto.setSgstAmount(po.getSgstAmount());
+        dto.setIgstAmount(po.getIgstAmount());
+        dto.setTdsPercentage(po.getTdsPercentage());
+        dto.setTdsAmount(po.getTdsAmount());
+        dto.setTotalTaxAmount(po.getTotalTaxAmount());
+        dto.setGrandTotal(po.getGrandTotal());
+
+        dto.setScopeOfWork(po.getScopeOfWork());
+        dto.setTermsAndConditions(po.getTermsAndConditions());
+        dto.setRemarks(po.getRemarks());
+        dto.setStatus(po.getStatus());
+
+        dto.setPaymentTypeName(
+                po.getPaymentType() != null
+                        ? po.getPaymentType().getName()
+                        : null
+        );
+
+        dto.setAttachmentUrls(po.getAttachmentUrls());
+
+        dto.setPoCreatedDate(po.getPoCreatedDate());
+        dto.setPoApprovedDate(po.getPoApprovedDate());
+        dto.setPoReleasedDate(po.getPoReleasedDate());
+
+        dto.setCreatedBy(po.getCreatedBy());
+        dto.setApprovedBy(po.getApprovedBy());
+        dto.setCreatedDate(po.getCreatedDate());
+        dto.setUpdatedDate(po.getUpdatedDate());
+
+        return dto;
+    }
+
+    private ProcurementOrderResponseDto mapToProcurementOrderResponseDto(ProcurementOrder order) {
 
         ProcurementOrderResponseDto dto = new ProcurementOrderResponseDto();
 
@@ -733,20 +774,18 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         dto.setFinalAmount(order.getFinalAmount());
         dto.setGstRate(order.getGstRate());
-
         dto.setCgstAmount(order.getCgstAmount());
         dto.setSgstAmount(order.getSgstAmount());
         dto.setIgstAmount(order.getIgstAmount());
-
+        dto.setTdsPercentage(order.getTdsPercentage());
+        dto.setTdsAmount(order.getTdsAmount());
         dto.setTotalTaxAmount(order.getTotalTaxAmount());
         dto.setGrandTotal(order.getGrandTotal());
 
         dto.setScopeOfWork(order.getScopeOfWork());
         dto.setTermsAndConditions(order.getTermsAndConditions());
         dto.setRemarks(order.getRemarks());
-
         dto.setAttachmentUrls(order.getAttachmentUrls());
-
         dto.setStatus(order.getStatus());
 
         dto.setPoCreatedDate(order.getPoCreatedDate());
@@ -769,92 +808,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         dto.setCreatedBy(order.getCreatedBy());
         dto.setUpdatedBy(order.getUpdatedBy());
         dto.setApprovedBy(order.getApprovedBy());
-
         dto.setCreatedDate(order.getCreatedDate());
         dto.setUpdatedDate(order.getUpdatedDate());
-
-        return dto;
-    }
-
-    private String generatePoNumber() {
-        int year = LocalDate.now().getYear();
-        long count = purchaseOrderRepository.count() + 1;
-        return String.format("CORP-PO-%d-%05d", year, count);
-    }
-
-    private PurchaseOrderResponseDto mapToResponseDto(ProcurementOrder po) {
-
-        PurchaseOrderResponseDto dto = new PurchaseOrderResponseDto();
-
-        dto.setId(po.getId());
-        dto.setPoNumber(po.getPoNumber());
-        dto.setPoReferenceNumber(po.getPoReferenceNumber());
-
-        dto.setProcurementAssignmentId(
-                po.getProcurementAssignment() != null
-                        ? po.getProcurementAssignment().getId()
-                        : null
-        );
-
-        dto.setProjectId(
-                po.getProject() != null
-                        ? po.getProject().getId()
-                        : null
-        );
-
-        dto.setProjectName(
-                po.getProject() != null
-                        ? po.getProject().getName()
-                        : null
-        );
-
-        dto.setProjectNo(
-                po.getProject() != null
-                        ? po.getProject().getProjectNo()
-                        : null
-        );
-
-        dto.setVendorId(
-                po.getVendor() != null
-                        ? po.getVendor().getId()
-                        : null
-        );
-
-        dto.setVendorName(
-                po.getVendor() != null
-                        ? po.getVendor().getName()
-                        : null
-        );
-
-        dto.setVendorGSTNumber(po.getVendor() != null ? po.getVendor().getGstNumber() : null);
-
-        dto.setFinalAmount(po.getFinalAmount());
-
-        dto.setGstRate(po.getGstRate());
-        dto.setCgstAmount(po.getCgstAmount());
-        dto.setSgstAmount(po.getSgstAmount());
-        dto.setIgstAmount(po.getIgstAmount());
-        dto.setTotalTaxAmount(po.getTotalTaxAmount());
-        dto.setGrandTotal(po.getGrandTotal());
-
-        dto.setScopeOfWork(po.getScopeOfWork());
-        dto.setTermsAndConditions(po.getTermsAndConditions());
-        dto.setRemarks(po.getRemarks());
-        dto.setAttachmentUrls(po.getAttachmentUrls());
-
-        dto.setStatus(po.getStatus());
-
-        dto.setPoCreatedDate(po.getPoCreatedDate());
-        dto.setPoApprovedDate(po.getPoApprovedDate());
-        dto.setPoReleasedDate(po.getPoReleasedDate());
-
-        dto.setTdsAmount(po.getTdsAmount());
-        dto.setTdsPercentage(po.getTdsPercentage());
-
-        dto.setVendorGSTRegistrationType(po.getVendorGSTRegistrationType());
-
-        dto.setCreatedDate(po.getCreatedDate());
-        dto.setUpdatedDate(po.getUpdatedDate());
 
         return dto;
     }

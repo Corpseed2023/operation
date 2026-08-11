@@ -8,14 +8,20 @@ import org.springframework.data.domain.Page;
 
 public interface PurchaseOrderService {
 
-    PurchaseOrderResponseDto createPurchaseOrder(PurchaseOrderRequestDto dto);
+    PurchaseOrderResponseDto createPurchaseOrder(
+            PurchaseOrderRequestDto dto
+    );
 
     PurchaseOrderResponseDto getPurchaseOrderById(Long id);
 
-    PurchaseOrderResponseDto releasePurchaseOrder(Long poId, Long userId);
+    PurchaseOrderResponseDto releasePurchaseOrder(
+            Long poId,
+            Long userId
+    );
 
-    PurchaseOrderResponseDto getByProcurementAssignmentId(Long procurementAssignmentId);
-
+    PurchaseOrderResponseDto getByProcurementAssignmentId(
+            Long procurementAssignmentId
+    );
 
     Page<PurchaseOrderResponseDto> getPurchaseOrdersByProjectId(
             Long projectId,
@@ -41,12 +47,21 @@ public interface PurchaseOrderService {
             String reason
     );
 
-    PurchaseOrderResponseDto updatePurchaseOrder(Long poId, PurchaseOrderRequestDto dto);
+    PurchaseOrderResponseDto updatePurchaseOrder(
+            Long poId,
+            PurchaseOrderRequestDto dto
+    );
 
     PurchaseOrderResponseDto updatePurchaseOrderStatus(
             Long poId,
             ProcurementOrderStatus status,
             Long userId,
             String remarks
+    );
+
+    Page<PurchaseOrderResponseDto> getPurchaseOrdersByUserId(
+            Long userId,
+            int page,
+            int size
     );
 }

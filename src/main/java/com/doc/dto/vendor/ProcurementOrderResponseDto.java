@@ -36,6 +36,10 @@ public class ProcurementOrderResponseDto {
     private BigDecimal sgstAmount;
     private BigDecimal igstAmount;
 
+    private BigDecimal tdsPercentage;
+
+    private BigDecimal tdsAmount;
+
     private BigDecimal totalTaxAmount;
     private BigDecimal grandTotal;
 

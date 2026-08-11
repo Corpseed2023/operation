@@ -32,6 +32,8 @@ public class PurchaseOrderRequestDto {
     private BigDecimal cgstAmount;
     private BigDecimal sgstAmount;
     private BigDecimal igstAmount;
+    private BigDecimal tdsAmount;
+
 
     private BigDecimal tdsPercentage;
 

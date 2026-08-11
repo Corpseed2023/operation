@@ -148,5 +148,25 @@ public class PurchaseOrderController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/by-user/{userId}")
+    @Operation(summary = "Get paginated Purchase Order list created by user ID")
+    public ResponseEntity<Page<PurchaseOrderResponseDto>>
+    getPurchaseOrdersByUserId(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+
+        Page<PurchaseOrderResponseDto> response =
+                purchaseOrderService.getPurchaseOrdersByUserId(
+                        userId,
+                        page,
+                        size
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+
 
 }
