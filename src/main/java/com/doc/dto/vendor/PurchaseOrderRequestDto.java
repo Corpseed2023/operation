@@ -13,12 +13,24 @@ import java.util.List;
 @Setter
 public class PurchaseOrderRequestDto {
 
+    @NotNull(message = "Procurement assignment ID is required")
     private Long procurementAssignmentId;
 
+    @NotNull(message = "Vendor ID is required")
     private Long vendorId;
+
+    /**
+     * Finalized vendor/item used to obtain the GST percentage.
+     * GST will not be accepted manually from the frontend.
+     */
+    @NotNull(message = "Vendor finalization ID is required")
+    private Long vendorFinalizationId;
 
     private String poReferenceNumber;
 
+    /**
+     * Basic PO amount before GST and TDS.
+     */
     @NotNull(message = "Final amount is required")
     @DecimalMin(
             value = "0.01",
@@ -27,33 +39,21 @@ public class PurchaseOrderRequestDto {
     private BigDecimal finalAmount;
 
     /**
-     * Total GST %
-     *
-     * Example:
-     * 18 = 18%
-     */
-    @DecimalMin(value = "0.00")
-    @DecimalMax(value = "100.00")
-    private BigDecimal gstRate;
-
-    /**
-     * TDS %
+     * TDS percentage.
      *
      * Example:
      * 10 = 10%
      */
-    @DecimalMin(value = "0.00")
-    @DecimalMax(value = "100.00")
+    @NotNull(message = "TDS percentage is required")
+    @DecimalMin(
+            value = "0.00",
+            message = "TDS percentage cannot be negative"
+    )
+    @DecimalMax(
+            value = "100.00",
+            message = "TDS percentage cannot be greater than 100"
+    )
     private BigDecimal tdsPercentage;
-
-    /**
-     * Place of supply / buyer state GST code.
-     *
-     * Example:
-     * UP = 09
-     * Delhi = 07
-     */
-    private String placeOfSupplyStateCode;
 
     private String scopeOfWork;
 
@@ -66,12 +66,12 @@ public class PurchaseOrderRequestDto {
     private String paymentTypeName;
 
     /**
-     * Required during CREATE.
+     * Required during Purchase Order creation.
      */
     private Long createdBy;
 
     /**
-     * Used during UPDATE.
+     * Used while updating a DRAFT Purchase Order.
      */
     private Long userId;
 }
