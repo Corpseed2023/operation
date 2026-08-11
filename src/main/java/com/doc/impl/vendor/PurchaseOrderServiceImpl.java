@@ -119,6 +119,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setTdsAmount(amountBreakup.getTdsAmount());
         po.setTotalTaxAmount(amountBreakup.getTotalTaxAmount());
         po.setGrandTotal(amountBreakup.getGrandTotal());
+        po.setPaymentTerms(dto.getPaymentTerms());
 
         po.setScopeOfWork(dto.getScopeOfWork());
         po.setTermsAndConditions(dto.getTermsAndConditions());
@@ -902,6 +903,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         dto.setCgstRate(getCgstRate(po));
         dto.setSgstRate(getSgstRate(po));
         dto.setIgstRate(getIgstRate(po));
+
+        dto.setPaymentTerms(po.getPaymentTerms());
 
         dto.setCgstAmount(po.getCgstAmount());
         dto.setSgstAmount(po.getSgstAmount());

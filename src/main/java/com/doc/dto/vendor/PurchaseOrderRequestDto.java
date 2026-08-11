@@ -69,6 +69,7 @@ public class PurchaseOrderRequestDto {
      * Required during CREATE.
      */
     private Long createdBy;
+    private Integer paymentTerms;
 
     /**
      * Used during UPDATE.

@@ -138,6 +138,9 @@ public class ProcurementOrder {
     @Column(length = 2000)
     private String termsAndConditions;
 
+    @Column(length = 2000)
+    private Integer paymentTerms;
+
     @Column(length = 1000)
     private String remarks;
 

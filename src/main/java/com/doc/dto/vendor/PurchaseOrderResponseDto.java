@@ -27,6 +27,8 @@ public class PurchaseOrderResponseDto {
 
     private String projectNo;
 
+    private Integer paymentTerms;
+
     private Long vendorId;
 
     private String vendorName;
