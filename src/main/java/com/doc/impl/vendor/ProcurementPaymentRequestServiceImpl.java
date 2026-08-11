@@ -1,7 +1,5 @@
 package com.doc.impl.vendor;
 
-import com.doc.calculation.vendor.ProcurementPaymentCalculation;
-import com.doc.calculation.vendor.ProcurementPaymentCalculator;
 import com.doc.dto.vendor.*;
 import com.doc.entity.project.Project;
 import com.doc.entity.vendor.*;
@@ -17,23 +15,16 @@ import com.doc.service.vendor.ProcurementPaymentRequestService;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Date;
-import java.util.Locale;
-import java.util.Objects;
-
-import static com.doc.dto.vendor.ProcurementPaymentRequestResponseDto.*;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -41,7 +32,8 @@ import static com.doc.dto.vendor.ProcurementPaymentRequestResponseDto.*;
 public class ProcurementPaymentRequestServiceImpl
         implements ProcurementPaymentRequestService {
 
-    private static final int MAX_PAGE_SIZE = 200;
+    private static final int MONEY_SCALE = 2;
+    private static final RoundingMode MONEY_ROUNDING = RoundingMode.HALF_UP;
 
     private final ProcurementPaymentRequestRepository paymentRequestRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -49,115 +41,450 @@ public class ProcurementPaymentRequestServiceImpl
     private final VendorAccountsSubmissionRepository vendorAccountsSubmissionRepository;
     private final VendorFinalizationRepository vendorFinalizationRepository;
     private final AccountFeignClient accountFeignClient;
-    private final ProcurementPaymentCalculator calculator;
 
-    /**
-     * SERIALIZABLE is intentional here: two concurrent requests must not both
-     * pass the PO remaining-taxable-value check.
-     */
+
+    // ================================================================
+    // CREATE PAYMENT REQUEST
+    // ================================================================
+
     @Override
-    @Transactional(isolation = Isolation.SERIALIZABLE)
+    @Transactional
     public ProcurementPaymentRequestResponseDto createPaymentRequest(
             Long procurementOrderId,
-            ProcurementPaymentRequestDto request
+            ProcurementPaymentRequestDto requestDto
     ) {
+
         if (procurementOrderId == null) {
-            throw validation(
+            throw new ValidationException(
                     "Procurement order id is required",
                     "ERR_PROCUREMENT_ORDER_ID_REQUIRED"
             );
         }
-        if (request == null) {
-            throw validation(
+
+        if (requestDto == null) {
+            throw new ValidationException(
                     "Payment request body is required",
                     "ERR_PAYMENT_REQUEST_BODY_REQUIRED"
             );
         }
-        validateUser(request.getCreatedBy());
 
-        ProcurementOrder order = getActiveOrder(procurementOrderId);
-        validateOrderEligibleForPaymentRequest(order);
+        if (requestDto.getCreatedBy() == null) {
+            throw new ValidationException(
+                    "Created by user id is required",
+                    "ERR_CREATED_BY_REQUIRED"
+            );
+        }
 
-        Vendor vendor = order.getVendor();
-        validateActiveVendor(vendor);
-
-        validateTaxRatesAgainstApprovedPo(order, request);
-
-        ProcurementPaymentCalculation calculation =
-                calculator.calculateFromInvoiceGross(
-                        request.getInvoiceAmount(),
-                        request.getGstActive(),
-                        request.getGstType(),
-                        request.getGstPercentage(),
-                        request.getTdsActive(),
-                        request.getTdsPercentage(),
-                        vendor.getGstRegistrationType()
+        userRepository.findActiveUserById(requestDto.getCreatedBy())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "CreatedBy user not found",
+                                "ERR_USER_NOT_FOUND"
+                        )
                 );
 
-        validatePoRemainingTaxableAmount(order, calculation.getTaxableAmount());
-        logIgnoredClientCalculatedValues(request, calculation);
+        ProcurementOrder order =
+                purchaseOrderRepository.findById(procurementOrderId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Procurement order not found",
+                                        "ERR_PROCUREMENT_ORDER_NOT_FOUND"
+                                )
+                        );
 
-        ProcurementPaymentRequest entity = new ProcurementPaymentRequest();
-        entity.setProcurementOrder(order);
-        entity.setProject(order.getProject());
-        entity.setVendor(vendor);
-        entity.setCreatedBy(request.getCreatedBy());
-        entity.setSubmissionDate(new Date());
-        entity.setStatus(PaymentRequestStatus.PENDING);
-        entity.setDeleted(false);
-        entity.setCompletionRemarks(clean(request.getCompletionRemarks()));
-        entity.setGstStateCode(clean(request.getGstStateCode()));
-
-        if (request.getProofAttachmentUrls() != null) {
-            entity.setProofAttachmentUrls(request.getProofAttachmentUrls());
+        if (order.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted procurement order cannot be used for payment request",
+                    "ERR_DELETED_PROCUREMENT_ORDER"
+            );
         }
 
-        if (hasText(request.getInvoiceNumber())) {
-            String invoiceNumber = request.getInvoiceNumber().trim();
-            validateInvoiceNumberUnique(vendor.getId(), invoiceNumber, null);
-            entity.setInvoiceNumber(invoiceNumber);
+        if (order.getFinalAmount() == null
+                || order.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Final amount is not configured for this procurement order",
+                    "ERR_PO_FINAL_AMOUNT_MISSING"
+            );
         }
-        entity.setInvoiceDate(request.getInvoiceDate());
 
-        applyCalculation(entity, calculation);
+        if (requestDto.getAmount() == null
+                || requestDto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
 
-        ProcurementPaymentRequest saved = paymentRequestRepository.save(entity);
+            throw new ValidationException(
+                    "Payment amount must be greater than zero",
+                    "ERR_INVALID_PAYMENT_AMOUNT"
+            );
+        }
+
+        BigDecimal newPaymentAmount =
+                money(requestDto.getAmount());
+
+        if (newPaymentAmount.compareTo(
+                money(order.getFinalAmount())
+        ) > 0) {
+
+            throw new ValidationException(
+                    "Payment request amount cannot be greater than procurement order final amount",
+                    "ERR_PAYMENT_AMOUNT_EXCEEDS_PO_FINAL_AMOUNT"
+            );
+        }
+
+        BigDecimal existingPaymentAmount =
+                paymentRequestRepository
+                        .sumAmountByProcurementOrderAndIsDeletedFalse(order);
+
+        existingPaymentAmount =
+                existingPaymentAmount == null
+                        ? zeroMoney()
+                        : money(existingPaymentAmount);
+
+        BigDecimal totalPaymentAmount =
+                money(
+                        existingPaymentAmount.add(
+                                newPaymentAmount
+                        )
+                );
+
+        if (totalPaymentAmount.compareTo(
+                money(order.getFinalAmount())
+        ) > 0) {
+
+            throw new ValidationException(
+                    "Total payment request amount cannot exceed procurement order final amount",
+                    "ERR_PAYMENT_REQUEST_AMOUNT_EXCEEDS_PO"
+            );
+        }
+
+        /*
+         * ================================================================
+         * GST CONFIGURATION
+         * ================================================================
+         */
+
+        Boolean effectiveGstActive =
+                Boolean.TRUE.equals(
+                        requestDto.getGstActive()
+                );
+
+        BigDecimal effectiveGstPercentage =
+                requestDto.getGstPercentage();
+
+        String effectiveGstStateCode =
+                clean(
+                        requestDto.getGstStateCode()
+                );
+
+        String effectiveGstType =
+                clean(
+                        requestDto.getGstType()
+                );
+
+        Optional<ProcurementPaymentRequest> firstPaymentRequestOptional =
+                paymentRequestRepository
+                        .findFirstByProcurementOrderAndIsDeletedFalseOrderByCreatedDateAsc(
+                                order
+                        );
+
+        /*
+         * Keep the same GST configuration across payment requests
+         * of the same Procurement Order.
+         */
+        if (firstPaymentRequestOptional.isPresent()) {
+
+            ProcurementPaymentRequest firstPaymentRequest =
+                    firstPaymentRequestOptional.get();
+
+            effectiveGstActive =
+                    Boolean.TRUE.equals(
+                            firstPaymentRequest.getGstActive()
+                    );
+
+            effectiveGstPercentage =
+                    firstPaymentRequest.getGstPercentage();
+
+            effectiveGstStateCode =
+                    clean(
+                            firstPaymentRequest.getGstStateCode()
+                    );
+
+            effectiveGstType =
+                    clean(
+                            firstPaymentRequest.getGstType()
+                    );
+        }
+
+        if (Boolean.TRUE.equals(effectiveGstActive)) {
+
+            validatePercentage(
+                    effectiveGstPercentage,
+                    "GST percentage",
+                    "ERR_GST_PERCENTAGE_REQUIRED"
+            );
+
+            effectiveGstPercentage =
+                    money(effectiveGstPercentage);
+
+            if (!hasText(effectiveGstType)) {
+
+                throw new ValidationException(
+                        "GST type is required when GST is active",
+                        "ERR_GST_TYPE_REQUIRED"
+                );
+            }
+
+        } else {
+
+            effectiveGstPercentage = null;
+            effectiveGstStateCode = null;
+            effectiveGstType = null;
+        }
+
+        /*
+         * ================================================================
+         * TDS CONFIGURATION
+         * ================================================================
+         */
+
+        boolean tdsActive =
+                Boolean.TRUE.equals(
+                        requestDto.getTdsActive()
+                );
+
+        BigDecimal tdsPercentage = null;
+
+        if (tdsActive) {
+
+            validatePercentage(
+                    requestDto.getTdsPercentage(),
+                    "TDS percentage",
+                    "ERR_TDS_PERCENTAGE_REQUIRED"
+            );
+
+            tdsPercentage =
+                    money(
+                            requestDto.getTdsPercentage()
+                    );
+        }
+
+        /*
+         * ================================================================
+         * CREATE ENTITY
+         * ================================================================
+         */
+
+        ProcurementPaymentRequest paymentRequest =
+                new ProcurementPaymentRequest();
+
+        paymentRequest.setProcurementOrder(order);
+        paymentRequest.setProject(order.getProject());
+        paymentRequest.setVendor(order.getVendor());
+
+        /*
+         * amount = taxable/basic procurement amount.
+         *
+         * NEVER replace this with the final bank payment.
+         */
+        paymentRequest.setAmount(
+                newPaymentAmount
+        );
+
+        /*
+         * invoiceAmount / payableAmount are backend-calculated values.
+         *
+         * Do not trust or persist client-calculated totals here.
+         * They are calculated below from the taxable/basic PR amount,
+         * GST configuration and TDS configuration.
+         */
+
+        paymentRequest.setSubmissionDate(
+                new Date()
+        );
+
+        paymentRequest.setCompletionRemarks(
+                clean(
+                        requestDto.getCompletionRemarks()
+                )
+        );
+
+        if (requestDto.getProofAttachmentUrls() != null) {
+            paymentRequest.setProofAttachmentUrls(
+                    requestDto.getProofAttachmentUrls()
+            );
+        }
+
+        paymentRequest.setStatus(
+                PaymentRequestStatus.PENDING
+        );
+
+        paymentRequest.setCreatedBy(
+                requestDto.getCreatedBy()
+        );
+
+        Date currentDate =
+                new Date();
+
+        paymentRequest.setCreatedDate(currentDate);
+        paymentRequest.setUpdatedDate(currentDate);
+        paymentRequest.setDeleted(false);
+
+        /*
+         * Store PR tax configuration.
+         */
+        paymentRequest.setTdsActive(
+                tdsActive
+        );
+
+        paymentRequest.setTdsPercentage(
+                tdsPercentage
+        );
+
+        paymentRequest.setTdsAmount(
+                null
+        );
+
+        paymentRequest.setGstActive(
+                effectiveGstActive
+        );
+
+        paymentRequest.setGstStateCode(
+                effectiveGstStateCode
+        );
+
+        paymentRequest.setGstPercentage(
+                effectiveGstPercentage
+        );
+
+        paymentRequest.setGstType(
+                effectiveGstType
+        );
+
+        /*
+         * ================================================================
+         * PR-TIME GST + TDS CALCULATION
+         * ================================================================
+         *
+         * Purchase Order stores only the commercial/basic amount.
+         * Procurement Payment Request owns GST/TDS configuration.
+         *
+         * Calculate and persist the GST/TDS snapshot now so PENDING /
+         * APPROVED PR responses already expose CGST, SGST, IGST, invoice
+         * amount and payable amount.
+         *
+         * releasePayment() recalculates the same values again before
+         * posting to Account Service. That second calculation remains the
+         * final authoritative payment calculation.
+         */
+
+        String gstRegistrationType =
+                order.getVendor() != null
+                        && order.getVendor().getGstRegistrationType() != null
+                        ? order.getVendor().getGstRegistrationType().name()
+                        : null;
+
+        GstPayload gstPayload =
+                resolveGstPayload(
+                        paymentRequest,
+                        gstRegistrationType
+                );
+
+        PaymentCalculation calculation =
+                calculatePayment(
+                        paymentRequest,
+                        gstPayload
+                );
+
+        applyPaymentRequestCreationCalculation(
+                paymentRequest,
+                calculation
+        );
+
+        ProcurementPaymentRequest saved =
+                paymentRequestRepository.save(
+                        paymentRequest
+                );
 
         log.info(
-                "[PROCUREMENT-PAYMENT-CREATED] requestId={} | poId={} | vendorId={} | "
-                        + "taxable={} | gst={} | invoiceGross={} | tds={} | netPayable={} | version={}",
+                "[PROCUREMENT-PAYMENT-CREATED] "
+                        + "paymentRequestId={} | procurementOrderId={} | "
+                        + "basicAmount={} | gstActive={} | gstPercentage={} | "
+                        + "gstType={} | cgst={} | sgst={} | igst={} | "
+                        + "totalGst={} | grossInvoice={} | "
+                        + "tdsActive={} | tdsPercentage={} | tdsAmount={} | "
+                        + "payableAmount={}",
                 saved.getId(),
                 order.getId(),
-                vendor.getId(),
                 saved.getAmount(),
+                saved.getGstActive(),
+                saved.getGstPercentage(),
+                saved.getGstType(),
+                saved.getCgstAmount(),
+                saved.getSgstAmount(),
+                saved.getIgstAmount(),
                 saved.getTotalGstAmount(),
                 saved.getInvoiceAmount(),
+                saved.getTdsActive(),
+                saved.getTdsPercentage(),
                 saved.getTdsAmount(),
-                saved.getPayableAmount(),
-                saved.getCalculationVersion()
+                saved.getPayableAmount()
         );
 
         return mapToResponse(saved);
     }
 
+
+    // ================================================================
+    // GET BY STATUS
+    // ================================================================
+
     @Override
     @Transactional(readOnly = true)
-    public Page<ProcurementPaymentRequestResponseDto> getPaymentRequestsByStatus(
+    public Page<ProcurementPaymentRequestResponseDto>
+    getPaymentRequestsByStatus(
             PaymentRequestStatus status,
             int page,
             int size
     ) {
-        Pageable pageable = pageable(page, size);
 
-        Page<ProcurementPaymentRequest> result = status == null
-                ? paymentRequestRepository.findByIsDeletedFalse(pageable)
-                : paymentRequestRepository.findByStatusAndIsDeletedFalse(
-                status,
-                pageable
+        Pageable pageable =
+                PageRequest.of(
+                        Math.max(page, 0),
+                        size <= 0 ? 20 : size,
+                        Sort.by(
+                                Sort.Direction.DESC,
+                                "createdDate"
+                        )
+                );
+
+        Page<ProcurementPaymentRequest> requests;
+
+        if (status == null) {
+
+            requests =
+                    paymentRequestRepository
+                            .findByIsDeletedFalse(
+                                    pageable
+                            );
+
+        } else {
+
+            requests =
+                    paymentRequestRepository
+                            .findByStatusAndIsDeletedFalse(
+                                    status,
+                                    pageable
+                            );
+        }
+
+        return requests.map(
+                this::mapToResponse
         );
-
-        return result.map(this::mapToResponse);
     }
+
+
+    // ================================================================
+    // GET BY PROCUREMENT ORDER
+    // ================================================================
 
     @Override
     @Transactional(readOnly = true)
@@ -167,24 +494,62 @@ public class ProcurementPaymentRequestServiceImpl
             int page,
             int size
     ) {
+
         if (procurementOrderId == null) {
-            throw validation(
+
+            throw new ValidationException(
                     "Procurement order id is required",
                     "ERR_PROCUREMENT_ORDER_ID_REQUIRED"
             );
         }
 
-        getActiveOrder(procurementOrderId);
+        ProcurementOrder order =
+                purchaseOrderRepository
+                        .findById(
+                                procurementOrderId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Procurement order not found",
+                                        "ERR_PROCUREMENT_ORDER_NOT_FOUND"
+                                )
+                        );
 
-        return paymentRequestRepository
-                .findByProcurementOrder_IdAndIsDeletedFalse(
-                        procurementOrderId,
-                        pageable(page, size)
-                )
-                .map(this::mapToResponse);
+        if (order.isDeleted()) {
+
+            throw new ValidationException(
+                    "Deleted procurement order cannot be used for fetching payment requests",
+                    "ERR_DELETED_PROCUREMENT_ORDER"
+            );
+        }
+
+        Pageable pageable =
+                PageRequest.of(
+                        Math.max(page, 0),
+                        size <= 0 ? 20 : size,
+                        Sort.by(
+                                Sort.Direction.DESC,
+                                "createdDate"
+                        )
+                );
+
+        Page<ProcurementPaymentRequest> requests =
+                paymentRequestRepository
+                        .findByProcurementOrder_IdAndIsDeletedFalse(
+                                procurementOrderId,
+                                pageable
+                        );
+
+        return requests.map(
+                this::mapToResponse
+        );
     }
 
-    /** Approval is Operation-only. No Account Service call occurs here. */
+
+    // ================================================================
+    // APPROVE
+    // ================================================================
+
     @Override
     @Transactional
     public ProcurementPaymentRequestResponseDto approvePaymentRequest(
@@ -192,47 +557,106 @@ public class ProcurementPaymentRequestServiceImpl
             Long userId,
             ProcurementPaymentActionRequestDto request
     ) {
-        validateUser(userId);
-        ProcurementPaymentRequest entity = getActivePaymentRequestForUpdate(
-                paymentRequestId
-        );
 
-        if (entity.getStatus() != PaymentRequestStatus.PENDING
-                && entity.getStatus() != PaymentRequestStatus.UNDER_REVIEW) {
-            throw invalidStatus(
-                    "Only PENDING or UNDER_REVIEW payment request can be approved",
-                    entity.getStatus()
+        validateUser(userId);
+
+        ProcurementPaymentRequest paymentRequest =
+                getActivePaymentRequest(
+                        paymentRequestId
+                );
+
+        if (paymentRequest.getStatus()
+                != PaymentRequestStatus.PENDING
+                &&
+                paymentRequest.getStatus()
+                        != PaymentRequestStatus.UNDER_REVIEW) {
+
+            throw new ValidationException(
+                    "Only PENDING or UNDER_REVIEW payment request can be approved. "
+                            + "Current status: "
+                            + paymentRequest.getStatus(),
+                    "ERR_INVALID_PAYMENT_REQUEST_STATUS"
             );
         }
 
-        validateActiveVendor(entity.getVendor());
-        refreshCalculation(entity);
+        Vendor vendor =
+                paymentRequest.getVendor();
+
+        if (vendor == null
+                || vendor.getId() == null) {
+
+            throw new ValidationException(
+                    "Vendor is not available against payment request ID: "
+                            + paymentRequestId,
+                    "ERR_PAYMENT_REQUEST_VENDOR_NOT_FOUND"
+            );
+        }
+
+        if (vendor.getStatus()
+                != VendorStatus.ACTIVE) {
+
+            throw new ValidationException(
+                    "Only an ACTIVE vendor payment request can be approved",
+                    "ERR_VENDOR_NOT_ACTIVE"
+            );
+        }
 
         if (request != null) {
-            updateInvoiceDetailsIfSupplied(entity, request);
-            String comment = firstNonBlank(request.getRemarks(), request.getComment());
-            if (hasText(comment)) {
-                entity.setCompletionRemarks(comment.trim());
+
+
+            if (hasText(
+                    request.getComment()
+            )) {
+
+                paymentRequest.setCompletionRemarks(
+                        request.getComment()
+                                .trim()
+                );
             }
         }
 
-        Date now = new Date();
-        entity.setStatus(PaymentRequestStatus.APPROVED);
-        entity.setApprovedBy(userId);
-        entity.setApprovedDate(now);
-        entity.setUpdatedDate(now);
+        Date currentDate =
+                new Date();
 
-        ProcurementPaymentRequest saved = paymentRequestRepository.save(entity);
-
-        log.info(
-                "[PROCUREMENT-PAYMENT-APPROVED] requestId={} | approvedBy={} | netPayable={}",
-                saved.getId(),
-                userId,
-                saved.getPayableAmount()
+        paymentRequest.setStatus(
+                PaymentRequestStatus.APPROVED
         );
 
+        paymentRequest.setApprovedBy(
+                userId
+        );
+
+        paymentRequest.setApprovedDate(
+                currentDate
+        );
+
+        paymentRequest.setUpdatedDate(
+                currentDate
+        );
+
+        ProcurementPaymentRequest saved =
+                paymentRequestRepository
+                        .saveAndFlush(
+                                paymentRequest
+                        );
+
+        log.info(
+                "[PROCUREMENT-PAYMENT-APPROVED] "
+                        + "paymentRequestId={} | vendorId={}",
+                saved.getId(),
+                vendor.getId()
+        );
+
+        /*
+         * Do NOT call Account Service here.
+         */
         return mapToResponse(saved);
     }
+
+
+    // ================================================================
+    // REJECT
+    // ================================================================
 
     @Override
     @Transactional
@@ -241,865 +665,2204 @@ public class ProcurementPaymentRequestServiceImpl
             Long userId,
             ProcurementPaymentActionRequestDto request
     ) {
-        validateUser(userId);
-        ProcurementPaymentRequest entity = getActivePaymentRequestForUpdate(
-                paymentRequestId
-        );
 
-        if (entity.getStatus() != PaymentRequestStatus.PENDING
-                && entity.getStatus() != PaymentRequestStatus.UNDER_REVIEW) {
-            throw invalidStatus(
-                    "Only PENDING or UNDER_REVIEW payment request can be rejected",
-                    entity.getStatus()
+        validateUser(userId);
+
+        ProcurementPaymentRequest paymentRequest =
+                getActivePaymentRequest(
+                        paymentRequestId
+                );
+
+        if (paymentRequest.getStatus()
+                != PaymentRequestStatus.PENDING
+                &&
+                paymentRequest.getStatus()
+                        != PaymentRequestStatus.UNDER_REVIEW) {
+
+            throw new ValidationException(
+                    "Only PENDING or UNDER_REVIEW payment request can be rejected. "
+                            + "Current status: "
+                            + paymentRequest.getStatus(),
+                    "ERR_INVALID_PAYMENT_REQUEST_STATUS"
             );
         }
 
-        String reason = request != null ? request.getReason() : null;
+        String reason =
+                request != null
+                        ? clean(
+                        request.getReason()
+                )
+                        : null;
+
         if (!hasText(reason)) {
-            throw validation(
+
+            throw new ValidationException(
                     "Rejection reason is required",
                     "ERR_REJECTION_REASON_REQUIRED"
             );
         }
 
-        Date now = new Date();
-        entity.setStatus(PaymentRequestStatus.REJECTED);
-        entity.setApprovedBy(userId);
-        entity.setApprovedDate(now);
-        entity.setCompletionRemarks(reason.trim());
-        entity.setUpdatedDate(now);
-
-        ProcurementPaymentRequest saved = paymentRequestRepository.save(entity);
-
-        log.info(
-                "[PROCUREMENT-PAYMENT-REJECTED] requestId={} | rejectedBy={}",
-                saved.getId(),
-                userId
+        paymentRequest.setStatus(
+                PaymentRequestStatus.REJECTED
         );
+
+        paymentRequest.setUpdatedDate(
+                new Date()
+        );
+
+        paymentRequest.setCompletionRemarks(
+                reason
+        );
+
+        ProcurementPaymentRequest saved =
+                paymentRequestRepository
+                        .save(
+                                paymentRequest
+                        );
 
         return mapToResponse(saved);
     }
 
-    /**
-     * Full-settlement release.
-     *
-     * Operation Service recalculates and freezes the snapshot, validates any UI
-     * confirmation, sends the canonical snapshot to Account Service, and marks
-     * PAYMENT_RELEASED only after both vouchers are confirmed.
-     */
+
+    // ================================================================
+    // RELEASE PAYMENT
+    // ================================================================
+
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ProcurementPaymentRequestResponseDto releasePayment(
             Long paymentRequestId,
             Long userId,
             ProcurementPaymentActionRequestDto request
     ) {
+
+        // ============================================================
+        // 1. USER VALIDATION
+        // ============================================================
+
         validateUser(userId);
 
         if (request == null) {
-            throw validation(
+
+            throw new ValidationException(
                     "Payment release request is required",
                     "ERR_PAYMENT_RELEASE_REQUEST_REQUIRED"
             );
         }
 
-        ProcurementPaymentRequest entity = getActivePaymentRequestForUpdate(
-                paymentRequestId
-        );
 
-        if (entity.getStatus() != PaymentRequestStatus.APPROVED
-                && entity.getStatus() != PaymentRequestStatus.PAYMENT_PROCESSING) {
-            throw invalidStatus(
-                    "Only APPROVED or PAYMENT_PROCESSING payment request can be released",
-                    entity.getStatus()
+        // ============================================================
+        // 2. LOCK PAYMENT REQUEST
+        // ============================================================
+        /*
+         * Prevent concurrent payment releases for the same
+         * Procurement Payment Request.
+         */
+
+        ProcurementPaymentRequest paymentRequest =
+                getActivePaymentRequestForUpdate(
+                        paymentRequestId
+                );
+
+
+        // ============================================================
+        // 3. STATUS VALIDATION
+        // ============================================================
+
+        if (paymentRequest.getStatus()
+                != PaymentRequestStatus.APPROVED
+                &&
+                paymentRequest.getStatus()
+                        != PaymentRequestStatus.PAYMENT_PROCESSING) {
+
+            throw new ValidationException(
+                    "Only APPROVED or PAYMENT_PROCESSING payment request can be released. "
+                            + "Current status: "
+                            + paymentRequest.getStatus(),
+                    "ERR_INVALID_PAYMENT_REQUEST_STATUS"
             );
         }
 
-        validateActiveVendor(entity.getVendor());
-        updateAndRequireInvoiceDetails(entity, request);
 
-        ProcurementPaymentCalculation calculation = refreshCalculation(entity);
-        validateReleaseTaxConfirmation(request, calculation);
+        // ============================================================
+        // 4. VENDOR CONTEXT
+        // ============================================================
 
-        BigDecimal calculatedBankPayment =
-                calculation.getVendorNetPayableAmount();
+        VendorSyncContext vendorContext =
+                resolveVendorSyncContext(
+                        paymentRequest
+                );
 
-        calculator.assertOptionalMoneyMatches(
-                "Bank payment amount",
-                request.getBankPaymentAmount(),
-                calculatedBankPayment,
-                "ERR_BANK_PAYMENT_AMOUNT_MISMATCH"
-        );
+        Vendor vendor =
+                vendorContext.vendor();
+
+        if (vendor.getStatus()
+                != VendorStatus.ACTIVE) {
+
+            throw new ValidationException(
+                    "Payment can be released only for an ACTIVE vendor",
+                    "ERR_VENDOR_NOT_ACTIVE"
+            );
+        }
+
+
+        // ============================================================
+        // 5. RELEASE INPUT VALIDATION
+        // ============================================================
 
         if (request.getBankLedgerId() == null
                 || request.getBankLedgerId() <= 0) {
-            throw validation(
+
+            throw new ValidationException(
                     "Bank/Cash ledger id is required for payment release",
                     "ERR_BANK_LEDGER_REQUIRED"
             );
         }
 
-        String paymentMode = normalizePaymentMode(request.getPaymentMode());
-        String transactionReference = clean(request.getTransactionReference());
+        if (!hasText(
+                request.getPaymentMode()
+        )) {
 
-        if (!"CASH".equals(paymentMode) && !hasText(transactionReference)) {
-            throw validation(
-                    "Transaction reference is required for non-cash payment",
-                    "ERR_TRANSACTION_REFERENCE_REQUIRED"
+            throw new ValidationException(
+                    "Payment mode is required for payment release",
+                    "ERR_PAYMENT_MODE_REQUIRED"
             );
         }
 
-        LocalDate paymentDate = request.getPaymentDate() != null
-                ? request.getPaymentDate()
-                : LocalDate.now();
 
-        entity.setBankPaymentAmount(calculatedBankPayment);
-        entity.setPaymentDate(paymentDate);
-        entity.setPaymentMode(paymentMode);
-        entity.setBankLedgerId(request.getBankLedgerId());
-        entity.setTransactionReference(transactionReference);
-        entity.setPaymentProof(clean(request.getPaymentProof()));
+        // ============================================================
+        // 6. APPLY RELEASE-TIME TDS CONFIGURATION
+        // ============================================================
+        /*
+         * IMPORTANT FIX.
+         *
+         * Accounts may select:
+         *
+         * tdsActive=true
+         * tdsPercentage=10
+         *
+         * during payment release.
+         *
+         * These values MUST be copied to the persisted
+         * ProcurementPaymentRequest BEFORE calculatePayment().
+         *
+         * We deliberately DO NOT use:
+         *
+         * request.bankPaymentAmount
+         *
+         * Backend calculates the actual bank payment.
+         */
 
-        if (request.getLedgerId() != null) {
-            entity.setLedgerId(request.getLedgerId());
-        }
-        if (hasText(request.getLedgerType())) {
-            entity.setLedgerType(request.getLedgerType().trim());
-        }
-        if (request.getProofAttachmentUrls() != null) {
-            entity.setProofAttachmentUrls(request.getProofAttachmentUrls());
-        }
-
-        String releaseComment = firstNonBlank(
-                request.getRemarks(),
-                request.getComment()
+        applyReleaseTdsConfiguration(
+                paymentRequest,
+                request
         );
-        if (hasText(releaseComment)) {
-            entity.setCompletionRemarks(releaseComment.trim());
+
+
+        // ============================================================
+        // 7. RESOLVE GST
+        // ============================================================
+
+        GstPayload gstPayload =
+                resolveGstPayload(
+                        paymentRequest,
+                        vendorContext.gstRegistrationType()
+                );
+
+
+        // ============================================================
+        // 8. BACKEND AUTHORITATIVE CALCULATION
+        // ============================================================
+
+        PaymentCalculation calculation =
+                calculatePayment(
+                        paymentRequest,
+                        gstPayload
+                );
+
+
+        // ============================================================
+        // 9. APPLY OPERATION CALCULATION
+        // ============================================================
+
+        applyOperationCalculation(
+                paymentRequest,
+                calculation
+        );
+
+
+        // ============================================================
+        // 10. STORE ACTUAL PAYMENT INFORMATION
+        // ============================================================
+
+        paymentRequest.setBankLedgerId(
+                request.getBankLedgerId()
+        );
+
+        paymentRequest.setPaymentMode(
+                request.getPaymentMode()
+                        .trim()
+        );
+
+
+        if (hasText(
+                request.getTransactionReference()
+        )) {
+
+            paymentRequest.setTransactionReference(
+                    request.getTransactionReference()
+                            .trim()
+            );
         }
 
-        Date now = new Date();
-        entity.setPaymentReleasedBy(userId);
-        entity.setUpdatedDate(now);
-        entity.setStatus(PaymentRequestStatus.PAYMENT_PROCESSING);
+
+        if (hasText(
+                request.getPaymentProof()
+        )) {
+
+            paymentRequest.setPaymentProof(
+                    request.getPaymentProof()
+                            .trim()
+            );
+        }
+
+
+        if (request.getProofAttachmentUrls() != null) {
+
+            paymentRequest.setProofAttachmentUrls(
+                    request.getProofAttachmentUrls()
+            );
+        }
+
+
+        if (hasText(
+                request.getComment()
+        )) {
+
+            paymentRequest.setCompletionRemarks(
+                    request.getComment()
+                            .trim()
+            );
+        }
+
+
+        /*
+         * Operation Service does not own vendor ledger resolution.
+         * Account Service owns vendor ledger selection.
+         */
+        paymentRequest.setLedgerId(null);
+        paymentRequest.setLedgerType(null);
+
+
+        // ============================================================
+        // 11. MOVE TO PROCESSING
+        // ============================================================
+
+        paymentRequest.setStatus(
+                PaymentRequestStatus.PAYMENT_PROCESSING
+        );
+
+        paymentRequest.setUpdatedDate(
+                new Date()
+        );
+
 
         ProcurementPaymentRequest processing =
-                paymentRequestRepository.saveAndFlush(entity);
+                paymentRequestRepository
+                        .saveAndFlush(
+                                paymentRequest
+                        );
+
+
+        // ============================================================
+        // 12. CALCULATION LOG
+        // ============================================================
+
+        log.info(
+                "[VENDOR-PAYMENT-CALCULATED] "
+                        + "paymentRequestId={} | vendorId={} | "
+                        + "tdsActive={} | tdsPercentage={} | "
+                        + "basic={} | cgst={} | sgst={} | igst={} | "
+                        + "totalGst={} | grossInvoice={} | "
+                        + "tds={} | vendorNetPayable={} | bankPayment={}",
+                processing.getId(),
+                vendor.getId(),
+                processing.getTdsActive(),
+                processing.getTdsPercentage(),
+                calculation.basicAmount(),
+                calculation.cgstAmount(),
+                calculation.sgstAmount(),
+                calculation.igstAmount(),
+                calculation.totalGstAmount(),
+                calculation.grossInvoiceAmount(),
+                calculation.tdsAmount(),
+                calculation.vendorNetPayableAmount(),
+                calculation.bankPaymentAmount()
+        );
+
+
+        // ============================================================
+        // 13. SEND AUTHORITATIVE CALCULATION TO ACCOUNT SERVICE
+        // ============================================================
 
         AccountVendorSyncResponseDto accountResponse =
                 syncVendorWithAccountService(
                         processing,
                         userId,
-                        request
+                        request,
+                        vendorContext,
+                        gstPayload,
+                        calculation
                 );
 
-        validateAccountingResult(accountResponse);
 
-        processing.setStatus(PaymentRequestStatus.PAYMENT_RELEASED);
-        processing.setPaymentReleasedDate(new Date());
-        processing.setUpdatedDate(new Date());
+        // ============================================================
+        // 14. CROSS-SERVICE CALCULATION VALIDATION
+        // ============================================================
+        /*
+         * Operation and Account calculations must match.
+         */
 
-        ProcurementPaymentRequest released =
-                paymentRequestRepository.save(processing);
+        validateAccountCalculation(
+                calculation,
+                accountResponse
+        );
+
+
+        // ============================================================
+        // 15. APPLY ACCOUNT RESPONSE
+        // ============================================================
+
+        applyAccountCalculatedAmounts(
+                processing,
+                accountResponse
+        );
+
+
+        /*
+         * Actual cash/bank payment calculated by Operation remains
+         * authoritative.
+         *
+         * NEVER overwrite it using frontend bankPaymentAmount.
+         */
+        processing.setBankPaymentAmount(
+                calculation.bankPaymentAmount()
+        );
+
+
+        // ============================================================
+        // 16. FINAL RELEASE
+        // ============================================================
+
+        Date releasedAt =
+                new Date();
+
+        processing.setPaymentReleasedBy(
+                userId
+        );
+
+        processing.setPaymentReleasedDate(
+                releasedAt
+        );
+
+        processing.setUpdatedDate(
+                releasedAt
+        );
+
+        processing.setStatus(
+                PaymentRequestStatus.PAYMENT_RELEASED
+        );
+
+
+        ProcurementPaymentRequest saved =
+                paymentRequestRepository
+                        .saveAndFlush(
+                                processing
+                        );
+
+
+        // ============================================================
+        // 17. SUCCESS LOG
+        // ============================================================
 
         log.info(
-                "[PROCUREMENT-PAYMENT-RELEASED] requestId={} | invoiceGross={} | "
-                        + "bankPayment={} | tds={} | settlement={} | "
+                "[VENDOR-PAYMENT-RELEASED] "
+                        + "paymentRequestId={} | vendorId={} | "
+                        + "tdsActive={} | tdsPercentage={} | "
+                        + "basicAmount={} | grossInvoice={} | "
+                        + "totalGst={} | tds={} | "
+                        + "bankPayment={} | "
                         + "invoiceVoucherId={} | paymentVoucherId={}",
-                released.getId(),
-                released.getInvoiceAmount(),
-                released.getBankPaymentAmount(),
-                released.getTdsAmount(),
-                released.getBankPaymentAmount().add(released.getTdsAmount()),
+                saved.getId(),
+                vendor.getId(),
+                saved.getTdsActive(),
+                saved.getTdsPercentage(),
+                saved.getAmount(),
+                saved.getInvoiceAmount(),
+                saved.getTotalGstAmount(),
+                saved.getTdsAmount(),
+                saved.getBankPaymentAmount(),
                 accountResponse.getVoucherId(),
                 accountResponse.getPaymentVoucherId()
         );
 
-        return mapToResponse(released);
+
+        return mapToResponse(saved);
     }
 
-    private AccountVendorSyncResponseDto syncVendorWithAccountService(
+
+    // ================================================================
+    // OPERATION PAYMENT CALCULATION
+    // ================================================================
+
+    private PaymentCalculation calculatePayment(
             ProcurementPaymentRequest paymentRequest,
-            Long operationUserId,
-            ProcurementPaymentActionRequestDto actionRequest
+            GstPayload gstPayload
     ) {
-        Vendor vendor = paymentRequest.getVendor();
-        if (vendor == null || vendor.getId() == null) {
-            throw validation(
-                    "Vendor is not available against payment request",
+
+        if (paymentRequest == null) {
+
+            throw new ValidationException(
+                    "Payment request is required for calculation",
+                    "ERR_PAYMENT_REQUEST_REQUIRED"
+            );
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * amount = taxable/basic procurement amount.
+         *
+         * Do not reverse-calculate it from invoiceAmount.
+         */
+        BigDecimal basicAmount =
+                money(
+                        paymentRequest.getAmount()
+                );
+
+        if (basicAmount.compareTo(
+                BigDecimal.ZERO
+        ) <= 0) {
+
+            throw new ValidationException(
+                    "Taxable/basic payment amount must be greater than zero",
+                    "ERR_INVALID_PAYMENT_AMOUNT"
+            );
+        }
+
+        BigDecimal cgstAmount =
+                zeroMoney();
+
+        BigDecimal sgstAmount =
+                zeroMoney();
+
+        BigDecimal igstAmount =
+                zeroMoney();
+
+        BigDecimal totalGstAmount =
+                zeroMoney();
+
+        if (Boolean.TRUE.equals(
+                gstPayload.gstActive()
+        )) {
+
+            validatePercentage(
+                    gstPayload.gstPercentage(),
+                    "GST percentage",
+                    "ERR_GST_PERCENTAGE_REQUIRED"
+            );
+
+            totalGstAmount =
+                    percentageOf(
+                            basicAmount,
+                            gstPayload.gstPercentage()
+                    );
+
+            if ("INTRA_STATE".equalsIgnoreCase(
+                    gstPayload.gstSupplyType()
+            )) {
+
+                /*
+                 * Split the already-rounded total.
+                 *
+                 * This guarantees:
+                 *
+                 * CGST + SGST == total GST
+                 */
+                cgstAmount =
+                        totalGstAmount.divide(
+                                BigDecimal.valueOf(2),
+                                MONEY_SCALE,
+                                MONEY_ROUNDING
+                        );
+
+                sgstAmount =
+                        money(
+                                totalGstAmount.subtract(
+                                        cgstAmount
+                                )
+                        );
+
+            } else if ("INTER_STATE".equalsIgnoreCase(
+                    gstPayload.gstSupplyType()
+            )) {
+
+                igstAmount =
+                        totalGstAmount;
+
+            } else {
+
+                throw new ValidationException(
+                        "Invalid GST supply type: "
+                                + gstPayload.gstSupplyType(),
+                        "ERR_INVALID_GST_SUPPLY_TYPE"
+                );
+            }
+        }
+
+        BigDecimal grossInvoiceAmount =
+                money(
+                        basicAmount.add(
+                                totalGstAmount
+                        )
+                );
+
+        /*
+         * ================================================================
+         * TDS
+         * ================================================================
+         *
+         * TDS is calculated on taxable/basic value,
+         * not on GST-inclusive invoice amount.
+         */
+
+        BigDecimal tdsAmount =
+                zeroMoney();
+
+        if (Boolean.TRUE.equals(
+                paymentRequest.getTdsActive()
+        )) {
+
+            validatePercentage(
+                    paymentRequest.getTdsPercentage(),
+                    "TDS percentage",
+                    "ERR_TDS_PERCENTAGE_REQUIRED"
+            );
+
+            tdsAmount =
+                    percentageOf(
+                            basicAmount,
+                            paymentRequest.getTdsPercentage()
+                    );
+        }
+
+        BigDecimal vendorNetPayable =
+                money(
+                        grossInvoiceAmount.subtract(
+                                tdsAmount
+                        )
+                );
+
+        if (vendorNetPayable.compareTo(
+                BigDecimal.ZERO
+        ) <= 0) {
+
+            throw new ValidationException(
+                    "Vendor payable amount must be greater than zero after TDS deduction",
+                    "ERR_INVALID_VENDOR_NET_PAYABLE"
+            );
+        }
+
+        /*
+         * Current flow = full settlement.
+         *
+         * Actual bank/cash payment is the vendor net payable.
+         */
+        BigDecimal bankPaymentAmount =
+                vendorNetPayable;
+
+        return new PaymentCalculation(
+                basicAmount,
+                cgstAmount,
+                sgstAmount,
+                igstAmount,
+                totalGstAmount,
+                grossInvoiceAmount,
+                tdsAmount,
+                vendorNetPayable,
+                bankPaymentAmount
+        );
+    }
+
+
+    // ================================================================
+    // PR CREATION CALCULATION SNAPSHOT
+    // ================================================================
+
+    private void applyPaymentRequestCreationCalculation(
+            ProcurementPaymentRequest paymentRequest,
+            PaymentCalculation calculation
+    ) {
+
+        /*
+         * Persist the financial snapshot as soon as the PR is created.
+         *
+         * This makes PENDING / APPROVED PR responses expose the calculated
+         * GST and TDS values without waiting for payment release.
+         *
+         * bankPaymentAmount remains null until releasePayment() because no
+         * bank/cash payment has actually been released yet.
+         */
+
+        paymentRequest.setCgstAmount(
+                calculation.cgstAmount()
+        );
+
+        paymentRequest.setSgstAmount(
+                calculation.sgstAmount()
+        );
+
+        paymentRequest.setIgstAmount(
+                calculation.igstAmount()
+        );
+
+        paymentRequest.setTotalGstAmount(
+                calculation.totalGstAmount()
+        );
+
+        paymentRequest.setInvoiceAmount(
+                calculation.grossInvoiceAmount()
+        );
+
+        paymentRequest.setTdsAmount(
+                calculation.tdsAmount()
+        );
+
+        paymentRequest.setPayableAmount(
+                calculation.vendorNetPayableAmount()
+        );
+
+        paymentRequest.setBankPaymentAmount(
+                null
+        );
+    }
+
+
+    private void applyOperationCalculation(
+            ProcurementPaymentRequest paymentRequest,
+            PaymentCalculation calculation
+    ) {
+
+        /*
+         * DO NOT call paymentRequest.setAmount(...) here.
+         *
+         * The original basic amount must remain unchanged.
+         */
+
+        paymentRequest.setCgstAmount(
+                calculation.cgstAmount()
+        );
+
+        paymentRequest.setSgstAmount(
+                calculation.sgstAmount()
+        );
+
+        paymentRequest.setIgstAmount(
+                calculation.igstAmount()
+        );
+
+        paymentRequest.setTotalGstAmount(
+                calculation.totalGstAmount()
+        );
+
+        paymentRequest.setInvoiceAmount(
+                calculation.grossInvoiceAmount()
+        );
+
+        paymentRequest.setTdsAmount(
+                calculation.tdsAmount()
+        );
+
+        paymentRequest.setPayableAmount(
+                calculation.vendorNetPayableAmount()
+        );
+
+        paymentRequest.setBankPaymentAmount(
+                calculation.bankPaymentAmount()
+        );
+    }
+
+
+    // ================================================================
+    // VENDOR ACCOUNTING CONTEXT
+    // ================================================================
+
+    private VendorSyncContext resolveVendorSyncContext(
+            ProcurementPaymentRequest paymentRequest
+    ) {
+
+        Vendor vendor =
+                paymentRequest.getVendor();
+
+        if (vendor == null
+                || vendor.getId() == null) {
+
+            throw new ValidationException(
+                    "Vendor is not available against payment request ID: "
+                            + paymentRequest.getId(),
                     "ERR_PAYMENT_REQUEST_VENDOR_NOT_FOUND"
             );
         }
 
+        Long vendorId =
+                vendor.getId();
+
         VendorAccountsSubmission accountsSubmission =
                 vendorAccountsSubmissionRepository
-                        .findFirstByVendor_IdOrderByIdDesc(vendor.getId())
-                        .orElseThrow(() -> validation(
-                                "Vendor accounts submission not found for vendor ID: "
-                                        + vendor.getId(),
-                                "ERR_VENDOR_ACCOUNTS_SUBMISSION_NOT_FOUND"
-                        ));
+                        .findFirstByVendor_IdOrderByIdDesc(
+                                vendorId
+                        )
+                        .orElseThrow(() ->
+                                new ValidationException(
+                                        "Vendor accounts submission not found for vendor ID: "
+                                                + vendorId,
+                                        "ERR_VENDOR_ACCOUNTS_SUBMISSION_NOT_FOUND"
+                                )
+                        );
 
-        if (accountsSubmission.getStatus()
-                != VendorAccountsSubmissionStatus.APPROVED) {
-            throw validation(
-                    "Latest vendor accounts submission must be APPROVED",
-                    "ERR_VENDOR_ACCOUNTS_NOT_APPROVED"
-            );
-        }
-
-        if (accountsSubmission.isDeleted()) {
-            throw validation(
-                    "Latest vendor accounts submission is deleted",
-                    "ERR_VENDOR_ACCOUNTS_SUBMISSION_DELETED"
-            );
-        }
-
-        VendorGSTRegistrationType accountsRegistrationType =
-                accountsSubmission.getGstRegistrationType();
-        if (accountsRegistrationType != null
-                && vendor.getGstRegistrationType() != null
-                && accountsRegistrationType != vendor.getGstRegistrationType()) {
-            throw validation(
-                    "Vendor GST registration type differs from the approved accounts submission",
-                    "ERR_VENDOR_GST_REGISTRATION_TYPE_MISMATCH"
-            );
-        }
-
-        VendorFinalization finalization =
-                accountsSubmission.getVendorFinalization() != null
-                        ? accountsSubmission.getVendorFinalization()
-                        : vendorFinalizationRepository
-                        .findFirstByVendor_IdOrderByIdDesc(vendor.getId())
-                        .orElseThrow(() -> validation(
-                                "Vendor finalization not found for vendor ID: "
-                                        + vendor.getId(),
-                                "ERR_VENDOR_FINALIZATION_NOT_FOUND"
-                        ));
-
-        if (finalization.isDeleted()) {
-            throw validation(
-                    "Vendor finalization is deleted",
-                    "ERR_VENDOR_FINALIZATION_DELETED"
-            );
-        }
+        VendorFinalization vendorFinalization =
+                vendorFinalizationRepository
+                        .findFirstByVendor_IdOrderByIdDesc(
+                                vendorId
+                        )
+                        .orElseThrow(() ->
+                                new ValidationException(
+                                        "Vendor finalization not found for vendor ID: "
+                                                + vendorId,
+                                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
+                                )
+                        );
 
         String gstRegistrationType =
                 accountsSubmission.getGstRegistrationType() != null
-                        ? accountsSubmission.getGstRegistrationType().name()
+                        ? accountsSubmission
+                        .getGstRegistrationType()
+                        .name()
                         : vendor.getGstRegistrationType() != null
-                        ? vendor.getGstRegistrationType().name()
+                        ? vendor.getGstRegistrationType()
+                        .name()
                         : null;
+
+        String gstNumber =
+                hasText(
+                        accountsSubmission.getGstNumber()
+                )
+                        ? accountsSubmission
+                        .getGstNumber()
+                        .trim()
+                        : clean(
+                        vendor.getGstNumber()
+                );
+
+        return new VendorSyncContext(
+                vendor,
+                accountsSubmission,
+                vendorFinalization,
+                gstRegistrationType,
+                gstNumber
+        );
+    }
+
+
+    // ================================================================
+    // SYNC WITH EXISTING ACCOUNT SERVICE
+    // ================================================================
+
+    private AccountVendorSyncResponseDto syncVendorWithAccountService(
+            ProcurementPaymentRequest paymentRequest,
+            Long operationUserId,
+            ProcurementPaymentActionRequestDto actionRequest,
+            VendorSyncContext context,
+            GstPayload gstPayload,
+            PaymentCalculation calculation
+    ) {
+
+        Vendor vendor =
+                context.vendor();
+
+        VendorAccountsSubmission accountsSubmission =
+                context.accountsSubmission();
+
+        VendorFinalization vendorFinalization =
+                context.vendorFinalization();
 
         VendorPaymentApprovalRequestDto paymentApproval =
                 buildPaymentReleaseRequest(
                         paymentRequest,
                         operationUserId,
-                        actionRequest
+                        actionRequest,
+                        gstPayload,
+                        calculation
                 );
-        paymentApproval.setGstRegistrationType(gstRegistrationType);
 
-        String gstNumber = hasText(accountsSubmission.getGstNumber())
-                ? accountsSubmission.getGstNumber().trim()
-                : clean(vendor.getGstNumber());
-
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now =
+                LocalDateTime.now();
 
         AccountVendorSyncRequestDto syncRequest =
                 AccountVendorSyncRequestDto.builder()
-                        .operationVendorId(vendor.getId())
-                        .vendorAccountsSubmissionId(accountsSubmission.getId())
-                        .vendorFinalizationId(finalization.getId())
-                        .vendorName(vendor.getName())
-                        .email(vendor.getEmail())
-                        .mobile(vendor.getMobile())
-                        .pan(vendor.getPanNumber())
-                        .gstNumber(gstNumber)
-                        .gstRegistrationType(gstRegistrationType)
-                        .accountHolderName(accountsSubmission.getAccountHolderName())
-                        .bankAccountNumber(accountsSubmission.getAccountNumber())
-                        .ifscCode(accountsSubmission.getIfsc())
+
+                        .operationVendorId(
+                                vendor.getId()
+                        )
+
+                        .vendorAccountsSubmissionId(
+                                accountsSubmission.getId()
+                        )
+
+                        .vendorFinalizationId(
+                                vendorFinalization.getId()
+                        )
+
+                        .vendorName(
+                                vendor.getName()
+                        )
+
+                        .email(
+                                vendor.getEmail()
+                        )
+
+                        .mobile(
+                                vendor.getMobile()
+                        )
+
+                        .pan(
+                                vendor.getPanNumber()
+                        )
+
+                        .gstNumber(
+                                context.gstNumber()
+                        )
+
+                        .gstRegistrationType(
+                                context.gstRegistrationType()
+                        )
+
+                        .accountHolderName(
+                                accountsSubmission.getAccountHolderName()
+                        )
+
+                        .bankAccountNumber(
+                                accountsSubmission.getAccountNumber()
+                        )
+
+                        .ifscCode(
+                                accountsSubmission.getIfsc()
+                        )
+
+                        /*
+                         * Current entity does not expose bank name.
+                         */
                         .bankName(null)
-                        .branchAddress(accountsSubmission.getBranchAddress())
+
+                        .branchAddress(
+                                accountsSubmission.getBranchAddress()
+                        )
+
                         .fullAddress(
-                                hasText(vendor.getFullAddress())
-                                        ? vendor.getFullAddress().trim()
-                                        : clean(accountsSubmission.getBranchAddress())
+                                hasText(
+                                        vendor.getFullAddress()
+                                )
+                                        ? vendor.getFullAddress()
+                                        .trim()
+                                        : clean(
+                                        accountsSubmission
+                                                .getBranchAddress()
+                                )
                         )
-                        .city(vendor.getCity())
-                        .state(vendor.getState())
-                        .country(vendor.getCountry())
-                        .active(vendor.getStatus() == VendorStatus.ACTIVE)
+
+                        .city(
+                                vendor.getCity()
+                        )
+
+                        .state(
+                                vendor.getState()
+                        )
+
+                        .country(
+                                vendor.getCountry()
+                        )
+
+                        .active(
+                                vendor.getStatus()
+                                        == VendorStatus.ACTIVE
+                        )
+
                         .approvedByOperationUserId(
-                                paymentRequest.getApprovedBy() != null
-                                        ? paymentRequest.getApprovedBy()
-                                        : operationUserId
+                                operationUserId
                         )
+
                         .approvedAt(
-                                paymentRequest.getApprovedDate() != null
-                                        ? toLocalDateTime(paymentRequest.getApprovedDate())
-                                        : now
+                                now
                         )
-                        .operationUpdatedAt(now)
-                        .paymentApproval(paymentApproval)
+
+                        .operationUpdatedAt(
+                                now
+                        )
+
+                        .paymentApproval(
+                                paymentApproval
+                        )
+
                         .build();
 
         try {
+
+            log.info(
+                    "[ACCOUNT-VENDOR-SYNC-START] "
+                            + "paymentRequestId={} | vendorId={} | "
+                            + "basic={} | gross={} | tds={} | bankPayment={} | "
+                            + "bankLedgerId={}",
+                    paymentRequest.getId(),
+                    vendor.getId(),
+                    calculation.basicAmount(),
+                    calculation.grossInvoiceAmount(),
+                    calculation.tdsAmount(),
+                    calculation.bankPaymentAmount(),
+                    paymentApproval.getBankLedgerId()
+            );
+
             AccountVendorSyncResponseDto response =
-                    accountFeignClient.syncVendor(syncRequest);
+                    accountFeignClient.syncVendor(
+                            syncRequest
+                    );
 
             if (response == null) {
-                throw validation(
-                        "Account Service returned an empty response",
+
+                throw new ValidationException(
+                        "Account Service returned an empty response for vendor ID: "
+                                + vendor.getId(),
                         "ERR_EMPTY_ACCOUNT_VENDOR_SYNC_RESPONSE"
                 );
             }
 
-            if (!"SUCCESS".equalsIgnoreCase(response.getSyncStatus())) {
-                throw validation(
-                        "Account Service synchronization failed: "
+            if (!"SUCCESS".equalsIgnoreCase(
+                    response.getSyncStatus()
+            )) {
+
+                throw new ValidationException(
+                        "Account Service vendor synchronization failed: "
                                 + response.getMessage(),
                         "ERR_ACCOUNT_VENDOR_SYNC_UNSUCCESSFUL"
                 );
             }
 
-            return response;
-        } catch (FeignException exception) {
-            log.error(
-                    "[ACCOUNT-SYNC-FAILED] requestId={} | status={} | response={}",
+            log.info(
+                    "[ACCOUNT-VENDOR-SYNC-SUCCESS] "
+                            + "paymentRequestId={} | vendorId={} | "
+                            + "ledgerId={} | invoiceVoucherId={} | paymentVoucherId={}",
                     paymentRequest.getId(),
+                    vendor.getId(),
+                    response.getLedgerId(),
+                    response.getVoucherId(),
+                    response.getPaymentVoucherId()
+            );
+
+            return response;
+
+        } catch (FeignException exception) {
+
+            log.error(
+                    "[ACCOUNT-VENDOR-SYNC-FAILED] "
+                            + "paymentRequestId={} | vendorId={} | "
+                            + "status={} | response={}",
+                    paymentRequest.getId(),
+                    vendor.getId(),
                     exception.status(),
                     exception.contentUTF8(),
                     exception
             );
-            throw validation(
-                    extractAccountServiceError(exception),
+
+            throw new ValidationException(
+                    extractAccountServiceError(
+                            exception
+                    ),
                     "ERR_ACCOUNT_VENDOR_SYNC_FAILED"
             );
         }
     }
 
+
+    // ================================================================
+    // BUILD EXISTING ACCOUNT SERVICE REQUEST
+    // ================================================================
+
     private VendorPaymentApprovalRequestDto buildPaymentReleaseRequest(
-            ProcurementPaymentRequest entity,
+            ProcurementPaymentRequest paymentRequest,
             Long operationUserId,
-            ProcurementPaymentActionRequestDto actionRequest
+            ProcurementPaymentActionRequestDto actionRequest,
+            GstPayload gstPayload,
+            PaymentCalculation calculation
     ) {
-        BigDecimal settlementAmount = entity.getBankPaymentAmount()
-                .add(entity.getTdsAmount())
-                .setScale(2, java.math.RoundingMode.HALF_UP);
 
+        LocalDate paymentDate =
+                actionRequest.getPaymentDate() != null
+                        ? actionRequest.getPaymentDate()
+                        : LocalDate.now();
+
+        String paymentMode =
+                hasText(
+                        actionRequest.getPaymentMode()
+                )
+                        ? actionRequest.getPaymentMode()
+                        .trim()
+                        : paymentRequest.getPaymentMode();
+
+        String transactionReference =
+                hasText(
+                        actionRequest.getTransactionReference()
+                )
+                        ? actionRequest
+                        .getTransactionReference()
+                        .trim()
+                        : paymentRequest.getTransactionReference();
+
+        String paymentProof =
+                hasText(
+                        actionRequest.getPaymentProof()
+                )
+                        ? actionRequest
+                        .getPaymentProof()
+                        .trim()
+                        : paymentRequest.getPaymentProof();
+
+        String releaseComment =
+                hasText(
+                        actionRequest.getComment()
+                )
+                        ? actionRequest
+                        .getComment()
+                        .trim()
+                        : clean(
+                        paymentRequest
+                                .getCompletionRemarks()
+                );
+
+        /*
+         * IMPORTANT:
+         *
+         * This DTO is INTERNAL Operation -> Account.
+         *
+         * Therefore fields removed from ProcurementPaymentActionRequestDto
+         * still exist here because Operation populates them.
+         */
         return VendorPaymentApprovalRequestDto.builder()
-                .procurementPaymentRequestId(entity.getId())
+
+                .procurementPaymentRequestId(
+                        paymentRequest.getId()
+                )
+
                 .procurementOrderId(
-                        entity.getProcurementOrder() != null
-                                ? entity.getProcurementOrder().getId()
+                        paymentRequest.getProcurementOrder() != null
+                                ? paymentRequest.getProcurementOrder().getId()
                                 : null
                 )
+
                 .purchaseOrderNumber(
-                        entity.getProcurementOrder() != null
-                                ? entity.getProcurementOrder().getPoNumber()
+                        paymentRequest.getProcurementOrder() != null
+                                ? paymentRequest.getProcurementOrder().getPoNumber()
                                 : null
                 )
-                .invoiceNumber(entity.getInvoiceNumber())
-                .invoiceDate(entity.getInvoiceDate())
-                .price(entity.getAmount())
-                .taxableAmount(entity.getAmount())
+
+                /*
+                 * Basic amount
+                 */
+                .price(
+                        calculation.basicAmount()
+                )
+
+                .taxableAmount(
+                        calculation.basicAmount()
+                )
+
+                /*
+                 * GST config
+                 */
                 .gstRegistrationType(
-                        entity.getVendor() != null
-                                && entity.getVendor().getGstRegistrationType() != null
-                                ? entity.getVendor().getGstRegistrationType().name()
+                        gstPayload.gstRegistrationType()
+                )
+
+                .gstActive(
+                        gstPayload.gstActive()
+                )
+
+                .gstSupplyType(
+                        gstPayload.gstSupplyType()
+                )
+
+                .gstStateCode(
+                        gstPayload.gstStateCode()
+                )
+
+                .gstPercentage(
+                        gstPayload.gstPercentage()
+                )
+
+                /*
+                 * GST calculated snapshot
+                 */
+                .cgstAmount(
+                        calculation.cgstAmount()
+                )
+
+                .sgstAmount(
+                        calculation.sgstAmount()
+                )
+
+                .igstAmount(
+                        calculation.igstAmount()
+                )
+
+                .totalGstAmount(
+                        calculation.totalGstAmount()
+                )
+
+                /*
+                 * Existing vendor liability / gross amount
+                 */
+                .invoiceGrossAmount(
+                        calculation.grossInvoiceAmount()
+                )
+
+                /*
+                 * ============================================================
+                 * TDS
+                 * ============================================================
+                 */
+
+                .tdsActive(
+                        Boolean.TRUE.equals(
+                                paymentRequest.getTdsActive()
+                        )
+                )
+
+                .tdsBaseAmount(
+                        calculation.basicAmount()
+                )
+
+                .tdsPercentage(
+                        Boolean.TRUE.equals(
+                                paymentRequest.getTdsActive()
+                        )
+                                ? money(
+                                paymentRequest.getTdsPercentage()
+                        )
+                                : zeroMoney()
+                )
+
+                .tdsAmount(
+                        calculation.tdsAmount()
+                )
+
+                .tdsPayableLedgerId(
+                        Boolean.TRUE.equals(
+                                paymentRequest.getTdsActive()
+                        )
+                                ? actionRequest.getTdsPayableLedgerId()
                                 : null
                 )
-                .gstActive(entity.getGstActive())
-                .gstSupplyType(entity.getGstType())
-                .gstStateCode(entity.getGstStateCode())
-                .gstPercentage(entity.getGstPercentage())
-                .cgstAmount(entity.getCgstAmount())
-                .sgstAmount(entity.getSgstAmount())
-                .igstAmount(entity.getIgstAmount())
-                .totalGstAmount(entity.getTotalGstAmount())
-                .invoiceGrossAmount(entity.getInvoiceAmount())
-                .tdsActive(entity.getTdsActive())
-                .tdsBaseAmount(entity.getAmount())
-                .tdsPercentage(entity.getTdsPercentage())
-                .tdsAmount(entity.getTdsAmount())
-                .tdsPayableLedgerId(actionRequest.getTdsPayableLedgerId())
-                .vendorNetPayableAmount(entity.getPayableAmount())
-                .settlementAmount(settlementAmount)
-                .paymentDate(entity.getPaymentDate())
-                .bankPaymentAmount(entity.getBankPaymentAmount())
-                .paymentMode(entity.getPaymentMode())
-                .bankLedgerId(entity.getBankLedgerId())
-                .ledgerId(entity.getLedgerId())
-                .ledgerType(entity.getLedgerType())
-                .transactionReference(entity.getTransactionReference())
-                .paymentProof(entity.getPaymentProof())
-                .proofAttachmentUrls(entity.getProofAttachmentUrls())
-                .approvedByOperationUserId(entity.getApprovedBy())
-                .approvedDate(toLocalDate(entity.getApprovedDate()))
-                .approvalComment(clean(entity.getCompletionRemarks()))
-                .paymentReleasedByOperationUserId(operationUserId)
-                .paymentReleasedDate(entity.getPaymentDate())
-                .releaseComment(clean(entity.getCompletionRemarks()))
-                .calculationVersion(entity.getCalculationVersion())
+
+                /*
+                 * Payable
+                 */
+                .vendorNetPayableAmount(
+                        calculation.vendorNetPayableAmount()
+                )
+
+                /*
+                 * Full settlement
+                 */
+                .settlementAmount(
+                        money(
+                                calculation.bankPaymentAmount()
+                                        .add(calculation.tdsAmount())
+                        )
+                )
+
+                /*
+                 * Payment
+                 */
+                .paymentDate(
+                        paymentDate
+                )
+
+                .bankPaymentAmount(
+                        calculation.bankPaymentAmount()
+                )
+
+                .paymentMode(
+                        paymentMode
+                )
+
+                .bankLedgerId(
+                        actionRequest.getBankLedgerId()
+                )
+
+                /*
+                 * Vendor ledger resolved in Account
+                 */
+                .ledgerId(null)
+                .ledgerType(null)
+
+                /*
+                 * Transaction
+                 */
+                .transactionReference(
+                        transactionReference
+                )
+
+                .paymentProof(
+                        paymentProof
+                )
+
+                .proofAttachmentUrls(
+                        actionRequest.getProofAttachmentUrls() != null
+                                ? actionRequest.getProofAttachmentUrls()
+                                : paymentRequest.getProofAttachmentUrls()
+                )
+
+                /*
+                 * Audit
+                 */
+                .approvedByOperationUserId(
+                        paymentRequest.getApprovedBy()
+                )
+
+                .approvedDate(
+                        toLocalDate(
+                                paymentRequest.getApprovedDate()
+                        )
+                )
+
+                .approvalComment(
+                        clean(
+                                paymentRequest.getCompletionRemarks()
+                        )
+                )
+
+                .paymentReleasedByOperationUserId(
+                        operationUserId
+                )
+
+                .paymentReleasedDate(
+                        paymentDate
+                )
+
+                .releaseComment(
+                        releaseComment
+                )
+
+                .calculationVersion(
+                        "PROCUREMENT_PAYMENT_V1"
+                )
+
                 .build();
+
+
     }
 
-    private ProcurementPaymentCalculation refreshCalculation(
-            ProcurementPaymentRequest entity
+
+    // ================================================================
+    // ACCOUNT RESPONSE VALIDATION
+    // ================================================================
+
+    private void validateAccountCalculation(
+            PaymentCalculation operationCalculation,
+            AccountVendorSyncResponseDto accountResponse
     ) {
-        ProcurementPaymentCalculation calculation =
-                calculator.calculateFromInvoiceGross(
-                        entity.getInvoiceAmount(),
-                        entity.getGstActive(),
-                        entity.getGstType(),
-                        entity.getGstPercentage(),
-                        entity.getTdsActive(),
-                        entity.getTdsPercentage(),
-                        entity.getVendor() != null
-                                ? entity.getVendor().getGstRegistrationType()
-                                : null
-                );
 
-        applyCalculation(entity, calculation);
-        return calculation;
-    }
+        if (accountResponse == null) {
 
-    private void applyCalculation(
-            ProcurementPaymentRequest entity,
-            ProcurementPaymentCalculation calculation
-    ) {
-        entity.setAmount(calculation.getTaxableAmount());
-        entity.setInvoiceAmount(calculation.getInvoiceGrossAmount());
-        entity.setPayableAmount(calculation.getVendorNetPayableAmount());
-
-        entity.setGstActive(calculation.getGstActive());
-        entity.setGstType(calculation.getGstSupplyType());
-        entity.setGstPercentage(calculation.getGstPercentage());
-        entity.setCgstAmount(calculation.getCgstAmount());
-        entity.setSgstAmount(calculation.getSgstAmount());
-        entity.setIgstAmount(calculation.getIgstAmount());
-        entity.setTotalGstAmount(calculation.getTotalGstAmount());
-
-        entity.setTdsActive(calculation.getTdsActive());
-        entity.setTdsPercentage(calculation.getTdsPercentage());
-        entity.setTdsAmount(calculation.getTdsAmount());
-        entity.setCalculationVersion(calculation.getCalculationVersion());
-    }
-
-    private void validateReleaseTaxConfirmation(
-            ProcurementPaymentActionRequestDto request,
-            ProcurementPaymentCalculation calculation
-    ) {
-        if (request.getTdsActive() != null
-                && !Objects.equals(
-                request.getTdsActive(),
-                calculation.getTdsActive()
-        )) {
-            throw validation(
-                    "TDS applicability cannot be changed during payment release",
-                    "ERR_TDS_ACTIVE_MISMATCH"
+            throw new ValidationException(
+                    "Account Service response is required",
+                    "ERR_ACCOUNT_RESPONSE_REQUIRED"
             );
         }
 
-        calculator.assertOptionalRateMatches(
-                "TDS percentage",
-                request.getTdsPercentage(),
-                calculation.getTdsPercentage(),
-                "ERR_TDS_PERCENTAGE_MISMATCH"
+        /*
+         * Account response values are rounded to Operation's
+         * 2-decimal procurement precision before comparison.
+         */
+
+        validateAmountMatch(
+                "basic amount",
+                operationCalculation.basicAmount(),
+                accountResponse.getPrice()
         );
-        calculator.assertOptionalMoneyMatches(
+
+        validateAmountMatch(
+                "CGST amount",
+                operationCalculation.cgstAmount(),
+                accountResponse.getCgstAmount()
+        );
+
+        validateAmountMatch(
+                "SGST amount",
+                operationCalculation.sgstAmount(),
+                accountResponse.getSgstAmount()
+        );
+
+        validateAmountMatch(
+                "IGST amount",
+                operationCalculation.igstAmount(),
+                accountResponse.getIgstAmount()
+        );
+
+        validateAmountMatch(
+                "total GST amount",
+                operationCalculation.totalGstAmount(),
+                accountResponse.getTotalGstAmount()
+        );
+
+        validateAmountMatch(
+                "gross invoice amount",
+                operationCalculation.grossInvoiceAmount(),
+                accountResponse.getGrossInvoiceAmount()
+        );
+
+        validateAmountMatch(
                 "TDS amount",
-                request.getTdsAmount(),
-                calculation.getTdsAmount(),
-                "ERR_TDS_AMOUNT_MISMATCH"
+                operationCalculation.tdsAmount(),
+                accountResponse.getTdsAmount()
+        );
+
+        validateAmountMatch(
+                "vendor net payable amount",
+                operationCalculation.vendorNetPayableAmount(),
+                accountResponse.getVendorNetPayableAmount()
         );
     }
 
-    private void validateAccountingResult(
-            AccountVendorSyncResponseDto response
+
+    private void validateAmountMatch(
+            String fieldName,
+            BigDecimal expected,
+            BigDecimal accountValue
     ) {
-        if (response.getVoucherId() == null) {
-            throw validation(
-                    "Account Service did not return a purchase invoice voucher",
-                    "ERR_PURCHASE_INVOICE_VOUCHER_NOT_CREATED"
-            );
-        }
 
-        if (response.getPaymentVoucherId() == null) {
-            throw validation(
-                    "Account Service did not return a payment voucher",
-                    "ERR_PAYMENT_VOUCHER_NOT_CREATED"
-            );
-        }
-    }
-
-    private void validateOrderEligibleForPaymentRequest(ProcurementOrder order) {
-        if (order.getStatus() != ProcurementOrderStatus.APPROVED
-                && order.getStatus() != ProcurementOrderStatus.COMPLETED) {
-            throw validation(
-                    "Only APPROVED or COMPLETED procurement order can be used for a payment request. Current status: "
-                            + order.getStatus(),
-                    "ERR_PROCUREMENT_ORDER_NOT_APPROVED"
-            );
-        }
-
-        if (order.getFinalAmount() == null
-                || order.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw validation(
-                    "PO taxable/final amount must be greater than zero",
-                    "ERR_PO_FINAL_AMOUNT_MISSING"
-            );
-        }
-    }
-
-    private void validatePoRemainingTaxableAmount(
-            ProcurementOrder order,
-            BigDecimal newTaxableAmount
-    ) {
-        BigDecimal reserved = calculator.money(
-                paymentRequestRepository.sumReservedTaxableAmountByOrder(order)
-        );
-        BigDecimal poTaxable = calculator.money(order.getFinalAmount());
-        BigDecimal after = calculator.money(reserved.add(newTaxableAmount));
-
-        if (after.compareTo(poTaxable) > 0) {
-            throw validation(
-                    "Payment request taxable amount exceeds PO balance. PO taxable: "
-                            + poTaxable.toPlainString()
-                            + ", already reserved: "
-                            + reserved.toPlainString()
-                            + ", new taxable: "
-                            + newTaxableAmount.toPlainString(),
-                    "ERR_PAYMENT_REQUEST_TAXABLE_AMOUNT_EXCEEDS_PO"
-            );
-        }
-    }
-
-    private void validateTaxRatesAgainstApprovedPo(
-            ProcurementOrder order,
-            ProcurementPaymentRequestDto request
-    ) {
-        if (Boolean.TRUE.equals(request.getGstActive())
-                && order.getGstRate() != null
-                && order.getGstRate().compareTo(BigDecimal.ZERO) > 0) {
-            calculator.assertOptionalRateMatches(
-                    "GST percentage against approved PO",
-                    request.getGstPercentage(),
-                    order.getGstRate(),
-                    "ERR_GST_RATE_DIFFERS_FROM_PO"
-            );
-        }
-
-        if (Boolean.TRUE.equals(request.getTdsActive())
-                && order.getTdsPercentage() != null
-                && order.getTdsPercentage().compareTo(BigDecimal.ZERO) > 0) {
-            calculator.assertOptionalRateMatches(
-                    "TDS percentage against approved PO",
-                    request.getTdsPercentage(),
-                    order.getTdsPercentage(),
-                    "ERR_TDS_RATE_DIFFERS_FROM_PO"
-            );
-        }
-    }
-
-    private void logIgnoredClientCalculatedValues(
-            ProcurementPaymentRequestDto request,
-            ProcurementPaymentCalculation calculation
-    ) {
-        logClientMismatch("amount", request.getAmount(), calculation.getTaxableAmount());
-        logClientMismatch("payableAmount", request.getPayableAmount(), calculation.getVendorNetPayableAmount());
-        logClientMismatch("cgstAmount", request.getCgstAmount(), calculation.getCgstAmount());
-        logClientMismatch("sgstAmount", request.getSgstAmount(), calculation.getSgstAmount());
-        logClientMismatch("igstAmount", request.getIgstAmount(), calculation.getIgstAmount());
-        logClientMismatch("totalGstAmount", request.getTotalGstAmount(), calculation.getTotalGstAmount());
-        logClientMismatch("tdsAmount", request.getTdsAmount(), calculation.getTdsAmount());
-    }
-
-    private void logClientMismatch(
-            String field,
-            BigDecimal supplied,
-            BigDecimal calculated
-    ) {
-        if (supplied == null) {
-            return;
-        }
-        if (calculator.money(supplied).compareTo(calculator.money(calculated)) != 0) {
-            log.warn(
-                    "[CLIENT-CALCULATION-IGNORED] field={} | supplied={} | backendCalculated={}",
-                    field,
-                    supplied,
-                    calculated
-            );
-        }
-    }
-
-    private void updateInvoiceDetailsIfSupplied(
-            ProcurementPaymentRequest entity,
-            ProcurementPaymentActionRequestDto request
-    ) {
-        if (hasText(request.getInvoiceNumber())) {
-            String invoiceNumber = request.getInvoiceNumber().trim();
-            validateInvoiceNumberUnique(
-                    entity.getVendor().getId(),
-                    invoiceNumber,
-                    entity.getId()
-            );
-            entity.setInvoiceNumber(invoiceNumber);
-        }
-        if (request.getInvoiceDate() != null) {
-            entity.setInvoiceDate(request.getInvoiceDate());
-        }
-    }
-
-    private void updateAndRequireInvoiceDetails(
-            ProcurementPaymentRequest entity,
-            ProcurementPaymentActionRequestDto request
-    ) {
-        updateInvoiceDetailsIfSupplied(entity, request);
-
-        if (!hasText(entity.getInvoiceNumber())) {
-            throw validation(
-                    "Invoice number is required for payment release",
-                    "ERR_INVOICE_NUMBER_REQUIRED"
-            );
-        }
-        if (entity.getInvoiceDate() == null) {
-            throw validation(
-                    "Invoice date is required for payment release",
-                    "ERR_INVOICE_DATE_REQUIRED"
-            );
-        }
-    }
-
-    private void validateInvoiceNumberUnique(
-            Long vendorId,
-            String invoiceNumber,
-            Long currentRequestId
-    ) {
-        if (vendorId == null || !hasText(invoiceNumber)) {
+        /*
+         * If old Account response does not expose a value,
+         * do not break backwards compatibility.
+         */
+        if (accountValue == null) {
             return;
         }
 
-        boolean duplicate = currentRequestId == null
-                ? paymentRequestRepository
-                .existsByVendor_IdAndInvoiceNumberIgnoreCaseAndIsDeletedFalse(
-                        vendorId,
-                        invoiceNumber
-                )
-                : paymentRequestRepository
-                .existsByVendor_IdAndInvoiceNumberIgnoreCaseAndIdNotAndIsDeletedFalse(
-                        vendorId,
-                        invoiceNumber,
-                        currentRequestId
+        BigDecimal expectedMoney =
+                money(expected);
+
+        BigDecimal actualMoney =
+                money(accountValue);
+
+        if (expectedMoney.compareTo(
+                actualMoney
+        ) != 0) {
+
+            throw new ValidationException(
+                    "Account Service calculation mismatch for "
+                            + fieldName
+                            + ". Operation calculated "
+                            + expectedMoney
+                            + " but Account returned "
+                            + actualMoney,
+                    "ERR_ACCOUNT_PAYMENT_CALCULATION_MISMATCH"
+            );
+        }
+    }
+
+
+    // ================================================================
+    // APPLY ACCOUNT CALCULATED VALUES
+    // ================================================================
+
+    private void applyAccountCalculatedAmounts(
+            ProcurementPaymentRequest paymentRequest,
+            AccountVendorSyncResponseDto accountResponse
+    ) {
+
+        if (accountResponse.getCgstAmount() != null) {
+
+            paymentRequest.setCgstAmount(
+                    money(
+                            accountResponse.getCgstAmount()
+                    )
+            );
+        }
+
+        if (accountResponse.getSgstAmount() != null) {
+
+            paymentRequest.setSgstAmount(
+                    money(
+                            accountResponse.getSgstAmount()
+                    )
+            );
+        }
+
+        if (accountResponse.getIgstAmount() != null) {
+
+            paymentRequest.setIgstAmount(
+                    money(
+                            accountResponse.getIgstAmount()
+                    )
+            );
+        }
+
+        if (accountResponse.getTotalGstAmount() != null) {
+
+            paymentRequest.setTotalGstAmount(
+                    money(
+                            accountResponse.getTotalGstAmount()
+                    )
+            );
+        }
+
+        if (accountResponse.getGrossInvoiceAmount() != null) {
+
+            paymentRequest.setInvoiceAmount(
+                    money(
+                            accountResponse.getGrossInvoiceAmount()
+                    )
+            );
+        }
+
+        if (accountResponse.getTdsAmount() != null) {
+
+            paymentRequest.setTdsAmount(
+                    money(
+                            accountResponse.getTdsAmount()
+                    )
+            );
+        }
+
+        if (accountResponse.getVendorNetPayableAmount() != null) {
+
+            paymentRequest.setPayableAmount(
+                    money(
+                            accountResponse
+                                    .getVendorNetPayableAmount()
+                    )
+            );
+        }
+    }
+
+
+    // ================================================================
+    // GST CONFIGURATION
+    // ================================================================
+
+    private GstPayload resolveGstPayload(
+            ProcurementPaymentRequest paymentRequest,
+            String gstRegistrationType
+    ) {
+
+        boolean gstActive =
+                Boolean.TRUE.equals(
+                        paymentRequest.getGstActive()
                 );
 
-        if (duplicate) {
-            throw validation(
-                    "Invoice number already exists for this vendor: " + invoiceNumber,
-                    "ERR_DUPLICATE_VENDOR_INVOICE_NUMBER"
+        /*
+         * Keep existing vendor behaviour:
+         * INTERNATIONAL / SEZ are zero-rated.
+         */
+        boolean zeroRated =
+                "INTERNATIONAL".equalsIgnoreCase(
+                        gstRegistrationType
+                )
+                        ||
+                        "SEZ".equalsIgnoreCase(
+                                gstRegistrationType
+                        );
+
+        if (!gstActive || zeroRated) {
+
+            return new GstPayload(
+                    false,
+                    gstRegistrationType,
+                    null,
+                    clean(
+                            paymentRequest.getGstStateCode()
+                    ),
+                    zeroMoney()
             );
         }
+
+        BigDecimal gstPercentage =
+                money(
+                        paymentRequest.getGstPercentage()
+                );
+
+        validatePercentage(
+                gstPercentage,
+                "GST percentage",
+                "ERR_GST_PERCENTAGE_REQUIRED"
+        );
+
+        String supplyType =
+                resolveGstSupplyType(
+                        paymentRequest
+                );
+
+        return new GstPayload(
+                true,
+                gstRegistrationType,
+                supplyType,
+                clean(
+                        paymentRequest.getGstStateCode()
+                ),
+                gstPercentage
+        );
     }
 
-    private ProcurementOrder getActiveOrder(Long orderId) {
-        ProcurementOrder order = purchaseOrderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Procurement order not found",
-                        "ERR_PROCUREMENT_ORDER_NOT_FOUND"
-                ));
-        if (order.isDeleted()) {
-            throw validation(
-                    "Deleted procurement order cannot be used",
-                    "ERR_DELETED_PROCUREMENT_ORDER"
+
+    private String resolveGstSupplyType(
+            ProcurementPaymentRequest paymentRequest
+    ) {
+
+        if (!hasText(
+                paymentRequest.getGstType()
+        )) {
+
+            throw new ValidationException(
+                    "GST type is required",
+                    "ERR_GST_TYPE_REQUIRED"
             );
         }
-        return order;
+
+        String gstType =
+                paymentRequest
+                        .getGstType()
+                        .trim()
+                        .toUpperCase()
+                        .replace("-", "_")
+                        .replace(" ", "_");
+
+        if ("INTRA_STATE".equals(gstType)
+                || "CGST_SGST".equals(gstType)
+                || "CGST+SGST".equals(gstType)
+                || "CGST_AND_SGST".equals(gstType)) {
+
+            return "INTRA_STATE";
+        }
+
+        if ("INTER_STATE".equals(gstType)
+                || "IGST".equals(gstType)) {
+
+            return "INTER_STATE";
+        }
+
+        throw new ValidationException(
+                "Invalid GST type: "
+                        + paymentRequest.getGstType()
+                        + ". Allowed values are INTRA_STATE/CGST_SGST "
+                        + "or INTER_STATE/IGST",
+                "ERR_INVALID_GST_TYPE"
+        );
     }
+
+
+    // ================================================================
+    // GET ACTIVE PAYMENT REQUEST
+    // ================================================================
+
+    private ProcurementPaymentRequest getActivePaymentRequest(
+            Long paymentRequestId
+    ) {
+
+        if (paymentRequestId == null) {
+
+            throw new ValidationException(
+                    "Payment request id is required",
+                    "ERR_PAYMENT_REQUEST_ID_REQUIRED"
+            );
+        }
+
+        ProcurementPaymentRequest paymentRequest =
+                paymentRequestRepository
+                        .findById(
+                                paymentRequestId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Procurement payment request not found",
+                                        "ERR_PAYMENT_REQUEST_NOT_FOUND"
+                                )
+                        );
+
+        if (paymentRequest.isDeleted()) {
+
+            throw new ValidationException(
+                    "Deleted payment request cannot be processed",
+                    "ERR_DELETED_PAYMENT_REQUEST"
+            );
+        }
+
+        return paymentRequest;
+    }
+
 
     private ProcurementPaymentRequest getActivePaymentRequestForUpdate(
             Long paymentRequestId
     ) {
+
         if (paymentRequestId == null) {
-            throw validation(
+
+            throw new ValidationException(
                     "Payment request id is required",
                     "ERR_PAYMENT_REQUEST_ID_REQUIRED"
             );
         }
 
         return paymentRequestRepository
-                .findActiveByIdForUpdate(paymentRequestId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Procurement payment request not found",
-                        "ERR_PAYMENT_REQUEST_NOT_FOUND"
-                ));
+                .findActiveByIdForUpdate(
+                        paymentRequestId
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Procurement payment request not found",
+                                "ERR_PAYMENT_REQUEST_NOT_FOUND"
+                        )
+                );
     }
 
-    private void validateUser(Long userId) {
+
+    // ================================================================
+    // USER VALIDATION
+    // ================================================================
+
+    private void validateUser(
+            Long userId
+    ) {
+
         if (userId == null) {
-            throw validation("User id is required", "ERR_USER_ID_REQUIRED");
+
+            throw new ValidationException(
+                    "User id is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
         }
-        userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found",
-                        "ERR_USER_NOT_FOUND"
-                ));
+
+        userRepository
+                .findActiveUserById(
+                        userId
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found",
+                                "ERR_USER_NOT_FOUND"
+                        )
+                );
     }
 
-    private void validateActiveVendor(Vendor vendor) {
-        if (vendor == null || vendor.getId() == null) {
-            throw validation(
-                    "Vendor is required for procurement payment",
-                    "ERR_PAYMENT_REQUEST_VENDOR_NOT_FOUND"
-            );
-        }
-        if (vendor.isDeleted() || vendor.getStatus() != VendorStatus.ACTIVE) {
-            throw validation(
-                    "Only an ACTIVE vendor can be used for procurement payment",
-                    "ERR_VENDOR_NOT_ACTIVE"
-            );
-        }
-    }
 
-    private Pageable pageable(int page, int size) {
-        if (page < 0) {
-            throw validation("Page cannot be negative", "ERR_INVALID_PAGE");
-        }
-        if (size <= 0 || size > MAX_PAGE_SIZE) {
-            throw validation(
-                    "Page size must be between 1 and " + MAX_PAGE_SIZE,
-                    "ERR_INVALID_PAGE_SIZE"
-            );
-        }
-        return PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, "createdDate")
+    // ================================================================
+    // MONEY HELPERS
+    // ================================================================
+
+    private BigDecimal percentageOf(
+            BigDecimal amount,
+            BigDecimal percentage
+    ) {
+
+        return money(
+                money(amount)
+                        .multiply(
+                                percentage
+                        )
+                        .divide(
+                                BigDecimal.valueOf(100),
+                                8,
+                                MONEY_ROUNDING
+                        )
         );
     }
 
-    private ProcurementPaymentRequestResponseDto mapToResponse(
-            ProcurementPaymentRequest entity
+
+    private void validatePercentage(
+            BigDecimal percentage,
+            String fieldName,
+            String errorCode
     ) {
-        ProcurementOrder order = entity.getProcurementOrder();
-        Project project = entity.getProject();
-        Vendor vendor = entity.getVendor();
 
-        BigDecimal settlementAmount = entity.getBankPaymentAmount() != null
-                ? calculator.money(entity.getBankPaymentAmount())
-                .add(calculator.money(entity.getTdsAmount()))
-                .setScale(2, java.math.RoundingMode.HALF_UP)
-                : null;
+        if (percentage == null
+                || percentage.compareTo(
+                BigDecimal.ZERO
+        ) <= 0) {
 
-        return builder()
-                .id(entity.getId())
-                .procurementOrderId(order != null ? order.getId() : null)
-                .poNumber(order != null ? order.getPoNumber() : null)
-                .projectId(project != null ? project.getId() : null)
-                .projectName(project != null ? project.getName() : null)
-                .projectNo(project != null ? project.getProjectNo() : null)
-                .vendorId(vendor != null ? vendor.getId() : null)
-                .vendorName(vendor != null ? vendor.getName() : null)
-                .invoiceAmount(entity.getInvoiceAmount())
-                .amount(entity.getAmount())
-                .payableAmount(entity.getPayableAmount())
-                .bankPaymentAmount(entity.getBankPaymentAmount())
-                .settlementAmount(settlementAmount)
-                .invoiceNumber(entity.getInvoiceNumber())
-                .invoiceDate(entity.getInvoiceDate())
-                .paymentDate(entity.getPaymentDate())
-                .submissionDate(entity.getSubmissionDate())
-                .completionRemarks(entity.getCompletionRemarks())
-                .proofAttachmentUrls(entity.getProofAttachmentUrls())
-                .status(entity.getStatus())
-                .approvedDate(entity.getApprovedDate())
-                .paymentReleasedDate(entity.getPaymentReleasedDate())
-                .createdBy(entity.getCreatedBy())
-                .approvedBy(entity.getApprovedBy())
-                .paymentReleasedBy(entity.getPaymentReleasedBy())
-                .createdDate(entity.getCreatedDate())
-                .updatedDate(entity.getUpdatedDate())
-                .tdsActive(entity.getTdsActive())
-                .tdsPercentage(entity.getTdsPercentage())
-                .tdsAmount(entity.getTdsAmount())
-                .gstActive(entity.getGstActive())
-                .gstType(entity.getGstType())
-                .gstStateCode(entity.getGstStateCode())
-                // Important: use the payment-request snapshot, not order.getGstRate().
-                .gstPercentage(entity.getGstPercentage())
-                .cgstAmount(entity.getCgstAmount())
-                .sgstAmount(entity.getSgstAmount())
-                .igstAmount(entity.getIgstAmount())
-                .totalGstAmount(entity.getTotalGstAmount())
-                .paymentMode(entity.getPaymentMode())
-                .bankLedgerId(entity.getBankLedgerId())
-                .ledgerId(entity.getLedgerId())
-                .ledgerType(entity.getLedgerType())
-                .transactionReference(entity.getTransactionReference())
-                .paymentProof(entity.getPaymentProof())
-                .calculationVersion(entity.getCalculationVersion())
-                .build();
-    }
-
-    private String normalizePaymentMode(String value) {
-        if (!hasText(value)) {
-            throw validation(
-                    "Payment mode is required",
-                    "ERR_PAYMENT_MODE_REQUIRED"
+            throw new ValidationException(
+                    fieldName
+                            + " must be greater than zero",
+                    errorCode
             );
         }
-        return value.trim().toUpperCase(Locale.ROOT);
+
+        if (percentage.compareTo(
+                BigDecimal.valueOf(100)
+        ) > 0) {
+
+            throw new ValidationException(
+                    fieldName
+                            + " cannot be greater than 100",
+                    errorCode
+            );
+        }
     }
 
-    private LocalDate toLocalDate(Date value) {
+
+    private BigDecimal money(
+            BigDecimal value
+    ) {
+
+        return value == null
+                ? zeroMoney()
+                : value.setScale(
+                MONEY_SCALE,
+                MONEY_ROUNDING
+        );
+    }
+
+
+    private BigDecimal zeroMoney() {
+
+        return BigDecimal.ZERO.setScale(
+                MONEY_SCALE,
+                MONEY_ROUNDING
+        );
+    }
+
+
+    // ================================================================
+    // STRING / DATE HELPERS
+    // ================================================================
+
+    private boolean hasText(
+            String value
+    ) {
+
+        return value != null
+                && !value.trim().isEmpty();
+    }
+
+
+    private String clean(
+            String value
+    ) {
+
+        return hasText(value)
+                ? value.trim()
+                : null;
+    }
+
+
+    private LocalDate toLocalDate(
+            Date value
+    ) {
+
         return value == null
                 ? null
                 : value.toInstant()
-                .atZone(ZoneId.systemDefault())
+                .atZone(
+                        java.time.ZoneId
+                                .systemDefault()
+                )
                 .toLocalDate();
     }
 
-    private LocalDateTime toLocalDateTime(Date value) {
-        return value == null
-                ? null
-                : value.toInstant()
-                .atZone(ZoneId.systemDefault())
-                .toLocalDateTime();
-    }
 
-    private String extractAccountServiceError(FeignException exception) {
-        if (exception == null) {
-            return "Unable to synchronize procurement payment with Account Service";
-        }
-        String responseBody = exception.contentUTF8();
-        return hasText(responseBody)
-                ? "Account Service response: " + responseBody
-                : "Account Service HTTP status: " + exception.status();
-    }
+    // ================================================================
+    // ACCOUNT ERROR
+    // ================================================================
 
-    private ValidationException invalidStatus(
-            String prefix,
-            PaymentRequestStatus currentStatus
+    private String extractAccountServiceError(
+            FeignException exception
     ) {
-        return validation(
-                prefix + ". Current status: " + currentStatus,
-                "ERR_INVALID_PAYMENT_REQUEST_STATUS"
+
+        if (exception == null) {
+            return "Unable to synchronise vendor with Account Service";
+        }
+
+        String responseBody =
+                exception.contentUTF8();
+
+        if (hasText(responseBody)) {
+
+            return "Unable to synchronise vendor with Account Service. "
+                    + "Account Service response: "
+                    + responseBody;
+        }
+
+        return "Unable to synchronise vendor with Account Service. "
+                + "HTTP status: "
+                + exception.status();
+    }
+
+
+    // ================================================================
+    // RESPONSE MAPPING
+    // ================================================================
+
+    private ProcurementPaymentRequestResponseDto mapToResponse(
+            ProcurementPaymentRequest request
+    ) {
+
+        ProcurementOrder order =
+                request.getProcurementOrder();
+
+        Project project =
+                request.getProject();
+
+        Vendor vendor =
+                request.getVendor();
+
+        return ProcurementPaymentRequestResponseDto.builder()
+
+                .id(
+                        request.getId()
+                )
+
+                .procurementOrderId(
+                        order != null
+                                ? order.getId()
+                                : null
+                )
+
+                .poNumber(
+                        order != null
+                                ? order.getPoNumber()
+                                : null
+                )
+
+                .projectId(
+                        project != null
+                                ? project.getId()
+                                : null
+                )
+
+                .projectName(
+                        project != null
+                                ? project.getName()
+                                : null
+                )
+
+                .projectNo(
+                        project != null
+                                ? project.getProjectNo()
+                                : null
+                )
+
+                .vendorId(
+                        vendor != null
+                                ? vendor.getId()
+                                : null
+                )
+
+                .vendorName(
+                        vendor != null
+                                ? vendor.getName()
+                                : null
+                )
+
+                .invoiceAmount(
+                        request.getInvoiceAmount()
+                )
+
+                .payableAmount(
+                        request.getPayableAmount()
+                )
+
+
+                .submissionDate(
+                        request.getSubmissionDate()
+                )
+
+                .completionRemarks(
+                        request.getCompletionRemarks()
+                )
+
+                .proofAttachmentUrls(
+                        request.getProofAttachmentUrls()
+                )
+
+                .status(
+                        request.getStatus()
+                )
+
+                .approvedDate(
+                        request.getApprovedDate()
+                )
+
+                .paymentReleasedDate(
+                        request.getPaymentReleasedDate()
+                )
+
+                .createdBy(
+                        request.getCreatedBy()
+                )
+
+                .approvedBy(
+                        request.getApprovedBy()
+                )
+
+                .paymentReleasedBy(
+                        request.getPaymentReleasedBy()
+                )
+
+                .createdDate(
+                        request.getCreatedDate()
+                )
+
+                .updatedDate(
+                        request.getUpdatedDate()
+                )
+
+                .tdsActive(
+                        request.getTdsActive()
+                )
+
+                .tdsPercentage(
+                        request.getTdsPercentage()
+                )
+
+                .tdsAmount(
+                        request.getTdsAmount()
+                )
+
+                .gstActive(
+                        request.getGstActive()
+                )
+
+                .gstStateCode(
+                        request.getGstStateCode()
+                )
+
+                /*
+                 * FIX:
+                 * use payment request's actual stored GST percentage,
+                 * not order.getGstRate().
+                 */
+                .gstPercentage(
+                        request.getGstPercentage()
+                )
+
+                .gstType(
+                        request.getGstType()
+                )
+
+                .cgstAmount(
+                        request.getCgstAmount()
+                )
+
+                .sgstAmount(
+                        request.getSgstAmount()
+                )
+
+                .igstAmount(
+                        request.getIgstAmount()
+                )
+
+                .totalGstAmount(
+                        request.getTotalGstAmount()
+                )
+
+                /*
+                 * Taxable/basic amount.
+                 */
+                .amount(
+                        request.getAmount()
+                )
+
+                .paymentMode(
+                        request.getPaymentMode()
+                )
+
+                .bankLedgerId(
+                        request.getBankLedgerId()
+                )
+
+                .ledgerId(
+                        request.getLedgerId()
+                )
+
+                .ledgerType(
+                        request.getLedgerType()
+                )
+
+                .transactionReference(
+                        request.getTransactionReference()
+                )
+
+                .paymentProof(
+                        request.getPaymentProof()
+                )
+
+                .build();
+    }
+
+
+    // ================================================================
+    // INTERNAL RECORDS
+    // ================================================================
+
+    private record PaymentCalculation(
+            BigDecimal basicAmount,
+            BigDecimal cgstAmount,
+            BigDecimal sgstAmount,
+            BigDecimal igstAmount,
+            BigDecimal totalGstAmount,
+            BigDecimal grossInvoiceAmount,
+            BigDecimal tdsAmount,
+            BigDecimal vendorNetPayableAmount,
+            BigDecimal bankPaymentAmount
+    ) {
+    }
+
+
+    private record GstPayload(
+            Boolean gstActive,
+            String gstRegistrationType,
+            String gstSupplyType,
+            String gstStateCode,
+            BigDecimal gstPercentage
+    ) {
+    }
+
+
+    private record VendorSyncContext(
+            Vendor vendor,
+            VendorAccountsSubmission accountsSubmission,
+            VendorFinalization vendorFinalization,
+            String gstRegistrationType,
+            String gstNumber
+    ) {
+    }
+
+    /**
+     * Applies Accounts-selected TDS configuration during payment release.
+     *
+     * Rules:
+     *
+     * 1. tdsActive == null
+     *      -> do not change existing Payment Request TDS configuration.
+     *
+     * 2. tdsActive == true
+     *      -> tdsPercentage is mandatory and must be valid.
+     *
+     * 3. tdsActive == false
+     *      -> clear TDS percentage and amount.
+     *
+     * The actual TDS amount is NOT accepted from frontend.
+     * calculatePayment() calculates TDS from the taxable/basic amount.
+     */
+    private void applyReleaseTdsConfiguration(
+            ProcurementPaymentRequest paymentRequest,
+            ProcurementPaymentActionRequestDto request
+    ) {
+
+        if (paymentRequest == null) {
+            throw new ValidationException(
+                    "Payment request is required for TDS configuration",
+                    "ERR_PAYMENT_REQUEST_REQUIRED"
+            );
+        }
+
+        if (request == null) {
+            throw new ValidationException(
+                    "Payment release request is required",
+                    "ERR_PAYMENT_RELEASE_REQUEST_REQUIRED"
+            );
+        }
+
+        Boolean requestedTdsActive =
+                request.getTdsActive();
+
+        BigDecimal requestedTdsPercentage =
+                request.getTdsPercentage();
+
+        /*
+         * No release-time override.
+         *
+         * Keep whatever was configured when Procurement Payment
+         * Request was created.
+         */
+        if (requestedTdsActive == null) {
+
+            /*
+             * Percentage without active flag is ambiguous.
+             */
+            if (requestedTdsPercentage != null) {
+
+                throw new ValidationException(
+                        "tdsActive is required when tdsPercentage is provided",
+                        "ERR_TDS_ACTIVE_REQUIRED"
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * =========================================================
+         * TDS ENABLED DURING RELEASE
+         * =========================================================
+         */
+        if (Boolean.TRUE.equals(requestedTdsActive)) {
+
+            validatePercentage(
+                    requestedTdsPercentage,
+                    "TDS percentage",
+                    "ERR_TDS_PERCENTAGE_REQUIRED"
+            );
+
+            paymentRequest.setTdsActive(true);
+
+            paymentRequest.setTdsPercentage(
+                    money(requestedTdsPercentage)
+            );
+
+            /*
+             * Old calculated TDS must not be reused.
+             *
+             * calculatePayment() below will calculate it again.
+             */
+            paymentRequest.setTdsAmount(
+                    zeroMoney()
+            );
+
+        } else {
+
+            /*
+             * =====================================================
+             * TDS DISABLED DURING RELEASE
+             * =====================================================
+             */
+
+            paymentRequest.setTdsActive(false);
+
+            paymentRequest.setTdsPercentage(null);
+
+            paymentRequest.setTdsAmount(
+                    zeroMoney()
+            );
+        }
+
+        log.info(
+                "[VENDOR-PAYMENT-RELEASE-TDS-CONFIG] "
+                        + "paymentRequestId={} | "
+                        + "requestTdsActive={} | requestTdsPercentage={} | "
+                        + "effectiveTdsActive={} | effectiveTdsPercentage={}",
+                paymentRequest.getId(),
+                requestedTdsActive,
+                requestedTdsPercentage,
+                paymentRequest.getTdsActive(),
+                paymentRequest.getTdsPercentage()
         );
-    }
-
-    private ValidationException validation(String message, String code) {
-        return new ValidationException(message, code);
-    }
-
-    private String firstNonBlank(String first, String second) {
-        return hasText(first) ? first : second;
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
-    private String clean(String value) {
-        return hasText(value) ? value.trim() : null;
     }
 }

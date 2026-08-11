@@ -25,7 +25,8 @@ public interface ProcurementPaymentRequestRepository
             Pageable pageable
     );
 
-    Optional<ProcurementPaymentRequest> findByProcurementOrderAndIsDeletedFalse(
+    Optional<ProcurementPaymentRequest>
+    findFirstByProcurementOrderAndIsDeletedFalseOrderByCreatedDateAsc(
             ProcurementOrder procurementOrder
     );
 
@@ -36,25 +37,15 @@ public interface ProcurementPaymentRequestRepository
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-        SELECT p
-        FROM ProcurementPaymentRequest p
-        WHERE p.id = :id
-          AND p.isDeleted = false
-    """)
+            SELECT p
+            FROM ProcurementPaymentRequest p
+            WHERE p.id = :paymentRequestId
+              AND p.isDeleted = false
+            """)
     Optional<ProcurementPaymentRequest> findActiveByIdForUpdate(
-            @Param("id") Long id
+            @Param("paymentRequestId") Long paymentRequestId
     );
 
-    boolean existsByVendor_IdAndInvoiceNumberIgnoreCaseAndIdNotAndIsDeletedFalse(
-            Long vendorId,
-            String invoiceNumber,
-            Long excludedId
-    );
-
-    boolean existsByVendor_IdAndInvoiceNumberIgnoreCaseAndIsDeletedFalse(
-            Long vendorId,
-            String invoiceNumber
-    );
 
     /**
      * PO finalAmount is the taxable/basic PO value, therefore reservation is
@@ -152,4 +143,25 @@ public interface ProcurementPaymentRequestRepository
     ) {
         return sumReservedTaxableAmountByOrder(order);
     }
+
+
+    /**
+     * Total taxable/basic amount whose vendor payment has actually
+     * been released successfully.
+     *
+     * Used for Procurement milestone completion.
+     */
+    @Query("""
+    SELECT COALESCE(SUM(COALESCE(p.amount, 0)), 0)
+    FROM ProcurementPaymentRequest p
+    WHERE p.procurementOrder = :order
+      AND p.isDeleted = false
+      AND p.status =
+          com.doc.entity.vendor.PaymentRequestStatus.PAYMENT_RELEASED
+""")
+    BigDecimal sumReleasedTaxableAmountByOrder(
+            @Param("order") ProcurementOrder order
+    );
+
+
 }

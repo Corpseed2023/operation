@@ -15,35 +15,63 @@ import java.util.List;
 @AllArgsConstructor
 public class ProcurementPaymentActionRequestDto {
 
+    /*
+     * Common approval/rejection fields
+     */
     private String comment;
     private String remarks;
     private String reason;
 
-    private String invoiceNumber;
-    private LocalDate invoiceDate;
+    /*
+     * Payment release
+     */
+    private String paymentMode;
 
-    private LocalDate paymentDate;
+    private Long bankLedgerId;
 
-    /**
-     * Optional confirmation supplied by the UI. The backend always derives
-     * the bank amount as invoice gross minus TDS. A different value is rejected.
+    /*
+     * Kept only for backward compatibility.
+     *
+     * IMPORTANT:
+     * Operation backend must NOT trust this amount.
+     * Backend calculates the actual bank payment.
      */
     private BigDecimal bankPaymentAmount;
 
-    private String paymentMode;
-    private Long bankLedgerId;
-
-    /** Optional legacy metadata. Account Service resolves the vendor ledger. */
-    private Long ledgerId;
-    private String ledgerType;
+    private LocalDate paymentDate;
 
     private String transactionReference;
+
     private String paymentProof;
+
     private List<String> proofAttachmentUrls;
 
-    /** Optional confirmations only; stored tax configuration cannot change at release. */
+    /*
+     * =========================================================
+     * RELEASE-TIME TDS CONFIGURATION
+     * =========================================================
+     *
+     * Boolean instead of primitive boolean is intentional.
+     *
+     * null  -> keep Payment Request's existing TDS configuration
+     * true  -> apply/recalculate TDS using tdsPercentage
+     * false -> disable TDS
+     */
     private Boolean tdsActive;
+
     private BigDecimal tdsPercentage;
-    private BigDecimal tdsAmount;
+
+    /*
+     * Optional.
+     *
+     * Account Service may resolve its own TDS Payable ledger.
+     * If Accounts explicitly selects one, pass it through.
+     */
     private Long tdsPayableLedgerId;
+
+    /*
+     * Existing compatibility fields, if your frontend still sends them.
+     * Operation should not use these to determine vendor liability.
+     */
+    private Long ledgerId;
 }

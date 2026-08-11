@@ -33,10 +33,6 @@ public class ProcurementPaymentRequestResponseDto {
     private String calculationVersion;
 
 
-
-
-    private String invoiceNumber;
-    private LocalDate invoiceDate;
     private Date submissionDate;
 
     private String completionRemarks;

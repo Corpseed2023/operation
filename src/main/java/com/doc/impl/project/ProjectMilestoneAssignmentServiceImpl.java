@@ -15,12 +15,16 @@ import com.doc.entity.department.Department;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
 import com.doc.entity.vendor.ProcurementMilestoneAssignment;
+import com.doc.entity.vendor.ProcurementOrder;
+import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.notification.*;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
+import com.doc.repository.vendor.ProcurementPaymentRequestRepository;
+import com.doc.repository.vendor.PurchaseOrderRepository;
 import com.doc.service.AutoAssignmentService;
 //import com.doc.service.NotificationPublisherService;
 import com.doc.service.NotificationPublisherService;
@@ -37,6 +41,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
@@ -62,6 +68,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     private final ProjectService projectService;
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final NotificationPublisherService notificationPublisherService;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+
+    private final ProcurementPaymentRequestRepository procurementPaymentRequestRepository;
+
 
     private final DocumentStatusRepository documentStatusRepository;
 
@@ -83,7 +93,11 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             @Lazy ProjectService projectService,
             ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
             NotificationPublisherService notificationPublisherService,
-            DocumentStatusRepository documentStatusRepository
+            DocumentStatusRepository documentStatusRepository,
+            PurchaseOrderRepository purchaseOrderRepository,
+            ProcurementPaymentRequestRepository procurementPaymentRequestRepository
+
+
     ) {
         this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
         this.userRepository = userRepository;
@@ -101,6 +115,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
         this.notificationPublisherService = notificationPublisherService;
         this.documentStatusRepository = documentStatusRepository;
+        this.purchaseOrderRepository=purchaseOrderRepository;
+        this.procurementPaymentRequestRepository=procurementPaymentRequestRepository;
+
+
     }
 
     @Override
@@ -440,7 +458,13 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     }
 
 
-    private void validateProcurementMilestoneBeforeCompletion(ProjectMilestoneAssignment assignment) {
+    private void validateProcurementMilestoneBeforeCompletion(
+            ProjectMilestoneAssignment assignment
+    ) {
+
+        // =========================================================
+        // 1. PROCUREMENT ASSIGNMENT
+        // =========================================================
 
         ProcurementMilestoneAssignment procurementAssignment =
                 procurementMilestoneAssignmentRepository
@@ -448,39 +472,211 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                                 assignment.getProject().getId(),
                                 assignment.getMilestone().getId()
                         )
-                        .orElseThrow(() -> new ValidationException(
-                                "Procurement assignment is not created for this milestone",
-                                "ERR_PROCUREMENT_ASSIGNMENT_NOT_FOUND"
-                        ));
+                        .orElseThrow(() ->
+                                new ValidationException(
+                                        "Procurement assignment is not created for this milestone",
+                                        "ERR_PROCUREMENT_ASSIGNMENT_NOT_FOUND"
+                                )
+                        );
+
+        // =========================================================
+        // 2. VENDOR MUST BE SELECTED
+        // =========================================================
 
         if (procurementAssignment.getSelectedVendor() == null) {
+
             throw new ValidationException(
                     "Please select vendor before completing Procurement milestone",
                     "ERR_VENDOR_NOT_SELECTED"
             );
         }
 
-        ProcurementStatus currentProcurementStatus = procurementAssignment.getStatus();
+        // =========================================================
+        // 3. PROCUREMENT STATUS MUST BE ELIGIBLE
+        // =========================================================
 
-        if (currentProcurementStatus == ProcurementStatus.VENDOR_REQUIRED) {
-            throw new ValidationException(
-                    "No vendor available for this service. Please create vendor and map it with this service.",
-                    "ERR_VENDOR_REQUIRED"
-            );
-        }
+        ProcurementStatus procurementStatus =
+                procurementAssignment.getStatus();
 
-        if (!isProcurementEligibleForMilestoneCompletion(currentProcurementStatus)) {
+        if (!isProcurementEligibleForMilestoneCompletion(
+                procurementStatus
+        )) {
+
             throw new ValidationException(
-                    "Procurement milestone cannot be completed until vendor is finalized",
+                    "Procurement is not ready for completion. Current status: "
+                            + procurementStatus,
                     "ERR_INVALID_PROCUREMENT_STATUS"
             );
         }
+
+        // =========================================================
+        // 4. PURCHASE ORDER MUST EXIST
+        // =========================================================
+
+        ProcurementOrder purchaseOrder =
+                purchaseOrderRepository
+                        .findByProcurementAssignmentId(
+                                procurementAssignment.getId()
+                        )
+                        .orElseThrow(() ->
+                                new ValidationException(
+                                        "Purchase Order must be created before completing Procurement milestone",
+                                        "ERR_PO_NOT_CREATED"
+                                )
+                        );
+
+        if (purchaseOrder.isDeleted()) {
+
+            throw new ValidationException(
+                    "Purchase Order is deleted and cannot be used for Procurement completion",
+                    "ERR_PO_DELETED"
+            );
+        }
+
+        // =========================================================
+        // 5. PURCHASE ORDER MUST BE APPROVED
+        // =========================================================
+
+        if (purchaseOrder.getStatus()
+                != ProcurementOrderStatus.APPROVED) {
+
+            throw new ValidationException(
+                    "Purchase Order must be approved before completing Procurement milestone",
+                    "ERR_PO_NOT_APPROVED"
+            );
+        }
+
+        // =========================================================
+        // 6. PO BASIC AMOUNT
+        // =========================================================
+
+        BigDecimal poAmount =
+                purchaseOrder.getFinalAmount();
+
+        if (poAmount == null
+                || poAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Purchase Order final amount is missing or invalid",
+                    "ERR_PO_FINAL_AMOUNT_INVALID"
+            );
+        }
+
+        poAmount =
+                poAmount.setScale(
+                        2,
+                        RoundingMode.HALF_UP
+                );
+
+        // =========================================================
+        // 7. TOTAL RELEASED PR BASIC/TAXABLE AMOUNT
+        // =========================================================
+
+        BigDecimal totalReleasedPrAmount =
+                procurementPaymentRequestRepository
+                        .sumReleasedTaxableAmountByOrder(
+                                purchaseOrder
+                        );
+
+        if (totalReleasedPrAmount == null) {
+
+            totalReleasedPrAmount =
+                    BigDecimal.ZERO.setScale(
+                            2,
+                            RoundingMode.HALF_UP
+                    );
+
+        } else {
+
+            totalReleasedPrAmount =
+                    totalReleasedPrAmount.setScale(
+                            2,
+                            RoundingMode.HALF_UP
+                    );
+        }
+
+        // =========================================================
+        // 8. PAYMENT MUST ACTUALLY BE RELEASED
+        // =========================================================
+
+        if (totalReleasedPrAmount.compareTo(
+                BigDecimal.ZERO
+        ) <= 0) {
+
+            throw new ValidationException(
+                    "Vendor payment must be released before completing Procurement milestone",
+                    "ERR_PROCUREMENT_PAYMENT_NOT_RELEASED"
+            );
+        }
+
+        // =========================================================
+        // 9. RELEASED PR BASIC AMOUNT MUST EQUAL PO BASIC AMOUNT
+        // =========================================================
+
+        int comparison =
+                totalReleasedPrAmount.compareTo(
+                        poAmount
+                );
+
+        /*
+         * Released amount is less than PO.
+         */
+        if (comparison < 0) {
+
+            BigDecimal remainingAmount =
+                    poAmount.subtract(
+                            totalReleasedPrAmount
+                    );
+
+            throw new ValidationException(
+                    "Vendor payment is not fully released. "
+                            + "PO Amount: " + poAmount
+                            + ", Released PR Amount: " + totalReleasedPrAmount
+                            + ", Remaining Amount: " + remainingAmount,
+                    "ERR_PROCUREMENT_PAYMENT_INCOMPLETE"
+            );
+        }
+
+        /*
+         * Released amount is greater than PO.
+         * Normally PR creation validation should already prevent this,
+         * but keep this defensive validation.
+         */
+        if (comparison > 0) {
+
+            throw new ValidationException(
+                    "Released Payment Request amount exceeds Purchase Order amount. "
+                            + "PO Amount: " + poAmount
+                            + ", Released PR Amount: " + totalReleasedPrAmount,
+                    "ERR_PROCUREMENT_PAYMENT_EXCEEDS_PO"
+            );
+        }
+
+        /*
+         * =========================================================
+         * SUCCESS
+         * =========================================================
+         *
+         * Vendor selected                   = YES
+         * Procurement status eligible       = YES
+         * Purchase Order exists             = YES
+         * Purchase Order approved           = YES
+         * Vendor payment released           = YES
+         * Released PR basic amount == PO amount
+         *
+         * Procurement milestone can now be COMPLETED.
+         */
     }
 
-    private boolean isProcurementEligibleForMilestoneCompletion(ProcurementStatus status) {
+    private boolean isProcurementEligibleForMilestoneCompletion(
+            ProcurementStatus status
+    ) {
+
+        if (status == null) {
+            return false;
+        }
+
         return List.of(
-                ProcurementStatus.VENDOR_FINALIZED,
-                ProcurementStatus.PO_CREATED,
                 ProcurementStatus.PO_APPROVED,
                 ProcurementStatus.PO_RELEASED,
                 ProcurementStatus.ADVANCE_PAID,
@@ -489,6 +685,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 ProcurementStatus.COMPLETED
         ).contains(status);
     }
+
 
     @Override
     public ReassignMilestoneResponseDto reassignMilestone(ReassignMilestoneDto reassignDto) {
