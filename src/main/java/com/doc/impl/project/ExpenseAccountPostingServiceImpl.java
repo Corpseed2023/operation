@@ -22,6 +22,8 @@ import feign.FeignException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Locale;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -309,10 +311,66 @@ public class ExpenseAccountPostingServiceImpl
                 return mapMinimalResponse(expense);
             }
 
+            // =========================================================
+            // ACCOUNT SERVICE RESPONSE VALIDATION
+            // =========================================================
+
+            if (response.getContraVoucherId() == null) {
+                markFundTransferFailed(
+                        expense,
+                        "Account Service returned " +
+                                response.getPostingStatus() +
+                                " without a CONTRA voucher ID"
+                );
+                return mapMinimalResponse(expense);
+            }
+
+            if (
+                    response.getFromBankLedgerId() == null ||
+                            response.getFromBankLedgerId() <= 0 ||
+                            response.getToBankLedgerId() == null ||
+                            response.getToBankLedgerId() <= 0
+            ) {
+                markFundTransferFailed(
+                        expense,
+                        "Account Service returned fund-transfer success without valid bank ledger IDs"
+                );
+                return mapMinimalResponse(expense);
+            }
+
+            /*
+             * Account Service is the accounting authority. The voucher returned
+             * by Account Service must represent the exact transfer requested by
+             * Operation Service.
+             */
+            if (
+                    !Objects.equals(
+                            response.getFromBankLedgerId(),
+                            request.getFromBankLedgerId()
+                    ) ||
+                            !Objects.equals(
+                                    response.getToBankLedgerId(),
+                                    request.getToBankLedgerId()
+                            )
+            ) {
+                markFundTransferFailed(
+                        expense,
+                        "Account Service fund-transfer bank mismatch. Requested " +
+                                request.getFromBankLedgerId() +
+                                " -> " +
+                                request.getToBankLedgerId() +
+                                ", but Account Service confirmed " +
+                                response.getFromBankLedgerId() +
+                                " -> " +
+                                response.getToBankLedgerId()
+                );
+                return mapMinimalResponse(expense);
+            }
+
             /*
              * Entry C:
-             * Dr Axis Bank
-             *     Cr HDFC Bank
+             * Dr Destination Bank
+             *     Cr Source Bank
              *
              * No entry touches Government Fee Payable here.
              */
@@ -321,23 +379,33 @@ public class ExpenseAccountPostingServiceImpl
             expense.setFundTransferVoucherNumber(response.getContraVoucherNumber());
             expense.setFundTransferPostingError(null);
 
-            // Axis is now the selected government-payment bank for Step 5.
-            expense.setPaymentBankLedgerId(request.getToBankLedgerId());
+            /*
+             * Persist the ledger IDs confirmed by Account Service. Bank names are
+             * display-only values; ledger IDs are authoritative.
+             */
+            expense.setFundTransferFromBankLedgerId(response.getFromBankLedgerId());
+            expense.setFundTransferFromBankName(clean(request.getFromBankName()));
+            expense.setFundTransferToBankLedgerId(response.getToBankLedgerId());
+            expense.setFundTransferToBankName(clean(request.getToBankName()));
+
+            // Step 4 destination bank is the authoritative payment bank for Step 5.
+            expense.setPaymentBankLedgerId(response.getToBankLedgerId());
             expense.setPaymentBankName(clean(request.getToBankName()));
 
             expense.setPaymentStatus(ExpensePaymentStatus.PROCESSING);
             expense.setPaidAmount(BigDecimal.ZERO);
             expense.setPaymentCompletedDate(null);
 
-            expenseRepository.save(expense);
+            expense = expenseRepository.saveAndFlush(expense);
 
             log.info(
-                    "[GOVERNMENT-FEE-FUND-TRANSFER-POSTED] expenseId={} | contraVoucherId={} | contraVoucherNumber={} | fromBankLedgerId={} | toBankLedgerId={} | amount={}",
+                    "[GOVERNMENT-FEE-FUND-TRANSFER-POSTED] expenseId={} | postingStatus={} | contraVoucherId={} | contraVoucherNumber={} | fromBankLedgerId={} | toBankLedgerId={} | amount={}",
                     expense.getId(),
+                    response.getPostingStatus(),
                     response.getContraVoucherId(),
                     response.getContraVoucherNumber(),
-                    request.getFromBankLedgerId(),
-                    request.getToBankLedgerId(),
+                    response.getFromBankLedgerId(),
+                    response.getToBankLedgerId(),
                     request.getAmount()
             );
         } catch (FeignException exception) {
@@ -393,7 +461,7 @@ public class ExpenseAccountPostingServiceImpl
         expense.setGovernmentPaymentPostingStatus(AccountPostingStatus.PENDING);
         expense.setGovernmentPaymentPostingError(null);
         expense.setGovernmentPaymentMode(
-                clean(request.getPaymentMode()).toUpperCase()
+                clean(request.getPaymentMode()).toUpperCase(Locale.ROOT)
         );
         expense.setGovernmentPaymentAmount(request.getAmount());
         expense.setGovernmentPaymentDate(request.getPaymentDate());
@@ -434,10 +502,59 @@ public class ExpenseAccountPostingServiceImpl
                 return mapMinimalResponse(expense);
             }
 
+            // =========================================================
+            // ACCOUNT SERVICE PAYMENT RESPONSE VALIDATION
+            // =========================================================
+
+            if (response.getPaymentVoucherId() == null) {
+                markGovernmentPaymentFailed(
+                        expense,
+                        "Account Service returned " +
+                                response.getPostingStatus() +
+                                " without a payment voucher ID"
+                );
+                return mapMinimalResponse(expense);
+            }
+
+            if (
+                    response.getPaymentBankLedgerId() == null ||
+                            response.getPaymentBankLedgerId() <= 0
+            ) {
+                markGovernmentPaymentFailed(
+                        expense,
+                        "Account Service returned payment success without a valid payment bank ledger ID"
+                );
+                return mapMinimalResponse(expense);
+            }
+
+            if (
+                    !Objects.equals(
+                            expense.getPaymentBankLedgerId(),
+                            response.getPaymentBankLedgerId()
+                    )
+            ) {
+                markGovernmentPaymentFailed(
+                        expense,
+                        "Account Service payment bank mismatch. Expected bank ledger ID " +
+                                expense.getPaymentBankLedgerId() +
+                                ", but Account Service confirmed " +
+                                response.getPaymentBankLedgerId()
+                );
+                return mapMinimalResponse(expense);
+            }
+
+            if (response.getGovernmentFeePayableLedgerId() == null) {
+                markGovernmentPaymentFailed(
+                        expense,
+                        "Account Service returned payment success without Government Fee Payable ledger ID"
+                );
+                return mapMinimalResponse(expense);
+            }
+
             /*
              * Entry D:
              * Dr Government Fee Payable
-             *     Cr Axis/payment Bank
+             *     Cr Selected Payment Bank
              */
             expense.setGovernmentPaymentPostingStatus(AccountPostingStatus.POSTED);
             expense.setGovernmentPaymentVerificationStatus(
@@ -454,14 +571,16 @@ public class ExpenseAccountPostingServiceImpl
             expense.setPaymentCompletedDate(request.getPaymentDate().atStartOfDay());
             expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
-            expenseRepository.save(expense);
+            expense = expenseRepository.saveAndFlush(expense);
 
             log.info(
-                    "[GOVERNMENT-FEE-PAYMENT-POSTED] expenseId={} | paymentVoucherId={} | paymentVoucherNumber={} | bankLedgerId={} | amount={} | paymentDate={}",
+                    "[GOVERNMENT-FEE-PAYMENT-POSTED] expenseId={} | postingStatus={} | paymentVoucherId={} | paymentVoucherNumber={} | bankLedgerId={} | payableLedgerId={} | amount={} | paymentDate={}",
                     expense.getId(),
+                    response.getPostingStatus(),
                     response.getPaymentVoucherId(),
                     response.getPaymentVoucherNumber(),
-                    expense.getPaymentBankLedgerId(),
+                    response.getPaymentBankLedgerId(),
+                    response.getGovernmentFeePayableLedgerId(),
                     request.getAmount(),
                     request.getPaymentDate()
             );
@@ -947,7 +1066,7 @@ public class ExpenseAccountPostingServiceImpl
                 .amount(request.getAmount())
                 .currencyCode(expense.getCurrencyCode())
                 .paymentDate(request.getPaymentDate())
-                .paymentMode(clean(request.getPaymentMode()).toUpperCase())
+                .paymentMode(clean(request.getPaymentMode()).toUpperCase(Locale.ROOT))
                 .paymentReference(clean(request.getPaymentReference()))
                 .paymentReceiptUrl(clean(request.getPaymentReceiptUrl()))
                 .paidByUserId(userId)

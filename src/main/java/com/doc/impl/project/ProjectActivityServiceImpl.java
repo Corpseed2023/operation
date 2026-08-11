@@ -1128,13 +1128,23 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         createExpenseDecisionActivity(project, expense, user, "Accounts", decision);
 
         /*
-         * Account Service books the approved Government Fee as:
+         * Step 3 approval-time government-fee accounting.
          *
-         * Government Fee Expense Dr
-         *     Government Fee Payable Cr
+         * COMPANY:
+         * Dr Government Fee Receivable
+         *     Cr Government Fee Payable
          *
-         * This is an approval-time payable posting. The actual company
-         * payment remains PENDING and is handled separately.
+         * CLIENT_TO_COMPANY:
+         * Receipt:
+         * Dr Receiving Bank
+         *     Cr Government Fee Client Advance
+         *
+         * Accrual:
+         * Dr Government Fee Client Advance
+         *     Cr Government Fee Payable
+         *
+         * The actual payment to the government is not posted here. It is
+         * handled after Step 4 fund transfer and Step 5 proof verification.
          */
         if (
                 decision == ApprovalStatus.APPROVED &&
@@ -1379,10 +1389,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         return response;
     }
-
-    // =========================================================
-    // STEP 5A - TECHNICAL SUBMITS GOVERNMENT PAYMENT PROOF
-    // =========================================================
 
     // =========================================================
     // STEP 5A - TECHNICAL SUBMITS GOVERNMENT PAYMENT PROOF
