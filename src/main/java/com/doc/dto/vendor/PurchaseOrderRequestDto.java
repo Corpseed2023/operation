@@ -13,35 +13,52 @@ import java.util.List;
 @Setter
 public class PurchaseOrderRequestDto {
 
+    /**
+     * Required while creating a Purchase Order.
+     */
     private Long procurementAssignmentId;
 
+    /**
+     * External vendor providing the service/product.
+     */
     private Long vendorId;
 
     /**
-     * Finalized vendor item used by the backend to obtain the GST percentage.
+     * true  = GST applicable
+     * false = GST not applicable
      */
-    @NotNull(message = "Vendor finalization ID is required")
-    private Long vendorFinalizationId;
+    @NotNull(message = "GST applicable flag is required")
+    private Boolean gstApplicable;
+
+    /**
+     * Total GST percentage, for example 18.00.
+     *
+     * Required when gstApplicable is true.
+     * Must be null or zero when gstApplicable is false.
+     */
+    @DecimalMin(
+            value = "0.00",
+            message = "GST percentage cannot be negative"
+    )
+    @DecimalMax(
+            value = "100.00",
+            message = "GST percentage cannot be greater than 100"
+    )
+    private BigDecimal gstPercentage;
 
     private String poReferenceNumber;
 
+    /**
+     * Vendor's basic amount before GST.
+     *
+     * Example: 50.00
+     */
     @NotNull(message = "Final amount is required")
     @DecimalMin(
             value = "0.01",
             message = "Final amount must be greater than zero"
     )
     private BigDecimal finalAmount;
-
-    @NotNull(message = "TDS percentage is required")
-    @DecimalMin(
-            value = "0.00",
-            message = "TDS percentage cannot be negative"
-    )
-    @DecimalMax(
-            value = "100.00",
-            message = "TDS percentage cannot be greater than 100"
-    )
-    private BigDecimal tdsPercentage;
 
     private String scopeOfWork;
 
@@ -57,6 +74,7 @@ public class PurchaseOrderRequestDto {
      * Required while creating a Purchase Order.
      */
     private Long createdBy;
+
     private Integer paymentTerms;
 
     /**

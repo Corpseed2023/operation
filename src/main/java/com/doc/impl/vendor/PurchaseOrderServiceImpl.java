@@ -10,15 +10,12 @@ import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.vendor.ProcurementOrder;
 import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.entity.vendor.Vendor;
-import com.doc.entity.vendor.VendorFinalization;
-import com.doc.entity.vendor.VendorFinalizationStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.PaymentTypeRepository;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.PurchaseOrderRepository;
-import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.vendor.PurchaseOrderService;
 import org.apache.logging.log4j.LogManager;
@@ -36,44 +33,43 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Date;
-
 @Service
 @Transactional
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
-    private static final Logger logger = LogManager.getLogger(PurchaseOrderServiceImpl.class);
+    private static final Logger logger =
+            LogManager.getLogger(PurchaseOrderServiceImpl.class);
 
-    @Autowired
-    private PurchaseOrderRepository purchaseOrderRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+    private final ProcurementMilestoneAssignmentRepository procurementRepository;
+    private final VendorRepository vendorRepository;
+    private final UserRepository userRepository;
+    private final PaymentTypeRepository paymentTypeRepository;
+    private final String companyStateCode;
 
-    @Autowired
-    private ProcurementMilestoneAssignmentRepository procurementRepository;
+    public PurchaseOrderServiceImpl(
+            PurchaseOrderRepository purchaseOrderRepository,
+            ProcurementMilestoneAssignmentRepository procurementRepository,
+            VendorRepository vendorRepository,
+            UserRepository userRepository,
+            PaymentTypeRepository paymentTypeRepository,
+            @Value("${company.gst.state-code}") String companyStateCode) {
 
-    @Autowired
-    private VendorRepository vendorRepository;
+        this.purchaseOrderRepository = purchaseOrderRepository;
+        this.procurementRepository = procurementRepository;
+        this.vendorRepository = vendorRepository;
+        this.userRepository = userRepository;
+        this.paymentTypeRepository = paymentTypeRepository;
+        this.companyStateCode = companyStateCode;
+    }
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PaymentTypeRepository paymentTypeRepository;
-
-    @Autowired
-    private VendorFinalizationRepository vendorFinalizationRepository;
-
-    /**
-     * Buyer's GST state code. This is configured on the backend so that the
-     * client cannot decide whether CGST/SGST or IGST applies.
-     */
-    @Value("${company.gst.state-code}")
-    private String companyStateCode;
 
     @Override
     public PurchaseOrderResponseDto createPurchaseOrder(PurchaseOrderRequestDto dto) {
 
-        logger.info("Creating Purchase Order for procurementAssignmentId={}", dto.getProcurementAssignmentId());
-
         validateCreateRequest(dto);
+
+        logger.info("Creating Purchase Order for procurementAssignmentId={}", dto.getProcurementAssignmentId());
 
         ProcurementMilestoneAssignment procurement = procurementRepository
                 .findById(dto.getProcurementAssignmentId())
@@ -89,10 +85,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         "ERR_VENDOR_NOT_FOUND"
                 ));
 
-        BigDecimal finalizedGstRate = getFinalizedGstRate(
-                dto.getVendorFinalizationId(),
-                vendor
-        );
+        validateSelectedVendor(procurement, vendor);
+
+        BigDecimal gstRate = resolveRequestedGstRate(dto);
 
         User createdByUser = userRepository
                 .findActiveUserById(dto.getCreatedBy())
@@ -104,8 +99,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PoAmountBreakup amountBreakup = calculatePoAmountBreakup(
                 vendor,
                 dto.getFinalAmount(),
-                finalizedGstRate,
-                dto.getTdsPercentage()
+                gstRate
         );
 
         validatePoValueNotGreaterThanProjectValue(
@@ -133,8 +127,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setCgstAmount(amountBreakup.getCgstAmount());
         po.setSgstAmount(amountBreakup.getSgstAmount());
         po.setIgstAmount(amountBreakup.getIgstAmount());
-        po.setTdsPercentage(amountBreakup.getTdsPercentage());
-        po.setTdsAmount(amountBreakup.getTdsAmount());
         po.setTotalTaxAmount(amountBreakup.getTotalTaxAmount());
         po.setGrandTotal(amountBreakup.getGrandTotal());
         po.setPaymentTerms(dto.getPaymentTerms());
@@ -377,16 +369,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     ));
         }
 
-        BigDecimal finalizedGstRate = getFinalizedGstRate(
-                dto.getVendorFinalizationId(),
-                vendorForCalculation
-        );
+        validateSelectedVendor(procurementForValidation, vendorForCalculation);
+
+        BigDecimal gstRate = resolveRequestedGstRate(dto);
 
         PoAmountBreakup amountBreakup = calculatePoAmountBreakup(
                 vendorForCalculation,
                 dto.getFinalAmount(),
-                finalizedGstRate,
-                dto.getTdsPercentage()
+                gstRate
         );
 
         validatePoValueNotGreaterThanProjectValue(
@@ -413,10 +403,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setCgstAmount(amountBreakup.getCgstAmount());
         po.setSgstAmount(amountBreakup.getSgstAmount());
         po.setIgstAmount(amountBreakup.getIgstAmount());
-        po.setTdsPercentage(amountBreakup.getTdsPercentage());
-        po.setTdsAmount(amountBreakup.getTdsAmount());
         po.setTotalTaxAmount(amountBreakup.getTotalTaxAmount());
         po.setGrandTotal(amountBreakup.getGrandTotal());
+        po.setPaymentTerms(dto.getPaymentTerms());
 
         po.setScopeOfWork(dto.getScopeOfWork());
         po.setTermsAndConditions(dto.getTermsAndConditions());
@@ -640,14 +629,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        if (dto.getVendorFinalizationId() == null) {
-            throw new ValidationException(
-                    "Vendor finalization ID is required",
-                    "ERR_VENDOR_FINALIZATION_ID_REQUIRED"
-            );
-        }
-
         validateAmountFields(dto);
+        validateGstFields(dto);
     }
 
     private void validateUpdateRequest(PurchaseOrderRequestDto dto) {
@@ -659,14 +642,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        if (dto.getVendorFinalizationId() == null) {
-            throw new ValidationException(
-                    "Vendor finalization ID is required",
-                    "ERR_VENDOR_FINALIZATION_ID_REQUIRED"
-            );
-        }
-
         validateAmountFields(dto);
+        validateGstFields(dto);
     }
 
     private void validateAmountFields(PurchaseOrderRequestDto dto) {
@@ -678,75 +655,86 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        if (dto.getTdsPercentage() == null) {
+    }
+
+    /**
+     * GST is supplied explicitly for the Purchase Order. When GST is not
+     * applicable, the backend always stores/calculates a zero GST rate.
+     */
+    private BigDecimal resolveRequestedGstRate(PurchaseOrderRequestDto dto) {
+        if (!Boolean.TRUE.equals(dto.getGstApplicable())) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return dto.getGstPercentage().setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void validateGstFields(PurchaseOrderRequestDto dto) {
+        if (dto.getGstApplicable() == null) {
             throw new ValidationException(
-                    "TDS percentage is required",
-                    "ERR_TDS_PERCENTAGE_REQUIRED"
+                    "GST applicable flag is required",
+                    "ERR_GST_APPLICABLE_REQUIRED"
             );
         }
 
-        if (dto.getTdsPercentage().compareTo(BigDecimal.ZERO) < 0
-                || dto.getTdsPercentage().compareTo(new BigDecimal("100")) > 0) {
+        BigDecimal gstPercentage = dto.getGstPercentage();
+
+        if (Boolean.TRUE.equals(dto.getGstApplicable())) {
+            if (gstPercentage == null
+                    || gstPercentage.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ValidationException(
+                        "GST percentage must be greater than zero when GST is applicable",
+                        "ERR_GST_PERCENTAGE_REQUIRED"
+                );
+            }
+
+            if (gstPercentage.compareTo(new BigDecimal("100")) > 0) {
+                throw new ValidationException(
+                        "GST percentage cannot be greater than 100",
+                        "ERR_INVALID_GST_PERCENTAGE"
+                );
+            }
+        } else if (gstPercentage != null
+                && gstPercentage.compareTo(BigDecimal.ZERO) != 0) {
             throw new ValidationException(
-                    "TDS percentage must be between 0 and 100",
-                    "ERR_INVALID_TDS_PERCENTAGE"
+                    "GST percentage must be zero or null when GST is not applicable",
+                    "ERR_GST_PERCENTAGE_NOT_ALLOWED"
             );
         }
     }
 
-    /**
-     * Loads GST from the selected finalized vendor record. The request DTO does
-     * not contain a GST rate, so callers cannot override the finalized rate.
-     */
-    private BigDecimal getFinalizedGstRate(
-            Long vendorFinalizationId,
+    private void validateSelectedVendor(
+            ProcurementMilestoneAssignment procurement,
             Vendor vendor
     ) {
-        if (vendorFinalizationId == null) {
+        if (procurement == null) {
             throw new ValidationException(
-                    "Vendor finalization ID is required",
-                    "ERR_VENDOR_FINALIZATION_ID_REQUIRED"
+                    "Procurement assignment is required",
+                    "ERR_PROCUREMENT_ASSIGNMENT_REQUIRED"
             );
         }
 
-        VendorFinalization finalization = vendorFinalizationRepository
-                .findByIdAndIsDeletedFalse(vendorFinalizationId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Vendor finalization not found",
-                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
-                ));
-
-        if (finalization.getStatus() != VendorFinalizationStatus.FINALIZED) {
+        if (procurement.isDeleted()) {
             throw new ValidationException(
-                    "Purchase Order can only be created from a finalized vendor record",
-                    "ERR_VENDOR_NOT_FINALIZED"
+                    "Procurement assignment is deleted",
+                    "ERR_PROCUREMENT_DELETED"
             );
         }
 
-        if (finalization.getVendor() == null
-                || vendor == null
-                || !finalization.getVendor().getId().equals(vendor.getId())) {
+        if (procurement.getSelectedVendor() == null) {
             throw new ValidationException(
-                    "Selected vendor does not match the vendor finalization",
-                    "ERR_VENDOR_FINALIZATION_MISMATCH"
+                    "No vendor is selected for this procurement assignment",
+                    "ERR_SELECTED_VENDOR_MISSING"
             );
         }
 
-        BigDecimal gstRate = finalization.getTaxPercent();
-
-        if (gstRate == null) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-
-        if (gstRate.compareTo(BigDecimal.ZERO) < 0
-                || gstRate.compareTo(new BigDecimal("100")) > 0) {
+        if (vendor == null
+                || !procurement.getSelectedVendor().getId().equals(vendor.getId())) {
             throw new ValidationException(
-                    "Vendor finalization contains an invalid GST percentage",
-                    "ERR_INVALID_FINALIZATION_GST_RATE"
+                    "Vendor does not match the selected procurement vendor",
+                    "ERR_SELECTED_VENDOR_MISMATCH"
             );
         }
-
-        return gstRate.setScale(2, RoundingMode.HALF_UP);
     }
 
     private String getConfiguredCompanyStateCode() {
@@ -764,13 +752,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private PoAmountBreakup calculatePoAmountBreakup(
             Vendor vendor,
             BigDecimal finalAmount,
-            BigDecimal gstRate,
-            BigDecimal tdsPercentage
+            BigDecimal gstRate
     ) {
 
         BigDecimal baseAmount = finalAmount.setScale(2, RoundingMode.HALF_UP);
         BigDecimal normalizedGstRate = gstRate.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal normalizedTdsPercentage = tdsPercentage.setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal cgstAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         BigDecimal sgstAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -807,14 +793,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .add(igstAmount)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal tdsAmount = calculatePercentageAmount(
-                baseAmount,
-                normalizedTdsPercentage
-        );
-
         BigDecimal grandTotal = baseAmount
                 .add(totalTaxAmount)
-                .subtract(tdsAmount)
                 .setScale(2, RoundingMode.HALF_UP);
 
         return new PoAmountBreakup(
@@ -823,8 +803,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 cgstAmount,
                 sgstAmount,
                 igstAmount,
-                normalizedTdsPercentage,
-                tdsAmount,
                 totalTaxAmount,
                 grandTotal
         );
@@ -981,9 +959,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         dto.setIgstAmount(po.getIgstAmount());
         dto.setTotalTaxAmount(po.getTotalTaxAmount());
 
-        dto.setTdsPercentage(po.getTdsPercentage());
-        dto.setTdsAmount(po.getTdsAmount());
-
         dto.setGrandTotal(po.getGrandTotal());
 
         dto.setScopeOfWork(po.getScopeOfWork());
@@ -1070,8 +1045,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         dto.setCgstAmount(order.getCgstAmount());
         dto.setSgstAmount(order.getSgstAmount());
         dto.setIgstAmount(order.getIgstAmount());
-        dto.setTdsPercentage(order.getTdsPercentage());
-        dto.setTdsAmount(order.getTdsAmount());
         dto.setTotalTaxAmount(order.getTotalTaxAmount());
         dto.setGrandTotal(order.getGrandTotal());
 
@@ -1166,10 +1139,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         private final BigDecimal igstAmount;
 
-        private final BigDecimal tdsPercentage;
-
-        private final BigDecimal tdsAmount;
-
         private final BigDecimal totalTaxAmount;
 
         private final BigDecimal grandTotal;
@@ -1180,8 +1149,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 BigDecimal cgstAmount,
                 BigDecimal sgstAmount,
                 BigDecimal igstAmount,
-                BigDecimal tdsPercentage,
-                BigDecimal tdsAmount,
                 BigDecimal totalTaxAmount,
                 BigDecimal grandTotal
         ) {
@@ -1190,8 +1157,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             this.cgstAmount = cgstAmount;
             this.sgstAmount = sgstAmount;
             this.igstAmount = igstAmount;
-            this.tdsPercentage = tdsPercentage;
-            this.tdsAmount = tdsAmount;
             this.totalTaxAmount = totalTaxAmount;
             this.grandTotal = grandTotal;
         }
@@ -1214,14 +1179,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         private BigDecimal getIgstAmount() {
             return igstAmount;
-        }
-
-        private BigDecimal getTdsPercentage() {
-            return tdsPercentage;
-        }
-
-        private BigDecimal getTdsAmount() {
-            return tdsAmount;
         }
 
         private BigDecimal getTotalTaxAmount() {
