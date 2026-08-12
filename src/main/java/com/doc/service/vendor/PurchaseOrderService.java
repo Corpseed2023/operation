@@ -64,4 +64,8 @@ public interface PurchaseOrderService {
             int page,
             int size
     );
+
+    PurchaseOrderResponseDto rejectByAdmin(Long poId, Long adminUserId, String reason);
+
+    PurchaseOrderResponseDto approveByAdmin(Long poId, Long adminUserId, String remarks);
 }

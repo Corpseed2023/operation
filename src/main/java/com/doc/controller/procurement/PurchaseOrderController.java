@@ -167,6 +167,34 @@ public class PurchaseOrderController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{poId}/admin-approve/{adminUserId}")
+    @Operation(summary = "Admin approves an over-budget Purchase Order, reverting it to DRAFT")
+    public ResponseEntity<PurchaseOrderResponseDto> approveByAdmin(
+            @PathVariable Long poId,
+            @PathVariable Long adminUserId,
+            @RequestBody(required = false) ProcurementOrderActionRequestDto request
+    ) {
+        String comment = request != null ? request.getComment() : null;
 
+        PurchaseOrderResponseDto response =
+                purchaseOrderService.approveByAdmin(poId, adminUserId, comment);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{poId}/admin-reject/{adminUserId}")
+    @Operation(summary = "Admin rejects an over-budget Purchase Order")
+    public ResponseEntity<PurchaseOrderResponseDto> rejectByAdmin(
+            @PathVariable Long poId,
+            @PathVariable Long adminUserId,
+            @RequestBody(required = false) ProcurementOrderActionRequestDto request
+    ) {
+        String reason = request != null ? request.getReason() : null;
+
+        PurchaseOrderResponseDto response =
+                purchaseOrderService.rejectByAdmin(poId, adminUserId, reason);
+
+        return ResponseEntity.ok(response);
+    }
 
 }

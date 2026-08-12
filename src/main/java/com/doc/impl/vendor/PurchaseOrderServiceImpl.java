@@ -102,7 +102,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 gstRate
         );
 
-        validatePoValueNotGreaterThanProjectValue(
+        boolean exceedsProjectValue = isPoValueExceedingProjectValue(
                 amountBreakup.getGrandTotal(),
                 amountBreakup.getFinalAmount(),
                 procurement
@@ -139,8 +139,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             po.setAttachmentUrls(dto.getAttachmentUrls());
         }
 
-        po.setStatus(ProcurementOrderStatus.DRAFT);
+        po.setStatus(exceedsProjectValue
+                ? ProcurementOrderStatus.ADMIN_APPROVAL_PENDING
+                : ProcurementOrderStatus.DRAFT);
         po.setPoCreatedDate(currentDate);
+
+        if (exceedsProjectValue) {
+            po.setPoSubmittedForApprovalDate(currentDate);
+        }
 
         po.setCreatedBy(createdByUser.getId());
         po.setUpdatedBy(createdByUser.getId());
@@ -379,7 +385,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 gstRate
         );
 
-        validatePoValueNotGreaterThanProjectValue(
+        boolean exceedsProjectValue = isPoValueExceedingProjectValue(
                 amountBreakup.getGrandTotal(),
                 amountBreakup.getFinalAmount(),
                 procurementForValidation
@@ -438,11 +444,73 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             po.setPaymentType(paymentType);
         }
 
+        po.setStatus(exceedsProjectValue
+                ? ProcurementOrderStatus.ADMIN_APPROVAL_PENDING
+                : ProcurementOrderStatus.DRAFT);
+
+        if (exceedsProjectValue) {
+            po.setPoSubmittedForApprovalDate(new Date());
+        }
+
         po.setUpdatedDate(new Date());
 
         ProcurementOrder savedPo = purchaseOrderRepository.save(po);
 
         logger.info("Purchase Order updated successfully. poNumber={}", savedPo.getPoNumber());
+
+        return convertToPurchaseOrderResponseDto(savedPo);
+    }
+
+    @Override
+    public PurchaseOrderResponseDto rejectByAdmin(Long poId, Long adminUserId, String reason) {
+
+        if (poId == null) {
+            throw new ValidationException("Purchase Order ID is required", "ERR_PO_ID_REQUIRED");
+        }
+
+        if (adminUserId == null) {
+            throw new ValidationException("Admin user ID is required", "ERR_USER_ID_REQUIRED");
+        }
+
+        ProcurementOrder po = purchaseOrderRepository.findById(poId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Purchase Order not found", "ERR_PO_NOT_FOUND"));
+
+        if (po.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted Purchase Order cannot be rejected", "ERR_DELETED_PO");
+        }
+
+        if (po.getStatus() != ProcurementOrderStatus.ADMIN_APPROVAL_PENDING) {
+            throw new ValidationException(
+                    "Only Purchase Orders pending admin approval can be rejected. Current status: "
+                            + po.getStatus(),
+                    "ERR_INVALID_PO_STATUS_FOR_ADMIN_REJECTION"
+            );
+        }
+
+        User adminUser = userRepository.findActiveUserById(adminUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Admin user not found", "ERR_USER_NOT_FOUND"));
+
+        Date currentDate = new Date();
+
+        po.setStatus(ProcurementOrderStatus.REJECTED);
+        po.setUpdatedBy(adminUser.getId());
+        po.setUpdatedDate(currentDate);
+
+        if (reason != null && !reason.trim().isEmpty()) {
+            po.setRemarks(reason.trim());
+        }
+
+        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
+
+        logger.info(
+                "Purchase Order rejected by admin. poNumber={}, adminUserId={}, reason={}",
+                savedPo.getPoNumber(),
+                adminUser.getId(),
+                reason
+        );
 
         return convertToPurchaseOrderResponseDto(savedPo);
     }
@@ -519,6 +587,59 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         );
 
         return orders.map(this::convertToPurchaseOrderResponseDto);
+    }
+
+    @Override
+    public PurchaseOrderResponseDto approveByAdmin(Long poId, Long adminUserId, String remarks) {
+
+        if (poId == null) {
+            throw new ValidationException("Purchase Order ID is required", "ERR_PO_ID_REQUIRED");
+        }
+
+        if (adminUserId == null) {
+            throw new ValidationException("Admin user ID is required", "ERR_USER_ID_REQUIRED");
+        }
+
+        ProcurementOrder po = purchaseOrderRepository.findById(poId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Purchase Order not found", "ERR_PO_NOT_FOUND"));
+
+        if (po.isDeleted()) {
+            throw new ValidationException(
+                    "Deleted Purchase Order cannot be approved", "ERR_DELETED_PO");
+        }
+
+        if (po.getStatus() != ProcurementOrderStatus.ADMIN_APPROVAL_PENDING) {
+            throw new ValidationException(
+                    "Only Purchase Orders pending admin approval can be actioned here. Current status: "
+                            + po.getStatus(),
+                    "ERR_INVALID_PO_STATUS_FOR_ADMIN_APPROVAL"
+            );
+        }
+
+        User adminUser = userRepository.findActiveUserById(adminUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Admin user not found", "ERR_USER_NOT_FOUND"));
+
+        Date currentDate = new Date();
+
+        po.setStatus(ProcurementOrderStatus.DRAFT);
+        po.setUpdatedBy(adminUser.getId());
+        po.setUpdatedDate(currentDate);
+
+        if (remarks != null && !remarks.trim().isEmpty()) {
+            po.setRemarks(remarks.trim());
+        }
+
+        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
+
+        logger.info(
+                "Purchase Order admin-approved and reverted to DRAFT. poNumber={}, adminUserId={}",
+                savedPo.getPoNumber(),
+                adminUser.getId()
+        );
+
+        return convertToPurchaseOrderResponseDto(savedPo);
     }
 
     private PurchaseOrderResponseDto approvePurchaseOrderInternal(
@@ -814,7 +935,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
-    private void validatePoValueNotGreaterThanProjectValue(
+    private boolean isPoValueExceedingProjectValue(
             BigDecimal grandTotal,
             BigDecimal finalAmount,
             ProcurementMilestoneAssignment procurement
@@ -854,15 +975,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 procurement.getProject().getPaymentDetail().getTotalAmount()
         );
 
-        if (poValue.compareTo(projectValue) > 0) {
-            throw new ValidationException(
-                    "PO value cannot be greater than project value. Project value: "
-                            + projectValue
-                            + ", PO value: "
-                            + poValue,
-                    "ERR_PO_VALUE_EXCEEDS_PROJECT_VALUE"
-            );
-        }
+        return poValue.compareTo(projectValue) > 0;
     }
 
     private BigDecimal toBigDecimal(Object value) {
