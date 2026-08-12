@@ -1,4 +1,4 @@
-package com.doc.dto;
+package com.doc.dto.project;
 
 import com.doc.em.ExpensePaidBy;
 import lombok.AllArgsConstructor;
