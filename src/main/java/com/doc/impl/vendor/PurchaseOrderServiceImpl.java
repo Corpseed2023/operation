@@ -10,17 +10,21 @@ import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.vendor.ProcurementOrder;
 import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.entity.vendor.Vendor;
+import com.doc.entity.vendor.VendorFinalization;
+import com.doc.entity.vendor.VendorFinalizationStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.PaymentTypeRepository;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.PurchaseOrderRepository;
+import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.vendor.PurchaseOrderService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -54,6 +58,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Autowired
     private PaymentTypeRepository paymentTypeRepository;
 
+    @Autowired
+    private VendorFinalizationRepository vendorFinalizationRepository;
+
+    /**
+     * Buyer's GST state code. This is configured on the backend so that the
+     * client cannot decide whether CGST/SGST or IGST applies.
+     */
+    @Value("${company.gst.state-code}")
+    private String companyStateCode;
+
     @Override
     public PurchaseOrderResponseDto createPurchaseOrder(PurchaseOrderRequestDto dto) {
 
@@ -75,6 +89,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         "ERR_VENDOR_NOT_FOUND"
                 ));
 
+        BigDecimal finalizedGstRate = getFinalizedGstRate(
+                dto.getVendorFinalizationId(),
+                vendor
+        );
+
         User createdByUser = userRepository
                 .findActiveUserById(dto.getCreatedBy())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -85,9 +104,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PoAmountBreakup amountBreakup = calculatePoAmountBreakup(
                 vendor,
                 dto.getFinalAmount(),
-                dto.getGstRate(),
-                dto.getTdsPercentage(),
-                dto.getPlaceOfSupplyStateCode()
+                finalizedGstRate,
+                dto.getTdsPercentage()
         );
 
         validatePoValueNotGreaterThanProjectValue(
@@ -108,7 +126,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setPoReferenceNumber(dto.getPoReferenceNumber());
 
         po.setVendorGSTRegistrationType(vendor.getGstRegistrationType());
-        po.setPlaceOfSupplyStateCode(dto.getPlaceOfSupplyStateCode());
+        po.setPlaceOfSupplyStateCode(getConfiguredCompanyStateCode());
 
         po.setFinalAmount(amountBreakup.getFinalAmount());
         po.setGstRate(amountBreakup.getGstRate());
@@ -359,12 +377,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     ));
         }
 
+        BigDecimal finalizedGstRate = getFinalizedGstRate(
+                dto.getVendorFinalizationId(),
+                vendorForCalculation
+        );
+
         PoAmountBreakup amountBreakup = calculatePoAmountBreakup(
                 vendorForCalculation,
                 dto.getFinalAmount(),
-                dto.getGstRate(),
-                dto.getTdsPercentage(),
-                dto.getPlaceOfSupplyStateCode()
+                finalizedGstRate,
+                dto.getTdsPercentage()
         );
 
         validatePoValueNotGreaterThanProjectValue(
@@ -384,7 +406,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         po.setPoReferenceNumber(dto.getPoReferenceNumber());
-        po.setPlaceOfSupplyStateCode(dto.getPlaceOfSupplyStateCode());
+        po.setPlaceOfSupplyStateCode(getConfiguredCompanyStateCode());
 
         po.setFinalAmount(amountBreakup.getFinalAmount());
         po.setGstRate(amountBreakup.getGstRate());
@@ -618,6 +640,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
+        if (dto.getVendorFinalizationId() == null) {
+            throw new ValidationException(
+                    "Vendor finalization ID is required",
+                    "ERR_VENDOR_FINALIZATION_ID_REQUIRED"
+            );
+        }
+
         validateAmountFields(dto);
     }
 
@@ -630,6 +659,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
+        if (dto.getVendorFinalizationId() == null) {
+            throw new ValidationException(
+                    "Vendor finalization ID is required",
+                    "ERR_VENDOR_FINALIZATION_ID_REQUIRED"
+            );
+        }
+
         validateAmountFields(dto);
     }
 
@@ -639,21 +675,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new ValidationException(
                     "Final amount must be greater than zero",
                     "ERR_INVALID_AMOUNT"
-            );
-        }
-
-        if (dto.getGstRate() == null) {
-            throw new ValidationException(
-                    "GST rate is required",
-                    "ERR_GST_RATE_REQUIRED"
-            );
-        }
-
-        if (dto.getGstRate().compareTo(BigDecimal.ZERO) < 0
-                || dto.getGstRate().compareTo(new BigDecimal("100")) > 0) {
-            throw new ValidationException(
-                    "GST rate must be between 0 and 100",
-                    "ERR_INVALID_GST_RATE"
             );
         }
 
@@ -671,33 +692,80 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     "ERR_INVALID_TDS_PERCENTAGE"
             );
         }
-
-        validateStateCode(dto.getPlaceOfSupplyStateCode());
     }
 
-    private void validateStateCode(String stateCode) {
-
-        if (stateCode == null || stateCode.trim().isEmpty()) {
+    /**
+     * Loads GST from the selected finalized vendor record. The request DTO does
+     * not contain a GST rate, so callers cannot override the finalized rate.
+     */
+    private BigDecimal getFinalizedGstRate(
+            Long vendorFinalizationId,
+            Vendor vendor
+    ) {
+        if (vendorFinalizationId == null) {
             throw new ValidationException(
-                    "Place of supply state code is required",
-                    "ERR_PLACE_OF_SUPPLY_REQUIRED"
+                    "Vendor finalization ID is required",
+                    "ERR_VENDOR_FINALIZATION_ID_REQUIRED"
             );
         }
 
-        if (!stateCode.matches("^[0-9]{2}$")) {
+        VendorFinalization finalization = vendorFinalizationRepository
+                .findByIdAndIsDeletedFalse(vendorFinalizationId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vendor finalization not found",
+                        "ERR_VENDOR_FINALIZATION_NOT_FOUND"
+                ));
+
+        if (finalization.getStatus() != VendorFinalizationStatus.FINALIZED) {
             throw new ValidationException(
-                    "Place of supply state code must be exactly 2 digits",
-                    "ERR_INVALID_PLACE_OF_SUPPLY"
+                    "Purchase Order can only be created from a finalized vendor record",
+                    "ERR_VENDOR_NOT_FINALIZED"
             );
         }
+
+        if (finalization.getVendor() == null
+                || vendor == null
+                || !finalization.getVendor().getId().equals(vendor.getId())) {
+            throw new ValidationException(
+                    "Selected vendor does not match the vendor finalization",
+                    "ERR_VENDOR_FINALIZATION_MISMATCH"
+            );
+        }
+
+        BigDecimal gstRate = finalization.getTaxPercent();
+
+        if (gstRate == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (gstRate.compareTo(BigDecimal.ZERO) < 0
+                || gstRate.compareTo(new BigDecimal("100")) > 0) {
+            throw new ValidationException(
+                    "Vendor finalization contains an invalid GST percentage",
+                    "ERR_INVALID_FINALIZATION_GST_RATE"
+            );
+        }
+
+        return gstRate.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String getConfiguredCompanyStateCode() {
+        if (companyStateCode == null
+                || !companyStateCode.trim().matches("^[0-9]{2}$")) {
+            throw new ValidationException(
+                    "Company GST state code must be configured as exactly 2 digits",
+                    "ERR_INVALID_COMPANY_GST_STATE_CODE"
+            );
+        }
+
+        return companyStateCode.trim();
     }
 
     private PoAmountBreakup calculatePoAmountBreakup(
             Vendor vendor,
             BigDecimal finalAmount,
             BigDecimal gstRate,
-            BigDecimal tdsPercentage,
-            String placeOfSupplyStateCode
+            BigDecimal tdsPercentage
     ) {
 
         BigDecimal baseAmount = finalAmount.setScale(2, RoundingMode.HALF_UP);
@@ -712,6 +780,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 vendor != null ? vendor.getGstNumber() : null
         );
 
+        String buyerStateCode = getConfiguredCompanyStateCode();
+
         if (normalizedGstRate.compareTo(BigDecimal.ZERO) > 0) {
 
             if (vendorStateCode == null) {
@@ -721,7 +791,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 );
             }
 
-            if (vendorStateCode.equals(placeOfSupplyStateCode)) {
+            if (vendorStateCode.equals(buyerStateCode)) {
                 BigDecimal halfGstRate = normalizedGstRate
                         .divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
 

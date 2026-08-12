@@ -17,6 +17,12 @@ public class PurchaseOrderRequestDto {
 
     private Long vendorId;
 
+    /**
+     * Finalized vendor item used by the backend to obtain the GST percentage.
+     */
+    @NotNull(message = "Vendor finalization ID is required")
+    private Long vendorFinalizationId;
+
     private String poReferenceNumber;
 
     @NotNull(message = "Final amount is required")
@@ -26,34 +32,16 @@ public class PurchaseOrderRequestDto {
     )
     private BigDecimal finalAmount;
 
-    /**
-     * Total GST %
-     *
-     * Example:
-     * 18 = 18%
-     */
-    @DecimalMin(value = "0.00")
-    @DecimalMax(value = "100.00")
-    private BigDecimal gstRate;
-
-    /**
-     * TDS %
-     *
-     * Example:
-     * 10 = 10%
-     */
-    @DecimalMin(value = "0.00")
-    @DecimalMax(value = "100.00")
+    @NotNull(message = "TDS percentage is required")
+    @DecimalMin(
+            value = "0.00",
+            message = "TDS percentage cannot be negative"
+    )
+    @DecimalMax(
+            value = "100.00",
+            message = "TDS percentage cannot be greater than 100"
+    )
     private BigDecimal tdsPercentage;
-
-    /**
-     * Place of supply / buyer state GST code.
-     *
-     * Example:
-     * UP = 09
-     * Delhi = 07
-     */
-    private String placeOfSupplyStateCode;
 
     private String scopeOfWork;
 
@@ -66,13 +54,13 @@ public class PurchaseOrderRequestDto {
     private String paymentTypeName;
 
     /**
-     * Required during CREATE.
+     * Required while creating a Purchase Order.
      */
     private Long createdBy;
     private Integer paymentTerms;
 
     /**
-     * Used during UPDATE.
+     * Used while updating a DRAFT Purchase Order.
      */
     private Long userId;
 }

@@ -1,4 +1,3 @@
-
 package com.doc.impl.project;
 
 import com.doc.dto.project.activity.CreateCommentRequestDto;
@@ -9,11 +8,11 @@ import com.doc.dto.project.activity.expense.AccountsExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.CreateExpenseRequestDto;
 import com.doc.dto.project.activity.expense.CrtExpenseDecisionRequestDto;
 import com.doc.dto.project.activity.expense.GovernmentFeeFundTransferRequestDto;
-import com.doc.dto.project.activity.expense.GovernmentFeePaymentRequestDto;
 import com.doc.dto.project.activity.expense.GovernmentFeePaymentDecisionRequestDto;
+import com.doc.dto.project.activity.expense.GovernmentFeePaymentRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
-import com.doc.em.ActivityType;
 import com.doc.em.AccountPostingStatus;
+import com.doc.em.ActivityType;
 import com.doc.em.ApprovalStatus;
 import com.doc.em.ExpenseApprovalStage;
 import com.doc.em.ExpenseCategory;
@@ -38,6 +37,16 @@ import com.doc.repository.projectRepo.activity.ProjectExpenseRepository;
 import com.doc.repository.projectRepo.activity.ProjectNoteRepository;
 import com.doc.service.ExpenseAccountPostingService;
 import com.doc.service.ProjectActivityService;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -48,18 +57,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
-import java.time.LocalTime;
 
 @Slf4j
 @Service
@@ -88,36 +85,33 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     private final ProjectCommentRepository commentRepository;
     private final ProjectExpenseRepository expenseRepository;
 
-    private final ExpenseAccountPostingService
-            expenseAccountPostingService;
+    private final ExpenseAccountPostingService expenseAccountPostingService;
 
-    private static final Set<String> ALLOWED_CLIENT_PAYMENT_MODES =
-            Set.of(
-                    "CASH",
-                    "CASH_DEPOSIT",
-                    "CHEQUE",
-                    "DEMAND_DRAFT",
-                    "NEFT",
-                    "RTGS",
-                    "IMPS",
-                    "UPI",
-                    "CARD",
-                    "BANK_TRANSFER",
-                    "OTHER"
-            );
+    private static final Set<String> ALLOWED_CLIENT_PAYMENT_MODES = Set.of(
+            "CASH",
+            "CASH_DEPOSIT",
+            "CHEQUE",
+            "DEMAND_DRAFT",
+            "NEFT",
+            "RTGS",
+            "IMPS",
+            "UPI",
+            "CARD",
+            "BANK_TRANSFER",
+            "OTHER"
+    );
 
-    private static final Set<String> BANK_DETAILS_REQUIRED_PAYMENT_MODES =
-            Set.of(
-                    "CASH_DEPOSIT",
-                    "CHEQUE",
-                    "DEMAND_DRAFT",
-                    "NEFT",
-                    "RTGS",
-                    "IMPS",
-                    "UPI",
-                    "CARD",
-                    "BANK_TRANSFER"
-            );
+    private static final Set<String> BANK_DETAILS_REQUIRED_PAYMENT_MODES = Set.of(
+            "CASH_DEPOSIT",
+            "CHEQUE",
+            "DEMAND_DRAFT",
+            "NEFT",
+            "RTGS",
+            "IMPS",
+            "UPI",
+            "CARD",
+            "BANK_TRANSFER"
+    );
 
     // =========================================================
     // NOTE
@@ -129,7 +123,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long projectId,
             CreateNoteRequestDto request
     ) {
-
         log.info(
                 "[NOTE-CREATE-START] projectId={} | createdByUserId={}",
                 projectId,
@@ -158,9 +151,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (request.getNoteText() == null ||
-                request.getNoteText().trim().isEmpty()) {
-
+        if (
+                request.getNoteText() == null || request.getNoteText().trim().isEmpty()
+        ) {
             log.warn(
                     "[NOTE-CREATE-VALIDATION-FAILED] projectId={} | userId={} | reason=note-text-empty",
                     projectId,
@@ -226,7 +219,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long projectId,
             CreateCommentRequestDto request
     ) {
-
         log.info(
                 "[COMMENT-CREATE-START] projectId={} | createdByUserId={} | parentCommentId={}",
                 projectId,
@@ -256,9 +248,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (request.getCommentText() == null ||
-                request.getCommentText().trim().isEmpty()) {
-
+        if (
+                request.getCommentText() == null ||
+                        request.getCommentText().trim().isEmpty()
+        ) {
             log.warn(
                     "[COMMENT-CREATE-VALIDATION-FAILED] projectId={} | userId={} | reason=comment-text-empty",
                     projectId,
@@ -282,10 +275,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
             ProjectComment parentComment = commentRepository
                     .findById(request.getParentCommentId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Parent comment not found",
-                            "ERR_PARENT_COMMENT_NOT_FOUND"
-                    ));
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException(
+                                    "Parent comment not found",
+                                    "ERR_PARENT_COMMENT_NOT_FOUND"
+                            )
+                    );
 
             if (!parentComment.getProject().getId().equals(projectId)) {
                 log.warn(
@@ -300,7 +295,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 );
             }
         }
-
 
         String commentText = request.getCommentText().trim();
 
@@ -355,7 +349,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long projectId,
             CreateExpenseRequestDto request
     ) {
-
         log.info(
                 "[EXPENSE-CREATE-START] projectId={} | createdByUserId={} | departmentId={} | category={}",
                 projectId,
@@ -394,10 +387,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 request.getDepartmentId()
         );
 
-        validateGovernmentFeeRaiser(
-                department,
-                request.getExpenseCategory()
-        );
+        validateGovernmentFeeRaiser(department, request.getExpenseCategory());
 
         log.debug(
                 "[EXPENSE-CREATE-CONTEXT-VALIDATED] projectId={} | userId={} | departmentId={}",
@@ -418,12 +408,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        String attachmentUrl =
-                normalizeOptionalText(request.getAttachmentUrl());
+        String attachmentUrl = normalizeOptionalText(request.getAttachmentUrl());
 
-        if (request.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE
-                && attachmentUrl == null) {
-
+        if (
+                request.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE &&
+                        attachmentUrl == null
+        ) {
             throw new ValidationException(
                     "Portal challan attachment is required for government fee expense",
                     "ERR_GOVERNMENT_FEE_ATTACHMENT_REQUIRED"
@@ -442,9 +432,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 "ERR_EXPENSE_REMARK_REQUIRED"
         );
 
-        if (request.getExpenseDate() != null &&
-                request.getExpenseDate().isAfter(LocalDateTime.now())) {
-
+        if (
+                request.getExpenseDate() != null &&
+                        request.getExpenseDate().isAfter(LocalDateTime.now())
+        ) {
             log.warn(
                     "[EXPENSE-CREATE-VALIDATION-FAILED] projectId={} | userId={} | reason=future-expense-date",
                     projectId,
@@ -456,21 +447,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        String currencyCode = normalizeCurrencyCode(
-                request.getCurrencyCode()
-        );
+        String currencyCode = normalizeCurrencyCode(request.getCurrencyCode());
 
-        String categoryName = request.getExpenseCategory()
-                .name()
-                .replace("_", " ");
+        String categoryName = request.getExpenseCategory().name().replace("_", " ");
 
         String activitySummary =
-                categoryName
-                        + " - "
-                        + currencyCode
-                        + " "
-                        + requestedAmount
-                        + " - Pending CRT approval";
+                categoryName +
+                        " - " +
+                        currencyCode +
+                        " " +
+                        requestedAmount +
+                        " - Pending CRT approval";
 
         ProjectActivity activity = createActivity(
                 project,
@@ -529,13 +516,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         expense.setExpensePaidBy(null);
 
-        expense.setPaymentStatus(
-                ExpensePaymentStatus.NOT_INITIATED
-        );
+        expense.setPaymentStatus(ExpensePaymentStatus.NOT_INITIATED);
 
-        expense.setAccountPostingStatus(
-                AccountPostingStatus.NOT_REQUIRED
-        );
+        expense.setAccountPostingStatus(AccountPostingStatus.NOT_REQUIRED);
         expense.setAccountVoucherId(null);
         expense.setAccountVoucherNumber(null);
         expense.setAccountPostedAt(null);
@@ -553,17 +536,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getPaymentStatus()
         );
 
-        return mapResponse(
-                activity,
-                mapToExpenseDto(expense)
-        );
+        return mapResponse(activity, mapToExpenseDto(expense));
     }
 
     private void validateGovernmentFeeRaiser(
             Department department,
             ExpenseCategory expenseCategory
     ) {
-
         if (expenseCategory != ExpenseCategory.GOVERNMENT_FEE) {
             return;
         }
@@ -571,11 +550,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         String departmentName =
                 department.getName() == null
                         ? ""
-                        : department.getName()
-                        .trim()
-                        .toUpperCase(Locale.ROOT);
-
-
+                        : department.getName().trim().toUpperCase(Locale.ROOT);
     }
 
     // =========================================================
@@ -590,7 +565,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId,
             CrtExpenseDecisionRequestDto request
     ) {
-
         log.info(
                 "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | paymentMode={}",
                 projectId,
@@ -613,40 +587,31 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         Project project = validateActiveProject(projectId);
 
-        ProjectExpense expense = validateExpense(
-                project,
-                expenseId
-        );
+        ProjectExpense expense = validateExpense(project, expenseId);
 
-        ApprovalStatus decision =
-                validateDecisionStatus(request.getStatus());
+        ApprovalStatus decision = validateDecisionStatus(request.getStatus());
 
-        if (expense.getApprovalStage()
-                != ExpenseApprovalStage.CRT_REVIEW) {
-
+        if (expense.getApprovalStage() != ExpenseApprovalStage.CRT_REVIEW) {
             throw new ValidationException(
                     "Expense is not pending at CRT review stage",
                     "ERR_INVALID_APPROVAL_STAGE"
             );
         }
 
-        if (expense.getApprovalStatus() == ApprovalStatus.APPROVED
-                || expense.getApprovalStatus() == ApprovalStatus.REJECTED
-                || expense.getApprovalStatus() == ApprovalStatus.CANCELLED) {
-
+        if (
+                expense.getApprovalStatus() == ApprovalStatus.APPROVED ||
+                        expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
+                        expense.getApprovalStatus() == ApprovalStatus.CANCELLED
+        ) {
             throw new ValidationException(
                     "Expense approval workflow is already completed",
                     "ERR_EXPENSE_ALREADY_COMPLETED"
             );
         }
 
-        String decisionRemark =
-                normalizeOptionalText(request.getRemark());
+        String decisionRemark = normalizeOptionalText(request.getRemark());
 
-        validateDecisionRemark(
-                decision,
-                decisionRemark
-        );
+        validateDecisionRemark(decision, decisionRemark);
 
         LocalDateTime actionTime = LocalDateTime.now();
 
@@ -657,17 +622,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setCrtDecisionRemark(decisionRemark);
 
         switch (decision) {
-
-            case APPROVED -> processCrtApproval(
-                    expense,
-                    request,
-                    actionTime
-            );
-
+            case APPROVED -> processCrtApproval(expense, request, actionTime);
             case REJECTED -> processCrtRejection(expense);
-
             case ON_HOLD -> processCrtOnHold(expense);
-
             default -> throw new ValidationException(
                     "Invalid CRT decision",
                     "ERR_INVALID_CRT_DECISION"
@@ -676,13 +633,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         expense = expenseRepository.save(expense);
 
-        createExpenseDecisionActivity(
-                project,
-                expense,
-                user,
-                "CRT",
-                decision
-        );
+        createExpenseDecisionActivity(project, expense, user, "CRT", decision);
 
         log.info(
                 "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | stage={} | paymentStatus={} | accountingCalled=false",
@@ -703,7 +654,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             CrtExpenseDecisionRequestDto request,
             LocalDateTime actionTime
     ) {
-
         ExpensePaidBy paidBy = request.getExpensePaidBy();
 
         if (paidBy == null) {
@@ -716,16 +666,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setExpensePaidBy(paidBy);
 
         if (paidBy == ExpensePaidBy.CLIENT_TO_COMPANY) {
-
             validateClientToCompanyDetails(request);
 
-            String paymentMode = normalizePaymentMode(
-                    request.getClientPaymentMode()
-            );
+            String paymentMode = normalizePaymentMode(request.getClientPaymentMode());
 
-            expense.setClientPaymentMode(
-                    paymentMode
-            );
+            expense.setClientPaymentMode(paymentMode);
 
             if ("CASH".equals(paymentMode)) {
                 expense.setClientPaymentBankLedgerId(null);
@@ -736,15 +681,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 );
 
                 expense.setClientPaymentBankName(
-                        normalizeOptionalText(
-                                request.getClientPaymentBankName()
-                        )
+                        normalizeOptionalText(request.getClientPaymentBankName())
                 );
             }
 
-            expense.setClientPaymentDate(
-                    request.getClientPaymentDate()
-            );
+            expense.setClientPaymentDate(request.getClientPaymentDate());
 
             expense.setClientPaymentReference(
                     requireText(
@@ -767,45 +708,29 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (paidBy == ExpensePaidBy.COMPANY) {
-
             clearClientFundingDetails(expense);
             moveExpenseToAccountsReview(expense);
             return;
         }
 
         if (isClientDirect(paidBy)) {
-
             clearClientFundingDetails(expense);
 
-            expense.setApprovalStatus(
-                    ApprovalStatus.APPROVED
-            );
+            expense.setApprovalStatus(ApprovalStatus.APPROVED);
 
-            expense.setApprovalStage(
-                    ExpenseApprovalStage.COMPLETED
-            );
+            expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
-            expense.setAccountsApprovalStatus(
-                    ApprovalStatus.CANCELLED
-            );
+            expense.setAccountsApprovalStatus(ApprovalStatus.CANCELLED);
 
-            expense.setApprovedAmount(
-                    expense.getRequestedAmount()
-            );
+            expense.setApprovedAmount(expense.getRequestedAmount());
 
-            expense.setPaidAmount(
-                    expense.getRequestedAmount()
-            );
+            expense.setPaidAmount(expense.getRequestedAmount());
 
-            expense.setPaymentStatus(
-                    ExpensePaymentStatus.CLIENT_PAID
-            );
+            expense.setPaymentStatus(ExpensePaymentStatus.CLIENT_PAID);
 
             expense.setPaymentCompletedDate(actionTime);
 
-            expense.setAccountPostingStatus(
-                    AccountPostingStatus.SKIPPED
-            );
+            expense.setAccountPostingStatus(AccountPostingStatus.SKIPPED);
 
             clearAccountVoucherDetails(expense);
             return;
@@ -817,28 +742,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
     }
 
-    private void moveExpenseToAccountsReview(
-            ProjectExpense expense
-    ) {
+    private void moveExpenseToAccountsReview(ProjectExpense expense) {
+        expense.setApprovalStatus(ApprovalStatus.PENDING);
 
-        expense.setApprovalStatus(
-                ApprovalStatus.PENDING
-        );
+        expense.setApprovalStage(ExpenseApprovalStage.ACCOUNTS_REVIEW);
 
-        expense.setApprovalStage(
-                ExpenseApprovalStage.ACCOUNTS_REVIEW
-        );
-
-        expense.setAccountsApprovalStatus(
-                ApprovalStatus.PENDING
-        );
+        expense.setAccountsApprovalStatus(ApprovalStatus.PENDING);
 
         expense.setApprovedAmount(null);
         expense.setPaidAmount(BigDecimal.ZERO);
 
-        expense.setPaymentStatus(
-                ExpensePaymentStatus.NOT_INITIATED
-        );
+        expense.setPaymentStatus(ExpensePaymentStatus.NOT_INITIATED);
 
         expense.setPaymentCompletedDate(null);
 
@@ -846,9 +760,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          * CRT only declared the transaction.
          * Accounts has not verified or posted it.
          */
-        expense.setAccountPostingStatus(
-                AccountPostingStatus.NOT_REQUIRED
-        );
+        expense.setAccountPostingStatus(AccountPostingStatus.NOT_REQUIRED);
 
         clearAccountVoucherDetails(expense);
     }
@@ -856,11 +768,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     private void validateClientToCompanyDetails(
             CrtExpenseDecisionRequestDto request
     ) {
-
-        String paymentMode =
-                normalizePaymentMode(
-                        request.getClientPaymentMode()
-                );
+        String paymentMode = normalizePaymentMode(request.getClientPaymentMode());
 
         if (paymentMode == null) {
             throw new ValidationException(
@@ -870,13 +778,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         if (BANK_DETAILS_REQUIRED_PAYMENT_MODES.contains(paymentMode)) {
-
-            if (request.getClientPaymentBankLedgerId() == null
-                    || request.getClientPaymentBankLedgerId() <= 0) {
-
+            if (
+                    request.getClientPaymentBankLedgerId() == null ||
+                            request.getClientPaymentBankLedgerId() <= 0
+            ) {
                 throw new ValidationException(
-                        "Receiving company bank is required for payment mode "
-                                + paymentMode,
+                        "Receiving company bank is required for payment mode " + paymentMode,
                         "ERR_CLIENT_PAYMENT_BANK_REQUIRED"
                 );
             }
@@ -915,77 +822,48 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
     }
 
-    private void processCrtRejection(
-            ProjectExpense expense
-    ) {
-
+    private void processCrtRejection(ProjectExpense expense) {
         expense.setExpensePaidBy(null);
         clearClientFundingDetails(expense);
 
-        expense.setApprovalStatus(
-                ApprovalStatus.REJECTED
-        );
+        expense.setApprovalStatus(ApprovalStatus.REJECTED);
 
-        expense.setApprovalStage(
-                ExpenseApprovalStage.COMPLETED
-        );
+        expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
-        expense.setAccountsApprovalStatus(
-                ApprovalStatus.CANCELLED
-        );
+        expense.setAccountsApprovalStatus(ApprovalStatus.CANCELLED);
 
         expense.setApprovedAmount(null);
         expense.setPaidAmount(BigDecimal.ZERO);
 
-        expense.setPaymentStatus(
-                ExpensePaymentStatus.CANCELLED
-        );
+        expense.setPaymentStatus(ExpensePaymentStatus.CANCELLED);
 
         expense.setPaymentCompletedDate(null);
 
-        expense.setAccountPostingStatus(
-                AccountPostingStatus.NOT_REQUIRED
-        );
+        expense.setAccountPostingStatus(AccountPostingStatus.NOT_REQUIRED);
 
         clearAccountVoucherDetails(expense);
     }
 
-    private void processCrtOnHold(
-            ProjectExpense expense
-    ) {
+    private void processCrtOnHold(ProjectExpense expense) {
+        expense.setApprovalStatus(ApprovalStatus.ON_HOLD);
 
-        expense.setApprovalStatus(
-                ApprovalStatus.ON_HOLD
-        );
+        expense.setApprovalStage(ExpenseApprovalStage.CRT_REVIEW);
 
-        expense.setApprovalStage(
-                ExpenseApprovalStage.CRT_REVIEW
-        );
-
-        expense.setAccountsApprovalStatus(
-                ApprovalStatus.PENDING
-        );
+        expense.setAccountsApprovalStatus(ApprovalStatus.PENDING);
 
         expense.setApprovedAmount(null);
         expense.setPaidAmount(BigDecimal.ZERO);
 
-        expense.setPaymentStatus(
-                ExpensePaymentStatus.NOT_INITIATED
-        );
+        expense.setPaymentStatus(ExpensePaymentStatus.NOT_INITIATED);
 
         expense.setPaymentCompletedDate(null);
 
-        expense.setAccountPostingStatus(
-                AccountPostingStatus.NOT_REQUIRED
-        );
+        expense.setAccountPostingStatus(AccountPostingStatus.NOT_REQUIRED);
 
         clearAccountVoucherDetails(expense);
     }
 
-    private String normalizePaymentMode(
-            String value
-    ) {
-
+    private String normalizePaymentMode(String value) {
         String paymentMode = normalizeOptionalText(value);
 
         if (paymentMode == null) {
@@ -1007,10 +885,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return paymentMode;
     }
 
-    private void clearClientFundingDetails(
-            ProjectExpense expense
-    ) {
-
+    private void clearClientFundingDetails(ProjectExpense expense) {
         expense.setClientPaymentMode(null);
         expense.setClientPaymentBankLedgerId(null);
         expense.setClientPaymentBankName(null);
@@ -1019,10 +894,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setClientPaymentProofUrl(null);
     }
 
-    private void clearAccountVoucherDetails(
-            ProjectExpense expense
-    ) {
-
+    private void clearAccountVoucherDetails(ProjectExpense expense) {
         expense.setAccountVoucherId(null);
         expense.setAccountVoucherNumber(null);
         expense.setAccountPostedAt(null);
@@ -1032,9 +904,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setInitialJournalVoucherId(null);
         expense.setInitialJournalVoucherNumber(null);
 
-        expense.setFundTransferPostingStatus(
-                AccountPostingStatus.NOT_REQUIRED
-        );
+        expense.setFundTransferPostingStatus(AccountPostingStatus.NOT_REQUIRED);
         expense.setFundTransferFromBankLedgerId(null);
         expense.setFundTransferFromBankName(null);
         expense.setFundTransferToBankLedgerId(null);
@@ -1073,11 +943,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setGovernmentPaymentSubmittedAt(null);
     }
 
-    private boolean isClientDirect(
-            ExpensePaidBy paidBy
-    ) {
-        return paidBy == ExpensePaidBy.CLIENT_DIRECT
-                || paidBy == ExpensePaidBy.CLIENT;
+    private boolean isClientDirect(ExpensePaidBy paidBy) {
+        return (
+                paidBy == ExpensePaidBy.CLIENT_DIRECT || paidBy == ExpensePaidBy.CLIENT
+        );
     }
 
     // =========================================================
@@ -1092,7 +961,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId,
             AccountsExpenseDecisionRequestDto request
     ) {
-
         log.info(
                 "[ACCOUNTS-DECISION-START] projectId={} | expenseId={} | userId={} | requestedDecision={}",
                 projectId,
@@ -1105,10 +973,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         validateAccountsApprover(user);
 
         Project project = validateProject(projectId);
-        ProjectExpense expense = validateExpense(
-                project,
-                expenseId
-        );
+        ProjectExpense expense = validateExpense(project, expenseId);
 
         log.debug(
                 "[ACCOUNTS-EXPENSE-LOADED] expenseId={} | requestedAmount={} | currentStage={} | approvalStatus={} | crtStatus={} | accountsStatus={}",
@@ -1133,22 +998,19 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (request.getApprovalDate() != null
-                && request.getApprovalDate().isAfter(LocalDate.now())) {
-
+        if (
+                request.getApprovalDate() != null &&
+                        request.getApprovalDate().isAfter(LocalDate.now())
+        ) {
             throw new ValidationException(
                     "Approval date cannot be in the future",
                     "ERR_FUTURE_ACCOUNTS_APPROVAL_DATE"
             );
         }
 
-        ApprovalStatus decision = validateDecisionStatus(
-                request.getStatus()
-        );
+        ApprovalStatus decision = validateDecisionStatus(request.getStatus());
 
-        if (expense.getApprovalStage() !=
-                ExpenseApprovalStage.ACCOUNTS_REVIEW) {
-
+        if (expense.getApprovalStage() != ExpenseApprovalStage.ACCOUNTS_REVIEW) {
             log.warn(
                     "[ACCOUNTS-DECISION-VALIDATION-FAILED] expenseId={} | currentStage={} | expectedStage={}",
                     expenseId,
@@ -1161,9 +1023,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (expense.getCrtApprovalStatus() !=
-                ApprovalStatus.APPROVED) {
-
+        if (expense.getCrtApprovalStatus() != ApprovalStatus.APPROVED) {
             log.warn(
                     "[ACCOUNTS-DECISION-VALIDATION-FAILED] expenseId={} | crtStatus={} | reason=crt-not-approved",
                     expenseId,
@@ -1175,9 +1035,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
-                expense.getApprovalStatus() == ApprovalStatus.APPROVED) {
-
+        if (
+                expense.getApprovalStatus() == ApprovalStatus.REJECTED ||
+                        expense.getApprovalStatus() == ApprovalStatus.APPROVED
+        ) {
             log.warn(
                     "[ACCOUNTS-DECISION-VALIDATION-FAILED] expenseId={} | approvalStatus={} | reason=workflow-completed",
                     expenseId,
@@ -1189,14 +1050,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        String decisionRemark = normalizeOptionalText(
-                request.getRemark()
-        );
+        String decisionRemark = normalizeOptionalText(request.getRemark());
 
-        validateDecisionRemark(
-                decision,
-                decisionRemark
-        );
+        validateDecisionRemark(decision, decisionRemark);
 
         LocalDateTime actionTime =
                 request.getApprovalDate() != null
@@ -1217,57 +1073,41 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setAccountsDecisionRemark(decisionRemark);
 
         switch (decision) {
-
             case APPROVED -> approveExpenseByAccounts(
                     expense,
                     request,
                     decisionRemark
             );
-
             case REJECTED -> {
                 expense.setApprovalStatus(ApprovalStatus.REJECTED);
-                expense.setApprovalStage(
-                        ExpenseApprovalStage.COMPLETED
-                );
+                expense.setApprovalStage(ExpenseApprovalStage.COMPLETED);
 
                 expense.setApprovedAmount(null);
                 expense.setPaidAmount(BigDecimal.ZERO);
 
-                expense.setPaymentStatus(
-                        ExpensePaymentStatus.CANCELLED
-                );
+                expense.setPaymentStatus(ExpensePaymentStatus.CANCELLED);
 
                 expense.setPaymentCompletedDate(null);
-                expense.setAccountPostingStatus(
-                        AccountPostingStatus.NOT_REQUIRED
-                );
+                expense.setAccountPostingStatus(AccountPostingStatus.NOT_REQUIRED);
                 expense.setAccountVoucherId(null);
                 expense.setAccountVoucherNumber(null);
                 expense.setAccountPostedAt(null);
                 expense.setAccountPostingError(null);
             }
-
             case ON_HOLD -> {
                 expense.setApprovalStatus(ApprovalStatus.ON_HOLD);
-                expense.setApprovalStage(
-                        ExpenseApprovalStage.ACCOUNTS_REVIEW
-                );
+                expense.setApprovalStage(ExpenseApprovalStage.ACCOUNTS_REVIEW);
 
                 /*
                  * Preserve CLIENT_PAID because client-paid expenses must not
                  * become company-payable while Accounts has placed them on hold.
                  */
                 if (expense.getExpensePaidBy() == ExpensePaidBy.COMPANY) {
-                    expense.setPaymentStatus(
-                            ExpensePaymentStatus.NOT_INITIATED
-                    );
+                    expense.setPaymentStatus(ExpensePaymentStatus.NOT_INITIATED);
                 }
 
-                expense.setAccountPostingStatus(
-                        AccountPostingStatus.NOT_REQUIRED
-                );
+                expense.setAccountPostingStatus(AccountPostingStatus.NOT_REQUIRED);
             }
-
             default -> throw new ValidationException(
                     "Invalid Accounts decision",
                     "ERR_INVALID_ACCOUNTS_DECISION"
@@ -1285,30 +1125,33 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getPaymentStatus()
         );
 
-        createExpenseDecisionActivity(
-                project,
-                expense,
-                user,
-                "Accounts",
-                decision
-        );
+        createExpenseDecisionActivity(project, expense, user, "Accounts", decision);
 
         /*
-         * Account Service books the approved Government Fee as:
+         * Step 3 approval-time government-fee accounting.
          *
-         * Government Fee Expense Dr
-         *     Government Fee Payable Cr
+         * COMPANY:
+         * Dr Government Fee Receivable
+         *     Cr Government Fee Payable
          *
-         * This is an approval-time payable posting. The actual company
-         * payment remains PENDING and is handled separately.
+         * CLIENT_TO_COMPANY:
+         * Receipt:
+         * Dr Receiving Bank
+         *     Cr Government Fee Client Advance
+         *
+         * Accrual:
+         * Dr Government Fee Client Advance
+         *     Cr Government Fee Payable
+         *
+         * The actual payment to the government is not posted here. It is
+         * handled after Step 4 fund transfer and Step 5 proof verification.
          */
-        if (decision == ApprovalStatus.APPROVED
-                && requiresApprovalPosting(expense.getExpensePaidBy())
-                && expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE) {
-
-            scheduleAccountPostingAfterCommit(
-                    expense.getId()
-            );
+        if (
+                decision == ApprovalStatus.APPROVED &&
+                        requiresApprovalPosting(expense.getExpensePaidBy()) &&
+                        expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE
+        ) {
+            scheduleAccountPostingAfterCommit(expense.getId());
         }
 
         log.info(
@@ -1322,21 +1165,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return mapToExpenseDto(expense);
     }
 
-
-    private boolean requiresApprovalPosting(
-            ExpensePaidBy paidBy
-    ) {
-        return paidBy == ExpensePaidBy.COMPANY
-                || paidBy == ExpensePaidBy.CLIENT_TO_COMPANY;
+    private boolean requiresApprovalPosting(ExpensePaidBy paidBy) {
+        return (
+                paidBy == ExpensePaidBy.COMPANY ||
+                        paidBy == ExpensePaidBy.CLIENT_TO_COMPANY
+        );
     }
-
 
     private void approveExpenseByAccounts(
             ProjectExpense expense,
             AccountsExpenseDecisionRequestDto request,
             String decisionRemark
     ) {
-
         BigDecimal approvedAmount = normalizePositiveAmount(
                 request.getApprovedAmount(),
                 "Approved amount must be greater than zero",
@@ -1350,9 +1190,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (approvedAmount.compareTo(expense.getRequestedAmount()) != 0
-                && decisionRemark == null) {
-
+        if (
+                approvedAmount.compareTo(expense.getRequestedAmount()) != 0 &&
+                        decisionRemark == null
+        ) {
             throw new ValidationException(
                     "Remark is required when approved amount differs from requested amount",
                     "ERR_PARTIAL_APPROVAL_REMARK_REQUIRED"
@@ -1376,21 +1217,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          * Client paid the government directly.
          * Nothing enters company books.
          */
-        if (paidBy == ExpensePaidBy.CLIENT_DIRECT
-                || paidBy == ExpensePaidBy.CLIENT) {
-
+        if (
+                paidBy == ExpensePaidBy.CLIENT_DIRECT || paidBy == ExpensePaidBy.CLIENT
+        ) {
             expense.setPaidAmount(approvedAmount);
-            expense.setPaymentStatus(
-                    ExpensePaymentStatus.CLIENT_PAID
-            );
+            expense.setPaymentStatus(ExpensePaymentStatus.CLIENT_PAID);
 
-            expense.setPaymentCompletedDate(
-                    LocalDateTime.now()
-            );
+            expense.setPaymentCompletedDate(LocalDateTime.now());
 
-            expense.setAccountPostingStatus(
-                    AccountPostingStatus.SKIPPED
-            );
+            expense.setAccountPostingStatus(AccountPostingStatus.SKIPPED);
 
             clearAccountVoucherDetails(expense);
             return;
@@ -1402,20 +1237,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          *
          * Actual government payment has not happened yet.
          */
-        if (paidBy == ExpensePaidBy.COMPANY
-                || paidBy == ExpensePaidBy.CLIENT_TO_COMPANY) {
-
+        if (
+                paidBy == ExpensePaidBy.COMPANY ||
+                        paidBy == ExpensePaidBy.CLIENT_TO_COMPANY
+        ) {
             expense.setPaidAmount(BigDecimal.ZERO);
 
-            expense.setPaymentStatus(
-                    ExpensePaymentStatus.PENDING
-            );
+            expense.setPaymentStatus(ExpensePaymentStatus.PENDING);
 
             expense.setPaymentCompletedDate(null);
 
-            expense.setAccountPostingStatus(
-                    AccountPostingStatus.PENDING
-            );
+            expense.setAccountPostingStatus(AccountPostingStatus.PENDING);
 
             clearAccountVoucherDetails(expense);
             return;
@@ -1432,10 +1264,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
      * Accounts approval transaction commits. The implementation uses
      * REQUIRES_NEW and can therefore read the committed approved expense.
      */
-    private void scheduleAccountPostingAfterCommit(
-            Long expenseId
-    ) {
-
+    private void scheduleAccountPostingAfterCommit(Long expenseId) {
         Runnable postingTask = () -> {
             try {
                 log.info(
@@ -1448,14 +1277,29 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                  * Spring injects ExpenseAccountPostingServiceImpl because it
                  * implements ExpenseAccountPostingService and is a @Service.
                  */
-                expenseAccountPostingService
-                        .postGovernmentFeeExpense(expenseId);
+                ProjectExpenseResponseDto postingResult =
+                        expenseAccountPostingService.postGovernmentFeeExpense(expenseId);
 
-                log.info(
-                        "[EXPENSE-ACCOUNT-POSTING-CALL-SUCCESS] expenseId={}",
-                        expenseId
-                );
-
+                if (
+                        postingResult.getAccountPostingStatus() ==
+                                AccountPostingStatus.POSTED &&
+                                postingResult.getInitialJournalVoucherId() != null
+                ) {
+                    log.info(
+                            "[EXPENSE-ACCOUNT-POSTING-CALL-SUCCESS] expenseId={} | status={} | journalVoucherId={}",
+                            expenseId,
+                            postingResult.getAccountPostingStatus(),
+                            postingResult.getInitialJournalVoucherId()
+                    );
+                } else {
+                    log.error(
+                            "[EXPENSE-ACCOUNT-POSTING-CALL-NOT-POSTED] expenseId={} | status={} | journalVoucherId={} | error={}",
+                            expenseId,
+                            postingResult.getAccountPostingStatus(),
+                            postingResult.getInitialJournalVoucherId(),
+                            postingResult.getAccountPostingError()
+                    );
+                }
             } catch (Exception exception) {
                 log.error(
                         "[EXPENSE-ACCOUNT-POSTING-CALL-FAILED] expenseId={}",
@@ -1465,24 +1309,20 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             }
         };
 
-        if (TransactionSynchronizationManager
-                .isSynchronizationActive()) {
-
-            TransactionSynchronizationManager
-                    .registerSynchronization(
-                            new TransactionSynchronization() {
-                                @Override
-                                public void afterCommit() {
-                                    postingTask.run();
-                                }
-                            }
-                    );
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            postingTask.run();
+                        }
+                    }
+            );
 
             log.info(
                     "[EXPENSE-ACCOUNT-POSTING-SCHEDULED-AFTER-COMMIT] expenseId={}",
                     expenseId
             );
-
         } else {
             /*
              * Fallback for execution without a Spring-managed transaction.
@@ -1502,7 +1342,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId,
             GovernmentFeeFundTransferRequestDto request
     ) {
-
         log.info(
                 "[GOVERNMENT-FEE-FUND-TRANSFER-START] projectId={} | expenseId={} | userId={} | fromBankLedgerId={} | toBankLedgerId={} | amount={}",
                 projectId,
@@ -1555,10 +1394,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     // STEP 5A - TECHNICAL SUBMITS GOVERNMENT PAYMENT PROOF
     // =========================================================
 
-    // =========================================================
-// STEP 5A - TECHNICAL SUBMITS GOVERNMENT PAYMENT PROOF
-// =========================================================
-
     @Override
     @Transactional
     public ProjectExpenseResponseDto submitGovernmentFeePaymentProof(
@@ -1567,7 +1402,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId,
             GovernmentFeePaymentRequestDto request
     ) {
-
         log.info(
                 "[GOVERNMENT-FEE-PAYMENT-PROOF-START] " +
                         "projectId={} | expenseId={} | userId={} | " +
@@ -1594,19 +1428,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         User technicalUser = validateActiveUser(userId);
 
-        ProjectExpense expense = validateExpense(
-                project,
-                expenseId
-        );
+        ProjectExpense expense = validateExpense(project, expenseId);
 
         /*
          * Only Technical/admin/expense creator is allowed
          * to submit government payment proof.
          */
-        validateTechnicalPaymentSubmitter(
-                technicalUser,
-                expense
-        );
+        validateTechnicalPaymentSubmitter(technicalUser, expense);
 
         /*
          * This validation also confirms that:
@@ -1619,10 +1447,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          * 6. Payment bank matches Step 4 destination bank
          * 7. Mode/reference/receipt are present
          */
-        validateGovernmentPaymentProof(
-                expense,
-                request
-        );
+        validateGovernmentPaymentProof(expense, request);
 
         /*
          * IMPORTANT:
@@ -1644,13 +1469,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 ).toUpperCase(Locale.ROOT)
         );
 
-        expense.setGovernmentPaymentAmount(
-                request.getAmount()
-        );
+        expense.setGovernmentPaymentAmount(request.getAmount());
 
-        expense.setGovernmentPaymentDate(
-                request.getPaymentDate()
-        );
+        expense.setGovernmentPaymentDate(request.getPaymentDate());
 
         expense.setGovernmentPaymentReference(
                 requireText(
@@ -1669,9 +1490,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         expense.setGovernmentPaymentRemark(
-                normalizeOptionalText(
-                        request.getRemark()
-                )
+                normalizeOptionalText(request.getRemark())
         );
 
         /*
@@ -1694,22 +1513,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         expense.setGovernmentPaymentPostingError(null);
 
-        expense.setGovernmentPaymentSubmittedByUserId(
-                technicalUser.getId()
-        );
+        expense.setGovernmentPaymentSubmittedByUserId(technicalUser.getId());
 
         expense.setGovernmentPaymentSubmittedByUserName(
                 technicalUser.getFullName()
         );
 
-        expense.setGovernmentPaymentSubmittedAt(
-                LocalDateTime.now()
-        );
+        expense.setGovernmentPaymentSubmittedAt(LocalDateTime.now());
 
         expense = expenseRepository.save(expense);
 
-        ProjectExpenseResponseDto response =
-                mapToExpenseDto(expense);
+        ProjectExpenseResponseDto response = mapToExpenseDto(expense);
 
         log.info(
                 "[GOVERNMENT-FEE-PAYMENT-PROOF-END] " +
@@ -1726,10 +1540,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return response;
     }
 
-
-// =========================================================
-// STEP 5B - ACCOUNTS VERIFIES AND POSTS PAYMENT
-// =========================================================
+    // =========================================================
+    // STEP 5B - ACCOUNTS VERIFIES AND POSTS PAYMENT
+    // =========================================================
 
     @Override
     @Transactional
@@ -1739,7 +1552,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId,
             GovernmentFeePaymentDecisionRequestDto request
     ) {
-
         log.info(
                 "[GOVERNMENT-FEE-PAYMENT-DECISION-START] " +
                         "projectId={} | expenseId={} | userId={} | decision={}",
@@ -1756,9 +1568,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (request.getStatus() != ApprovalStatus.APPROVED
-                && request.getStatus() != ApprovalStatus.REJECTED) {
-
+        if (
+                request.getStatus() != ApprovalStatus.APPROVED &&
+                        request.getStatus() != ApprovalStatus.REJECTED
+        ) {
             throw new ValidationException(
                     "Payment decision must be APPROVED or REJECTED",
                     "ERR_INVALID_PAYMENT_DECISION"
@@ -1771,20 +1584,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         validateAccountsApprover(accountsUser);
 
-        ProjectExpense expense = validateExpense(
-                project,
-                expenseId
-        );
+        ProjectExpense expense = validateExpense(project, expenseId);
 
         /*
          * Idempotency:
          * if Accounts already approved and payment voucher exists,
          * simply return current expense.
          */
-        if (expense.getGovernmentPaymentVerificationStatus()
-                == GovernmentPaymentVerificationStatus.APPROVED
-                && expense.getGovernmentPaymentVoucherId() != null) {
-
+        if (
+                expense.getGovernmentPaymentVerificationStatus() ==
+                        GovernmentPaymentVerificationStatus.APPROVED &&
+                        expense.getGovernmentPaymentVoucherId() != null
+        ) {
             return mapToExpenseDto(expense);
         }
 
@@ -1792,26 +1603,23 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          * Accounts can only make a decision when
          * Technical proof is pending.
          */
-        if (expense.getGovernmentPaymentVerificationStatus()
-                != GovernmentPaymentVerificationStatus.PENDING) {
-
+        if (
+                expense.getGovernmentPaymentVerificationStatus() !=
+                        GovernmentPaymentVerificationStatus.PENDING
+        ) {
             throw new ValidationException(
                     "No government payment proof is pending Accounts verification",
                     "ERR_PAYMENT_PROOF_NOT_PENDING"
             );
         }
 
-        String verificationRemark =
-                normalizeOptionalText(
-                        request.getRemark()
-                );
+        String verificationRemark = normalizeOptionalText(request.getRemark());
 
         // =====================================================
         // REJECTED
         // =====================================================
 
         if (request.getStatus() == ApprovalStatus.REJECTED) {
-
             if (verificationRemark == null) {
                 throw new ValidationException(
                         "Remark is required when payment proof is rejected",
@@ -1823,21 +1631,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                     GovernmentPaymentVerificationStatus.REJECTED
             );
 
-            expense.setGovernmentPaymentVerificationRemark(
-                    verificationRemark
-            );
+            expense.setGovernmentPaymentVerificationRemark(verificationRemark);
 
-            expense.setGovernmentPaymentMarkedByUserId(
-                    accountsUser.getId()
-            );
+            expense.setGovernmentPaymentMarkedByUserId(accountsUser.getId());
 
-            expense.setGovernmentPaymentMarkedByUserName(
-                    accountsUser.getFullName()
-            );
+            expense.setGovernmentPaymentMarkedByUserName(accountsUser.getFullName());
 
-            expense.setGovernmentPaymentMarkedAt(
-                    LocalDateTime.now()
-            );
+            expense.setGovernmentPaymentMarkedAt(LocalDateTime.now());
 
             expense.setGovernmentPaymentPostingStatus(
                     AccountPostingStatus.NOT_REQUIRED
@@ -1873,42 +1673,26 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         GovernmentFeePaymentRequestDto submittedProof =
                 new GovernmentFeePaymentRequestDto();
 
-        submittedProof.setAmount(
-                expense.getGovernmentPaymentAmount()
-        );
+        submittedProof.setAmount(expense.getGovernmentPaymentAmount());
 
-        submittedProof.setPaymentDate(
-                expense.getGovernmentPaymentDate()
-        );
+        submittedProof.setPaymentDate(expense.getGovernmentPaymentDate());
 
-        submittedProof.setPaymentMode(
-                expense.getGovernmentPaymentMode()
-        );
+        submittedProof.setPaymentMode(expense.getGovernmentPaymentMode());
 
         // Step 4 authoritative payment bank
-        submittedProof.setPaymentBankLedgerId(
-                expense.getPaymentBankLedgerId()
-        );
+        submittedProof.setPaymentBankLedgerId(expense.getPaymentBankLedgerId());
 
-        submittedProof.setPaymentBankName(
-                expense.getPaymentBankName()
-        );
+        submittedProof.setPaymentBankName(expense.getPaymentBankName());
 
-        submittedProof.setPaymentReference(
-                expense.getGovernmentPaymentReference()
-        );
+        submittedProof.setPaymentReference(expense.getGovernmentPaymentReference());
 
         submittedProof.setPaymentReceiptUrl(
                 expense.getGovernmentPaymentReceiptUrl()
         );
 
-        submittedProof.setRemark(
-                expense.getGovernmentPaymentRemark()
-        );
+        submittedProof.setRemark(expense.getGovernmentPaymentRemark());
 
-        expense.setGovernmentPaymentVerificationRemark(
-                verificationRemark
-        );
+        expense.setGovernmentPaymentVerificationRemark(verificationRemark);
 
         expenseRepository.save(expense);
 
@@ -1921,12 +1705,11 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          *      Cr Selected Payment Bank
          */
         ProjectExpenseResponseDto response =
-                expenseAccountPostingService
-                        .completeGovernmentFeePayment(
-                                expenseId,
-                                userId,
-                                submittedProof
-                        );
+                expenseAccountPostingService.completeGovernmentFeePayment(
+                        expenseId,
+                        userId,
+                        submittedProof
+                );
 
         log.info(
                 "[GOVERNMENT-FEE-PAYMENT-DECISION-END] " +
@@ -1944,8 +1727,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return response;
     }
 
-
-
     // =========================================================
     // APPROVAL QUEUE
     // =========================================================
@@ -1957,7 +1738,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             ExpenseApprovalStage approvalStage,
             ApprovalStatus approvalStatus
     ) {
-
         log.info(
                 "[EXPENSE-APPROVAL-QUEUE-START] userId={} | approvalStage={} | approvalStatus={}",
                 userId,
@@ -1980,23 +1760,19 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         if (approvalStage == ExpenseApprovalStage.CRT_REVIEW) {
             validateCrtApprover(user);
-        } else if (
-                approvalStage ==
-                        ExpenseApprovalStage.ACCOUNTS_REVIEW
-        ) {
+        } else if (approvalStage == ExpenseApprovalStage.ACCOUNTS_REVIEW) {
             validateAccountsApprover(user);
         }
 
         List<ProjectExpense> expenses;
 
         if (approvalStatus == null) {
-            expenses = expenseRepository
-                    .findByApprovalStageOrderByExpenseDateDesc(
-                            approvalStage
-                    );
+            expenses = expenseRepository.findByApprovalStageOrderByExpenseDateDesc(
+                    approvalStage
+            );
         } else {
-            expenses = expenseRepository
-                    .findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
+            expenses =
+                    expenseRepository.findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
                             approvalStage,
                             approvalStatus
                     );
@@ -2010,9 +1786,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expenses.size()
         );
 
-        return expenses.stream()
-                .map(this::mapToExpenseDto)
-                .toList();
+        return expenses.stream().map(this::mapToExpenseDto).toList();
     }
 
     // =========================================================
@@ -2025,7 +1799,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long userId,
             ExpensePaymentStatus paymentStatus
     ) {
-
         log.info(
                 "[EXPENSE-PAYMENT-QUEUE-START] userId={} | paymentStatus={}",
                 userId,
@@ -2045,15 +1818,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         List<ProjectExpense> expenses;
 
         if (paymentStatus == null) {
-            expenses = expenseRepository
-                    .findByPaymentStatusInOrderByExpenseDateDesc(
-                            ACTIVE_PAYMENT_STATUSES
-                    );
+            expenses = expenseRepository.findByPaymentStatusInOrderByExpenseDateDesc(
+                    ACTIVE_PAYMENT_STATUSES
+            );
         } else {
-            expenses = expenseRepository
-                    .findByPaymentStatusOrderByExpenseDateDesc(
-                            paymentStatus
-                    );
+            expenses = expenseRepository.findByPaymentStatusOrderByExpenseDateDesc(
+                    paymentStatus
+            );
         }
 
         log.info(
@@ -2063,9 +1834,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expenses.size()
         );
 
-        return expenses.stream()
-                .map(this::mapToExpenseDto)
-                .toList();
+        return expenses.stream().map(this::mapToExpenseDto).toList();
     }
 
     // =========================================================
@@ -2078,7 +1847,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long projectId,
             Long userId
     ) {
-
         log.info(
                 "[PROJECT-EXPENSES-START] projectId={} | userId={}",
                 projectId,
@@ -2088,8 +1856,8 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         validateActiveUser(userId);
         validateProject(projectId);
 
-        List<ProjectExpense> expenses = expenseRepository
-                .findByProjectIdOrderByExpenseDateDesc(projectId);
+        List<ProjectExpense> expenses =
+                expenseRepository.findByProjectIdOrderByExpenseDateDesc(projectId);
 
         log.info(
                 "[PROJECT-EXPENSES-SUCCESS] projectId={} | userId={} | recordCount={}",
@@ -2098,10 +1866,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expenses.size()
         );
 
-        return expenses
-                .stream()
-                .map(this::mapToExpenseDto)
-                .toList();
+        return expenses.stream().map(this::mapToExpenseDto).toList();
     }
 
     // =========================================================
@@ -2110,11 +1875,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
     @Override
     @Transactional(readOnly = true)
-    public ProjectExpenseResponseDto getExpenseById(
-            Long expenseId,
-            Long userId
-    ) {
-
+    public ProjectExpenseResponseDto getExpenseById(Long expenseId, Long userId) {
         log.info(
                 "[EXPENSE-DETAIL-START] expenseId={} | userId={}",
                 expenseId,
@@ -2125,10 +1886,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         ProjectExpense expense = expenseRepository
                 .findById(expenseId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Expense not found with id: " + expenseId,
-                        "ERR_EXPENSE_NOT_FOUND"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Expense not found with id: " + expenseId,
+                                "ERR_EXPENSE_NOT_FOUND"
+                        )
+                );
 
         log.info(
                 "[EXPENSE-DETAIL-SUCCESS] expenseId={} | userId={} | projectId={} | stage={} | approvalStatus={} | paymentStatus={}",
@@ -2153,7 +1916,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             Long projectId,
             Pageable pageable
     ) {
-
         log.info(
                 "[ACTIVITY-LIST-START] projectId={} | requestedPage={} | requestedSize={}",
                 projectId,
@@ -2163,40 +1925,32 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         validateProject(projectId);
 
-        Pageable normalizedPageable =
-                normalizePageable(pageable);
+        Pageable normalizedPageable = normalizePageable(pageable);
 
-        Page<ProjectActivity> page = activityRepository
-                .findByProjectIdAndDeletedFalseOrderByActivityDateDesc(
+        Page<ProjectActivity> page =
+                activityRepository.findByProjectIdAndDeletedFalseOrderByActivityDateDesc(
                         projectId,
                         normalizedPageable
                 );
 
-        List<ProjectActivityResponseDto> content =
-                page.getContent()
-                        .stream()
-                        .map(activity -> {
+        List<ProjectActivityResponseDto> content = page
+                .getContent()
+                .stream()
+                .map(activity -> {
+                    if (activity.getActivityType() == ActivityType.COMMENT) {
+                        ProjectComment comment = commentRepository
+                                .findByActivityId(activity.getId())
+                                .orElse(null);
 
-                            if (activity.getActivityType() ==
-                                    ActivityType.COMMENT) {
+                        if (comment != null && comment.getParentCommentId() != null) {
+                            return null;
+                        }
+                    }
 
-                                ProjectComment comment =
-                                        commentRepository
-                                                .findByActivityId(
-                                                        activity.getId()
-                                                )
-                                                .orElse(null);
-
-                                if (comment != null &&
-                                        comment.getParentCommentId() != null) {
-                                    return null;
-                                }
-                            }
-
-                            return mapTimeline(activity);
-                        })
-                        .filter(Objects::nonNull)
-                        .toList();
+                    return mapTimeline(activity);
+                })
+                .filter(Objects::nonNull)
+                .toList();
 
         log.info(
                 "[ACTIVITY-LIST-SUCCESS] projectId={} | page={} | size={} | returnedCount={} | totalElements={}",
@@ -2207,11 +1961,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 page.getTotalElements()
         );
 
-        return new PageImpl<>(
-                content,
-                normalizedPageable,
-                page.getTotalElements()
-        );
+        return new PageImpl<>(content, normalizedPageable, page.getTotalElements());
     }
 
     @Override
@@ -2221,7 +1971,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             ActivityType type,
             Pageable pageable
     ) {
-
         log.info(
                 "[ACTIVITY-BY-TYPE-START] projectId={} | activityType={} | requestedPage={} | requestedSize={}",
                 projectId,
@@ -2243,18 +1992,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        Pageable normalizedPageable =
-                normalizePageable(pageable);
+        Pageable normalizedPageable = normalizePageable(pageable);
 
         Page<ProjectActivityResponseDto> response;
 
         if (type == ActivityType.COMMENT) {
             response = activityRepository
-                    .findParentCommentActivities(
-                            projectId,
-                            type,
-                            normalizedPageable
-                    )
+                    .findParentCommentActivities(projectId, type, normalizedPageable)
                     .map(this::mapTimeline);
         } else {
             response = activityRepository
@@ -2286,7 +2030,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             LocalDate endDate,
             Pageable pageable
     ) {
-
         log.info(
                 "[ACTIVITY-DATE-RANGE-START] projectId={} | startDate={} | endDate={} | requestedPage={} | requestedSize={}",
                 projectId,
@@ -2324,42 +2067,34 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        Pageable normalizedPageable =
-                normalizePageable(pageable);
+        Pageable normalizedPageable = normalizePageable(pageable);
 
-        Page<ProjectActivity> page = activityRepository
-                .findByProjectIdAndActivityDateBetweenAndDeletedFalseOrderByActivityDateDesc(
+        Page<ProjectActivity> page =
+                activityRepository.findByProjectIdAndActivityDateBetweenAndDeletedFalseOrderByActivityDateDesc(
                         projectId,
                         startDate.atStartOfDay(),
                         endDate.atTime(23, 59, 59),
                         normalizedPageable
                 );
 
-        List<ProjectActivityResponseDto> content =
-                page.getContent()
-                        .stream()
-                        .map(activity -> {
+        List<ProjectActivityResponseDto> content = page
+                .getContent()
+                .stream()
+                .map(activity -> {
+                    if (activity.getActivityType() == ActivityType.COMMENT) {
+                        ProjectComment comment = commentRepository
+                                .findByActivityId(activity.getId())
+                                .orElse(null);
 
-                            if (activity.getActivityType() ==
-                                    ActivityType.COMMENT) {
+                        if (comment != null && comment.getParentCommentId() != null) {
+                            return null;
+                        }
+                    }
 
-                                ProjectComment comment =
-                                        commentRepository
-                                                .findByActivityId(
-                                                        activity.getId()
-                                                )
-                                                .orElse(null);
-
-                                if (comment != null &&
-                                        comment.getParentCommentId() != null) {
-                                    return null;
-                                }
-                            }
-
-                            return mapTimeline(activity);
-                        })
-                        .filter(Objects::nonNull)
-                        .toList();
+                    return mapTimeline(activity);
+                })
+                .filter(Objects::nonNull)
+                .toList();
 
         log.info(
                 "[ACTIVITY-DATE-RANGE-SUCCESS] projectId={} | startDate={} | endDate={} | returnedCount={} | totalElements={}",
@@ -2370,11 +2105,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 page.getTotalElements()
         );
 
-        return new PageImpl<>(
-                content,
-                normalizedPageable,
-                page.getTotalElements()
-        );
+        return new PageImpl<>(content, normalizedPageable, page.getTotalElements());
     }
 
     // =========================================================
@@ -2382,11 +2113,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     // =========================================================
 
     private User validateActiveUser(Long userId) {
-
-        log.debug(
-                "[USER-VALIDATION-START] userId={}",
-                userId
-        );
+        log.debug("[USER-VALIDATION-START] userId={}", userId);
 
         if (userId == null) {
             log.warn("[USER-VALIDATION-FAILED] reason=user-id-null");
@@ -2398,25 +2125,20 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         User user = userRepository
                 .findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Active user not found with id: " + userId,
-                        "ERR_USER_NOT_FOUND"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Active user not found with id: " + userId,
+                                "ERR_USER_NOT_FOUND"
+                        )
+                );
 
-        log.debug(
-                "[USER-VALIDATION-SUCCESS] userId={}",
-                user.getId()
-        );
+        log.debug("[USER-VALIDATION-SUCCESS] userId={}", user.getId());
 
         return user;
     }
 
     private Project validateProject(Long projectId) {
-
-        log.debug(
-                "[PROJECT-VALIDATION-START] projectId={}",
-                projectId
-        );
+        log.debug("[PROJECT-VALIDATION-START] projectId={}", projectId);
 
         if (projectId == null) {
             log.warn("[PROJECT-VALIDATION-FAILED] reason=project-id-null");
@@ -2428,10 +2150,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         Project project = projectRepository
                 .findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project not found with id: " + projectId,
-                        "ERR_PROJECT_NOT_FOUND"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Project not found with id: " + projectId,
+                                "ERR_PROJECT_NOT_FOUND"
+                        )
+                );
 
         log.debug(
                 "[PROJECT-VALIDATION-SUCCESS] projectId={} | active={} | deleted={} | cancelled={}",
@@ -2445,7 +2169,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     }
 
     private Project validateActiveProject(Long projectId) {
-
         Project project = validateProject(projectId);
 
         if (project.isDeleted()) {
@@ -2481,19 +2204,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        log.debug(
-                "[ACTIVE-PROJECT-VALIDATION-SUCCESS] projectId={}",
-                projectId
-        );
+        log.debug("[ACTIVE-PROJECT-VALIDATION-SUCCESS] projectId={}", projectId);
 
         return project;
     }
 
-    private ProjectExpense validateExpense(
-            Project project,
-            Long expenseId
-    ) {
-
+    private ProjectExpense validateExpense(Project project, Long expenseId) {
         log.debug(
                 "[EXPENSE-VALIDATION-START] projectId={} | expenseId={}",
                 project != null ? project.getId() : null,
@@ -2513,14 +2229,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         ProjectExpense expense = expenseRepository
                 .findById(expenseId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Expense not found with id: " + expenseId,
-                        "ERR_EXPENSE_NOT_FOUND"
-                ));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Expense not found with id: " + expenseId,
+                                "ERR_EXPENSE_NOT_FOUND"
+                        )
+                );
 
-        if (expense.getProject() == null ||
-                !expense.getProject().getId().equals(project.getId())) {
-
+        if (
+                expense.getProject() == null ||
+                        !expense.getProject().getId().equals(project.getId())
+        ) {
             log.warn(
                     "[EXPENSE-VALIDATION-FAILED] selectedProjectId={} | expenseId={} | actualProjectId={} | reason=project-mismatch",
                     project.getId(),
@@ -2544,11 +2263,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return expense;
     }
 
-    private Department validateUserDepartment(
-            User user,
-            Long departmentId
-    ) {
-
+    private Department validateUserDepartment(User user, Long departmentId) {
         log.debug(
                 "[DEPARTMENT-VALIDATION-START] userId={} | departmentId={}",
                 user != null ? user.getId() : null,
@@ -2578,21 +2293,21 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        Department department = user.getDepartments()
+        Department department = user
+                .getDepartments()
                 .stream()
                 .filter(Objects::nonNull)
                 .filter(userDepartment ->
-                        Objects.equals(
-                                userDepartment.getId(),
-                                departmentId
-                        )
+                        Objects.equals(userDepartment.getId(), departmentId)
                 )
                 .filter(userDepartment -> !userDepartment.isDeleted())
                 .findFirst()
-                .orElseThrow(() -> new ValidationException(
-                        "User does not belong to the selected department",
-                        "ERR_USER_DEPARTMENT_MISMATCH"
-                ));
+                .orElseThrow(() ->
+                        new ValidationException(
+                                "User does not belong to the selected department",
+                                "ERR_USER_DEPARTMENT_MISMATCH"
+                        )
+                );
 
         log.debug(
                 "[DEPARTMENT-VALIDATION-SUCCESS] userId={} | departmentId={}",
@@ -2603,14 +2318,8 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return department;
     }
 
-    private ApprovalStatus validateDecisionStatus(
-            ApprovalStatus status
-    ) {
-
-        log.debug(
-                "[DECISION-STATUS-VALIDATION-START] status={}",
-                status
-        );
+    private ApprovalStatus validateDecisionStatus(ApprovalStatus status) {
+        log.debug("[DECISION-STATUS-VALIDATION-START] status={}", status);
 
         if (status == null) {
             log.warn("[DECISION-STATUS-VALIDATION-FAILED] reason=status-null");
@@ -2632,23 +2341,16 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        log.debug(
-                "[DECISION-STATUS-VALIDATION-SUCCESS] status={}",
-                status
-        );
+        log.debug("[DECISION-STATUS-VALIDATION-SUCCESS] status={}", status);
 
         return status;
     }
 
-    private void validateDecisionRemark(
-            ApprovalStatus status,
-            String remark
-    ) {
-
-        if ((status == ApprovalStatus.REJECTED ||
-                status == ApprovalStatus.ON_HOLD) &&
-                remark == null) {
-
+    private void validateDecisionRemark(ApprovalStatus status, String remark) {
+        if (
+                (status == ApprovalStatus.REJECTED || status == ApprovalStatus.ON_HOLD) &&
+                        remark == null
+        ) {
             log.warn(
                     "[DECISION-REMARK-VALIDATION-FAILED] status={} | reason=remark-required",
                     status
@@ -2665,25 +2367,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     // =========================================================
 
     private void validateCrtApprover(User user) {
-
-        if (isAdministrator(user) ||
-                hasRoleContaining(user, "CRT") ||
-                hasDepartmentContaining(user, "CRT") ||
-                hasDepartmentContaining(
-                        user,
-                        "CUSTOMER RELATIONSHIP"
-                )) {
-            log.debug(
-                    "[CRT-AUTHORIZATION-SUCCESS] userId={}",
-                    user.getId()
-            );
+        if (
+                isAdministrator(user) ||
+                        hasRoleContaining(user, "CRT") ||
+                        hasDepartmentContaining(user, "CRT") ||
+                        hasDepartmentContaining(user, "CUSTOMER RELATIONSHIP")
+        ) {
+            log.debug("[CRT-AUTHORIZATION-SUCCESS] userId={}", user.getId());
             return;
         }
 
-        log.warn(
-                "[CRT-AUTHORIZATION-FAILED] userId={}",
-                user.getId()
-        );
+        log.warn("[CRT-AUTHORIZATION-FAILED] userId={}", user.getId());
         throw new ValidationException(
                 "User is not authorized to take a CRT expense decision",
                 "ERR_CRT_APPROVAL_UNAUTHORIZED"
@@ -2691,23 +2385,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     }
 
     private void validateAccountsApprover(User user) {
-
-        if (isAdministrator(user) ||
-                hasRoleContaining(user, "ACCOUNT") ||
-                hasRoleContaining(user, "FINANCE") ||
-                hasDepartmentContaining(user, "ACCOUNT") ||
-                hasDepartmentContaining(user, "FINANCE")) {
-            log.debug(
-                    "[ACCOUNTS-AUTHORIZATION-SUCCESS] userId={}",
-                    user.getId()
-            );
+        if (
+                isAdministrator(user) ||
+                        hasRoleContaining(user, "ACCOUNT") ||
+                        hasRoleContaining(user, "FINANCE") ||
+                        hasDepartmentContaining(user, "ACCOUNT") ||
+                        hasDepartmentContaining(user, "FINANCE")
+        ) {
+            log.debug("[ACCOUNTS-AUTHORIZATION-SUCCESS] userId={}", user.getId());
             return;
         }
 
-        log.warn(
-                "[ACCOUNTS-AUTHORIZATION-FAILED] userId={}",
-                user.getId()
-        );
+        log.warn("[ACCOUNTS-AUTHORIZATION-FAILED] userId={}", user.getId());
         throw new ValidationException(
                 "User is not authorized to take an Accounts expense decision",
                 "ERR_ACCOUNTS_APPROVAL_UNAUTHORIZED"
@@ -2718,12 +2407,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             User user,
             ProjectExpense expense
     ) {
-        if (isAdministrator(user)
-                || Objects.equals(
-                user.getId(),
-                expense.getCreatedByUserId())
-                || hasRoleContaining(user, "TECHNICAL")
-                || hasDepartmentContaining(user, "TECHNICAL")) {
+        if (
+                isAdministrator(user) ||
+                        Objects.equals(user.getId(), expense.getCreatedByUserId()) ||
+                        hasRoleContaining(user, "TECHNICAL") ||
+                        hasDepartmentContaining(user, "TECHNICAL")
+        ) {
             return;
         }
 
@@ -2737,8 +2426,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             ProjectExpense expense,
             GovernmentFeePaymentRequestDto request
     ) {
-
-
         if (expense.getExpenseCategory() != ExpenseCategory.GOVERNMENT_FEE) {
             throw new ValidationException(
                     "Payment proof can be submitted only for a government-fee expense",
@@ -2746,18 +2433,69 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (expense.getApprovalStatus() != ApprovalStatus.APPROVED
-                || expense.getAccountPostingStatus()
-                != AccountPostingStatus.POSTED) {
+        if (expense.getApprovalStatus() != ApprovalStatus.APPROVED) {
             throw new ValidationException(
-                    "Accounts approval and Step 3 posting must be completed first",
+                    "Accounts approval must be completed first",
+                    "ERR_EXPENSE_NOT_APPROVED"
+            );
+        }
+
+        if (expense.getAccountPostingStatus() == AccountPostingStatus.PENDING) {
+            throw new ValidationException(
+                    "Step 3 accounting posting is still in progress",
+                    "ERR_APPROVAL_POSTING_IN_PROGRESS"
+            );
+        }
+
+        if (expense.getAccountPostingStatus() == AccountPostingStatus.FAILED) {
+            String postingError = normalizeOptionalText(
+                    expense.getAccountPostingError()
+            );
+
+            throw new ValidationException(
+                    postingError != null
+                            ? "Step 3 accounting posting failed: " + postingError
+                            : "Step 3 accounting posting failed",
+                    "ERR_APPROVAL_POSTING_FAILED"
+            );
+        }
+
+        if (
+                expense.getAccountPostingStatus() != AccountPostingStatus.POSTED ||
+                        expense.getInitialJournalVoucherId() == null
+        ) {
+            throw new ValidationException(
+                    "Step 3 accounting posting must be completed first",
                     "ERR_APPROVAL_POSTING_NOT_COMPLETED"
             );
         }
 
-        if (expense.getFundTransferPostingStatus()
-                != AccountPostingStatus.POSTED
-                || expense.getFundTransferVoucherId() == null) {
+        if (
+                expense.getFundTransferPostingStatus() == AccountPostingStatus.PENDING
+        ) {
+            throw new ValidationException(
+                    "Step 4 fund-transfer posting is still in progress",
+                    "ERR_FUND_TRANSFER_IN_PROGRESS"
+            );
+        }
+
+        if (expense.getFundTransferPostingStatus() == AccountPostingStatus.FAILED) {
+            String transferError = normalizeOptionalText(
+                    expense.getFundTransferPostingError()
+            );
+
+            throw new ValidationException(
+                    transferError != null
+                            ? "Step 4 fund-transfer posting failed: " + transferError
+                            : "Step 4 fund-transfer posting failed",
+                    "ERR_FUND_TRANSFER_FAILED"
+            );
+        }
+
+        if (
+                expense.getFundTransferPostingStatus() != AccountPostingStatus.POSTED ||
+                        expense.getFundTransferVoucherId() == null
+        ) {
             throw new ValidationException(
                     "Step 4 fund transfer must be posted before payment proof submission",
                     "ERR_FUND_TRANSFER_NOT_COMPLETED"
@@ -2765,21 +2503,23 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         // =========================================================
-// PAYMENT BANK VALIDATION
-// =========================================================
+        // PAYMENT BANK VALIDATION
+        // =========================================================
 
-        if (request.getPaymentBankLedgerId() == null
-                || request.getPaymentBankLedgerId() <= 0) {
-
+        if (
+                request.getPaymentBankLedgerId() == null ||
+                        request.getPaymentBankLedgerId() <= 0
+        ) {
             throw new ValidationException(
                     "Payment bank ledger ID is required",
                     "ERR_PAYMENT_BANK_REQUIRED"
             );
         }
 
-        if (expense.getPaymentBankLedgerId() == null
-                || expense.getPaymentBankLedgerId() <= 0) {
-
+        if (
+                expense.getPaymentBankLedgerId() == null ||
+                        expense.getPaymentBankLedgerId() <= 0
+        ) {
             throw new ValidationException(
                     "Payment bank was not selected during Step 4 fund transfer",
                     "ERR_PAYMENT_BANK_NOT_CONFIGURED"
@@ -2794,9 +2534,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
          * HDFC -> Axis in Step 4
          * Government payment must be from Axis.
          */
-        if (!expense.getPaymentBankLedgerId()
-                .equals(request.getPaymentBankLedgerId())) {
-
+        if (
+                !expense.getPaymentBankLedgerId().equals(request.getPaymentBankLedgerId())
+        ) {
             throw new ValidationException(
                     "Selected payment bank does not match Step 4 destination bank",
                     "ERR_PAYMENT_BANK_MISMATCH"
@@ -2810,53 +2550,62 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (expense.getGovernmentPaymentVerificationStatus()
-                == GovernmentPaymentVerificationStatus.PENDING) {
+        if (
+                expense.getGovernmentPaymentVerificationStatus() ==
+                        GovernmentPaymentVerificationStatus.PENDING
+        ) {
             throw new ValidationException(
                     "Payment proof is already pending Accounts verification",
                     "ERR_PAYMENT_PROOF_ALREADY_PENDING"
             );
         }
 
-        if (expense.getGovernmentPaymentVerificationStatus()
-                == GovernmentPaymentVerificationStatus.APPROVED) {
+        if (
+                expense.getGovernmentPaymentVerificationStatus() ==
+                        GovernmentPaymentVerificationStatus.APPROVED
+        ) {
             throw new ValidationException(
                     "Government payment is already verified",
                     "ERR_PAYMENT_ALREADY_VERIFIED"
             );
         }
 
-        if (request.getAmount() == null
-                || request.getAmount().compareTo(BigDecimal.ZERO) <= 0
-                || expense.getApprovedAmount() == null
-                || request.getAmount().compareTo(
-                expense.getApprovedAmount()) != 0) {
+        if (
+                request.getAmount() == null ||
+                        request.getAmount().compareTo(BigDecimal.ZERO) <= 0 ||
+                        expense.getApprovedAmount() == null ||
+                        request.getAmount().compareTo(expense.getApprovedAmount()) != 0
+        ) {
             throw new ValidationException(
                     "Payment amount must equal the approved amount",
                     "ERR_PAYMENT_AMOUNT_MISMATCH"
             );
         }
 
-        if (expense.getFundTransferAmount() != null
-                && request.getAmount().compareTo(
-                expense.getFundTransferAmount()) != 0) {
+        if (
+                expense.getFundTransferAmount() != null &&
+                        request.getAmount().compareTo(expense.getFundTransferAmount()) != 0
+        ) {
             throw new ValidationException(
                     "Payment amount must equal the Step 4 transfer amount",
                     "ERR_PAYMENT_TRANSFER_AMOUNT_MISMATCH"
             );
         }
 
-        if (request.getPaymentDate() == null
-                || request.getPaymentDate().isAfter(LocalDate.now())) {
+        if (
+                request.getPaymentDate() == null ||
+                        request.getPaymentDate().isAfter(LocalDate.now())
+        ) {
             throw new ValidationException(
                     "Payment date is required and cannot be in the future",
                     "ERR_INVALID_PAYMENT_DATE"
             );
         }
 
-        if (expense.getFundTransferDate() != null
-                && request.getPaymentDate().isBefore(
-                expense.getFundTransferDate())) {
+        if (
+                expense.getFundTransferDate() != null &&
+                        request.getPaymentDate().isBefore(expense.getFundTransferDate())
+        ) {
             throw new ValidationException(
                     "Payment date cannot be before the Step 4 fund-transfer date",
                     "ERR_PAYMENT_BEFORE_FUND_TRANSFER"
@@ -2884,51 +2633,39 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return hasRoleContaining(user, "ADMIN");
     }
 
-    private boolean hasRoleContaining(
-            User user,
-            String expectedValue
-    ) {
-
+    private boolean hasRoleContaining(User user, String expectedValue) {
         if (user.getRoles() == null) {
             return false;
         }
 
-        String normalizedExpected =
-                normalizeName(expectedValue);
+        String normalizedExpected = normalizeName(expectedValue);
 
-        return user.getRoles()
+        return user
+                .getRoles()
                 .stream()
                 .filter(Objects::nonNull)
                 .map(Role::getName)
                 .filter(Objects::nonNull)
                 .map(this::normalizeName)
-                .anyMatch(roleName ->
-                        roleName.contains(normalizedExpected)
-                );
+                .anyMatch(roleName -> roleName.contains(normalizedExpected));
     }
 
-    private boolean hasDepartmentContaining(
-            User user,
-            String expectedValue
-    ) {
-
+    private boolean hasDepartmentContaining(User user, String expectedValue) {
         if (user.getDepartments() == null) {
             return false;
         }
 
-        String normalizedExpected =
-                normalizeName(expectedValue);
+        String normalizedExpected = normalizeName(expectedValue);
 
-        return user.getDepartments()
+        return user
+                .getDepartments()
                 .stream()
                 .filter(Objects::nonNull)
                 .filter(department -> !department.isDeleted())
                 .map(Department::getName)
                 .filter(Objects::nonNull)
                 .map(this::normalizeName)
-                .anyMatch(departmentName ->
-                        departmentName.contains(normalizedExpected)
-                );
+                .anyMatch(departmentName -> departmentName.contains(normalizedExpected));
     }
 
     private String normalizeName(String value) {
@@ -2951,7 +2688,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             User user,
             boolean systemGenerated
     ) {
-
         log.debug(
                 "[ACTIVITY-BUILD-START] projectId={} | type={} | userId={} | systemGenerated={}",
                 project.getId(),
@@ -2992,7 +2728,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             String approvalLevel,
             ApprovalStatus status
     ) {
-
         log.debug(
                 "[EXPENSE-DECISION-ACTIVITY-START] projectId={} | expenseId={} | approvalLevel={} | status={} | userId={}",
                 project.getId(),
@@ -3003,9 +2738,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
 
         String currencyCode =
-                expense.getCurrencyCode() != null
-                        ? expense.getCurrencyCode()
-                        : "INR";
+                expense.getCurrencyCode() != null ? expense.getCurrencyCode() : "INR";
 
         BigDecimal displayAmount =
                 expense.getApprovedAmount() != null
@@ -3016,40 +2749,39 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         String summary;
 
         switch (status) {
-
             case APPROVED -> {
                 title = approvalLevel + " Expense Approved";
-                summary = approvalLevel
-                        + " approved expense of "
-                        + currencyCode
-                        + " "
-                        + displayAmount
-                        + " by "
-                        + user.getFullName();
+                summary =
+                        approvalLevel +
+                                " approved expense of " +
+                                currencyCode +
+                                " " +
+                                displayAmount +
+                                " by " +
+                                user.getFullName();
             }
-
             case REJECTED -> {
                 title = approvalLevel + " Expense Rejected";
-                summary = approvalLevel
-                        + " rejected expense of "
-                        + currencyCode
-                        + " "
-                        + displayAmount
-                        + " by "
-                        + user.getFullName();
+                summary =
+                        approvalLevel +
+                                " rejected expense of " +
+                                currencyCode +
+                                " " +
+                                displayAmount +
+                                " by " +
+                                user.getFullName();
             }
-
             case ON_HOLD -> {
                 title = approvalLevel + " Expense On Hold";
-                summary = approvalLevel
-                        + " placed expense of "
-                        + currencyCode
-                        + " "
-                        + displayAmount
-                        + " on hold by "
-                        + user.getFullName();
+                summary =
+                        approvalLevel +
+                                " placed expense of " +
+                                currencyCode +
+                                " " +
+                                displayAmount +
+                                " on hold by " +
+                                user.getFullName();
             }
-
             default -> throw new ValidationException(
                     "Unsupported activity status",
                     "ERR_UNSUPPORTED_ACTIVITY_STATUS"
@@ -3085,62 +2817,44 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             ProjectActivity activity,
             Object details
     ) {
-
-        ProjectActivityResponseDto dto =
-                new ProjectActivityResponseDto();
+        ProjectActivityResponseDto dto = new ProjectActivityResponseDto();
 
         dto.setActivityId(activity.getId());
         dto.setActivityType(activity.getActivityType());
         dto.setTitle(activity.getTitle());
         dto.setSummary(activity.getSummary());
         dto.setActivityDate(activity.getActivityDate());
-        dto.setCreatedByUserId(
-                activity.getCreatedByUserId()
-        );
-        dto.setCreatedByUserName(
-                activity.getCreatedByUserName()
-        );
+        dto.setCreatedByUserId(activity.getCreatedByUserId());
+        dto.setCreatedByUserName(activity.getCreatedByUserName());
         dto.setDetails(details);
 
         return dto;
     }
 
-    private ProjectActivityResponseDto mapTimeline(
-            ProjectActivity activity
-    ) {
-
+    private ProjectActivityResponseDto mapTimeline(ProjectActivity activity) {
         Object details = null;
 
         switch (activity.getActivityType()) {
-
             case NOTE -> details = noteRepository
                     .findByActivityId(activity.getId())
                     .orElse(null);
-
             case COMMENT -> {
-                ProjectComment rootComment =
-                        commentRepository
-                                .findByActivityId(activity.getId())
-                                .orElse(null);
+                ProjectComment rootComment = commentRepository
+                        .findByActivityId(activity.getId())
+                        .orElse(null);
 
                 if (rootComment != null) {
-                    List<ProjectComment> allComments =
-                            commentRepository.findByProjectId(
-                                    activity.getProject().getId()
-                            );
-
-                    details = buildCommentTree(
-                            rootComment,
-                            allComments
+                    List<ProjectComment> allComments = commentRepository.findByProjectId(
+                            activity.getProject().getId()
                     );
+
+                    details = buildCommentTree(rootComment, allComments);
                 }
             }
-
             case EXPENSE -> details = expenseRepository
                     .findByActivityId(activity.getId())
                     .map(this::mapToExpenseDto)
                     .orElse(null);
-
             default -> {
                 // No additional details.
             }
@@ -3153,277 +2867,155 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             ProjectComment root,
             List<ProjectComment> allComments
     ) {
-
-        ProjectCommentResponseDto dto =
-                new ProjectCommentResponseDto();
+        ProjectCommentResponseDto dto = new ProjectCommentResponseDto();
 
         dto.setId(root.getId());
         dto.setCommentText(root.getCommentText());
         dto.setParentCommentId(root.getParentCommentId());
         dto.setCreatedDate(root.getCreatedDate());
         dto.setCreatedByUserId(root.getCreatedByUserId());
-        dto.setCreatedByUserName(
-                root.getCreatedByUserName()
-        );
+        dto.setCreatedByUserName(root.getCreatedByUserName());
 
-        List<ProjectCommentResponseDto> children =
-                allComments.stream()
-                        .filter(comment ->
-                                Objects.equals(
-                                        root.getId(),
-                                        comment.getParentCommentId()
-                                )
-                        )
-                        .map(comment ->
-                                buildCommentTree(
-                                        comment,
-                                        allComments
-                                )
-                        )
-                        .toList();
+        List<ProjectCommentResponseDto> children = allComments
+                .stream()
+                .filter(comment ->
+                        Objects.equals(root.getId(), comment.getParentCommentId())
+                )
+                .map(comment -> buildCommentTree(comment, allComments))
+                .toList();
 
         dto.setChildren(children);
 
         return dto;
     }
 
-    private ProjectExpenseResponseDto mapToExpenseDto(
-            ProjectExpense expense
-    ) {
-
-        ProjectExpenseResponseDto dto =
-                new ProjectExpenseResponseDto();
+    private ProjectExpenseResponseDto mapToExpenseDto(ProjectExpense expense) {
+        ProjectExpenseResponseDto dto = new ProjectExpenseResponseDto();
 
         dto.setExpenseId(expense.getId());
 
         dto.setActivityId(
-                expense.getActivity() != null
-                        ? expense.getActivity().getId()
-                        : null
+                expense.getActivity() != null ? expense.getActivity().getId() : null
         );
 
-        dto.setRaisedDepartmentId(
-                expense.getRaisedDepartmentId()
-        );
+        dto.setRaisedDepartmentId(expense.getRaisedDepartmentId());
 
-        dto.setRaisedDepartmentName(
-                expense.getRaisedDepartmentName()
-        );
+        dto.setRaisedDepartmentName(expense.getRaisedDepartmentName());
 
-        dto.setExpenseCategory(
-                expense.getExpenseCategory()
-        );
+        dto.setExpenseCategory(expense.getExpenseCategory());
 
-        dto.setExpensePaidBy(
-                expense.getExpensePaidBy()
-        );
+        dto.setExpensePaidBy(expense.getExpensePaidBy());
 
-        dto.setRequestedAmount(
-                expense.getRequestedAmount()
-        );
+        dto.setRequestedAmount(expense.getRequestedAmount());
 
-        dto.setApprovedAmount(
-                expense.getApprovedAmount()
-        );
+        dto.setApprovedAmount(expense.getApprovedAmount());
 
-        dto.setPaidAmount(
-                expense.getPaidAmount()
-        );
+        dto.setPaidAmount(expense.getPaidAmount());
 
-        dto.setOutstandingAmount(
-                expense.getOutstandingAmount()
-        );
+        dto.setOutstandingAmount(expense.getOutstandingAmount());
 
-        dto.setCurrencyCode(
-                expense.getCurrencyCode()
-        );
+        dto.setCurrencyCode(expense.getCurrencyCode());
 
         dto.setRemark(expense.getRemark());
         dto.setExpenseDate(expense.getExpenseDate());
         dto.setAttachmentUrl(expense.getAttachmentUrl());
 
-        dto.setExternalReference(
-                expense.getExternalReference()
-        );
+        dto.setExternalReference(expense.getExternalReference());
 
-        dto.setApprovalStatus(
-                expense.getApprovalStatus()
-        );
+        dto.setApprovalStatus(expense.getApprovalStatus());
 
-        dto.setApprovalStage(
-                expense.getApprovalStage()
-        );
+        dto.setApprovalStage(expense.getApprovalStage());
 
-        dto.setCrtApprovalStatus(
-                expense.getCrtApprovalStatus()
-        );
+        dto.setCrtApprovalStatus(expense.getCrtApprovalStatus());
 
-        dto.setCrtActionByUserId(
-                expense.getCrtActionByUserId()
-        );
+        dto.setCrtActionByUserId(expense.getCrtActionByUserId());
 
-        dto.setCrtActionByUserName(
-                expense.getCrtActionByUserName()
-        );
+        dto.setCrtActionByUserName(expense.getCrtActionByUserName());
 
-        dto.setCrtActionDate(
-                expense.getCrtActionDate()
-        );
+        dto.setCrtActionDate(expense.getCrtActionDate());
 
-        dto.setCrtDecisionRemark(
-                expense.getCrtDecisionRemark()
-        );
+        dto.setCrtDecisionRemark(expense.getCrtDecisionRemark());
 
-        dto.setClientPaymentMode(
-                expense.getClientPaymentMode()
-        );
+        dto.setClientPaymentMode(expense.getClientPaymentMode());
 
-        dto.setClientPaymentBankLedgerId(
-                expense.getClientPaymentBankLedgerId()
-        );
+        dto.setClientPaymentBankLedgerId(expense.getClientPaymentBankLedgerId());
 
-        dto.setClientPaymentBankName(
-                expense.getClientPaymentBankName()
-        );
+        dto.setClientPaymentBankName(expense.getClientPaymentBankName());
 
-        dto.setClientPaymentDate(
-                expense.getClientPaymentDate()
-        );
+        dto.setClientPaymentDate(expense.getClientPaymentDate());
 
-        dto.setClientPaymentReference(
-                expense.getClientPaymentReference()
-        );
+        dto.setClientPaymentReference(expense.getClientPaymentReference());
 
-        dto.setClientPaymentProofUrl(
-                expense.getClientPaymentProofUrl()
-        );
+        dto.setClientPaymentProofUrl(expense.getClientPaymentProofUrl());
 
-        dto.setAccountsApprovalStatus(
-                expense.getAccountsApprovalStatus()
-        );
+        dto.setAccountsApprovalStatus(expense.getAccountsApprovalStatus());
 
-        dto.setAccountsActionByUserId(
-                expense.getAccountsActionByUserId()
-        );
+        dto.setAccountsActionByUserId(expense.getAccountsActionByUserId());
 
-        dto.setAccountsActionByUserName(
-                expense.getAccountsActionByUserName()
-        );
+        dto.setAccountsActionByUserName(expense.getAccountsActionByUserName());
 
-        dto.setAccountsActionDate(
-                expense.getAccountsActionDate()
-        );
+        dto.setAccountsActionDate(expense.getAccountsActionDate());
 
-        dto.setAccountsDecisionRemark(
-                expense.getAccountsDecisionRemark()
-        );
+        dto.setAccountsDecisionRemark(expense.getAccountsDecisionRemark());
 
-        dto.setExpensePaidBy(
-                expense.getExpensePaidBy()
-        );
+        dto.setExpensePaidBy(expense.getExpensePaidBy());
 
-        dto.setPaymentStatus(
-                expense.getPaymentStatus()
-        );
+        dto.setPaymentStatus(expense.getPaymentStatus());
 
-        dto.setPaymentCompletedDate(
-                expense.getPaymentCompletedDate()
-        );
+        dto.setPaymentCompletedDate(expense.getPaymentCompletedDate());
 
-        dto.setAccountPostingStatus(
-                expense.getAccountPostingStatus()
-        );
+        dto.setAccountPostingStatus(expense.getAccountPostingStatus());
 
-        dto.setAccountVoucherId(
-                expense.getAccountVoucherId()
-        );
+        dto.setAccountVoucherId(expense.getAccountVoucherId());
 
-        dto.setAccountVoucherNumber(
-                expense.getAccountVoucherNumber()
-        );
+        dto.setAccountVoucherNumber(expense.getAccountVoucherNumber());
 
-        dto.setAccountPostedAt(
-                expense.getAccountPostedAt()
-        );
+        dto.setAccountPostedAt(expense.getAccountPostedAt());
 
-        dto.setAccountPostingError(
-                expense.getAccountPostingError()
-        );
+        dto.setAccountPostingError(expense.getAccountPostingError());
 
         // Step 3 voucher audit
-        dto.setReceiptVoucherId(
-                expense.getReceiptVoucherId()
-        );
+        dto.setReceiptVoucherId(expense.getReceiptVoucherId());
 
-        dto.setReceiptVoucherNumber(
-                expense.getReceiptVoucherNumber()
-        );
+        dto.setReceiptVoucherNumber(expense.getReceiptVoucherNumber());
 
-        dto.setInitialJournalVoucherId(
-                expense.getInitialJournalVoucherId()
-        );
+        dto.setInitialJournalVoucherId(expense.getInitialJournalVoucherId());
 
         dto.setInitialJournalVoucherNumber(
                 expense.getInitialJournalVoucherNumber()
         );
 
         // Step 4 fund-transfer audit and CONTRA voucher
-        dto.setFundTransferPostingStatus(
-                expense.getFundTransferPostingStatus()
-        );
+        dto.setFundTransferPostingStatus(expense.getFundTransferPostingStatus());
 
         dto.setFundTransferFromBankLedgerId(
                 expense.getFundTransferFromBankLedgerId()
         );
 
-        dto.setFundTransferFromBankName(
-                expense.getFundTransferFromBankName()
-        );
+        dto.setFundTransferFromBankName(expense.getFundTransferFromBankName());
 
-        dto.setFundTransferToBankLedgerId(
-                expense.getFundTransferToBankLedgerId()
-        );
+        dto.setFundTransferToBankLedgerId(expense.getFundTransferToBankLedgerId());
 
-        dto.setFundTransferToBankName(
-                expense.getFundTransferToBankName()
-        );
+        dto.setFundTransferToBankName(expense.getFundTransferToBankName());
 
-        dto.setFundTransferAmount(
-                expense.getFundTransferAmount()
-        );
+        dto.setFundTransferAmount(expense.getFundTransferAmount());
 
-        dto.setFundTransferDate(
-                expense.getFundTransferDate()
-        );
+        dto.setFundTransferDate(expense.getFundTransferDate());
 
-        dto.setFundTransferReference(
-                expense.getFundTransferReference()
-        );
+        dto.setFundTransferReference(expense.getFundTransferReference());
 
-        dto.setFundTransferProofUrl(
-                expense.getFundTransferProofUrl()
-        );
+        dto.setFundTransferProofUrl(expense.getFundTransferProofUrl());
 
-        dto.setFundTransferVoucherId(
-                expense.getFundTransferVoucherId()
-        );
+        dto.setFundTransferVoucherId(expense.getFundTransferVoucherId());
 
-        dto.setFundTransferVoucherNumber(
-                expense.getFundTransferVoucherNumber()
-        );
+        dto.setFundTransferVoucherNumber(expense.getFundTransferVoucherNumber());
 
-        dto.setFundTransferPostingError(
-                expense.getFundTransferPostingError()
-        );
+        dto.setFundTransferPostingError(expense.getFundTransferPostingError());
 
         // Destination bank retained for Step 5.
-        dto.setPaymentBankLedgerId(
-                expense.getPaymentBankLedgerId()
-        );
+        dto.setPaymentBankLedgerId(expense.getPaymentBankLedgerId());
 
-        dto.setPaymentBankName(
-                expense.getPaymentBankName()
-        );
+        dto.setPaymentBankName(expense.getPaymentBankName());
 
         // Step 5 final government-payment audit and PAYMENT voucher
         dto.setGovernmentPaymentPostingStatus(
@@ -3434,37 +3026,25 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getGovernmentPaymentVerificationStatus()
         );
 
-        dto.setGovernmentPaymentMode(
-                expense.getGovernmentPaymentMode()
-        );
+        dto.setGovernmentPaymentMode(expense.getGovernmentPaymentMode());
 
-        dto.setGovernmentPaymentAmount(
-                expense.getGovernmentPaymentAmount()
-        );
+        dto.setGovernmentPaymentAmount(expense.getGovernmentPaymentAmount());
 
-        dto.setGovernmentPaymentDate(
-                expense.getGovernmentPaymentDate()
-        );
+        dto.setGovernmentPaymentDate(expense.getGovernmentPaymentDate());
 
-        dto.setGovernmentPaymentReference(
-                expense.getGovernmentPaymentReference()
-        );
+        dto.setGovernmentPaymentReference(expense.getGovernmentPaymentReference());
 
         dto.setGovernmentPaymentReceiptUrl(
                 expense.getGovernmentPaymentReceiptUrl()
         );
 
-        dto.setGovernmentPaymentRemark(
-                expense.getGovernmentPaymentRemark()
-        );
+        dto.setGovernmentPaymentRemark(expense.getGovernmentPaymentRemark());
 
         dto.setGovernmentPaymentVerificationRemark(
                 expense.getGovernmentPaymentVerificationRemark()
         );
 
-        dto.setGovernmentPaymentVoucherId(
-                expense.getGovernmentPaymentVoucherId()
-        );
+        dto.setGovernmentPaymentVoucherId(expense.getGovernmentPaymentVoucherId());
 
         dto.setGovernmentPaymentVoucherNumber(
                 expense.getGovernmentPaymentVoucherNumber()
@@ -3482,9 +3062,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getGovernmentPaymentMarkedByUserName()
         );
 
-        dto.setGovernmentPaymentMarkedAt(
-                expense.getGovernmentPaymentMarkedAt()
-        );
+        dto.setGovernmentPaymentMarkedAt(expense.getGovernmentPaymentMarkedAt());
 
         dto.setGovernmentPaymentSubmittedByUserId(
                 expense.getGovernmentPaymentSubmittedByUserId()
@@ -3498,13 +3076,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 expense.getGovernmentPaymentSubmittedAt()
         );
 
-        dto.setCreatedByUserId(
-                expense.getCreatedByUserId()
-        );
+        dto.setCreatedByUserId(expense.getCreatedByUserId());
 
-        dto.setCreatedByUserName(
-                expense.getCreatedByUserName()
-        );
+        dto.setCreatedByUserName(expense.getCreatedByUserName());
 
         dto.setCreatedDate(expense.getCreatedDate());
         dto.setUpdatedDate(expense.getUpdatedDate());
@@ -3515,14 +3089,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             dto.setProjectId(project.getId());
             dto.setProjectNo(project.getProjectNo());
             dto.setProjectName(project.getName());
-            dto.setUnbilledNumber(
-                    project.getUnbilledNumber()
-            );
+            dto.setUnbilledNumber(project.getUnbilledNumber());
 
             if (project.getProduct() != null) {
-                dto.setProductName(
-                        project.getProduct().getProductName()
-                );
+                dto.setProductName(project.getProduct().getProductName());
             }
         }
 
@@ -3538,75 +3108,47 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             String message,
             String errorCode
     ) {
-
-        if (amount == null ||
-                amount.compareTo(BigDecimal.ZERO) <= 0) {
-
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn(
                     "[AMOUNT-VALIDATION-FAILED] amount={} | errorCode={}",
                     amount,
                     errorCode
             );
-            throw new ValidationException(
-                    message,
-                    errorCode
-            );
+            throw new ValidationException(message, errorCode);
         }
 
-        return amount.setScale(
-                2,
-                RoundingMode.HALF_UP
-        );
+        return amount.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private String requireText(
-            String value,
-            String message,
-            String errorCode
-    ) {
-
-        String normalized =
-                normalizeOptionalText(value);
+    private String requireText(String value, String message, String errorCode) {
+        String normalized = normalizeOptionalText(value);
 
         if (normalized == null) {
-            log.warn(
-                    "[TEXT-VALIDATION-FAILED] errorCode={}",
-                    errorCode
-            );
-            throw new ValidationException(
-                    message,
-                    errorCode
-            );
+            log.warn("[TEXT-VALIDATION-FAILED] errorCode={}", errorCode);
+            throw new ValidationException(message, errorCode);
         }
 
         return normalized;
     }
 
     private String normalizeOptionalText(String value) {
-
         if (value == null) {
             return null;
         }
 
         String normalized = value.trim();
 
-        return normalized.isEmpty()
-                ? null
-                : normalized;
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private String normalizeCurrencyCode(String value) {
-
         String currencyCode =
                 value == null || value.trim().isEmpty()
                         ? "INR"
                         : value.trim().toUpperCase(Locale.ROOT);
 
         if (!currencyCode.matches("^[A-Z]{3}$")) {
-            log.warn(
-                    "[CURRENCY-VALIDATION-FAILED] currencyCode={}",
-                    currencyCode
-            );
+            log.warn("[CURRENCY-VALIDATION-FAILED] currencyCode={}", currencyCode);
             throw new ValidationException(
                     "Currency code must contain exactly three letters",
                     "ERR_INVALID_CURRENCY_CODE"
@@ -3617,25 +3159,15 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     }
 
     private Pageable normalizePageable(Pageable pageable) {
-
         if (pageable == null) {
-            log.debug(
-                    "[PAGEABLE-NORMALIZED] source=null | page=0 | size=20"
-            );
+            log.debug("[PAGEABLE-NORMALIZED] source=null | page=0 | size=20");
             return PageRequest.of(0, 20);
         }
 
         int page = Math.max(pageable.getPageNumber(), 0);
-        int size = Math.min(
-                Math.max(pageable.getPageSize(), 1),
-                100
-        );
+        int size = Math.min(Math.max(pageable.getPageSize(), 1), 100);
 
-        Pageable normalized = PageRequest.of(
-                page,
-                size,
-                pageable.getSort()
-        );
+        Pageable normalized = PageRequest.of(page, size, pageable.getSort());
 
         log.debug(
                 "[PAGEABLE-NORMALIZED] requestedPage={} | requestedSize={} | normalizedPage={} | normalizedSize={}",
@@ -3648,10 +3180,3 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         return normalized;
     }
 }
-
-
-
-
-
-
-

@@ -5,9 +5,11 @@ import com.doc.dto.project.activity.expense.GovernmentFeePaymentRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 
 public interface ExpenseAccountPostingService {
-
-    /** Step 3: posts approval-time government-fee vouchers. */
-    void postGovernmentFeeExpense(Long expenseId);
+    /**
+     * Step 3: posts the approval-time government-fee vouchers and returns the
+     * persisted Operation Service posting state.
+     */
+    ProjectExpenseResponseDto postGovernmentFeeExpense(Long expenseId);
 
     /** Retries only a failed Step 3 Account Service posting. */
     ProjectExpenseResponseDto retryGovernmentFeePosting(

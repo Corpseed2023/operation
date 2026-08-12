@@ -2,26 +2,55 @@ package com.doc.repository.vendor;
 
 import com.doc.entity.vendor.VendorFinalization;
 import com.doc.entity.vendor.VendorFinalizationStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface VendorFinalizationRepository extends JpaRepository<VendorFinalization, Long> {
+public interface VendorFinalizationRepository
+        extends JpaRepository<VendorFinalization, Long> {
 
     Optional<VendorFinalization> findByIdAndIsDeletedFalse(Long id);
 
-    List<VendorFinalization> findByRfq_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long rfqId);
+    List<VendorFinalization>
+    findByRfq_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long rfqId);
 
     boolean existsByRfqVendor_IdAndQuotationItem_IdAndIsDeletedFalse(
             Long rfqVendorId,
             Long quotationItemId
     );
 
-    List<VendorFinalization> findByVendor_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
+    List<VendorFinalization>
+    findByVendor_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorId);
+
+    /**
+     * Finalizations are scoped through RFQ -> procurement assignment.
+     * This prevents a historical finalization for the same product from being
+     * selected while creating a Purchase Order for another project.
+     */
+    @Query("""
+            SELECT DISTINCT vf
+            FROM VendorFinalization vf
+            JOIN FETCH vf.rfq r
+            JOIN FETCH r.product p
+            JOIN FETCH vf.vendor v
+            LEFT JOIN FETCH vf.quotationItem qi
+            WHERE r.procurementAssignment.id = :procurementAssignmentId
+              AND v.id = :vendorId
+              AND vf.status = :status
+              AND vf.isDeleted = false
+              AND r.isDeleted = false
+              AND v.isDeleted = false
+            ORDER BY vf.id ASC
+            """)
+    List<VendorFinalization> findFinalizedForProcurementAssignmentAndVendor(
+            @Param("procurementAssignmentId") Long procurementAssignmentId,
+            @Param("vendorId") Long vendorId,
+            @Param("status") VendorFinalizationStatus status
+    );
 
     @Query("""
             SELECT vf
@@ -55,42 +84,38 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
     );
 
     @Query("""
-        SELECT COUNT(DISTINCT vf.vendor.id)
-        FROM VendorFinalization vf
-        WHERE vf.rfq.product.id = :productId
-          AND vf.isDeleted = false
-          AND vf.vendor.isDeleted = false
-          AND vf.rfq.isDeleted = false
-          AND vf.status IN :statuses
-        """)
+            SELECT COUNT(DISTINCT vf.vendor.id)
+            FROM VendorFinalization vf
+            WHERE vf.rfq.product.id = :productId
+              AND vf.isDeleted = false
+              AND vf.vendor.isDeleted = false
+              AND vf.rfq.isDeleted = false
+              AND vf.status IN :statuses
+            """)
     Long countDistinctFinalizedVendorsByProductId(
             @Param("productId") Long productId,
             @Param("statuses") List<VendorFinalizationStatus> statuses
     );
 
-
-
     @Query("""
-        SELECT vf
-        FROM VendorFinalization vf
-        JOIN FETCH vf.vendor v
-        WHERE vf.rfq.product.id = :productId
-          AND vf.isDeleted = false
-          AND vf.rfq.isDeleted = false
-          AND v.isDeleted = false
-          AND vf.status IN :statuses
-        ORDER BY
-          CASE WHEN vf.totalFinalizedAmount IS NULL THEN 1 ELSE 0 END,
-          vf.totalFinalizedAmount ASC,
-          vf.id ASC
-        """)
+            SELECT vf
+            FROM VendorFinalization vf
+            JOIN FETCH vf.vendor v
+            WHERE vf.rfq.product.id = :productId
+              AND vf.isDeleted = false
+              AND vf.rfq.isDeleted = false
+              AND v.isDeleted = false
+              AND vf.status IN :statuses
+            ORDER BY
+              CASE WHEN vf.totalFinalizedAmount IS NULL THEN 1 ELSE 0 END,
+              vf.totalFinalizedAmount ASC,
+              vf.id ASC
+            """)
     List<VendorFinalization> findLowestFinalizedVendorByProductId(
             @Param("productId") Long productId,
             @Param("statuses") List<VendorFinalizationStatus> statuses,
             Pageable pageable
     );
-
-
 
     List<VendorFinalization> findByQuotation_IdAndIsDeletedFalse(
             Long quotationId
@@ -98,6 +123,4 @@ public interface VendorFinalizationRepository extends JpaRepository<VendorFinali
 
     Optional<VendorFinalization>
     findFirstByVendor_IdOrderByIdDesc(Long vendorId);
-
-
 }
