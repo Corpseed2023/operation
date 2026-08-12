@@ -5,6 +5,7 @@ import com.doc.dto.vendor.VendorOnboardingDocumentRequestDto;
 import com.doc.dto.vendor.VendorOnboardingResponseDto;
 import com.doc.dto.vendor.VendorOnboardingSendFormRequestDto;
 import com.doc.entity.vendor.*;
+import com.doc.exception.ValidationException;
 import com.doc.repository.vendor.*;
 import com.doc.service.mail.MailService;
 import com.doc.service.vendor.VendorOnboardingService;
@@ -42,7 +43,22 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
         }
 
         Vendor vendor = finalization.getVendor();
-        if(vendor.getStatus() == VendorStatus.PROSPECTIVE){
+
+        /*
+         * FIX (issue #5): an already-ACTIVE vendor has already completed
+         * onboarding + accounts approval in a previous cycle. Sending a
+         * fresh onboarding form to them is the same asymmetry that
+         * sendAgreementToVendor already guards against for the Accounts
+         * step — apply the same shortcut here instead of re-onboarding.
+         */
+        if (vendor.getStatus() == VendorStatus.ACTIVE) {
+            throw new ValidationException(
+                    "Vendor is already active; onboarding is not required",
+                    "ERR_ACTIVE_VENDOR_ONBOARDING_NOT_REQUIRED"
+            );
+        }
+
+        if (vendor.getStatus() == VendorStatus.PROSPECTIVE) {
             vendor.setStatus(VendorStatus.ONBOARDING);
             vendor.setUpdatedBy(requestDto.getCreatedBy());
             vendor.setUpdatedDate(new Date());
@@ -50,7 +66,6 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
         }
 
         RFQ rfq = finalization.getRfq();
-
         RFQVendor rfqVendor = finalization.getRfqVendor();
 
         String vendorEmail = resolveVendorEmail(rfqVendor, vendor);
@@ -103,13 +118,9 @@ public class VendorOnboardingServiceImpl implements VendorOnboardingService {
             vendorOnboardingDocumentRepository.save(document);
         }
 
-        sendVendorOnboardingMail(
-                vendorEmail,
-                vendor,
-                finalization,
-                requestDto
-        );
-        if(rfq != null){
+        sendVendorOnboardingMail(vendorEmail, vendor, finalization, requestDto);
+
+        if (rfq != null) {
             rfq.setStatus(RFQStatus.ONBOARDING_STARTED);
             rfq.setUpdatedBy(requestDto.getCreatedBy());
             rfq.setUpdatedDate(new Date());

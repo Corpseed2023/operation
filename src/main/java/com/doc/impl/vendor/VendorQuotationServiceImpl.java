@@ -313,6 +313,28 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                         "ERR_VENDOR_QUOTATION_NOT_FOUND"
                 ));
 
+        /*
+         * FIX: Enforce the flow — final agreement can only be sent to the
+         * vendor after Legal has sent the agreement to Procurement and
+         * Procurement has marked it AGREED. This closes the gap where
+         * sendAgreementToVendor could be called with no legal request at
+         * all, or after AGREEMENT_DISAGREED.
+         */
+        VendorQuotationLegalRequest legalRequest = vendorQuotationLegalRequestRepository
+                .findTopByVendorQuotation_IdAndIsDeletedFalseOrderByCreatedDateDesc(quotationId)
+                .orElseThrow(() -> new ValidationException(
+                        "No legal request found for this quotation; agreement cannot be sent to vendor yet",
+                        "ERR_LEGAL_REQUEST_NOT_FOUND"
+                ));
+
+        if (legalRequest.getStatus() != VendorQuotationLegalRequestStatus.AGREEMENT_AGREED) {
+            throw new ValidationException(
+                    "Final agreement can only be sent to vendor after the legal agreement is marked AGREED. Current status: "
+                            + legalRequest.getStatus(),
+                    "ERR_LEGAL_AGREEMENT_NOT_AGREED"
+            );
+        }
+
         if (!StringUtils.hasText(requestDto.getAttachmentUrl())) {
             throw new ValidationException(
                     "Agreement attachment URL is required",
@@ -332,12 +354,8 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         String vendorEmail = null;
 
         if (quotation.getRfqVendor() != null
-                && StringUtils.hasText(
-                quotation.getRfqVendor().getSentToEmail()
-        )) {
-
+                && StringUtils.hasText(quotation.getRfqVendor().getSentToEmail())) {
             vendorEmail = quotation.getRfqVendor().getSentToEmail();
-
         } else if (StringUtils.hasText(vendor.getEmail())) {
             vendorEmail = vendor.getEmail();
         }
@@ -349,12 +367,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
             );
         }
 
-        sendFinalAgreementMail(
-                vendorEmail,
-                vendor,
-                quotation,
-                requestDto
-        );
+        sendFinalAgreementMail(vendorEmail, vendor, quotation, requestDto);
 
         Date now = new Date();
 
@@ -367,18 +380,9 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         quotation.setUpdatedBy(userId);
         quotation.setUpdatedDate(now);
 
-        /*
-         * Existing active vendor:
-         * Map product with vendor and skip Accounts workflow.
-         */
         if (vendor.getStatus() == VendorStatus.ACTIVE) {
 
-            mapProductWithActiveVendor(
-                    quotation,
-                    vendor,
-                    userId,
-                    now
-            );
+            mapProductWithActiveVendor(quotation, vendor, userId, now);
 
             quotation.setStatus(VendorQuotationStatus.ACCEPTED);
 
@@ -388,7 +392,6 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                 rfq.setStatus(RFQStatus.VENDOR_FINALIZED);
                 rfq.setUpdatedBy(userId);
                 rfq.setUpdatedDate(now);
-
                 rfqRepository.save(rfq);
             }
 
@@ -398,39 +401,29 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                 rfqVendor.setStatus(RFQVendorStatus.SELECTED);
                 rfqVendor.setUpdatedBy(userId);
                 rfqVendor.setUpdatedDate(now);
-                rfqVendor.setRemarks(
-                        "Active vendor mapped with product; accounts workflow skipped"
-                );
-
+                rfqVendor.setRemarks("Active vendor mapped with product; accounts workflow skipped");
                 rfqVendorRepository.save(rfqVendor);
             }
 
+            /*
+             * FIX (issue #8): use the dedicated ACTIVE_VENDOR_MAPPED status
+             * instead of re-setting FINALIZED, so this shortcut path is
+             * distinguishable from a plain finalization later on.
+             */
             vendorFinalizationRepository
                     .findByQuotation_IdAndIsDeletedFalse(quotationId)
                     .forEach(finalization -> {
-                        /*
-                         * Prefer adding a dedicated status such as
-                         * ACTIVE_VENDOR_MAPPED instead of ACCOUNTS_APPROVED.
-                         */
-                        finalization.setStatus(
-                                VendorFinalizationStatus.FINALIZED
-                        );
+                        finalization.setStatus(VendorFinalizationStatus.ACTIVE_VENDOR_MAPPED);
                         finalization.setSentToAccounts(false);
                         finalization.setUpdatedBy(userId);
                         finalization.setUpdatedDate(now);
                     });
 
         } else {
-            /*
-             * New or inactive vendor must still go through Accounts.
-             */
-            quotation.setStatus(
-                    VendorQuotationStatus.AGREEMENT_SENT_TO_VENDOR
-            );
+            quotation.setStatus(VendorQuotationStatus.AGREEMENT_SENT_TO_VENDOR);
         }
 
-        VendorQuotation saved =
-                vendorQuotationRepository.save(quotation);
+        VendorQuotation saved = vendorQuotationRepository.save(quotation);
 
         return mapToResponse(saved);
     }
@@ -484,17 +477,17 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         RFQ rfq = rfqRepository.findById(requestDto.getRfqId())
                 .orElseThrow(() -> new RuntimeException("RFQ not found"));
 
-        RFQVendor rfqVendor = rfqVendorRepository.findById(requestDto.getRfqVendorId())
+        RFQVendor newRfqVendor = rfqVendorRepository.findById(requestDto.getRfqVendorId())
                 .orElseThrow(() -> new RuntimeException("RFQ vendor not found"));
 
         Vendor vendor = vendorRepository.findById(requestDto.getVendorId())
                 .orElseThrow(() -> new RuntimeException("Vendor not found"));
 
-        if (rfqVendor.getRfq() == null || !rfqVendor.getRfq().getId().equals(rfq.getId())) {
+        if (newRfqVendor.getRfq() == null || !newRfqVendor.getRfq().getId().equals(rfq.getId())) {
             throw new RuntimeException("RFQ Vendor does not belong to selected RFQ");
         }
 
-        if (rfqVendor.getVendor() == null || !rfqVendor.getVendor().getId().equals(vendor.getId())) {
+        if (newRfqVendor.getVendor() == null || !newRfqVendor.getVendor().getId().equals(vendor.getId())) {
             throw new RuntimeException("Vendor does not match RFQ Vendor");
         }
 
@@ -508,8 +501,31 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
             );
         }
 
+        /*
+         * FIX (issue #7): if the RFQ vendor mapping is being changed,
+         * revert the old RFQVendor's status and carry the
+         * QUOTATION_RECEIVED status/date to the new one so neither is
+         * left stale.
+         */
+        RFQVendor previousRfqVendor = quotation.getRfqVendor();
+
+        if (previousRfqVendor != null
+                && !previousRfqVendor.getId().equals(newRfqVendor.getId())) {
+
+            if (previousRfqVendor.getStatus() == RFQVendorStatus.QUOTATION_RECEIVED) {
+                previousRfqVendor.setStatus(RFQVendorStatus.SENT);
+                previousRfqVendor.setRemarks("Quotation moved to a different RFQ vendor");
+                rfqVendorRepository.save(previousRfqVendor);
+            }
+
+            newRfqVendor.setStatus(RFQVendorStatus.QUOTATION_RECEIVED);
+            newRfqVendor.setQuotationReceivedDate(new Date());
+            newRfqVendor.setUpdatedBy(requestDto.getCreatedBy());
+            rfqVendorRepository.save(newRfqVendor);
+        }
+
         quotation.setRfq(rfq);
-        quotation.setRfqVendor(rfqVendor);
+        quotation.setRfqVendor(newRfqVendor);
         quotation.setVendor(vendor);
 
         quotation.setQuotationNumber(requestDto.getQuotationNumber());
@@ -526,10 +542,6 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         quotation.setUpdatedBy(requestDto.getCreatedBy());
 
-        /*
-         * Update quotation documents.
-         * Since this is PUT API, old documents are removed and request documents are saved again.
-         */
         quotation.getDocuments().clear();
 
         if (requestDto.getDocuments() != null && !requestDto.getDocuments().isEmpty()) {
@@ -547,10 +559,6 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
             }
         }
 
-        /*
-         * Update quotation items.
-         * Old items are removed and new request items are saved again.
-         */
         quotation.getItems().clear();
 
         if (requestDto.getItems() != null) {

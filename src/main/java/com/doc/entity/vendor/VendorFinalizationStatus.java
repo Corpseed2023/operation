@@ -40,5 +40,7 @@ public enum VendorFinalizationStatus {
     /**
      * Accounts Department rejected finalized vendor details.
      */
-    ACCOUNTS_REJECTED
+    ACCOUNTS_REJECTED,
+    ACTIVE_VENDOR_MAPPED,   // distinct from FINALIZED, used when active-vendor shortcut is taken
+    REJECTED_BY_ACCOUNTS,    // used when accounts rejects the submission
 }

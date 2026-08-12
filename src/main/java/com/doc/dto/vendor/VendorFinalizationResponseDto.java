@@ -22,6 +22,8 @@ public class VendorFinalizationResponseDto {
     private String vendorEmail;
     private String vendorMobile;
 
+    private String vendorStatus;
+
     private Long quotationId;
     private String quotationNumber;
 

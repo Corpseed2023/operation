@@ -112,7 +112,7 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             throw new ValidationException("RFQ is deleted with ID: " + rfqId,"ERR_RFQ_DELETED");
         }
 
-        Product product = productRepository.findById(requestDto.getProductId())
+        Product product = productRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(requestDto.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Product not found with ID: " + requestDto.getProductId(),
                         "ERR_PRODUCT_NOT_FOUND"
@@ -235,13 +235,13 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             throw new ValidationException("No vendors mapped with this RFQ","ERR_NO_MAPPED_VENDORS");
         }
 
-        List<RFQVendor> vendorsToSend;
+        List<RFQVendor> candidateVendors;
 
         if (requestDto == null
                 || requestDto.getRfqVendorIds() == null
                 || requestDto.getRfqVendorIds().isEmpty()) {
 
-            vendorsToSend = rfq.getVendors()
+            candidateVendors = rfq.getVendors()
                     .stream()
                     .filter(rfqVendor -> rfqVendor != null && !rfqVendor.isDeleted())
                     .toList();
@@ -249,15 +249,32 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         } else {
             Set<Long> requestedRfqVendorIds = new HashSet<>(requestDto.getRfqVendorIds());
 
-            vendorsToSend = rfq.getVendors()
+            candidateVendors = rfq.getVendors()
                     .stream()
                     .filter(rfqVendor -> rfqVendor != null && !rfqVendor.isDeleted())
                     .filter(rfqVendor -> requestedRfqVendorIds.contains(rfqVendor.getId()))
                     .toList();
         }
 
-        if (vendorsToSend.isEmpty()) {
+        if (candidateVendors.isEmpty()) {
             throw new ValidationException("No valid RFQ vendors found for sending mail","ERR_NO_VALID_RFQ_VENDORS");
+        }
+
+        /*
+         * FIX: Do not resend/regress status for vendors that have already
+         * progressed past SENT (e.g. quotation already received or selected).
+         * Only vendors still at their initial (pre-send) state should be mailed.
+         */
+        List<RFQVendor> vendorsToSend = candidateVendors.stream()
+                .filter(rfqVendor -> rfqVendor.getStatus() == null
+                        || rfqVendor.getStatus() == RFQVendorStatus.SENT)
+                .toList();
+
+        if (vendorsToSend.isEmpty()) {
+            throw new ValidationException(
+                    "All selected vendors have already progressed past the RFQ-sent stage; nothing to (re)send",
+                    "ERR_VENDORS_ALREADY_PROGRESSED"
+            );
         }
 
         validateNoVendorEmailsInCcOrBcc(vendorsToSend, requestDto);
@@ -277,14 +294,8 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             }
 
             String subject = buildRFQMailSubject(rfq, requestDto);
-
             String body = buildRFQMailBody(rfq, rfqVendor, vendor, requestDto);
 
-            /*
-             * IMPORTANT:
-             * One mail is sent to one vendor only.
-             * Do not add other vendor emails in TO/CC/BCC.
-             */
             MailRequestDto mailRequestDto = MailRequestDto.builder()
                     .to(vendor.getEmail())
                     .cc(requestDto != null ? requestDto.getCc() : null)
@@ -310,8 +321,15 @@ public class VendorRFQServiceImpl implements VendorRFQService {
             throw new ValidationException("RFQ mail was not sent to any vendor","ERR_RFQ_MAIL_NOT_SENT");
         }
 
-        rfq.setStatus(RFQStatus.SENT);
-        rfq.setUpdatedBy(userId);
+        /*
+         * FIX: Only move RFQ status forward, never backward.
+         * If RFQ has already progressed (e.g. ONBOARDING_STARTED, VENDOR_FINALIZED),
+         * a resend to a subset of vendors should not reset it to SENT.
+         */
+        if (rfq.getStatus() == RFQStatus.DRAFT) {
+            rfq.setStatus(RFQStatus.SENT);
+            rfq.setUpdatedBy(userId);
+        }
 
         RFQ savedRFQ = vendorRFQRepository.save(rfq);
 

@@ -18,4 +18,5 @@ public interface VendorQuotationLegalRequestRepository
     );
     Optional<VendorQuotationLegalRequest>
     findTopByVendorQuotation_IdAndIsDeletedFalseOrderByCreatedDateDesc(Long vendorQuotationId);
+
 }

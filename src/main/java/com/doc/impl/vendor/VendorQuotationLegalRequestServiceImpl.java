@@ -37,6 +37,28 @@ public class VendorQuotationLegalRequestServiceImpl
                         "ERR_VENDOR_QUOTATION_NOT_FOUND"
                 ));
 
+        /*
+         * FIX (issue #4): block duplicate/concurrent legal requests for the
+         * same quotation, mirroring the check already done in
+         * VendorOnboardingServiceImpl.sendOnboardingForm. Only block if an
+         * existing request hasn't yet reached a terminal decision — this
+         * still allows a fresh request to be raised after a DISAGREED
+         * outcome if your process wants a second round with Legal.
+         */
+        boolean hasOpenLegalRequest = legalRequestRepository
+                .findTopByVendorQuotation_IdAndIsDeletedFalseOrderByCreatedDateDesc(
+                        requestDto.getVendorQuotationId()
+                )
+                .filter(existing -> existing.getStatus() != VendorQuotationLegalRequestStatus.AGREEMENT_DISAGREED)
+                .isPresent();
+
+        if (hasOpenLegalRequest) {
+            throw new ValidationException(
+                    "An active legal request already exists for this quotation",
+                    "ERR_LEGAL_REQUEST_ALREADY_EXISTS"
+            );
+        }
+
         VendorQuotationLegalRequest legalRequest = new VendorQuotationLegalRequest();
 
         legalRequest.setVendorQuotation(quotation);
@@ -102,14 +124,27 @@ public class VendorQuotationLegalRequestServiceImpl
             );
         }
 
+        /*
+         * FIX (issue #3): mirror the guard already present in
+         * agreementDecision — once a decision has been made, this
+         * request should not be re-sent to procurement (which would
+         * silently reset an AGREED/DISAGREED request back to
+         * AGREEMENT_SENT_TO_PROCUREMENT).
+         */
+        if (legalRequest.getStatus() == VendorQuotationLegalRequestStatus.AGREEMENT_AGREED
+                || legalRequest.getStatus() == VendorQuotationLegalRequestStatus.AGREEMENT_DISAGREED) {
+            throw new ValidationException(
+                    "A decision has already been made on this legal request; it cannot be re-sent to procurement",
+                    "ERR_LEGAL_REQUEST_ALREADY_DECIDED"
+            );
+        }
+
         legalRequest.setAgreementFileUrl(requestDto.getAgreementFileUrl());
-        legalRequest.setStatusReason(requestDto.getRemarks()) ;
+        legalRequest.setStatusReason(requestDto.getRemarks());
         legalRequest.setSentToProcurementBy(userId);
         legalRequest.setSentToProcurementDate(new Date());
         legalRequest.setUpdatedBy(userId);
-        legalRequest.setStatus(
-                VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT
-        );
+        legalRequest.setStatus(VendorQuotationLegalRequestStatus.AGREEMENT_SENT_TO_PROCUREMENT);
         legalRequest.setExpiryDate(requestDto.getExpiryDate());
         legalRequest.setValidityDays(requestDto.getValidityDays());
 

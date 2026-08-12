@@ -509,8 +509,16 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
         VendorFinalization finalization = submission.getVendorFinalization();
 
         if (finalization != null) {
+            /*
+             * FIX (issue #9): previously only sentToAccounts was reset,
+             * leaving finalization.status stuck at FINALIZED/ONBOARDING_STARTED
+             * with no visibility that Accounts rejected it. Now the
+             * finalization itself is explicitly marked rejected.
+             */
+            finalization.setStatus(VendorFinalizationStatus.REJECTED_BY_ACCOUNTS);
             finalization.setSentToAccounts(false);
             finalization.setUpdatedBy(requestDto.getUserId());
+            finalization.setUpdatedDate(new Date());
             vendorFinalizationRepository.save(finalization);
         }
 
@@ -620,6 +628,11 @@ public class VendorFinalizationServiceImpl implements VendorFinalizationService 
             response.setVendorName(finalization.getVendor().getName());
             response.setVendorEmail(finalization.getVendor().getEmail());
             response.setVendorMobile(finalization.getVendor().getMobile());
+            response.setVendorStatus(
+                    finalization.getVendor().getStatus() != null
+                            ? finalization.getVendor().getStatus().name()
+                            : null
+            );
         }
 
         if (finalization.getQuotation() != null) {
