@@ -5,6 +5,7 @@ public enum ProcurementOrderStatus {
     APPROVED,
     COMPLETED,
     REJECTED,
+    ADMIN_APPROVED,
     ADMIN_APPROVAL_PENDING
 }
 
