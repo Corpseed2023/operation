@@ -138,8 +138,20 @@ public class ProcurementOrder {
     @Column(length = 2000)
     private String termsAndConditions;
 
-    @Column(length = 2000)
-    private Integer paymentTerms;
+    /**
+     * Commercial payment terms agreed with the external vendor.
+     *
+     * Examples:
+     * - 100% Advance
+     * - Net 30 days
+     * - 50% advance and 50% after completion
+     *
+     * This must remain text. Declaring it as Integer makes Hibernate attempt
+     * to parse values such as "100% Advance", causing NumberFormatException
+     * whenever the Purchase Order is loaded.
+     */
+    @Column(name = "payment_terms", length = 500)
+    private String paymentTerms;
 
     @Column(length = 1000)
     private String remarks;

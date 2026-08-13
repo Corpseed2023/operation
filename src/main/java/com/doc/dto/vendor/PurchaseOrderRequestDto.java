@@ -19,22 +19,20 @@ public class PurchaseOrderRequestDto {
     private Long procurementAssignmentId;
 
     /**
-     * External vendor providing the service/product.
+     * Required while creating a Purchase Order. Optional while updating when
+     * the existing PO vendor must remain unchanged.
      */
     private Long vendorId;
 
     /**
-     * true  = GST applicable
-     * false = GST not applicable
+     * True when GST must be calculated for this Purchase Order.
      */
     @NotNull(message = "GST applicable flag is required")
     private Boolean gstApplicable;
 
     /**
-     * Total GST percentage, for example 18.00.
-     *
-     * Required when gstApplicable is true.
-     * Must be null or zero when gstApplicable is false.
+     * Total GST percentage, for example 18.00. Required and greater than zero
+     * only when gstApplicable is true. Keep null or 0 when it is false.
      */
     @DecimalMin(
             value = "0.00",
@@ -48,11 +46,7 @@ public class PurchaseOrderRequestDto {
 
     private String poReferenceNumber;
 
-    /**
-     * Vendor's basic amount before GST.
-     *
-     * Example: 50.00
-     */
+
     @NotNull(message = "Final amount is required")
     @DecimalMin(
             value = "0.01",
@@ -75,7 +69,11 @@ public class PurchaseOrderRequestDto {
      */
     private Long createdBy;
 
-    private Integer paymentTerms;
+    /**
+     * Commercial payment terms agreed with the external vendor.
+     * Examples: "100% Advance", "Net 30 days".
+     */
+    private String paymentTerms;
 
     /**
      * Used while updating a DRAFT Purchase Order.

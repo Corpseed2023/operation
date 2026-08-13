@@ -2,10 +2,10 @@ package com.doc.impl.project;
 
 import com.doc.dto.GovernmentFeeFundTransferPostingRequestDto;
 import com.doc.dto.GovernmentFeeFundTransferPostingResponseDto;
-import com.doc.dto.GovernmentFeePaymentPostingRequestDto;
 import com.doc.dto.GovernmentFeePaymentPostingResponseDto;
 import com.doc.dto.GovernmentFeePostingRequestDto;
 import com.doc.dto.GovernmentFeePostingResponseDto;
+import com.doc.dto.project.GovernmentFeePaymentPostingRequestDto;
 import com.doc.dto.project.activity.expense.GovernmentFeeFundTransferRequestDto;
 import com.doc.dto.project.activity.expense.GovernmentFeePaymentRequestDto;
 import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;

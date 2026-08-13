@@ -29,6 +29,7 @@ import com.doc.entity.user.Role;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.repository.DepartmentRepository;
 import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.projectRepo.activity.ProjectActivityRepository;
@@ -80,6 +81,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
     private final ProjectActivityRepository activityRepository;
     private final ProjectNoteRepository noteRepository;
     private final ProjectCommentRepository commentRepository;
@@ -547,11 +549,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             return;
         }
 
-        String departmentName =
-                department.getName() == null
-                        ? ""
-                        : department.getName().trim().toUpperCase(Locale.ROOT);
+        if (department == null) {
+            throw new ValidationException(
+                    "Department is required for a government-fee expense",
+                    "ERR_GOVERNMENT_FEE_DEPARTMENT_REQUIRED"
+            );
+        }
+
+
+
     }
+
 
     // =========================================================
     // CRT DECISION
@@ -666,7 +674,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setExpensePaidBy(paidBy);
 
         if (paidBy == ExpensePaidBy.CLIENT_TO_COMPANY) {
-            validateClientToCompanyDetails(request);
+            validateClientToCompanyDetails(expense, request);
 
             String paymentMode = normalizePaymentMode(request.getClientPaymentMode());
 
@@ -766,6 +774,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     }
 
     private void validateClientToCompanyDetails(
+            ProjectExpense expense,
             CrtExpenseDecisionRequestDto request
     ) {
         String paymentMode = normalizePaymentMode(request.getClientPaymentMode());
@@ -777,7 +786,30 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (BANK_DETAILS_REQUIRED_PAYMENT_MODES.contains(paymentMode)) {
+        /*
+         * Government-fee CLIENT_TO_COMPANY expenses must later perform Step 4,
+         * which transfers funds from the bank that actually received the
+         * client's money. Plain CASH has no receiving bank ledger, so allowing
+         * it here would make Step 4 impossible. Use CASH_DEPOSIT after the cash
+         * has been deposited into a company bank.
+         */
+        if (
+                expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE &&
+                        "CASH".equals(paymentMode)
+        ) {
+            throw new ValidationException(
+                    "CASH is not supported for CLIENT_TO_COMPANY government-fee expenses. " +
+                            "Use CASH_DEPOSIT and select the receiving company bank",
+                    "ERR_GOVERNMENT_FEE_CASH_NOT_SUPPORTED"
+            );
+        }
+
+        boolean bankDetailsRequired =
+                BANK_DETAILS_REQUIRED_PAYMENT_MODES.contains(paymentMode) ||
+                        (expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE &&
+                                "OTHER".equals(paymentMode));
+
+        if (bankDetailsRequired) {
             if (
                     request.getClientPaymentBankLedgerId() == null ||
                             request.getClientPaymentBankLedgerId() <= 0
@@ -1431,10 +1463,10 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         ProjectExpense expense = validateExpense(project, expenseId);
 
         /*
-         * Only Technical/admin/expense creator is allowed
-         * to submit government payment proof.
+         * Only Technical users or administrators may submit
+         * government payment proof.
          */
-        validateTechnicalPaymentSubmitter(technicalUser, expense);
+        validateTechnicalPaymentSubmitter(technicalUser);
 
         /*
          * This validation also confirms that:
@@ -2281,10 +2313,19 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        if (user.getDepartments() == null) {
+        Department activeDepartment = departmentRepository
+                .findByIdAndIsDeletedFalse(departmentId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Active department not found with id: " + departmentId,
+                                "ERR_DEPARTMENT_NOT_FOUND"
+                        )
+                );
+
+        if (user == null || user.getDepartments() == null) {
             log.warn(
                     "[DEPARTMENT-VALIDATION-FAILED] userId={} | departmentId={} | reason=no-user-departments",
-                    user.getId(),
+                    user != null ? user.getId() : null,
                     departmentId
             );
             throw new ValidationException(
@@ -2293,29 +2334,30 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        Department department = user
+        boolean assignedToDepartment = user
                 .getDepartments()
                 .stream()
                 .filter(Objects::nonNull)
-                .filter(userDepartment ->
-                        Objects.equals(userDepartment.getId(), departmentId)
-                )
-                .filter(userDepartment -> !userDepartment.isDeleted())
-                .findFirst()
-                .orElseThrow(() ->
-                        new ValidationException(
-                                "User does not belong to the selected department",
-                                "ERR_USER_DEPARTMENT_MISMATCH"
-                        )
+                .anyMatch(userDepartment ->
+                        Objects.equals(userDepartment.getId(), activeDepartment.getId()) &&
+                                !userDepartment.isDeleted()
                 );
 
+        if (!assignedToDepartment) {
+            throw new ValidationException(
+                    "User does not belong to the selected department",
+                    "ERR_USER_DEPARTMENT_MISMATCH"
+            );
+        }
+
         log.debug(
-                "[DEPARTMENT-VALIDATION-SUCCESS] userId={} | departmentId={}",
+                "[DEPARTMENT-VALIDATION-SUCCESS] userId={} | departmentId={} | departmentName={}",
                 user.getId(),
-                department.getId()
+                activeDepartment.getId(),
+                activeDepartment.getName()
         );
 
-        return department;
+        return activeDepartment;
     }
 
     private ApprovalStatus validateDecisionStatus(ApprovalStatus status) {
@@ -2403,13 +2445,9 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         );
     }
 
-    private void validateTechnicalPaymentSubmitter(
-            User user,
-            ProjectExpense expense
-    ) {
+    private void validateTechnicalPaymentSubmitter(User user) {
         if (
                 isAdministrator(user) ||
-                        Objects.equals(user.getId(), expense.getCreatedByUserId()) ||
                         hasRoleContaining(user, "TECHNICAL") ||
                         hasDepartmentContaining(user, "TECHNICAL")
         ) {
@@ -3179,4 +3217,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         return normalized;
     }
+
+
+
+
+
+
+
+
+
 }
