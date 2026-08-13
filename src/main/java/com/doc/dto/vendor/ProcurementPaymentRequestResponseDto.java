@@ -78,4 +78,20 @@ public class ProcurementPaymentRequestResponseDto {
     private BigDecimal tdsAmount;
     private String gstType;
 
+    private String paymentTerms;
+
+    private Integer paymentTermDays;
+
+    private LocalDate paymentRequestDate;
+
+    private LocalDate paymentDueDate;
+
+    private Long remainingDays;
+
+    private Long overdueDays;
+
+    private Boolean overdue;
+
+    private String paymentDueStatus;
+
 }
