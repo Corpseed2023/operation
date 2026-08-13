@@ -75,6 +75,8 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
+
+
         userRepository.findActiveUserById(requestDto.getCreatedBy())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
@@ -96,6 +98,34 @@ public class ProcurementPaymentRequestServiceImpl
             throw new ValidationException(
                     "Deleted procurement order cannot be used for payment request",
                     "ERR_DELETED_PROCUREMENT_ORDER"
+            );
+        }
+
+
+        /*
+         * ================================================================
+         * PO APPROVAL VALIDATION
+         * ================================================================
+         *
+         * A Procurement Payment Request can only be created
+         * against an approved Procurement Order.
+         */
+        if (order.getStatus() != ProcurementOrderStatus.APPROVED
+                && order.getStatus() != ProcurementOrderStatus.ADMIN_APPROVED) {
+
+            throw new ValidationException(
+                    "Payment request cannot be created until the Procurement Order is approved. "
+                            + "Current PO status: " + order.getStatus(),
+                    "ERR_PO_NOT_APPROVED"
+            );
+        }
+
+        if (order.getFinalAmount() == null
+                || order.getFinalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Final amount is not configured for this procurement order",
+                    "ERR_PO_FINAL_AMOUNT_MISSING"
             );
         }
 
