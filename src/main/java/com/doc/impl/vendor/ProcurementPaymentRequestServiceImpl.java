@@ -280,6 +280,16 @@ public class ProcurementPaymentRequestServiceImpl
         paymentRequest.setProject(order.getProject());
         paymentRequest.setVendor(order.getVendor());
 
+        if (!hasText(requestDto.getInvoiceNumber())) {
+            throw new ValidationException(
+                    "Invoice number is required",
+                    "ERR_INVOICE_NUMBER_REQUIRED"
+            );
+        }
+
+        paymentRequest.setInvoiceNumber(requestDto.getInvoiceNumber().trim());
+        paymentRequest.setInvoiceDate(requestDto.getInvoiceDate());
+
         /*
          * amount = taxable/basic procurement amount.
          *
@@ -1783,6 +1793,13 @@ public class ProcurementPaymentRequestServiceImpl
                 .taxableAmount(
                         calculation.basicAmount()
                 )
+                .invoiceNumber(
+                        paymentRequest.getInvoiceNumber()
+                )
+
+                .invoiceDate(
+                        paymentRequest.getInvoiceDate()
+                )
 
                 /*
                  * GST config
@@ -2576,6 +2593,13 @@ public class ProcurementPaymentRequestServiceImpl
 
                 .payableAmount(
                         request.getPayableAmount()
+                )
+                .invoiceNumber(
+                        request.getInvoiceNumber()
+                )
+
+                .invoiceDate(
+                        request.getInvoiceDate()
                 )
 
 

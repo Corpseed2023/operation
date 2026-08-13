@@ -33,6 +33,7 @@ public class ProcurementPaymentRequestDto {
     private String gstStateCode;
     private BigDecimal gstPercentage;
 
+
     /*
      * Legacy client-calculated fields retained for JSON compatibility only.
      * ProcurementPaymentRequestServiceImpl does not trust or persist these

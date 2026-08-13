@@ -70,6 +70,9 @@ public class ProcurementPaymentRequestResponseDto {
     private Long ledgerId;
     private String ledgerType;
 
+    private String invoiceNumber;
+    private LocalDate invoiceDate;
+
     private String transactionReference;
     private String paymentProof;
     private BigDecimal tdsAmount;

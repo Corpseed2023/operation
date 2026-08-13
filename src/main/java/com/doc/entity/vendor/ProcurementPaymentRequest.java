@@ -90,11 +90,11 @@ public class ProcurementPaymentRequest {
     )
     private BigDecimal bankPaymentAmount;
 
-//    @Column(name = "invoice_number", length = 100)
-//    private String invoiceNumber;
-//
-//    @Column(name = "invoice_date")
-//    private LocalDate invoiceDate;
+    @Column(name = "invoice_number", length = 100)
+    private String invoiceNumber;
+
+    @Column(name = "invoice_date")
+    private LocalDate invoiceDate;
 
     @Column(name = "payment_date")
     private LocalDate paymentDate;
