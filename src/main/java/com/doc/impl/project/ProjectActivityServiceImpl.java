@@ -951,28 +951,23 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setPaymentBankLedgerId(null);
         expense.setPaymentBankName(null);
 
-        expense.setGovernmentPaymentPostingStatus(
-                AccountPostingStatus.NOT_REQUIRED
-        );
-        expense.setGovernmentPaymentVerificationStatus(
-                GovernmentPaymentVerificationStatus.NOT_SUBMITTED
-        );
-        expense.setGovernmentPaymentMode(null);
-        expense.setGovernmentPaymentAmount(null);
-        expense.setGovernmentPaymentDate(null);
-        expense.setGovernmentPaymentReference(null);
-        expense.setGovernmentPaymentReceiptUrl(null);
-        expense.setGovernmentPaymentRemark(null);
-        expense.setGovernmentPaymentVerificationRemark(null);
-        expense.setGovernmentPaymentVoucherId(null);
-        expense.setGovernmentPaymentVoucherNumber(null);
-        expense.setGovernmentPaymentPostingError(null);
-        expense.setGovernmentPaymentMarkedByUserId(null);
-        expense.setGovernmentPaymentMarkedByUserName(null);
-        expense.setGovernmentPaymentMarkedAt(null);
-        expense.setGovernmentPaymentSubmittedByUserId(null);
-        expense.setGovernmentPaymentSubmittedByUserName(null);
-        expense.setGovernmentPaymentSubmittedAt(null);
+        /*
+         * IMPORTANT:
+         *
+         * Government payment (Step 5) fields are intentionally NOT reset
+         * here anymore.
+         *
+         * clearAccountVoucherDetails() runs on every CRT/Accounts approval
+         * transition (moveExpenseToAccountsReview, direct-client approval,
+         * approveExpenseByAccounts). Wiping Step 5 data on those transitions
+         * was destroying government payment proof/verification history that
+         * had already been submitted and/or verified.
+         *
+         * Government payment fields should only ever be reset by the Step 5
+         * flow itself (submitGovernmentFeePaymentProof /
+         * takeGovernmentFeePaymentDecision), not as a side effect of earlier
+         * workflow stages being re-run.
+         */
     }
 
     private boolean isClientDirect(ExpensePaidBy paidBy) {
@@ -1692,37 +1687,40 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         }
 
         // =====================================================
-        // APPROVED
-        // =====================================================
+// APPROVED
+// =====================================================
 
-        /*
-         * Recreate the original payment proof from database.
-         *
-         * IMPORTANT:
-         * Payment bank comes from Step 4 stored values,
-         * NOT directly from frontend at approval time.
-         */
         GovernmentFeePaymentRequestDto submittedProof =
                 new GovernmentFeePaymentRequestDto();
 
         submittedProof.setAmount(expense.getGovernmentPaymentAmount());
-
         submittedProof.setPaymentDate(expense.getGovernmentPaymentDate());
-
         submittedProof.setPaymentMode(expense.getGovernmentPaymentMode());
-
-        // Step 4 authoritative payment bank
         submittedProof.setPaymentBankLedgerId(expense.getPaymentBankLedgerId());
-
         submittedProof.setPaymentBankName(expense.getPaymentBankName());
-
         submittedProof.setPaymentReference(expense.getGovernmentPaymentReference());
-
-        submittedProof.setPaymentReceiptUrl(
-                expense.getGovernmentPaymentReceiptUrl()
-        );
-
+        submittedProof.setPaymentReceiptUrl(expense.getGovernmentPaymentReceiptUrl());
         submittedProof.setRemark(expense.getGovernmentPaymentRemark());
+
+        /*
+         * IMPORTANT:
+         *
+         * Do NOT set governmentPaymentVerificationStatus, MarkedByUserId,
+         * MarkedByUserName, or MarkedAt here.
+         *
+         * completeGovernmentFeePayment() requires governmentPaymentVerificationStatus
+         * to still be PENDING when it runs its eligibility check
+         * (validateGovernmentPaymentEligibility -> ERR_PAYMENT_PROOF_NOT_PENDING).
+         *
+         * It sets MarkedByUserId / MarkedByUserName / MarkedAt itself before calling
+         * Account Service, and only flips verificationStatus to APPROVED after
+         * Account Service confirms the payment voucher was actually posted.
+         *
+         * Setting these fields here first would make this transaction's managed
+         * entity already show APPROVED when completeGovernmentFeePayment() re-reads
+         * it (same transaction, same persistence context), causing every approval
+         * attempt to fail eligibility validation.
+         */
 
         expense.setGovernmentPaymentVerificationRemark(verificationRemark);
 
