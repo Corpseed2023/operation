@@ -142,6 +142,9 @@ public class VendorPaymentApprovalRequestDto {
      */
     private BigDecimal vendorNetPayableAmount;
 
+    private String invoiceNumber;
+    private LocalDate invoiceDate;
+
 
     /*
      * ================================================================
