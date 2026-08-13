@@ -46,6 +46,7 @@ public class PurchaseOrderRequestDto {
 
     private String poReferenceNumber;
 
+
     @NotNull(message = "Final amount is required")
     @DecimalMin(
             value = "0.01",
