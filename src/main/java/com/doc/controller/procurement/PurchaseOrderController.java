@@ -30,6 +30,19 @@ public class PurchaseOrderController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    @GetMapping("/all")
+    @Operation(summary = "Get all Purchase Orders (paginated)")
+    public ResponseEntity<Page<PurchaseOrderResponseDto>> getAllPurchaseOrders(
+            @RequestParam @Parameter(description = "User ID requesting the list") Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Page<PurchaseOrderResponseDto> response =
+                purchaseOrderService.getAllPurchaseOrders(userId, page, size);
+
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/byProjectId/{projectId}")
     @Operation(summary = "Get Purchase Order list by Project ID")
     public ResponseEntity<Page<PurchaseOrderResponseDto>> getPurchaseOrdersByProjectId(

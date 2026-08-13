@@ -590,6 +590,38 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<PurchaseOrderResponseDto> getAllPurchaseOrders(Long userId, int page, int size) {
+
+        logger.info("Fetching all Purchase Orders. userId={}, page={}, size={}", userId, page, size);
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        // Verifies the user exists (and is active) in the DB before returning data
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
+
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                size <= 0 ? 10 : size,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+
+        Page<ProcurementOrder> orders =
+                purchaseOrderRepository.findByIsDeletedFalse(pageable);
+
+        return orders.map(this::convertToPurchaseOrderResponseDto);
+    }
+
+    @Override
     public PurchaseOrderResponseDto approveByAdmin(Long poId, Long adminUserId, String remarks) {
 
         if (poId == null) {
