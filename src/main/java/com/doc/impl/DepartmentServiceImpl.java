@@ -154,10 +154,23 @@ public class DepartmentServiceImpl implements DepartmentService {
         return dto;
     }
 
+    @Override
     public List<UserResponseDto> getUsersByDepartmentId(Long departmentId) {
-        Department department = departmentRepository.findByIdAndIsDeletedFalse(departmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Department ID " + departmentId + " not found", "DEPARTMENT_NOT_FOUND"));
-        return department.getUsers().stream().map(this::mapToUserResponseDto).collect(Collectors.toList());
+
+        departmentRepository.findByIdAndIsDeletedFalse(departmentId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Department ID " + departmentId + " not found",
+                                "DEPARTMENT_NOT_FOUND"
+                        )
+                );
+
+        List<User> users =
+                userRepository.findActiveUsersByDepartmentId(departmentId);
+
+        return users.stream()
+                .map(this::mapToUserResponseDto)
+                .collect(Collectors.toList());
     }
 
     private UserResponseDto mapToUserResponseDto(User user) {

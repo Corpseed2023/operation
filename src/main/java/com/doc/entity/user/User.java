@@ -48,7 +48,6 @@ public class User {
             joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"),
             inverseJoinColumns = @JoinColumn(name = "dept_id", referencedColumnName = "id")
     )
-    @Comment("List of departments associated with the user")
     private List<Department> departments = new ArrayList<>();
 
     @ManyToMany(fetch = FetchType.LAZY)

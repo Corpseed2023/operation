@@ -111,6 +111,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
     );
 
 
+    @Query("""
+    SELECT DISTINCT u
+    FROM User u
+    JOIN u.departments d
+    WHERE d.id = :departmentId
+      AND u.isDeleted = false
+      AND u.isActive = true
+""")
+    List<User> findActiveUsersByDepartmentId(
+            @Param("departmentId") Long departmentId
+    );
+
 
 
 }
