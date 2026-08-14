@@ -321,4 +321,15 @@ public class ProjectController {
     }
 
 
+    @GetMapping("/unit/{unitId}")
+    @Operation(summary = "Get all projects by company unit ID")
+    public ResponseEntity<List<ProjectResponseDto>> getProjectsByUnitId(
+            @PathVariable Long unitId) {
+
+        List<ProjectResponseDto> response =
+                projectService.getProjectsByUnitId(unitId);
+
+        return ResponseEntity.ok(response);
+    }
+
 }

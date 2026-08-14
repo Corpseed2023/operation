@@ -2752,6 +2752,24 @@ public class ProjectServiceImpl implements ProjectService {
         return "Milestone-" + assignment.getId();
     }
 
+    @Override
+    public List<ProjectResponseDto> getProjectsByUnitId(Long unitId) {
+
+        if (unitId == null) {
+            throw new ValidationException(
+                    "Unit ID is required",
+                    "ERR_UNIT_ID_REQUIRED"
+            );
+        }
+
+        List<Project> projects =
+                projectRepository.findProjectsByUnitId(unitId);
+
+        return projects.stream()
+                .map(this::mapToResponseDto)
+                .toList();
+    }
+
 
 
 

@@ -781,6 +781,15 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
 
+    @Query("""
+    SELECT p
+    FROM Project p
+    WHERE p.unit.id = :unitId
+      AND p.isDeleted = false
+      AND p.isCancelled = false
+    ORDER BY p.createdDate DESC
+""")
+    List<Project> findProjectsByUnitId(@Param("unitId") Long unitId);
 
 
 
