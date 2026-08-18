@@ -267,6 +267,7 @@ public class VendorRFQServiceImpl implements VendorRFQService {
          */
         List<RFQVendor> vendorsToSend = candidateVendors.stream()
                 .filter(rfqVendor -> rfqVendor.getStatus() == null
+                        || rfqVendor.getStatus() == RFQVendorStatus.ADDED   // or whatever the real initial value is
                         || rfqVendor.getStatus() == RFQVendorStatus.SENT)
                 .toList();
 
