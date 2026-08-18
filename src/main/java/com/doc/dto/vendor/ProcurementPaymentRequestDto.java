@@ -18,8 +18,6 @@ public class ProcurementPaymentRequestDto {
     /** GST-inclusive invoice gross. Required. */
     private BigDecimal invoiceAmount;
 
-    private String invoiceNumber;
-    private LocalDate invoiceDate;
 
     private String completionRemarks;
     private List<String> proofAttachmentUrls;
