@@ -43,7 +43,12 @@ public class CrtExpenseDecisionRequestDto {
     private String clientPaymentMode;
 
     /**
-     * Account Service bank ledger ID.
+     * ================================================================
+     * OUR bank ledger (Account Service LedgerMaster, ledgerType = BANK)
+     * that actually received the client's money.
+     * Example: HDFC (ledgerId=2), Axis, Kotak.
+     * Required for any clientPaymentMode other than CASH.
+     * ================================================================
      */
     @Positive(
             message = "Client payment bank ledger ID must be greater than zero"
@@ -51,7 +56,7 @@ public class CrtExpenseDecisionRequestDto {
     private Long clientPaymentBankLedgerId;
 
     /**
-     * Display snapshot.
+     * Display snapshot of the bank above.
      * Account Service will validate the ledger ID during Step 3.
      */
     @Size(
@@ -59,6 +64,16 @@ public class CrtExpenseDecisionRequestDto {
             message = "Client payment bank name cannot exceed 150 characters"
     )
     private String clientPaymentBankName;
+
+
+    /**
+     * Display snapshot of the client ledger above (e.g. "Microsoft").
+     */
+    @Size(
+            max = 150,
+            message = "Client ledger name cannot exceed 150 characters"
+    )
+    private String clientLedgerName;
 
     @PastOrPresent(
             message = "Client payment date cannot be in the future"

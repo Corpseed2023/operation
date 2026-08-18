@@ -574,13 +574,17 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             CrtExpenseDecisionRequestDto request
     ) {
         log.info(
-                "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | paymentMode={}",
+                "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | " +
+                        "paymentMode={} | clientPaymentBankLedgerId={} | clientLedgerId={} | clientLedgerName={}",
                 projectId,
                 expenseId,
                 userId,
                 request != null ? request.getStatus() : null,
                 request != null ? request.getExpensePaidBy() : null,
-                request != null ? request.getClientPaymentMode() : null
+                request != null ? request.getClientPaymentMode() : null,
+                request != null ? request.getClientPaymentBankLedgerId() : null,
+                request != null ? request.getClientLedgerId() : null,
+                request != null ? request.getClientLedgerName() : null
         );
 
         if (request == null) {
@@ -644,14 +648,16 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         createExpenseDecisionActivity(project, expense, user, "CRT", decision);
 
         log.info(
-                "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | stage={} | paymentStatus={} | accountingCalled=false",
+                "[CRT-DECISION-SUCCESS] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | " +
+                        "stage={} | paymentStatus={} | clientLedgerId={} | accountingCalled=false",
                 projectId,
                 expense.getId(),
                 user.getId(),
                 decision,
                 expense.getExpensePaidBy(),
                 expense.getApprovalStage(),
-                expense.getPaymentStatus()
+                expense.getPaymentStatus(),
+                expense.getClientLedgerId()
         );
 
         return mapToExpenseDto(expense);
@@ -692,6 +698,23 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         normalizeOptionalText(request.getClientPaymentBankName())
                 );
             }
+
+            /*
+             * ================================================================
+             * OPTIONAL: explicit CRT override of the client's own CUSTOMER
+             * ledger in Account Service (e.g. "Microsoft"). When left null,
+             * Account Service auto-resolves this ledger from the project's
+             * clientCompanyId + clientUnitId at posting time.
+             *
+             * This is completely independent of clientPaymentBankLedgerId
+             * above, which identifies OUR bank (HDFC/Axis/etc.) that
+             * received the money.
+             * ================================================================
+             */
+            expense.setClientLedgerId(request.getClientLedgerId());
+            expense.setClientLedgerName(
+                    normalizeOptionalText(request.getClientLedgerName())
+            );
 
             expense.setClientPaymentDate(request.getClientPaymentDate());
 
@@ -921,6 +944,8 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense.setClientPaymentMode(null);
         expense.setClientPaymentBankLedgerId(null);
         expense.setClientPaymentBankName(null);
+        expense.setClientLedgerId(null);
+        expense.setClientLedgerName(null);
         expense.setClientPaymentDate(null);
         expense.setClientPaymentReference(null);
         expense.setClientPaymentProofUrl(null);
@@ -1003,13 +1028,14 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         ProjectExpense expense = validateExpense(project, expenseId);
 
         log.debug(
-                "[ACCOUNTS-EXPENSE-LOADED] expenseId={} | requestedAmount={} | currentStage={} | approvalStatus={} | crtStatus={} | accountsStatus={}",
+                "[ACCOUNTS-EXPENSE-LOADED] expenseId={} | requestedAmount={} | currentStage={} | approvalStatus={} | crtStatus={} | accountsStatus={} | clientLedgerId={}",
                 expense.getId(),
                 expense.getRequestedAmount(),
                 expense.getApprovalStage(),
                 expense.getApprovalStatus(),
                 expense.getCrtApprovalStatus(),
-                expense.getAccountsApprovalStatus()
+                expense.getAccountsApprovalStatus(),
+                expense.getClientLedgerId()
         );
 
         if (request == null) {
@@ -1144,12 +1170,13 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         expense = expenseRepository.save(expense);
 
         log.info(
-                "[ACCOUNTS-EXPENSE-SAVED] expenseId={} | decision={} | approvedAmount={} | approvalStatus={} | paymentStatus={}",
+                "[ACCOUNTS-EXPENSE-SAVED] expenseId={} | decision={} | approvedAmount={} | approvalStatus={} | paymentStatus={} | clientLedgerId={}",
                 expense.getId(),
                 decision,
                 expense.getApprovedAmount(),
                 expense.getApprovalStatus(),
-                expense.getPaymentStatus()
+                expense.getPaymentStatus(),
+                expense.getClientLedgerId()
         );
 
         createExpenseDecisionActivity(project, expense, user, "Accounts", decision);
@@ -3215,13 +3242,4 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         return normalized;
     }
-
-
-
-
-
-
-
-
-
 }
