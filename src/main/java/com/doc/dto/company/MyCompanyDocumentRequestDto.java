@@ -1,13 +1,13 @@
 package com.doc.dto.company;
+
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
 public class MyCompanyDocumentRequestDto {
 
-    @NotNull(message = "Required document ID is required")
-    private Long requiredDocumentId;
+    @NotBlank(message = "Document type is required")
+    private String documentType;
 
     @NotBlank(message = "File name is required")
     private String fileName;

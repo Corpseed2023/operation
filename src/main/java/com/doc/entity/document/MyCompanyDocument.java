@@ -13,12 +13,8 @@ import java.util.Date;
 @Table(
         name = "my_company_documents",
         indexes = {
-                @Index(name = "idx_mcd_required_document_id", columnList = "required_document_id")
-        },
-        uniqueConstraints = @UniqueConstraint(
-                name = "uc_my_company_required_document",
-                columnNames = {"required_document_id"}
-        )
+                @Index(name = "idx_mcd_document_type", columnList = "document_type")
+        }
 )
 @Getter
 @Setter
@@ -30,9 +26,9 @@ public class MyCompanyDocument {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "required_document_id", nullable = false)
-    private ProductRequiredDocuments requiredDocument;
+    @Column(name = "document_type", nullable = false, length = 100)
+    @Comment("Free-text category, e.g. 'PAN Card', 'Aadhar Card', 'GST Certificate'")
+    private String documentType;
 
     @Column(name = "file_url", nullable = false, length = 1000)
     private String fileUrl;

@@ -15,9 +15,7 @@ public class MyCompanyDocumentResponseDto {
 
     private Long id;
 
-    private Long requiredDocumentId;
-    private String requiredDocumentName;
-    private String requiredDocumentType;
+    private String documentType;
 
     private String fileUrl;
     private String fileName;

@@ -7,9 +7,15 @@ import java.util.List;
 
 public interface MyCompanyDocumentService {
 
-    MyCompanyDocumentResponseDto uploadOrReplace(MyCompanyDocumentRequestDto request, Long currentUserId);
+    MyCompanyDocumentResponseDto upload(MyCompanyDocumentRequestDto request, Long currentUserId);
+
+    MyCompanyDocumentResponseDto update(Long id, MyCompanyDocumentRequestDto request, Long currentUserId);
 
     List<MyCompanyDocumentResponseDto> getAll();
 
-    MyCompanyDocumentResponseDto getByRequiredDocumentId(Long requiredDocumentId);
+    MyCompanyDocumentResponseDto getById(Long id);
+
+    List<MyCompanyDocumentResponseDto> getByType(String documentType);
+
+    void delete(Long id);
 }
