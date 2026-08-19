@@ -63,7 +63,38 @@ public class ExpenseAccountPostingServiceImpl
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ProjectExpenseResponseDto postGovernmentFeeExpense(Long expenseId) {
+        log.info(
+                "[OP-STEP3-START] expenseId={} | thread={}",
+                expenseId,
+                Thread.currentThread().getName()
+        );
+
         ProjectExpense expense = getExpense(expenseId);
+
+        log.info(
+                "[OP-STEP3-EXPENSE-LOADED] expenseId={} | category={} | approvalStage={} | " +
+                        "approvalStatus={} | crtStatus={} | accountsStatus={} | approvedAmount={} | " +
+                        "paidBy={} | paymentMode={} | bankLedgerId={} | bankName={} | paymentDate={} | " +
+                        "referencePresent={} | proofPresent={} | postingStatus={} | existingReceiptVoucherId={} | " +
+                        "existingJournalVoucherId={}",
+                expense.getId(),
+                expense.getExpenseCategory(),
+                expense.getApprovalStage(),
+                expense.getApprovalStatus(),
+                expense.getCrtApprovalStatus(),
+                expense.getAccountsApprovalStatus(),
+                expense.getApprovedAmount(),
+                expense.getExpensePaidBy(),
+                expense.getClientPaymentMode(),
+                expense.getClientPaymentBankLedgerId(),
+                expense.getClientPaymentBankName(),
+                expense.getClientPaymentDate(),
+                hasText(expense.getClientPaymentReference()),
+                hasText(expense.getClientPaymentProofUrl()),
+                expense.getAccountPostingStatus(),
+                expense.getReceiptVoucherId(),
+                expense.getInitialJournalVoucherId()
+        );
 
         if (expense.getExpenseCategory() != ExpenseCategory.GOVERNMENT_FEE) {
             expense.setAccountPostingStatus(AccountPostingStatus.NOT_REQUIRED);
@@ -98,6 +129,13 @@ public class ExpenseAccountPostingServiceImpl
 
         validateApprovedGovernmentFee(expense);
 
+        log.info(
+                "[OP-STEP3-ELIGIBILITY-SUCCESS] expenseId={} | paidBy={} | approvedAmount={}",
+                expense.getId(),
+                expense.getExpensePaidBy(),
+                expense.getApprovedAmount()
+        );
+
         if (
                 expense.getAccountPostingStatus() == AccountPostingStatus.POSTED &&
                         expense.getInitialJournalVoucherId() != null
@@ -119,9 +157,46 @@ public class ExpenseAccountPostingServiceImpl
                 expense
         );
 
+        log.info(
+                "[OP-STEP3-FEIGN-PAYLOAD] expenseId={} | paidBy={} | paymentMode={} | " +
+                        "clientBankLedgerId={} | clientBankName={} | clientPaymentDate={} | " +
+                        "referencePresent={} | proofPresent={} | approvedAmount={} | clientCompanyId={} | clientUnitId={}",
+                request.getOperationExpenseId(),
+                request.getPaidBy(),
+                request.getClientPaymentMode(),
+                request.getClientPaymentBankLedgerId(),
+                request.getClientPaymentBankName(),
+                request.getClientPaymentDate(),
+                hasText(request.getClientPaymentReference()),
+                hasText(request.getClientPaymentProofUrl()),
+                request.getApprovedAmount(),
+                request.getClientCompanyId(),
+                request.getClientUnitId()
+        );
+
         try {
+            log.info(
+                    "[OP-STEP3-FEIGN-CALL-START] expenseId={} | endpoint=/government-fee/post",
+                    expense.getId()
+            );
+
             GovernmentFeePostingResponseDto response =
                     accountExpenseFeignClient.postGovernmentFeeExpense(request);
+
+            log.info(
+                    "[OP-STEP3-FEIGN-RESPONSE] expenseId={} | responseNull={} | postingStatus={} | " +
+                            "receiptVoucherId={} | receiptVoucherNumber={} | journalVoucherId={} | " +
+                            "journalVoucherNumber={} | receivingBankLedgerId={} | payableLedgerId={}",
+                    expense.getId(),
+                    response == null,
+                    response != null ? response.getPostingStatus() : null,
+                    response != null ? response.getReceiptVoucherId() : null,
+                    response != null ? response.getReceiptVoucherNumber() : null,
+                    response != null ? response.getJournalVoucherId() : null,
+                    response != null ? response.getJournalVoucherNumber() : null,
+                    response != null ? response.getReceivingBankLedgerId() : null,
+                    response != null ? response.getGovernmentFeePayableLedgerId() : null
+            );
 
             if (response == null) {
                 return markGovernmentFeePostingFailed(
@@ -199,6 +274,14 @@ public class ExpenseAccountPostingServiceImpl
 
             return mapMinimalResponse(expense);
         } catch (FeignException exception) {
+            log.error(
+                    "[OP-STEP3-FEIGN-ERROR] expenseId={} | httpStatus={} | responseBody={} | message={}",
+                    expense.getId(),
+                    exception.status(),
+                    safeFeignBody(exception),
+                    exception.getMessage(),
+                    exception
+            );
             return markGovernmentFeePostingFailed(
                     expense,
                     "Account Service posting failed. HTTP status: " +
@@ -207,6 +290,13 @@ public class ExpenseAccountPostingServiceImpl
                             exception.getMessage()
             );
         } catch (Exception exception) {
+            log.error(
+                    "[OP-STEP3-UNEXPECTED-ERROR] expenseId={} | errorType={} | message={}",
+                    expense.getId(),
+                    exception.getClass().getName(),
+                    exception.getMessage(),
+                    exception
+            );
             return markGovernmentFeePostingFailed(
                     expense,
                     exception.getMessage() != null
@@ -249,6 +339,20 @@ public class ExpenseAccountPostingServiceImpl
             Long userId,
             GovernmentFeeFundTransferRequestDto request
     ) {
+        log.info(
+                "[OP-STEP4-START] expenseId={} | userId={} | requestNull={} | fromBankLedgerId={} | " +
+                        "toBankLedgerId={} | amount={} | transferDate={} | referencePresent={} | proofPresent={}",
+                expenseId,
+                userId,
+                request == null,
+                request != null ? request.getFromBankLedgerId() : null,
+                request != null ? request.getToBankLedgerId() : null,
+                request != null ? request.getAmount() : null,
+                request != null ? request.getTransferDate() : null,
+                request != null && hasText(request.getTransferReference()),
+                request != null && hasText(request.getTransferProofUrl())
+        );
+
         validateActiveUser(userId);
 
         if (request == null) {
@@ -259,6 +363,21 @@ public class ExpenseAccountPostingServiceImpl
         }
 
         ProjectExpense expense = getExpense(expenseId);
+
+        log.info(
+                "[OP-STEP4-EXPENSE-LOADED] expenseId={} | paidBy={} | paymentStatus={} | " +
+                        "step3Status={} | receiptVoucherId={} | journalVoucherId={} | " +
+                        "crtReceivingBankLedgerId={} | existingTransferStatus={} | existingContraVoucherId={}",
+                expense.getId(),
+                expense.getExpensePaidBy(),
+                expense.getPaymentStatus(),
+                expense.getAccountPostingStatus(),
+                expense.getReceiptVoucherId(),
+                expense.getInitialJournalVoucherId(),
+                expense.getClientPaymentBankLedgerId(),
+                expense.getFundTransferPostingStatus(),
+                expense.getFundTransferVoucherId()
+        );
 
         /*
          * Idempotent return. A successful Contra must never be posted again.
@@ -287,9 +406,32 @@ public class ExpenseAccountPostingServiceImpl
         GovernmentFeeFundTransferPostingRequestDto postingRequest =
                 buildFundTransferPostingRequest(expense, userId, request);
 
+        log.info(
+                "[OP-STEP4-FEIGN-PAYLOAD] expenseId={} | fromBankLedgerId={} | toBankLedgerId={} | " +
+                        "amount={} | transferDate={} | referencePresent={} | proofPresent={}",
+                postingRequest.getOperationExpenseId(),
+                postingRequest.getFromBankLedgerId(),
+                postingRequest.getToBankLedgerId(),
+                postingRequest.getAmount(),
+                postingRequest.getTransferDate(),
+                hasText(postingRequest.getTransferReference()),
+                hasText(postingRequest.getTransferProofUrl())
+        );
+
         try {
             GovernmentFeeFundTransferPostingResponseDto response =
                     accountExpenseFeignClient.postGovernmentFeeFundTransfer(postingRequest);
+
+            log.info(
+                    "[OP-STEP4-FEIGN-RESPONSE] expenseId={} | responseNull={} | postingStatus={} | " +
+                            "contraVoucherId={} | fromBankLedgerId={} | toBankLedgerId={}",
+                    expense.getId(),
+                    response == null,
+                    response != null ? response.getPostingStatus() : null,
+                    response != null ? response.getContraVoucherId() : null,
+                    response != null ? response.getFromBankLedgerId() : null,
+                    response != null ? response.getToBankLedgerId() : null
+            );
 
             if (response == null) {
                 markFundTransferFailed(
@@ -409,6 +551,14 @@ public class ExpenseAccountPostingServiceImpl
                     request.getAmount()
             );
         } catch (FeignException exception) {
+            log.error(
+                    "[OP-STEP4-FEIGN-ERROR] expenseId={} | httpStatus={} | responseBody={} | message={}",
+                    expense.getId(),
+                    exception.status(),
+                    safeFeignBody(exception),
+                    exception.getMessage(),
+                    exception
+            );
             markFundTransferFailed(
                     expense,
                     "Account Service fund transfer failed. HTTP status: " +
@@ -417,6 +567,13 @@ public class ExpenseAccountPostingServiceImpl
                             exception.getMessage()
             );
         } catch (Exception exception) {
+            log.error(
+                    "[OP-STEP4-UNEXPECTED-ERROR] expenseId={} | errorType={} | message={}",
+                    expense.getId(),
+                    exception.getClass().getName(),
+                    exception.getMessage(),
+                    exception
+            );
             markFundTransferFailed(expense, exception.getMessage());
         }
 
@@ -434,6 +591,20 @@ public class ExpenseAccountPostingServiceImpl
             Long userId,
             GovernmentFeePaymentRequestDto request
     ) {
+        log.info(
+                "[OP-STEP5-START] expenseId={} | userId={} | requestNull={} | amount={} | paymentDate={} | " +
+                        "paymentMode={} | paymentBankLedgerId={} | referencePresent={} | receiptPresent={}",
+                expenseId,
+                userId,
+                request == null,
+                request != null ? request.getAmount() : null,
+                request != null ? request.getPaymentDate() : null,
+                request != null ? request.getPaymentMode() : null,
+                request != null ? request.getPaymentBankLedgerId() : null,
+                request != null && hasText(request.getPaymentReference()),
+                request != null && hasText(request.getPaymentReceiptUrl())
+        );
+
         validateActiveUser(userId);
 
         if (request == null) {
@@ -444,6 +615,21 @@ public class ExpenseAccountPostingServiceImpl
         }
 
         ProjectExpense expense = getExpense(expenseId);
+
+        log.info(
+                "[OP-STEP5-EXPENSE-LOADED] expenseId={} | paidBy={} | paymentStatus={} | " +
+                        "step3Status={} | step4Status={} | paymentBankLedgerId={} | approvedAmount={} | " +
+                        "existingPaymentPostingStatus={} | existingPaymentVoucherId={}",
+                expense.getId(),
+                expense.getExpensePaidBy(),
+                expense.getPaymentStatus(),
+                expense.getAccountPostingStatus(),
+                expense.getFundTransferPostingStatus(),
+                expense.getPaymentBankLedgerId(),
+                expense.getApprovedAmount(),
+                expense.getGovernmentPaymentPostingStatus(),
+                expense.getGovernmentPaymentVoucherId()
+        );
 
         // A confirmed payment voucher must never be posted twice.
         if (
@@ -478,9 +664,33 @@ public class ExpenseAccountPostingServiceImpl
         GovernmentFeePaymentPostingRequestDto postingRequest =
                 buildGovernmentPaymentPostingRequest(expense, userId, userName, request);
 
+        log.info(
+                "[OP-STEP5-FEIGN-PAYLOAD] expenseId={} | paidBy={} | paymentBankLedgerId={} | " +
+                        "amount={} | paymentDate={} | paymentMode={} | referencePresent={} | receiptPresent={}",
+                postingRequest.getOperationExpenseId(),
+                postingRequest.getPaidBy(),
+                postingRequest.getPaymentBankLedgerId(),
+                postingRequest.getAmount(),
+                postingRequest.getPaymentDate(),
+                postingRequest.getPaymentMode(),
+                hasText(postingRequest.getPaymentReference()),
+                hasText(postingRequest.getPaymentReceiptUrl())
+        );
+
         try {
             GovernmentFeePaymentPostingResponseDto response =
                     accountExpenseFeignClient.postGovernmentFeePayment(postingRequest);
+
+            log.info(
+                    "[OP-STEP5-FEIGN-RESPONSE] expenseId={} | responseNull={} | postingStatus={} | " +
+                            "paymentVoucherId={} | paymentBankLedgerId={} | payableLedgerId={}",
+                    expense.getId(),
+                    response == null,
+                    response != null ? response.getPostingStatus() : null,
+                    response != null ? response.getPaymentVoucherId() : null,
+                    response != null ? response.getPaymentBankLedgerId() : null,
+                    response != null ? response.getGovernmentFeePayableLedgerId() : null
+            );
 
             if (response == null) {
                 markGovernmentPaymentFailed(
@@ -585,6 +795,14 @@ public class ExpenseAccountPostingServiceImpl
                     request.getPaymentDate()
             );
         } catch (FeignException exception) {
+            log.error(
+                    "[OP-STEP5-FEIGN-ERROR] expenseId={} | httpStatus={} | responseBody={} | message={}",
+                    expense.getId(),
+                    exception.status(),
+                    safeFeignBody(exception),
+                    exception.getMessage(),
+                    exception
+            );
             markGovernmentPaymentFailed(
                     expense,
                     "Account Service government payment failed. HTTP status: " +
@@ -593,6 +811,13 @@ public class ExpenseAccountPostingServiceImpl
                             exception.getMessage()
             );
         } catch (Exception exception) {
+            log.error(
+                    "[OP-STEP5-UNEXPECTED-ERROR] expenseId={} | errorType={} | message={}",
+                    expense.getId(),
+                    exception.getClass().getName(),
+                    exception.getMessage(),
+                    exception
+            );
             markGovernmentPaymentFailed(expense, exception.getMessage());
         }
 
@@ -1083,6 +1308,7 @@ public class ExpenseAccountPostingServiceImpl
     }
 
     private void validateApprovedGovernmentFee(ProjectExpense expense) {
+
         if (expense.getApprovalStatus() != ApprovalStatus.APPROVED) {
             throw new ValidationException(
                     "Only approved expenses can be posted to Account Service",
@@ -1090,17 +1316,54 @@ public class ExpenseAccountPostingServiceImpl
             );
         }
 
-        if (
-                expense.getExpensePaidBy() != ExpensePaidBy.COMPANY &&
-                        expense.getExpensePaidBy() != ExpensePaidBy.CLIENT_TO_COMPANY
-        ) {
+        if (expense.getApprovalStage() != ExpenseApprovalStage.COMPLETED) {
             throw new ValidationException(
-                    "Government-fee approval posting requires COMPANY or CLIENT_TO_COMPANY funding",
+                    "Approval workflow must be completed before accounting posting",
+                    "ERR_APPROVAL_WORKFLOW_NOT_COMPLETED"
+            );
+        }
+
+        if (expense.getCrtApprovalStatus() != ApprovalStatus.APPROVED) {
+            throw new ValidationException(
+                    "CRT approval is required before accounting posting",
+                    "ERR_CRT_APPROVAL_REQUIRED"
+            );
+        }
+
+        if (expense.getAccountsApprovalStatus() != ApprovalStatus.APPROVED) {
+            throw new ValidationException(
+                    "Accounts approval is required before accounting posting",
+                    "ERR_ACCOUNTS_APPROVAL_REQUIRED"
+            );
+        }
+
+        if (expense.getApprovedAmount() == null
+                || expense.getApprovedAmount()
+                .compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Approved amount must be greater than zero",
+                    "ERR_INVALID_APPROVED_AMOUNT"
+            );
+        }
+
+        if (expense.getExpensePaidBy() == null) {
+            throw new ValidationException(
+                    "Expense paid-by selection is required",
+                    "ERR_EXPENSE_PAID_BY_REQUIRED"
+            );
+        }
+
+        if (expense.getExpensePaidBy() != ExpensePaidBy.COMPANY
+                && expense.getExpensePaidBy()
+                != ExpensePaidBy.CLIENT_TO_COMPANY) {
+
+            throw new ValidationException(
+                    "Government-fee posting requires COMPANY or CLIENT_TO_COMPANY funding",
                     "ERR_INVALID_EXPENSE_PAID_BY"
             );
         }
     }
-
     private boolean isClientDirect(ExpensePaidBy paidBy) {
         return (
                 paidBy == ExpensePaidBy.CLIENT_DIRECT || paidBy == ExpensePaidBy.CLIENT
@@ -1190,6 +1453,19 @@ public class ExpenseAccountPostingServiceImpl
 
     private String clean(String value) {
         return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private String safeFeignBody(FeignException exception) {
+        if (exception == null) {
+            return null;
+        }
+
+        String body = exception.contentUTF8();
+        return truncate(body, 2000);
     }
 
     private String truncate(String value, int maximumLength) {

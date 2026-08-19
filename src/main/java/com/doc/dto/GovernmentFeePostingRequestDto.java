@@ -22,6 +22,14 @@ public class GovernmentFeePostingRequestDto {
     private String clientCompanyName;
     private Long clientUnitId;
     private String clientUnitName;
+
+    /**
+     * Optional explicit override of the client's own CUSTOMER ledger in
+     * Account Service (e.g. Microsoft). When null, Account Service
+     * auto-resolves the ledger from clientCompanyId + clientUnitId.
+     */
+    private Long clientLedgerId;
+
     private String expenseCategory;
     private BigDecimal approvedAmount;
     private String currencyCode;

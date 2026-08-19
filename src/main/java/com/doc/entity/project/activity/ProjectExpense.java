@@ -498,6 +498,12 @@ public class ProjectExpense {
     @Column(name = "government_payment_submitted_at")
     private LocalDateTime governmentPaymentSubmittedAt;
 
+    /** Optional CRT override of the client's own ledger (CUSTOMER type) in Account Service. */
+    private Long clientLedgerId;
+
+    /** Display snapshot: e.g. "Microsoft". */
+    private String clientLedgerName;
+
 
 
     @PrePersist
