@@ -27,7 +27,7 @@ public class MyCompanyDocument {
     private Long id;
 
     @Column(name = "document_type", nullable = false, length = 100)
-    @Comment("Free-text category, e.g. 'PAN Card', 'Aadhar Card', 'GST Certificate'")
+    @Comment("Free-text category, e.g. PAN Card, Aadhar Card, GST Certificate")
     private String documentType;
 
     @Column(name = "file_url", nullable = false, length = 1000)

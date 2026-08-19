@@ -583,7 +583,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 request != null ? request.getExpensePaidBy() : null,
                 request != null ? request.getClientPaymentMode() : null,
                 request != null ? request.getClientPaymentBankLedgerId() : null,
-                request != null ? request.getClientLedgerId() : null,
+//                request != null ? request.getClientLedgerId() : null,
                 request != null ? request.getClientLedgerName() : null
         );
 
@@ -711,7 +711,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
              * received the money.
              * ================================================================
              */
-            expense.setClientLedgerId(request.getClientLedgerId());
+//            expense.setClientLedgerId(request.getClientLedgerId());
             expense.setClientLedgerName(
                     normalizeOptionalText(request.getClientLedgerName())
             );
