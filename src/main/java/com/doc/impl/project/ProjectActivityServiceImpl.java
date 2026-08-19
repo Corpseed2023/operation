@@ -575,7 +575,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     ) {
         log.info(
                 "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | " +
-                        "paymentMode={} | clientPaymentBankLedgerId={} | clientLedgerId={} | clientLedgerName={}",
+                        "paymentMode={} | clientPaymentBankLedgerId={} | clientPaymentBankName={} | clientLedgerName={}",
                 projectId,
                 expenseId,
                 userId,
@@ -583,6 +583,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 request != null ? request.getExpensePaidBy() : null,
                 request != null ? request.getClientPaymentMode() : null,
                 request != null ? request.getClientPaymentBankLedgerId() : null,
+                request != null ? request.getClientPaymentBankName() : null,
                 request != null ? request.getClientLedgerName() : null
         );
 
@@ -830,6 +831,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         (expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE &&
                                 "OTHER".equals(paymentMode));
 
+        /*
+         * ONLY the bank ledger ID is mandatory for bank-based modes.
+         * Bank NAME is a display-only snapshot, resolved authoritatively by
+         * Account Service from the ledger ID — it is intentionally NOT
+         * required here (matches the documented API contract).
+         */
         if (bankDetailsRequired) {
             if (
                     request.getClientPaymentBankLedgerId() == null ||
@@ -840,12 +847,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         "ERR_CLIENT_PAYMENT_BANK_REQUIRED"
                 );
             }
-
-            requireText(
-                    request.getClientPaymentBankName(),
-                    "Client payment bank name is required",
-                    "ERR_CLIENT_PAYMENT_BANK_NAME_REQUIRED"
-            );
         }
 
         if (request.getClientPaymentDate() == null) {
@@ -874,7 +875,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 "ERR_CLIENT_PAYMENT_PROOF_REQUIRED"
         );
     }
-
     private void processCrtRejection(ProjectExpense expense) {
         expense.setExpensePaidBy(null);
         clearClientFundingDetails(expense);
