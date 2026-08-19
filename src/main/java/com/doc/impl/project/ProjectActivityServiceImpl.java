@@ -583,7 +583,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 request != null ? request.getExpensePaidBy() : null,
                 request != null ? request.getClientPaymentMode() : null,
                 request != null ? request.getClientPaymentBankLedgerId() : null,
-                request != null ? request.getClientLedgerId() : null,
                 request != null ? request.getClientLedgerName() : null
         );
 
@@ -699,19 +698,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 );
             }
 
-            /*
-             * ================================================================
-             * OPTIONAL: explicit CRT override of the client's own CUSTOMER
-             * ledger in Account Service (e.g. "Microsoft"). When left null,
-             * Account Service auto-resolves this ledger from the project's
-             * clientCompanyId + clientUnitId at posting time.
-             *
-             * This is completely independent of clientPaymentBankLedgerId
-             * above, which identifies OUR bank (HDFC/Axis/etc.) that
-             * received the money.
-             * ================================================================
-             */
-            expense.setClientLedgerId(request.getClientLedgerId());
+
             expense.setClientLedgerName(
                     normalizeOptionalText(request.getClientLedgerName())
             );
@@ -843,11 +830,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 );
             }
 
-            requireText(
-                    request.getClientPaymentBankName(),
-                    "Client payment bank name is required",
-                    "ERR_CLIENT_PAYMENT_BANK_NAME_REQUIRED"
-            );
         }
 
         if (request.getClientPaymentDate() == null) {
