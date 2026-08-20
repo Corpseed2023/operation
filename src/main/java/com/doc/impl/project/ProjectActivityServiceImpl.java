@@ -3155,6 +3155,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             if (project.getProduct() != null) {
                 dto.setProductName(project.getProduct().getProductName());
             }
+
+            // NEW: client company and unit, so Accounts sees these directly
+            // on the payment-queue / approval-queue without opening the project.
+            if (project.getCompany() != null) {
+                dto.setCompanyId(project.getCompany().getId());
+                dto.setCompanyName(project.getCompany().getName());
+            }
+
+            if (project.getUnit() != null) {
+                dto.setUnitId(project.getUnit().getId());
+                dto.setUnitName(project.getUnit().getUnitName());
+            }
         }
 
         return dto;
