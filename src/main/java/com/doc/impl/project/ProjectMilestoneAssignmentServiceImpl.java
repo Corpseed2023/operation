@@ -869,11 +869,19 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             boolean reassigned,
             String reason
     ) {
+
         if (assignment == null || assignment.getId() == null) {
+            logger.warn(
+                    "[MILESTONE-NOTIFICATION-SKIP] assignment is null or assignmentId is null"
+            );
             return;
         }
 
         if (assignedUser == null || assignedUser.getId() == null) {
+            logger.warn(
+                    "[MILESTONE-NOTIFICATION-SKIP] assignedUser is null or assignedUserId is null. assignmentId={}",
+                    assignment.getId()
+            );
             return;
         }
 
@@ -893,8 +901,44 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 : "Project Milestone Assigned";
 
         String message = reassigned
-                ? "You have been reassigned to milestone \"" + milestoneName + "\" for project \"" + projectName + "\" by " + actorName + "."
-                : "You have been assigned to milestone \"" + milestoneName + "\" for project \"" + projectName + "\".";
+                ? "You have been reassigned to milestone \"" + milestoneName
+                + "\" for project \"" + projectName
+                + "\" by " + actorName + "."
+                : "You have been assigned to milestone \"" + milestoneName
+                + "\" for project \"" + projectName + "\".";
+
+        String metadataJson =
+                "{"
+                        + "\"projectId\":" + (project != null ? project.getId() : null) + ","
+                        + "\"projectName\":\"" + escapeJson(projectName) + "\","
+                        + "\"projectNumber\":\"" + escapeJson(projectNumber) + "\","
+                        + "\"milestoneAssignmentId\":" + assignment.getId() + ","
+                        + "\"milestoneName\":\"" + escapeJson(milestoneName) + "\","
+                        + "\"assignedUserId\":" + assignedUser.getId() + ","
+                        + "\"assignedUserName\":\""
+                        + escapeJson(getUserDisplayName(assignedUser)) + "\","
+                        + "\"assignedById\":" + (actor != null ? actor.getId() : null) + ","
+                        + "\"assignedByName\":\"" + escapeJson(actorName) + "\","
+                        + "\"reason\":\"" + escapeJson(reason) + "\","
+                        + "\"reassigned\":" + reassigned
+                        + "}";
+
+        logger.info(
+                "[MILESTONE-NOTIFICATION-START] assignmentId={}, projectId={}, assignedUserId={}, actorId={}, eventType={}, reassigned={}",
+                assignment.getId(),
+                project != null ? project.getId() : null,
+                assignedUser.getId(),
+                actor != null ? actor.getId() : null,
+                eventType,
+                reassigned
+        );
+
+        logger.debug(
+                "[MILESTONE-NOTIFICATION-DATA] title={}, message={}, metadataJson={}",
+                title,
+                message,
+                metadataJson
+        );
 
         notificationPublisherService.sendNotification(
                 NotificationCreateRequestDto.builder()
@@ -903,29 +947,31 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         .actorName(actorName)
                         .module(NotificationModule.PROJECT)
                         .eventType(eventType)
-                        .referenceId(project != null ? project.getId() : assignment.getId())
+                        .referenceId(
+                                project != null
+                                        ? project.getId()
+                                        : assignment.getId()
+                        )
                         .referenceNumber(projectNumber)
                         .title(title)
                         .message(message)
-                        .redirectUrl("/projects/" + (project != null ? project.getId() : "") + "/milestones/" + assignment.getId())
+                        .redirectUrl(
+                                "/projects/"
+                                        + (project != null ? project.getId() : "")
+                                        + "/milestones/"
+                                        + assignment.getId()
+                        )
                         .priority(NotificationPriority.HIGH)
                         .displayType(NotificationDisplayType.INFO)
-                        .metadataJson(
-                                "{"
-                                        + "\"projectId\":" + (project != null ? project.getId() : null) + ","
-                                        + "\"projectName\":\"" + escapeJson(projectName) + "\","
-                                        + "\"projectNumber\":\"" + escapeJson(projectNumber) + "\","
-                                        + "\"milestoneAssignmentId\":" + assignment.getId() + ","
-                                        + "\"milestoneName\":\"" + escapeJson(milestoneName) + "\","
-                                        + "\"assignedUserId\":" + assignedUser.getId() + ","
-                                        + "\"assignedUserName\":\"" + escapeJson(getUserDisplayName(assignedUser)) + "\","
-                                        + "\"assignedById\":" + (actor != null ? actor.getId() : null) + ","
-                                        + "\"assignedByName\":\"" + escapeJson(actorName) + "\","
-                                        + "\"reason\":\"" + escapeJson(reason) + "\","
-                                        + "\"reassigned\":" + reassigned
-                                        + "}"
-                        )
+                        .metadataJson(metadataJson)
                         .build()
+        );
+
+        logger.info(
+                "[MILESTONE-NOTIFICATION-SUCCESS] assignmentId={}, receiverId={}, eventType={}",
+                assignment.getId(),
+                assignedUser.getId(),
+                eventType
         );
     }
 
@@ -997,6 +1043,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     }
 
     private String escapeJson(String value) {
+
         if (value == null) {
             return "";
         }
@@ -1137,49 +1184,17 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 //        project.setProgressPercentage(progress);
     }
 
-    private void validateProjectAllowsPayment(
-            Project project
-    ) {
-        if (project == null || project.getStatus() == null) {
-            throw new ValidationException(
-                    "Project status is missing",
-                    "ERR_PROJECT_STATUS_MISSING"
-            );
-        }
-
-        Long statusId = project.getStatus().getId();
-
-        if (StatusConstants.PROJECT_FORCE_CLOSED_ID
-                .equals(statusId)) {
-
-            throw new ValidationException(
-                    "Payment cannot be added because project is FORCE_CLOSED",
-                    "ERR_FORCE_CLOSED_PROJECT_PAYMENT_NOT_ALLOWED"
-            );
-        }
-
-        if (StatusConstants.PROJECT_CANCELLED_ID
-                .equals(statusId)
-                || project.isCancelled()) {
-
-            throw new ValidationException(
-                    "Payment cannot be added because project is CANCELLED",
-                    "ERR_CANCELLED_PROJECT_PAYMENT_NOT_ALLOWED"
-            );
-        }
-
-        if (StatusConstants.PROJECT_REFUNDED_ID
-                .equals(statusId)) {
-
-            throw new ValidationException(
-                    "Payment cannot be added because project is REFUNDED",
-                    "ERR_REFUNDED_PROJECT_PAYMENT_NOT_ALLOWED"
-            );
-        }
-    }
 
     @Override
     public void sendBackToPreviousMilestone(SendBackToPreviousMilestoneDto dto) {
+
+        logger.info(
+                "[MILESTONE-SEND-BACK-START] currentAssignmentId={}, changedById={}, rejectedDocumentIds={}, reason={}",
+                dto != null ? dto.getCurrentAssignmentId() : null,
+                dto != null ? dto.getChangedById() : null,
+                dto != null ? dto.getRejectedDocumentIds() : null,
+                dto != null ? dto.getReason() : null
+        );
 
         ProjectMilestoneAssignment currentAssignment =
                 projectMilestoneAssignmentRepository.findActiveUserById(dto.getCurrentAssignmentId())
@@ -1194,6 +1209,17 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                                 "User not found",
                                 "USER_NOT_FOUND"
                         ));
+
+        boolean changedByAdmin = isAdminUser(changedBy);
+
+        logger.info(
+                "[MILESTONE-SEND-BACK-USER] currentAssignmentId={}, changedById={}, changedByName={}, roles={}, isAdmin={}",
+                currentAssignment.getId(),
+                changedBy.getId(),
+                changedBy.getFullName(),
+                getRoleNamesForLog(changedBy),
+                changedByAdmin
+        );
 
         if (currentAssignment.getAssignedUser() == null ||
                 !currentAssignment.getAssignedUser().getId().equals(dto.getChangedById())) {
@@ -1284,12 +1310,62 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     );
                 }
 
+                String currentDocumentStatus = documentUpload.getStatus() != null
+                        ? documentUpload.getStatus().getName()
+                        : null;
+
+                logger.info(
+                        "[MILESTONE-SEND-BACK-DOCUMENT-CHECK] documentId={}, projectId={}, currentStatus={}, changedById={}, roles={}, isAdmin={}",
+                        documentUpload.getId(),
+                        project.getId(),
+                        currentDocumentStatus,
+                        changedBy.getId(),
+                        getRoleNamesForLog(changedBy),
+                        changedByAdmin
+                );
+
+                /*
+                 * SECURITY VALIDATION ONLY:
+                 * Do not allow a normal user to downgrade VERIFIED -> REJECTED here,
+                 * because that would bypass the ADMIN-only VERIFIED replacement rule.
+                 */
+                if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus) && !changedByAdmin) {
+
+                    logger.warn(
+                            "[MILESTONE-SEND-BACK-DOCUMENT-DENIED] Non-admin attempted to reject VERIFIED document. documentId={}, projectId={}, changedById={}, roles={}",
+                            documentUpload.getId(),
+                            project.getId(),
+                            changedBy.getId(),
+                            getRoleNamesForLog(changedBy)
+                    );
+
+                    throw new ValidationException(
+                            "Only ADMIN can reject or replace a VERIFIED document",
+                            "VERIFIED_DOCUMENT_ADMIN_ONLY"
+                    );
+                }
+
+                if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus)) {
+                    logger.info(
+                            "[MILESTONE-SEND-BACK-DOCUMENT-ADMIN-ALLOWED] ADMIN is rejecting VERIFIED document. documentId={}, adminUserId={}",
+                            documentUpload.getId(),
+                            changedBy.getId()
+                    );
+                }
+
                 documentUpload.setStatus(rejectedDocumentStatus);
                 documentUpload.setRemarks(dto.getReason());
                 documentUpload.setUpdatedBy(dto.getChangedById());
                 documentUpload.setUpdatedDate(new Date());
 
                 projectDocumentUploadRepository.save(documentUpload);
+
+                logger.info(
+                        "[MILESTONE-SEND-BACK-DOCUMENT-REJECTED] documentId={}, previousStatus={}, newStatus=REJECTED, changedById={}",
+                        documentUpload.getId(),
+                        currentDocumentStatus,
+                        changedBy.getId()
+                );
             }
         }
 
@@ -1339,10 +1415,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         updateProjectStatus(project, dto.getChangedById());
 
         logger.info(
-                "Current milestone assignment ID {} sent back to previous milestone assignment ID {} for rework by user {}",
+                "[MILESTONE-SEND-BACK-SUCCESS] currentAssignmentId={}, previousAssignmentId={}, projectId={}, changedById={}, changedByName={}, previousMilestoneNewStatus={}, currentMilestoneNewStatus={}",
                 currentAssignment.getId(),
                 previousAssignment.getId(),
-                changedBy.getFullName()
+                project.getId(),
+                changedBy.getId(),
+                changedBy.getFullName(),
+                previousAssignment.getStatus() != null ? previousAssignment.getStatus().getName() : null,
+                currentAssignment.getStatus() != null ? currentAssignment.getStatus().getName() : null
         );
     }
 
@@ -1365,54 +1445,40 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         milestoneStatusHistoryRepository.save(history);
     }
 
-    private void validateProjectAllowsMilestoneMutation(
-            Project project
-    ) {
-        if (project == null) {
-            throw new ValidationException(
-                    "Project is required",
-                    "ERR_PROJECT_REQUIRED"
-            );
+
+
+
+
+
+    /**
+     * ADMIN validation helper used only for VERIFIED document protection
+     * during send-back/rework flow.
+     */
+    private boolean isAdminUser(User user) {
+        if (user == null || user.getRoles() == null) {
+            return false;
         }
 
-        if (project.getStatus() == null) {
-            throw new ValidationException(
-                    "Project status is missing",
-                    "ERR_PROJECT_STATUS_MISSING"
-            );
-        }
-
-        Long projectStatusId = project.getStatus().getId();
-
-        if (StatusConstants.PROJECT_FORCE_CLOSED_ID
-                .equals(projectStatusId)) {
-
-            throw new ValidationException(
-                    "Milestones cannot be changed because project is FORCE_CLOSED",
-                    "ERR_FORCE_CLOSED_PROJECT_MILESTONE_MUTATION_NOT_ALLOWED"
-            );
-        }
-
-        if (StatusConstants.PROJECT_CANCELLED_ID
-                .equals(projectStatusId)
-                || project.isCancelled()) {
-
-            throw new ValidationException(
-                    "Milestones cannot be changed because project is CANCELLED",
-                    "ERR_CANCELLED_PROJECT_MILESTONE_MUTATION_NOT_ALLOWED"
-            );
-        }
-
-        if (StatusConstants.PROJECT_REFUNDED_ID
-                .equals(projectStatusId)) {
-
-            throw new ValidationException(
-                    "Milestones cannot be changed because project is REFUNDED",
-                    "ERR_REFUNDED_PROJECT_MILESTONE_MUTATION_NOT_ALLOWED"
-            );
-        }
+        return user.getRoles().stream()
+                .anyMatch(role ->
+                        role != null
+                                && role.getName() != null
+                                && "ADMIN".equalsIgnoreCase(role.getName())
+                );
     }
 
+    /**
+     * Used only for readable authorization logs.
+     */
+    private List<String> getRoleNamesForLog(User user) {
+        if (user == null || user.getRoles() == null) {
+            return List.of();
+        }
 
+        return user.getRoles().stream()
+                .filter(role -> role != null && role.getName() != null)
+                .map(role -> role.getName())
+                .toList();
+    }
 
 }

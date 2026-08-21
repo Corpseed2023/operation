@@ -30,7 +30,7 @@ public class DueRiskQueueResponseDto {
 
     private ProjectPriority priority;
 
-    private Boolean overdue;
+    private boolean overdue;
 
-    private Long overdueDays;
+    private long overdueDays;
 }

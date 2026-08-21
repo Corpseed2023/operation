@@ -21,7 +21,7 @@ public class ProjectMilestoneProgressDto {
 
     private String statusName;
 
-    private Boolean completed;
+    private boolean completed;
 
     private Long assignedUserId;
 

@@ -63,6 +63,16 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     @Override
     public DocumentResponseDto uploadDocument(ProjectDocumentUploadRequestDto requestDto) {
 
+        logger.info(
+                "[DOC-UPLOAD-START] projectId={}, requiredDocumentId={}, uploadedById={}, fileUrl={}, fileSizeKb={}, fileFormat={}",
+                requestDto != null ? requestDto.getProjectId() : null,
+                requestDto != null ? requestDto.getRequiredDocumentId() : null,
+                requestDto != null ? requestDto.getUploadedById() : null,
+                requestDto != null ? requestDto.getFileUrl() : null,
+                requestDto != null ? requestDto.getFileSizeKb() : null,
+                requestDto != null ? requestDto.getFileFormat() : null
+        );
+
         validateUploadRequest(requestDto);
 
         validateFileSizeAgainstRequirement(
@@ -126,11 +136,43 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
             doc = existingOpt.get();
 
-            if (doc.getStatus() != null
-                    && "VERIFIED".equalsIgnoreCase(doc.getStatus().getName())) {
+            String existingStatus = doc.getStatus() != null
+                    ? doc.getStatus().getName()
+                    : null;
+
+            boolean admin = isAdmin(uploadedBy);
+
+            logger.info(
+                    "[DOC-UPLOAD-EXISTING] documentId={}, projectId={}, requiredDocumentId={}, currentStatus={}, uploadedById={}, roles={}, isAdmin={}",
+                    doc.getId(),
+                    requestDto.getProjectId(),
+                    requestDto.getRequiredDocumentId(),
+                    existingStatus,
+                    uploadedBy.getId(),
+                    getRoleNames(uploadedBy),
+                    admin
+            );
+
+            if ("VERIFIED".equalsIgnoreCase(existingStatus) && !admin) {
+                logger.warn(
+                        "[DOC-UPLOAD-DENIED] VERIFIED document can only be replaced by ADMIN. documentId={}, projectId={}, uploadedById={}, roles={}",
+                        doc.getId(),
+                        requestDto.getProjectId(),
+                        uploadedBy.getId(),
+                        getRoleNames(uploadedBy)
+                );
+
                 throw new ValidationException(
-                        "Cannot replace VERIFIED document",
-                        "VERIFIED_DOCUMENT_REPLACEMENT"
+                        "Only ADMIN can replace a VERIFIED document",
+                        "VERIFIED_DOCUMENT_REPLACEMENT_ADMIN_ONLY"
+                );
+            }
+
+            if ("VERIFIED".equalsIgnoreCase(existingStatus)) {
+                logger.info(
+                        "[DOC-UPLOAD-ADMIN-ALLOWED] ADMIN is replacing VERIFIED document. documentId={}, adminUserId={}",
+                        doc.getId(),
+                        uploadedBy.getId()
                 );
             }
 
@@ -174,14 +216,16 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         ProjectDocumentUpload savedDoc = projectDocumentUploadRepository.save(doc);
 
         logger.info(
-                "Document uploaded successfully. ID: {}, ProjectId: {}, RequiredDoc: {}, FileName: {}, FileUrl: {}, Size: {} KB, Format: {}",
+                "[DOC-UPLOAD-SUCCESS] ID: {}, ProjectId: {}, RequiredDoc: {}, FileName: {}, FileUrl: {}, Size: {} KB, Format: {}, Status: {}, ReplacementCount: {}",
                 savedDoc.getId(),
                 requestDto.getProjectId(),
                 requiredDoc.getName(),
                 savedDoc.getFileName(),
                 savedDoc.getFileUrl(),
                 requestDto.getFileSizeKb(),
-                fileFormat
+                fileFormat,
+                savedDoc.getStatus() != null ? savedDoc.getStatus().getName() : null,
+                savedDoc.getReplacementCount()
         );
 
         return mapToDocumentResponseDto(savedDoc);
@@ -232,6 +276,14 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     @Transactional
     public DocumentResponseDto updateDocumentStatus(Long documentId, ProjectDocumentStatusUpdateDto updateDto) {
 
+        logger.info(
+                "[DOC-STATUS-START] documentId={}, requestedStatus={}, changedById={}, remarks={}",
+                documentId,
+                updateDto != null ? updateDto.getNewStatus() : null,
+                updateDto != null ? updateDto.getChangedById() : null,
+                updateDto != null ? updateDto.getRemarks() : null
+        );
+
         ProjectDocumentUpload documentUpload = projectDocumentUploadRepository
                 .findActiveUserById(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -245,6 +297,52 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                         "STATUS_NOT_FOUND"
                 ));
 
+        User statusChangedBy = userRepository.findActiveUserById(updateDto.getChangedById())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Status changing user not found",
+                        "USER_NOT_FOUND"
+                ));
+
+        String currentStatusName = documentUpload.getStatus() != null
+                ? documentUpload.getStatus().getName()
+                : null;
+
+        String requestedStatusName = newStatus.getName();
+        boolean admin = isAdmin(statusChangedBy);
+
+        logger.info(
+                "[DOC-STATUS-AUTH] documentId={}, currentStatus={}, requestedStatus={}, changedById={}, roles={}, isAdmin={}",
+                documentId,
+                currentStatusName,
+                requestedStatusName,
+                statusChangedBy.getId(),
+                getRoleNames(statusChangedBy),
+                admin
+        );
+
+        /*
+         * SECURITY VALIDATION ONLY:
+         * Once a document is VERIFIED, a non-admin must not downgrade it to another status.
+         * Otherwise VERIFIED -> REJECTED could bypass the ADMIN-only replacement rule.
+         */
+        if ("VERIFIED".equalsIgnoreCase(currentStatusName)
+                && !"VERIFIED".equalsIgnoreCase(requestedStatusName)
+                && !admin) {
+
+            logger.warn(
+                    "[DOC-STATUS-DENIED] Non-admin attempted to change VERIFIED document status. documentId={}, requestedStatus={}, changedById={}, roles={}",
+                    documentId,
+                    requestedStatusName,
+                    statusChangedBy.getId(),
+                    getRoleNames(statusChangedBy)
+            );
+
+            throw new ValidationException(
+                    "Only ADMIN can change the status of a VERIFIED document",
+                    "VERIFIED_DOCUMENT_STATUS_CHANGE_ADMIN_ONLY"
+            );
+        }
+
         validateDocumentStatusTransition(documentUpload.getStatus(), newStatus);
 
         documentUpload.setStatus(newStatus);
@@ -254,7 +352,22 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         documentUpload = projectDocumentUploadRepository.save(documentUpload);
 
+        logger.info(
+                "[DOC-STATUS-SAVED] documentId={}, oldStatus={}, newStatus={}, changedById={}",
+                documentUpload.getId(),
+                currentStatusName,
+                newStatus.getName(),
+                updateDto.getChangedById()
+        );
+
         if ("VERIFIED".equalsIgnoreCase(newStatus.getName())) {
+
+            logger.info(
+                    "[DOC-VERIFY-COMPANY-SYNC-START] documentId={}, projectId={}, changedById={}",
+                    documentUpload.getId(),
+                    documentUpload.getProject() != null ? documentUpload.getProject().getId() : null,
+                    updateDto.getChangedById()
+            );
 
             Project project = documentUpload.getProject();
             if (project == null) {
@@ -341,8 +454,24 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             companyDoc.setVerifiedBy(verifiedBy);
             companyDoc.setVerifiedDate(new Date());
 
-            companyDocumentRepository.save(companyDoc);
+            CompanyDocument savedCompanyDoc = companyDocumentRepository.save(companyDoc);
+
+            logger.info(
+                    "[DOC-VERIFY-COMPANY-SYNC-SUCCESS] projectDocumentId={}, companyDocumentId={}, companyId={}, unitId={}, requiredDocumentId={}",
+                    documentUpload.getId(),
+                    savedCompanyDoc.getId(),
+                    company.getId(),
+                    unit.getId(),
+                    requiredDoc.getId()
+            );
         }
+
+        logger.info(
+                "[DOC-STATUS-SUCCESS] documentId={}, finalStatus={}, changedById={}",
+                documentUpload.getId(),
+                documentUpload.getStatus() != null ? documentUpload.getStatus().getName() : null,
+                updateDto.getChangedById()
+        );
 
         return mapToDocumentResponseDto(documentUpload);
     }
@@ -376,7 +505,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             throw new ValidationException("File name cannot be empty", "INVALID_FILE_NAME");
         }
 
-        String sanitized = fileName.trim().replaceAll("[^a-zA-Z0-9\\.\\-_() ]", "");
+        String sanitized = fileName.trim().replaceAll("[^a-zA-Z0-9\\\\.\\\\-_() ]", "");
 
         if (sanitized.length() > 255) {
             throw new ValidationException("File name too long (max 255 characters)", "INVALID_FILE_NAME_LENGTH");
@@ -465,6 +594,18 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     @Transactional
     public DocumentResponseDto replaceDocument(Long documentId, ProjectDocumentUploadRequestDto requestDto) {
 
+        logger.info(
+                "[DOC-REPLACE-START] documentId={}, projectId={}, requiredDocumentId={}, uploadedById={}, fileName={}, fileUrl={}, fileSizeKb={}, fileFormat={}",
+                documentId,
+                requestDto != null ? requestDto.getProjectId() : null,
+                requestDto != null ? requestDto.getRequiredDocumentId() : null,
+                requestDto != null ? requestDto.getUploadedById() : null,
+                requestDto != null ? requestDto.getFileName() : null,
+                requestDto != null ? requestDto.getFileUrl() : null,
+                requestDto != null ? requestDto.getFileSizeKb() : null,
+                requestDto != null ? requestDto.getFileFormat() : null
+        );
+
         validateUploadRequest(requestDto);
 
         validateFileSizeAgainstRequirement(
@@ -485,11 +626,52 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             );
         }
 
-        if (doc.getStatus() != null &&
-                "VERIFIED".equalsIgnoreCase(doc.getStatus().getName())) {
+        /*
+         * Keep existing replacement flow unchanged.
+         * Only add authorization validation before replacement.
+         */
+        User replacementRequestedBy = userRepository.findActiveUserById(requestDto.getUploadedById())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Uploader not found",
+                        "USER_NOT_FOUND"
+                ));
+
+        String currentDocumentStatus = doc.getStatus() != null
+                ? doc.getStatus().getName()
+                : null;
+
+        boolean admin = isAdmin(replacementRequestedBy);
+
+        logger.info(
+                "[DOC-REPLACE-AUTH] documentId={}, projectId={}, currentStatus={}, userId={}, roles={}, isAdmin={}",
+                doc.getId(),
+                doc.getProject() != null ? doc.getProject().getId() : null,
+                currentDocumentStatus,
+                replacementRequestedBy.getId(),
+                getRoleNames(replacementRequestedBy),
+                admin
+        );
+
+        if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus) && !admin) {
+            logger.warn(
+                    "[DOC-REPLACE-DENIED] Only ADMIN can replace VERIFIED document. documentId={}, projectId={}, userId={}, roles={}",
+                    doc.getId(),
+                    doc.getProject() != null ? doc.getProject().getId() : null,
+                    replacementRequestedBy.getId(),
+                    getRoleNames(replacementRequestedBy)
+            );
+
             throw new ValidationException(
-                    "Cannot replace VERIFIED document",
-                    "VERIFIED_DOCUMENT_REPLACEMENT"
+                    "Only ADMIN can replace a VERIFIED document",
+                    "VERIFIED_DOCUMENT_REPLACEMENT_ADMIN_ONLY"
+            );
+        }
+
+        if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus)) {
+            logger.info(
+                    "[DOC-REPLACE-ADMIN-ALLOWED] ADMIN is replacing VERIFIED document. documentId={}, adminUserId={}",
+                    doc.getId(),
+                    replacementRequestedBy.getId()
             );
         }
 
@@ -548,6 +730,18 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         ProjectDocumentUpload saved = projectDocumentUploadRepository.save(doc);
 
+        logger.info(
+                "[DOC-REPLACE-SUCCESS] documentId={}, projectId={}, previousStatus={}, newStatus={}, replacedById={}, replacementCount={}, oldFileUrl={}, newFileUrl={}",
+                saved.getId(),
+                saved.getProject() != null ? saved.getProject().getId() : null,
+                currentDocumentStatus,
+                saved.getStatus() != null ? saved.getStatus().getName() : null,
+                uploadedBy.getId(),
+                saved.getReplacementCount(),
+                saved.getOldFileUrl(),
+                saved.getFileUrl()
+        );
+
         return mapToDocumentResponseDto(saved);
     }
 
@@ -595,4 +789,35 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
 
         return dto;
     }
+
+    /**
+     * Role validation helper used only for VERIFIED document protection.
+     */
+    private boolean isAdmin(User user) {
+        if (user == null || user.getRoles() == null) {
+            return false;
+        }
+
+        return user.getRoles().stream()
+                .anyMatch(role ->
+                        role != null
+                                && role.getName() != null
+                                && "ADMIN".equalsIgnoreCase(role.getName())
+                );
+    }
+
+    /**
+     * Used only for readable authorization logs.
+     */
+    private List<String> getRoleNames(User user) {
+        if (user == null || user.getRoles() == null) {
+            return List.of();
+        }
+
+        return user.getRoles().stream()
+                .filter(role -> role != null && role.getName() != null)
+                .map(role -> role.getName())
+                .toList();
+    }
+
 }
