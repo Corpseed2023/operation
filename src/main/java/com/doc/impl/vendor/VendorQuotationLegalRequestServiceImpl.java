@@ -71,6 +71,8 @@ public class VendorQuotationLegalRequestServiceImpl
         legalRequest.setUpdatedBy(requestDto.getCreatedBy());
         legalRequest.setDeleted(false);
 
+        quotation.setStatus(VendorQuotationStatus.AGREEMENT_REQUESTED);
+        vendorQuotationRepository.save(quotation);
         VendorQuotationLegalRequest saved = legalRequestRepository.save(legalRequest);
 
         return mapToResponse(saved);

@@ -78,6 +78,7 @@ public enum VendorQuotationStatus {
      * or quotation was entered incorrectly and cancelled.
      */
     CANCELLED,
+    AGREEMENT_REQUESTED,
     AGREEMENT_SENT_TO_PROCUREMENT,
     AGREEMENT_SENT_TO_VENDOR,
     REJECTED_BY_ACCOUNTS

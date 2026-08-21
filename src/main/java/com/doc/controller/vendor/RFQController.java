@@ -23,15 +23,28 @@ public class RFQController {
     @Operation(summary = "Get All RFQs")
     public ResponseEntity<Page<RFQResponseDto>> getAllRFQs(
             @RequestParam(required = false) Long productId,
-            @RequestParam(required = false) RFQStatus status,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Page<RFQResponseDto> response =
-                vendorRFQService.getAllRFQs(productId, status, userId, page, size);
+        RFQStatus resolvedStatus = resolveStatus(status);
 
+        Page<RFQResponseDto> response =
+                vendorRFQService.getAllRFQs(productId, resolvedStatus, userId, page, size);
         return ResponseEntity.ok(response);
+    }
+
+    private RFQStatus resolveStatus(String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status.trim())) {
+            return null;
+        }
+
+        try {
+            return RFQStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid RFQ status: " + status);
+        }
     }
 
     @PostMapping
