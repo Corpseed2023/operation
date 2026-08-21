@@ -31,6 +31,15 @@ public class ProjectExpenseResponseDto {
     private Long raisedDepartmentId;
     private String raisedDepartmentName;
 
+    // NEW: Client company and unit — needed on payment-queue / approval-queue
+    // so Accounts can see which client/branch the expense belongs to without
+    // opening the project.
+    private Long companyId;
+    private String companyName;
+    private Long unitId;
+    private String unitName;
+
+
     // Expense details
     private ExpenseCategory expenseCategory;
     private BigDecimal requestedAmount;

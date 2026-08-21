@@ -575,7 +575,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     ) {
         log.info(
                 "[CRT-DECISION-START] projectId={} | expenseId={} | userId={} | decision={} | paidBy={} | " +
-                        "paymentMode={} | clientPaymentBankLedgerId={} | clientLedgerId={} | clientLedgerName={}",
+                        "paymentMode={} | clientPaymentBankLedgerId={} | clientPaymentBankName={} | clientLedgerName={}",
                 projectId,
                 expenseId,
                 userId,
@@ -583,6 +583,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 request != null ? request.getExpensePaidBy() : null,
                 request != null ? request.getClientPaymentMode() : null,
                 request != null ? request.getClientPaymentBankLedgerId() : null,
+                request != null ? request.getClientPaymentBankName() : null,
                 request != null ? request.getClientLedgerName() : null
         );
 
@@ -698,7 +699,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 );
             }
 
-
+            /*
+             * ================================================================
+             * OPTIONAL: explicit CRT override of the client's own CUSTOMER
+             * ledger in Account Service (e.g. "Microsoft"). When left null,
+             * Account Service auto-resolves this ledger from the project's
+             * clientCompanyId + clientUnitId at posting time.
+             *
+             * This is completely independent of clientPaymentBankLedgerId
+             * above, which identifies OUR bank (HDFC/Axis/etc.) that
+             * received the money.
+             * ================================================================
+             */
             expense.setClientLedgerName(
                     normalizeOptionalText(request.getClientLedgerName())
             );
@@ -819,6 +831,12 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         (expense.getExpenseCategory() == ExpenseCategory.GOVERNMENT_FEE &&
                                 "OTHER".equals(paymentMode));
 
+        /*
+         * ONLY the bank ledger ID is mandatory for bank-based modes.
+         * Bank NAME is a display-only snapshot, resolved authoritatively by
+         * Account Service from the ledger ID — it is intentionally NOT
+         * required here (matches the documented API contract).
+         */
         if (bankDetailsRequired) {
             if (
                     request.getClientPaymentBankLedgerId() == null ||
@@ -829,7 +847,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                         "ERR_CLIENT_PAYMENT_BANK_REQUIRED"
                 );
             }
-
         }
 
         if (request.getClientPaymentDate() == null) {
@@ -858,7 +875,6 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 "ERR_CLIENT_PAYMENT_PROOF_REQUIRED"
         );
     }
-
     private void processCrtRejection(ProjectExpense expense) {
         expense.setExpensePaidBy(null);
         clearClientFundingDetails(expense);
@@ -3138,6 +3154,18 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
             if (project.getProduct() != null) {
                 dto.setProductName(project.getProduct().getProductName());
+            }
+
+            // NEW: client company and unit, so Accounts sees these directly
+            // on the payment-queue / approval-queue without opening the project.
+            if (project.getCompany() != null) {
+                dto.setCompanyId(project.getCompany().getId());
+                dto.setCompanyName(project.getCompany().getName());
+            }
+
+            if (project.getUnit() != null) {
+                dto.setUnitId(project.getUnit().getId());
+                dto.setUnitName(project.getUnit().getUnitName());
             }
         }
 
