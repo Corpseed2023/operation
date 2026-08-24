@@ -504,12 +504,9 @@ public class VendorRFQServiceImpl implements VendorRFQService {
                 .createdBy(rfq.getCreatedBy())
                 .updatedBy(rfq.getUpdatedBy())
                 .deleted(rfq.isDeleted())
-//                .vendors(mapRFQVendors(rfq.getVendors()))
+                .vendors(mapRFQVendors(rfq.getVendors()))
                 .build();
     }
-
-
-
 
     private List<RFQVendorResponseDto> mapRFQVendors(List<RFQVendor> rfqVendors) {
 
@@ -520,6 +517,10 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         }
 
         for (RFQVendor rfqVendor : rfqVendors) {
+
+            if (rfqVendor == null || rfqVendor.isDeleted()) {
+                continue;
+            }
 
             Vendor vendor = rfqVendor.getVendor();
 

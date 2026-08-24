@@ -44,6 +44,7 @@ public class VendorServiceImpl implements VendorService {
     private final VendorFinalizationRepository vendorFinalizationRepository;
     private final VendorOnboardingRepository vendorOnboardingRepository;
     private final VendorRestrictionRequestRepository vendorRestrictionRequestRepository;
+    private final ProductVendorMappingRepository productVendorMappingRepository;
 
     public VendorServiceImpl(
             VendorRepository vendorRepository,
@@ -53,7 +54,8 @@ public class VendorServiceImpl implements VendorService {
             VendorQuotationRepository vendorQuotationRepository,
             VendorFinalizationRepository vendorFinalizationRepository,
             VendorOnboardingRepository vendorOnboardingRepository,
-            VendorRestrictionRequestRepository vendorRestrictionRequestRepository
+            VendorRestrictionRequestRepository vendorRestrictionRequestRepository,
+            ProductVendorMappingRepository productVendorMappingRepositor
     ) {
         this.vendorRepository = vendorRepository;
         this.vendorMailService = vendorMailService;
@@ -63,7 +65,7 @@ public class VendorServiceImpl implements VendorService {
         this.vendorFinalizationRepository = vendorFinalizationRepository;
         this.vendorOnboardingRepository = vendorOnboardingRepository;
         this.vendorRestrictionRequestRepository = vendorRestrictionRequestRepository;
-
+        this.productVendorMappingRepository = productVendorMappingRepositor;
     }
 
     @Override
@@ -1158,8 +1160,28 @@ public class VendorServiceImpl implements VendorService {
         dto.setState(vendor.getState());
         dto.setCountry(vendor.getCountry());
 
+        dto.setMappedProducts(mapMappedProductsForVendor(vendor.getId())); // NEW
+
         return dto;
     }
+    private List<VendorMappedProductDto> mapMappedProductsForVendor(Long vendorId) {
+
+        return productVendorMappingRepository
+                .findActiveMappingsByVendorId(vendorId)
+                .stream()
+                .map(mapping -> {
+                    VendorMappedProductDto dto = new VendorMappedProductDto();
+
+                    dto.setProductId(mapping.getProduct().getId());
+                    dto.setProductName(mapping.getProduct().getProductName());
+                    dto.setMappingActive(mapping.isActive());
+                    dto.setProductActive(mapping.getProduct().isActive());
+
+                    return dto;
+                })
+                .toList();
+    }
+
 
     private VendorQuotationResponseDto mapQuotationToResponse(VendorQuotation quotation) {
         VendorQuotationResponseDto dto = new VendorQuotationResponseDto();
