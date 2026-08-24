@@ -58,11 +58,6 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         }
 
         List<Department> depts = milestone.getMilestone().getDepartments();
-        if (depts.isEmpty()) {
-            logger.warn("No department linked → QUEUING");
-            queueMilestone(milestone, project, updatedById);
-            return new AssignmentResult(null, "Queued: no department");
-        }
 
         Department dept = depts.get(0);
         DepartmentAutoConfig config = getOrCreateConfig(dept);
@@ -460,34 +455,6 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
         return userProductMapRepository.save(map);
     }
 
-
-    private void queueMilestone(ProductMilestoneMap milestone, Project project, Long updatedById) {
-        ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
-                .findByProjectIdAndMilestoneIdAndIsDeletedFalse(project.getId(), milestone.getMilestone().getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found", "ERR_ASSIGNMENT_NOT_FOUND"));
-
-        MilestoneStatus queued = milestoneStatusRepository.findById(StatusConstants.MILESTONE_QUEUED_ID)
-                .orElseThrow(() -> new ResourceNotFoundException("QUEUED status not found", "ERR_STATUS_NOT_FOUND"));
-
-        assignment.setStatus(queued);
-        assignment.setStatusReason("Queued due to no department mapping");
-        assignment.setUpdatedBy(updatedById);
-        assignment.setUpdatedDate(new Date());
-        projectMilestoneAssignmentRepository.save(assignment);
-
-        ProjectAssignmentHistory history = new ProjectAssignmentHistory();
-        history.setProject(project);
-        history.setMilestoneAssignment(assignment);
-        history.setAssignmentReason("Queued due to no department mapping");
-        history.setCreatedDate(new Date());
-        history.setUpdatedDate(new Date());
-        history.setCreatedBy(updatedById);
-        history.setUpdatedBy(updatedById);
-        history.setDeleted(false);
-        projectAssignmentHistoryRepository.save(history);
-
-        logger.warn("Milestone QUEUED: {}", milestone.getMilestone().getName());
-    }
 
     @Override
     public void updateDepartmentAutoConfig(DepartmentAutoConfigDto dto) {

@@ -4,7 +4,6 @@ import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
 import com.doc.dto.ProjectMilestoneassignment.SendBackToPreviousMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
-import com.doc.entity.project.ProjectMilestoneAssignment;
 
 public interface ProjectMilestoneAssignmentService {
     void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto);
