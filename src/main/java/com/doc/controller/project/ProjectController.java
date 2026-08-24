@@ -70,7 +70,11 @@ public class ProjectController {
 
         // Default to OPEN if no status is provided
         if (statuses == null || statuses.isEmpty()) {
-            statuses = List.of("OPEN");
+            statuses = List.of(
+                    "OPEN",
+                    "IN_PROGRESS",
+                    "REOPENED"
+            );
         }
 
         List<ProjectResponseDto> responses = projectService.getAllProjects(userId, page - 1, size, statuses);

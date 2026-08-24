@@ -31,7 +31,6 @@ public final class StatusConstants {
     public static final Long MILESTONE_COMPLETED_ID = 3L;
     public static final Long MILESTONE_REWORK_ID = 4L;
     public static final Long MILESTONE_ON_HOLD_ID = 5L;
-    public static final Long MILESTONE_REJECTED_ID = 7L;
 
     // ====================== DOCUMENT STATUSES ======================
 
@@ -64,8 +63,7 @@ public final class StatusConstants {
             MILESTONE_IN_PROGRESS_ID,
             MILESTONE_COMPLETED_ID,
             MILESTONE_REWORK_ID,
-            MILESTONE_ON_HOLD_ID,
-            MILESTONE_REJECTED_ID
+            MILESTONE_ON_HOLD_ID
     );
 
     public static final Set<Long> ACTIVE_MILESTONE_STATUS_IDS = Set.of(

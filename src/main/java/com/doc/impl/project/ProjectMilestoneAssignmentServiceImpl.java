@@ -40,7 +40,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -204,21 +206,17 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * ON_HOLD APPROVAL FLOW
+         * ON_HOLD approval flow.
          *
-         * Do not update the milestone status directly.
-         * Create a pending request for the assigned user's manager and stop here.
-         *
-         * After manager approval, MilestoneOnHoldApprovalService will:
-         * 1. Change the milestone status to ON_HOLD.
-         * 2. Create milestone status history.
-         * 3. Close the approval request.
+         * Do not change the milestone status immediately.
+         * Create a pending request for the assigned user's manager.
          */
         if ("ON_HOLD".equalsIgnoreCase(requestedStatusName)) {
 
             logger.info(
-                    "[MILESTONE-ON-HOLD-APPROVAL-REQUEST] assignmentId={}, " +
-                            "projectId={}, requestedById={}, currentStatus={}, reason={}",
+                    "[MILESTONE-ON-HOLD-APPROVAL-REQUEST] " +
+                            "assignmentId={}, projectId={}, requestedById={}, " +
+                            "currentStatus={}, reason={}",
                     assignment.getId(),
                     assignment.getProject() != null
                             ? assignment.getProject().getId()
@@ -237,6 +235,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     changedBy.getId()
             );
 
+            /*
+             * Important:
+             * Stop execution so ON_HOLD is not directly written below.
+             */
             return;
         }
 
@@ -252,7 +254,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * Business validation before marking COMPLETED.
+         * Business validations before marking the milestone COMPLETED.
          */
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
 
@@ -283,37 +285,16 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * Rollback handling: REJECTED -> NEW.
+         * Milestone REJECTED logic has been removed.
+         *
+         * REWORK should be used when milestone correction is required.
          */
-        if ("NEW".equalsIgnoreCase(newStatus.getName())
-                && "REJECTED".equalsIgnoreCase(currentStatusName)) {
-
-            if (!assignment.getProductMilestoneMap().isAllowRollback()) {
-                throw new ValidationException(
-                        "Rollback not allowed for this milestone",
-                        "ROLLBACK_NOT_ALLOWED"
-                );
-            }
-
-            if (assignment.getReworkAttempts()
-                    >= assignment.getProductMilestoneMap().getMaxAttempts()) {
-
-                throw new ValidationException(
-                        "Maximum rework attempts reached",
-                        "MAX_REWORK_ATTEMPTS_REACHED"
-                );
-            }
-
-            assignment.setReworkAttempts(
-                    assignment.getReworkAttempts() + 1
-            );
-        }
 
         /*
          * If the milestone is getting completed:
-         * 1. Reduce the old user's active assignment count.
+         * 1. Reduce the assigned user's active assignment count.
          * 2. Add time spent.
-         * 3. Mark the user-product map as unassigned.
+         * 3. Mark the user-product mapping as unassigned.
          */
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
 
@@ -351,6 +332,15 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     count.setUpdatedBy(updateDto.getChangedById());
 
                     userPerformanceCountRepository.save(count);
+
+                    logger.info(
+                            "[MILESTONE-COMPLETION-PERFORMANCE-UPDATED] " +
+                                    "assignmentId={}, userId={}, assignmentCount={}, timeSpent={}",
+                            assignment.getId(),
+                            oldUser.getId(),
+                            count.getAssignmentCount(),
+                            count.getTimeSpent()
+                    );
                 }
 
                 UserProductMap userMap =
@@ -369,12 +359,20 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     userMap.setUpdatedBy(updateDto.getChangedById());
 
                     userProductMapRepository.save(userMap);
+
+                    logger.info(
+                            "[MILESTONE-COMPLETION-USER-PRODUCT-RELEASED] " +
+                                    "assignmentId={}, userId={}, productId={}",
+                            assignment.getId(),
+                            oldUser.getId(),
+                            assignment.getProject().getProduct().getId()
+                    );
                 }
             }
         }
 
         /*
-         * Save status history before changing the assignment status.
+         * Save milestone status history before changing the current status.
          */
         MilestoneStatusHistory history = new MilestoneStatusHistory();
 
@@ -388,8 +386,17 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         milestoneStatusHistoryRepository.save(history);
 
+        logger.info(
+                "[MILESTONE-STATUS-HISTORY-SAVED] " +
+                        "assignmentId={}, previousStatus={}, newStatus={}, changedById={}",
+                assignment.getId(),
+                currentStatusName,
+                newStatus.getName(),
+                changedBy.getId()
+        );
+
         /*
-         * Update the assignment status.
+         * Update the milestone assignment status.
          */
         assignment.setStatus(newStatus);
         assignment.setStatusReason(updateDto.getStatusReason());
@@ -409,17 +416,20 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 projectMilestoneAssignmentRepository.save(assignment);
 
         logger.info(
-                "Milestone assignment ID {} status updated from {} to {} by user {}",
-                updateDto.getAssignmentId(),
+                "[MILESTONE-STATUS-UPDATED] " +
+                        "assignmentId={}, previousStatus={}, newStatus={}, changedById={}, changedByName={}",
+                assignment.getId(),
                 currentStatusName,
                 newStatus.getName(),
+                changedBy.getId(),
                 changedBy.getFullName()
         );
 
         Project project = assignment.getProject();
 
         /*
-         * After completing a milestone, recalculate milestone visibility.
+         * After completing a milestone, recalculate the visibility of all
+         * milestones belonging to the project.
          */
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
 
@@ -429,19 +439,33 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
 
             logger.info(
-                    "Milestone visibility recalculated after completion. Project ID: {}",
-                    project.getId()
+                    "[MILESTONE-VISIBILITY-RECALCULATED] projectId={}, assignmentId={}",
+                    project.getId(),
+                    assignment.getId()
             );
         }
 
         /*
-         * Update the overall project status.
+         * Recalculate the overall project status.
          */
         updateProjectStatus(
                 project,
                 updateDto.getChangedById()
         );
+
+        logger.info(
+                "[MILESTONE-STATUS-UPDATE-SUCCESS] " +
+                        "assignmentId={}, projectId={}, finalStatus={}, changedById={}",
+                assignment.getId(),
+                project.getId(),
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null,
+                changedBy.getId()
+        );
     }
+
+
 
     private boolean isCertificationMilestone(String milestoneName) {
 
@@ -1257,183 +1281,459 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
 
     @Override
-    public void sendBackToPreviousMilestone(SendBackToPreviousMilestoneDto dto) {
+    @Transactional
+    public void sendBackToPreviousMilestone(
+            SendBackToPreviousMilestoneDto dto
+    ) {
 
         logger.info(
-                "[MILESTONE-SEND-BACK-START] currentAssignmentId={}, changedById={}, rejectedDocumentIds={}, reason={}",
+                "[MILESTONE-SEND-BACK-START] " +
+                        "currentAssignmentId={}, changedById={}, " +
+                        "rejectedDocumentIds={}, reason={}",
                 dto != null ? dto.getCurrentAssignmentId() : null,
                 dto != null ? dto.getChangedById() : null,
                 dto != null ? dto.getRejectedDocumentIds() : null,
                 dto != null ? dto.getReason() : null
         );
 
+        /*
+         * Request validation
+         */
+        if (dto == null) {
+            throw new ValidationException(
+                    "Send-back request is required",
+                    "SEND_BACK_REQUEST_REQUIRED"
+            );
+        }
+
+        if (dto.getCurrentAssignmentId() == null) {
+            throw new ValidationException(
+                    "Current milestone assignment ID is required",
+                    "CURRENT_ASSIGNMENT_ID_REQUIRED"
+            );
+        }
+
+        if (dto.getChangedById() == null) {
+            throw new ValidationException(
+                    "Changed-by user ID is required",
+                    "CHANGED_BY_ID_REQUIRED"
+            );
+        }
+
+        if (dto.getReason() == null || dto.getReason().isBlank()) {
+            throw new ValidationException(
+                    "Reason is required to send a milestone back for rework",
+                    "SEND_BACK_REASON_REQUIRED"
+            );
+        }
+
+        String reworkReason = dto.getReason().trim();
+
+        /*
+         * Find the current milestone assignment.
+         */
         ProjectMilestoneAssignment currentAssignment =
-                projectMilestoneAssignmentRepository.findActiveUserById(dto.getCurrentAssignmentId())
+                projectMilestoneAssignmentRepository
+                        .findActiveUserById(dto.getCurrentAssignmentId())
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 "Current milestone assignment not found",
                                 "MILESTONE_ASSIGNMENT_NOT_FOUND"
                         ));
 
+        /*
+         * Find the user performing the send-back action.
+         */
         User changedBy =
-                userRepository.findActiveUserById(dto.getChangedById())
+                userRepository
+                        .findActiveUserById(dto.getChangedById())
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 "User not found",
                                 "USER_NOT_FOUND"
                         ));
 
-        boolean changedByAdmin = isAdminUser(changedBy);
-
         logger.info(
-                "[MILESTONE-SEND-BACK-USER] currentAssignmentId={}, changedById={}, changedByName={}, roles={}, isAdmin={}",
+                "[MILESTONE-SEND-BACK-USER] " +
+                        "currentAssignmentId={}, changedById={}, changedByName={}, " +
+                        "assignedUserId={}, assignedUserName={}",
                 currentAssignment.getId(),
                 changedBy.getId(),
                 changedBy.getFullName(),
-                getRoleNamesForLog(changedBy),
-                changedByAdmin
+                currentAssignment.getAssignedUser() != null
+                        ? currentAssignment.getAssignedUser().getId()
+                        : null,
+                currentAssignment.getAssignedUser() != null
+                        ? currentAssignment.getAssignedUser().getFullName()
+                        : null
         );
 
-        if (currentAssignment.getAssignedUser() == null ||
-                !currentAssignment.getAssignedUser().getId().equals(dto.getChangedById())) {
+        /*
+         * Only the user assigned to the current milestone can send the
+         * immediately previous milestone back to REWORK.
+         */
+        if (currentAssignment.getAssignedUser() == null
+                || !currentAssignment.getAssignedUser()
+                .getId()
+                .equals(changedBy.getId())) {
+
+            logger.warn(
+                    "[MILESTONE-SEND-BACK-DENIED] " +
+                            "User is not the current milestone assignee. " +
+                            "currentAssignmentId={}, changedById={}, assignedUserId={}",
+                    currentAssignment.getId(),
+                    changedBy.getId(),
+                    currentAssignment.getAssignedUser() != null
+                            ? currentAssignment.getAssignedUser().getId()
+                            : null
+            );
 
             throw new ValidationException(
-                    "Only current assigned user can send milestone back to previous milestone",
+                    "Only the currently assigned user can send the previous milestone back for rework",
                     "NOT_CURRENT_ASSIGNEE"
             );
         }
 
-        String currentStatus = currentAssignment.getStatus().getName();
-
-        if (!List.of("NEW", "IN_PROGRESS").contains(currentStatus)) {
+        /*
+         * Do not allow send-back while a manually requested ON_HOLD approval
+         * is already pending for the current milestone.
+         */
+        if (milestoneOnHoldApprovalService.hasPendingRequest(
+                currentAssignment.getId()
+        )) {
             throw new ValidationException(
-                    "Only NEW or IN_PROGRESS milestone can be sent back to previous milestone",
+                    "An ON_HOLD manager approval request is already pending for this milestone",
+                    "ON_HOLD_APPROVAL_PENDING"
+            );
+        }
+
+        if (currentAssignment.getStatus() == null
+                || currentAssignment.getStatus().getName() == null) {
+            throw new ValidationException(
+                    "Current milestone status is not configured",
+                    "CURRENT_MILESTONE_STATUS_NOT_CONFIGURED"
+            );
+        }
+
+        String currentStatus =
+                currentAssignment.getStatus().getName();
+
+        /*
+         * The current/downstream milestone can request rework only before it
+         * is completed.
+         */
+        if (!"NEW".equalsIgnoreCase(currentStatus)
+                && !"IN_PROGRESS".equalsIgnoreCase(currentStatus)) {
+
+            throw new ValidationException(
+                    "Only a NEW or IN_PROGRESS milestone can send the previous milestone back for rework",
                     "INVALID_CURRENT_STATUS_FOR_SEND_BACK"
             );
         }
 
         Project project = currentAssignment.getProject();
 
+        if (project == null || project.getId() == null) {
+            throw new ValidationException(
+                    "Project is not configured for the current milestone",
+                    "MILESTONE_PROJECT_NOT_CONFIGURED"
+            );
+        }
+
+        if (currentAssignment.getProductMilestoneMap() == null) {
+            throw new ValidationException(
+                    "Product milestone mapping is not configured for the current milestone",
+                    "PRODUCT_MILESTONE_MAPPING_NOT_CONFIGURED"
+            );
+        }
+
+        Integer currentOrderValue =
+                currentAssignment
+                        .getProductMilestoneMap()
+                        .getOrder();
+
+        if (currentOrderValue == null) {
+            throw new ValidationException(
+                    "Milestone order is not configured for the current milestone",
+                    "MILESTONE_ORDER_NOT_CONFIGURED"
+            );
+        }
+
+        int currentOrder = currentOrderValue;
+
+        /*
+         * Find all milestones for the project in configured order.
+         */
         List<ProjectMilestoneAssignment> assignments =
-                projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId())
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(project.getId())
                         .stream()
-                        .sorted((a, b) -> Integer.compare(
-                                a.getProductMilestoneMap().getOrder(),
-                                b.getProductMilestoneMap().getOrder()
-                        ))
+                        .filter(assignment ->
+                                assignment.getProductMilestoneMap() != null
+                        )
+                        .filter(assignment ->
+                                assignment
+                                        .getProductMilestoneMap()
+                                        .getOrder() > 0
+                        )
+                        .sorted((first, second) ->
+                                Integer.compare(
+                                        first.getProductMilestoneMap().getOrder(),
+                                        second.getProductMilestoneMap().getOrder()
+                                )
+                        )
                         .toList();
 
-        int currentOrder = currentAssignment.getProductMilestoneMap().getOrder();
-
+        /*
+         * Find only the immediately previous milestone.
+         *
+         * Examples:
+         * Technical     -> Documentation
+         * Liaison       -> Technical
+         * Certification -> Liaison
+         */
         ProjectMilestoneAssignment previousAssignment =
                 assignments.stream()
-                        .filter(a -> a.getProductMilestoneMap().getOrder() < currentOrder)
+                        .filter(assignment ->
+                                assignment
+                                        .getProductMilestoneMap()
+                                        .getOrder() < currentOrder
+                        )
                         .reduce((first, second) -> second)
                         .orElseThrow(() -> new ValidationException(
-                                "No previous milestone found for send back",
+                                "No previous milestone exists for the current milestone",
                                 "PREVIOUS_MILESTONE_NOT_FOUND"
                         ));
 
-        if (!"COMPLETED".equalsIgnoreCase(previousAssignment.getStatus().getName())) {
+        if (previousAssignment.getStatus() == null
+                || previousAssignment.getStatus().getName() == null) {
+            throw new ValidationException(
+                    "Previous milestone status is not configured",
+                    "PREVIOUS_MILESTONE_STATUS_NOT_CONFIGURED"
+            );
+        }
+
+        String previousStatus =
+                previousAssignment.getStatus().getName();
+
+        /*
+         * Only completed work can be reopened as REWORK.
+         */
+        if (!"COMPLETED".equalsIgnoreCase(previousStatus)) {
+
             throw new ValidationException(
                     "Previous milestone must be COMPLETED before it can be moved to REWORK",
                     "PREVIOUS_MILESTONE_NOT_COMPLETED"
             );
         }
 
+        String currentMilestoneName =
+                getMilestoneName(currentAssignment);
+
+        String previousMilestoneName =
+                getMilestoneName(previousAssignment);
+
+        logger.info(
+                "[MILESTONE-SEND-BACK-PREVIOUS-FOUND] " +
+                        "projectId={}, currentAssignmentId={}, currentMilestone={}, " +
+                        "currentStatus={}, currentOrder={}, previousAssignmentId={}, " +
+                        "previousMilestone={}, previousStatus={}, previousOrder={}",
+                project.getId(),
+                currentAssignment.getId(),
+                currentMilestoneName,
+                currentStatus,
+                currentOrder,
+                previousAssignment.getId(),
+                previousMilestoneName,
+                previousStatus,
+                previousAssignment.getProductMilestoneMap().getOrder()
+        );
+
+        /*
+         * Validate maximum rework attempts if configured.
+         */
+        Integer existingReworkAttemptsValue =
+                previousAssignment.getReworkAttempts();
+
+        int existingReworkAttempts =
+                existingReworkAttemptsValue == null
+                        ? 0
+                        : existingReworkAttemptsValue;
+
+        Integer maxAttemptsValue =
+                previousAssignment
+                        .getProductMilestoneMap()
+                        .getMaxAttempts();
+
+        int maxAttempts =
+                maxAttemptsValue == null
+                        ? 0
+                        : maxAttemptsValue;
+
+        /*
+         * maxAttempts <= 0 means no maximum limit is configured.
+         */
+        if (maxAttempts > 0
+                && existingReworkAttempts >= maxAttempts) {
+
+            logger.warn(
+                    "[MILESTONE-SEND-BACK-MAX-ATTEMPTS] " +
+                            "previousAssignmentId={}, existingAttempts={}, maxAttempts={}",
+                    previousAssignment.getId(),
+                    existingReworkAttempts,
+                    maxAttempts
+            );
+
+            throw new ValidationException(
+                    "Maximum rework attempts reached for the previous milestone",
+                    "MAX_REWORK_ATTEMPTS_REACHED"
+            );
+        }
+
+        /*
+         * Resolve milestone statuses.
+         */
         MilestoneStatus reworkStatus =
-                milestoneStatusRepository.findByName("REWORK")
+                milestoneStatusRepository
+                        .findByName("REWORK")
                         .orElseThrow(() -> new ResourceNotFoundException(
-                                "REWORK status not found",
+                                "REWORK milestone status not found",
                                 "STATUS_NOT_FOUND"
                         ));
 
         MilestoneStatus onHoldStatus =
-                milestoneStatusRepository.findByName("ON_HOLD")
+                milestoneStatusRepository
+                        .findByName("ON_HOLD")
                         .orElseThrow(() -> new ResourceNotFoundException(
-                                "ON_HOLD status not found",
-                                "STATUS_NOT_FOUND"
-                        ));
-
-        DocumentStatus rejectedDocumentStatus =
-                documentStatusRepository.findByName("REJECTED")
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Document status REJECTED not found",
+                                "ON_HOLD milestone status not found",
                                 "STATUS_NOT_FOUND"
                         ));
 
         /*
-         * Reject wrong documents selected by Technical user.
+         * Document rejection is optional.
+         *
+         * Technical may send Documentation back with document IDs.
+         * Liaison or Certification may send the previous milestone back without
+         * providing document IDs.
+         *
+         * VERIFIED documents are also allowed to be rejected here because this
+         * action is performed by the authorized current milestone assignee.
          */
-        if (dto.getRejectedDocumentIds() != null && !dto.getRejectedDocumentIds().isEmpty()) {
+        if (dto.getRejectedDocumentIds() != null
+                && !dto.getRejectedDocumentIds().isEmpty()) {
 
-            for (Long documentId : dto.getRejectedDocumentIds()) {
+            if (dto.getRejectedDocumentIds().contains(null)) {
+                throw new ValidationException(
+                        "Rejected document IDs cannot contain null values",
+                        "INVALID_REJECTED_DOCUMENT_IDS"
+                );
+            }
+
+            DocumentStatus rejectedDocumentStatus =
+                    documentStatusRepository
+                            .findByName("REJECTED")
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                    "Document status REJECTED not found",
+                                    "DOCUMENT_STATUS_NOT_FOUND"
+                            ));
+
+            /*
+             * LinkedHashSet prevents processing duplicate document IDs.
+             */
+            Set<Long> uniqueDocumentIds =
+                    new LinkedHashSet<>(
+                            dto.getRejectedDocumentIds()
+                    );
+
+            for (Long documentId : uniqueDocumentIds) {
 
                 ProjectDocumentUpload documentUpload =
-                        projectDocumentUploadRepository.findActiveUserById(documentId)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                        "Document not found with ID: " + documentId,
-                                        "DOCUMENT_UPLOAD_NOT_FOUND"
-                                ));
+                        projectDocumentUploadRepository
+                                .findActiveUserById(documentId)
+                                .orElseThrow(() ->
+                                        new ResourceNotFoundException(
+                                                "Document not found with ID: "
+                                                        + documentId,
+                                                "DOCUMENT_UPLOAD_NOT_FOUND"
+                                        )
+                                );
 
-                if (!documentUpload.getProject().getId().equals(project.getId())) {
+                if (documentUpload.getProject() == null
+                        || documentUpload.getProject().getId() == null
+                        || !documentUpload
+                        .getProject()
+                        .getId()
+                        .equals(project.getId())) {
+
                     throw new ValidationException(
-                            "Document does not belong to this project",
+                            "Document ID " + documentId
+                                    + " does not belong to project ID "
+                                    + project.getId(),
                             "DOCUMENT_PROJECT_MISMATCH"
                     );
                 }
 
-                String currentDocumentStatus = documentUpload.getStatus() != null
-                        ? documentUpload.getStatus().getName()
-                        : null;
+                String currentDocumentStatus =
+                        documentUpload.getStatus() != null
+                                ? documentUpload.getStatus().getName()
+                                : null;
 
                 logger.info(
-                        "[MILESTONE-SEND-BACK-DOCUMENT-CHECK] documentId={}, projectId={}, currentStatus={}, changedById={}, roles={}, isAdmin={}",
+                        "[MILESTONE-SEND-BACK-DOCUMENT-CHECK] " +
+                                "documentId={}, projectId={}, currentStatus={}, " +
+                                "changedById={}, currentMilestone={}, previousMilestone={}",
                         documentUpload.getId(),
                         project.getId(),
                         currentDocumentStatus,
                         changedBy.getId(),
-                        getRoleNamesForLog(changedBy),
-                        changedByAdmin
+                        currentMilestoneName,
+                        previousMilestoneName
                 );
 
                 /*
-                 * SECURITY VALIDATION ONLY:
-                 * Do not allow a normal user to downgrade VERIFIED -> REJECTED here,
-                 * because that would bypass the ADMIN-only VERIFIED replacement rule.
+                 * Avoid creating unnecessary duplicate REJECTED updates.
                  */
-                if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus) && !changedByAdmin) {
+                if ("REJECTED".equalsIgnoreCase(currentDocumentStatus)) {
 
+                    logger.info(
+                            "[MILESTONE-SEND-BACK-DOCUMENT-SKIPPED] " +
+                                    "documentId={} is already REJECTED",
+                            documentUpload.getId()
+                    );
+
+                    continue;
+                }
+
+                /*
+                 * VERIFIED documents are allowed here.
+                 *
+                 * This does not use milestone REJECTED.
+                 * Only the selected document becomes REJECTED.
+                 */
+                if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus)) {
                     logger.warn(
-                            "[MILESTONE-SEND-BACK-DOCUMENT-DENIED] Non-admin attempted to reject VERIFIED document. documentId={}, projectId={}, changedById={}, roles={}",
+                            "[MILESTONE-SEND-BACK-VERIFIED-DOCUMENT] " +
+                                    "Authorized current milestone assignee is rejecting " +
+                                    "a VERIFIED document. documentId={}, projectId={}, " +
+                                    "changedById={}, reason={}",
                             documentUpload.getId(),
                             project.getId(),
                             changedBy.getId(),
-                            getRoleNamesForLog(changedBy)
-                    );
-
-                    throw new ValidationException(
-                            "Only ADMIN can reject or replace a VERIFIED document",
-                            "VERIFIED_DOCUMENT_ADMIN_ONLY"
-                    );
-                }
-
-                if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus)) {
-                    logger.info(
-                            "[MILESTONE-SEND-BACK-DOCUMENT-ADMIN-ALLOWED] ADMIN is rejecting VERIFIED document. documentId={}, adminUserId={}",
-                            documentUpload.getId(),
-                            changedBy.getId()
+                            reworkReason
                     );
                 }
 
                 documentUpload.setStatus(rejectedDocumentStatus);
-                documentUpload.setRemarks(dto.getReason());
-                documentUpload.setUpdatedBy(dto.getChangedById());
+                documentUpload.setRemarks(reworkReason);
+                documentUpload.setUpdatedBy(changedBy.getId());
                 documentUpload.setUpdatedDate(new Date());
 
                 projectDocumentUploadRepository.save(documentUpload);
 
                 logger.info(
-                        "[MILESTONE-SEND-BACK-DOCUMENT-REJECTED] documentId={}, previousStatus={}, newStatus=REJECTED, changedById={}",
+                        "[MILESTONE-SEND-BACK-DOCUMENT-REJECTED] " +
+                                "documentId={}, projectId={}, previousStatus={}, " +
+                                "newStatus=REJECTED, changedById={}",
                         documentUpload.getId(),
+                        project.getId(),
                         currentDocumentStatus,
                         changedBy.getId()
                 );
@@ -1441,32 +1741,119 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * Previous milestone:
-         * Documentation COMPLETED -> REWORK
+         * Save previous milestone history:
+         * COMPLETED -> REWORK
          */
         saveMilestoneStatusHistory(
                 previousAssignment,
                 previousAssignment.getStatus(),
                 reworkStatus,
-                dto.getReason(),
+                reworkReason,
                 changedBy
         );
 
+        /*
+         * Move the immediately previous milestone to REWORK.
+         */
         previousAssignment.setStatus(reworkStatus);
-        previousAssignment.setStatusReason(dto.getReason());
+        previousAssignment.setStatusReason(reworkReason);
         previousAssignment.setVisible(true);
         previousAssignment.setVisibilityReason(null);
         previousAssignment.setCompletedDate(null);
-        previousAssignment.setUpdatedBy(dto.getChangedById());
+        previousAssignment.setReworkAttempts(
+                existingReworkAttempts + 1
+        );
+        previousAssignment.setUpdatedBy(changedBy.getId());
         previousAssignment.setUpdatedDate(new Date());
 
         projectMilestoneAssignmentRepository.save(previousAssignment);
 
+        logger.info(
+                "[MILESTONE-SEND-BACK-PREVIOUS-REWORK] " +
+                        "previousAssignmentId={}, previousMilestone={}, " +
+                        "oldStatus={}, newStatus=REWORK, reworkAttempts={}, " +
+                        "assignedUserId={}",
+                previousAssignment.getId(),
+                previousMilestoneName,
+                previousStatus,
+                previousAssignment.getReworkAttempts(),
+                previousAssignment.getAssignedUser() != null
+                        ? previousAssignment.getAssignedUser().getId()
+                        : null
+        );
+
         /*
-         * Current milestone:
-         * Filing NEW / IN_PROGRESS -> ON_HOLD
+         * Reactivate the previous milestone user's assignment count.
+         *
+         * The count was reduced when this milestone was previously completed.
+         * It must be increased again so that the user's active-work count
+         * remains correct during REWORK.
          */
-        String holdReason = "Waiting for previous milestone rework: " + dto.getReason();
+        if (previousAssignment.getAssignedUser() != null
+                && project.getProduct() != null) {
+
+            User previousAssignedUser =
+                    previousAssignment.getAssignedUser();
+
+            UserPerformanceCount performanceCount =
+                    userPerformanceCountRepository
+                            .findByUserIdAndProductId(
+                                    previousAssignedUser.getId(),
+                                    project.getProduct().getId()
+                            );
+
+            if (performanceCount != null) {
+                performanceCount.setAssignmentCount(
+                        performanceCount.getAssignmentCount() + 1
+                );
+                performanceCount.setLastUpdatedDate(new Date());
+                performanceCount.setUpdatedDate(new Date());
+                performanceCount.setUpdatedBy(changedBy.getId());
+
+                userPerformanceCountRepository.save(performanceCount);
+
+                logger.info(
+                        "[MILESTONE-SEND-BACK-PERFORMANCE-REACTIVATED] " +
+                                "userId={}, productId={}, assignmentCount={}",
+                        previousAssignedUser.getId(),
+                        project.getProduct().getId(),
+                        performanceCount.getAssignmentCount()
+                );
+            }
+
+            UserProductMap previousUserProductMap =
+                    userProductMapRepository
+                            .findByUserIdAndProductIdAndIsDeletedFalse(
+                                    previousAssignedUser.getId(),
+                                    project.getProduct().getId()
+                            )
+                            .orElse(null);
+
+            if (previousUserProductMap != null) {
+                previousUserProductMap.setAssigned(true);
+                previousUserProductMap.setUpdatedDate(new Date());
+                previousUserProductMap.setUpdatedBy(changedBy.getId());
+
+                userProductMapRepository.save(
+                        previousUserProductMap
+                );
+            }
+        }
+
+        /*
+         * The current milestone is automatically put ON_HOLD because its
+         * required previous milestone has returned to REWORK.
+         *
+         * This is a system-generated hold caused by dependency failure.
+         * It is different from a user manually requesting ON_HOLD.
+         */
+        String holdReason =
+                "Waiting for rework of "
+                        + (previousMilestoneName != null
+                        ? previousMilestoneName
+                        : "the previous milestone")
+                        + ": "
+                        + reworkReason;
 
         saveMilestoneStatusHistory(
                 currentAssignment,
@@ -1478,25 +1865,51 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         currentAssignment.setStatus(onHoldStatus);
         currentAssignment.setStatusReason(holdReason);
-        currentAssignment.setUpdatedBy(dto.getChangedById());
+        currentAssignment.setUpdatedBy(changedBy.getId());
         currentAssignment.setUpdatedDate(new Date());
 
-        projectMilestoneAssignmentRepository.save(currentAssignment);
-
-        updateProjectStatus(project, dto.getChangedById());
+        projectMilestoneAssignmentRepository.save(
+                currentAssignment
+        );
 
         logger.info(
-                "[MILESTONE-SEND-BACK-SUCCESS] currentAssignmentId={}, previousAssignmentId={}, projectId={}, changedById={}, changedByName={}, previousMilestoneNewStatus={}, currentMilestoneNewStatus={}",
+                "[MILESTONE-SEND-BACK-CURRENT-ON-HOLD] " +
+                        "currentAssignmentId={}, currentMilestone={}, " +
+                        "oldStatus={}, newStatus=ON_HOLD, reason={}",
                 currentAssignment.getId(),
-                previousAssignment.getId(),
+                currentMilestoneName,
+                currentStatus,
+                holdReason
+        );
+
+        /*
+         * Recalculate the overall project status.
+         */
+        updateProjectStatus(
+                project,
+                changedBy.getId()
+        );
+
+        logger.info(
+                "[MILESTONE-SEND-BACK-SUCCESS] " +
+                        "projectId={}, currentAssignmentId={}, currentMilestone={}, " +
+                        "currentStatus=ON_HOLD, previousAssignmentId={}, " +
+                        "previousMilestone={}, previousStatus=REWORK, " +
+                        "changedById={}, changedByName={}, rejectedDocumentCount={}",
                 project.getId(),
+                currentAssignment.getId(),
+                currentMilestoneName,
+                previousAssignment.getId(),
+                previousMilestoneName,
                 changedBy.getId(),
                 changedBy.getFullName(),
-                previousAssignment.getStatus() != null ? previousAssignment.getStatus().getName() : null,
-                currentAssignment.getStatus() != null ? currentAssignment.getStatus().getName() : null
+                dto.getRejectedDocumentIds() == null
+                        ? 0
+                        : new LinkedHashSet<>(
+                        dto.getRejectedDocumentIds()
+                ).size()
         );
     }
-
     private void saveMilestoneStatusHistory(
             ProjectMilestoneAssignment assignment,
             MilestoneStatus previousStatus,

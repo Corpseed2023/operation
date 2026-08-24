@@ -75,9 +75,6 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectPaymentTransactionRepository projectPaymentTransactionRepository;
     private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
     private final ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository;
-    private final UserPerformanceCountRepository userPerformanceCountRepository;
-    private final UserProductMapRepository userProductMapRepository;
-    private final UserLoginStatusRepository userOnlineStatusRepository;
     private final ProductMilestoneMapRepository productMilestoneMapRepository;
     private final ProjectDocumentUploadRepository projectDocumentUploadRepository;
     private final MilestoneStatusHistoryRepository milestoneStatusHistoryRepository;
@@ -91,9 +88,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ApplicantTypeRepository applicantTypeRepository;
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final ProjectMailService projectMailService;
-
     private final LeadFeignClient leadFeignClient;
-
 
     public ProjectServiceImpl(
             ProjectRepository projectRepository,
@@ -106,22 +101,16 @@ public class ProjectServiceImpl implements ProjectService {
             ProjectPaymentTransactionRepository projectPaymentTransactionRepository,
             ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
             ProjectAssignmentHistoryRepository projectAssignmentHistoryRepository,
-            UserPerformanceCountRepository userPerformanceCountRepository,
-            UserProductMapRepository userProductMapRepository,
-            UserLoginStatusRepository userOnlineStatusRepository,
             ProductMilestoneMapRepository productMilestoneMapRepository,
             ProjectDocumentUploadRepository projectDocumentUploadRepository,
             MilestoneStatusHistoryRepository milestoneStatusHistoryRepository,
             MilestoneStatusRepository milestoneStatusRepository,
-            DocumentStatusRepository documentStatusRepository,
             ProjectStatusRepository projectStatusRepository,
-            DepartmentAutoConfigRepository departmentAutoConfigRepository,
             AutoAssignmentService autoAssignmentService,
             ProjectRequestValidator projectRequestValidator,
             VendorRepository vendorRepository,
             CompanyUnitRepository companyUnitRepository,
             ProductDocumentMappingRepository productDocumentMappingRepository,
-            ProjectMilestoneAssignmentService projectMilestoneAssignmentService,
             ApplicantTypeRepository applicantTypeRepository,
             ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
             ProjectMailService projectMailService,
@@ -137,9 +126,6 @@ public class ProjectServiceImpl implements ProjectService {
         this.projectPaymentTransactionRepository = projectPaymentTransactionRepository;
         this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
         this.projectAssignmentHistoryRepository = projectAssignmentHistoryRepository;
-        this.userPerformanceCountRepository = userPerformanceCountRepository;
-        this.userProductMapRepository = userProductMapRepository;
-        this.userOnlineStatusRepository = userOnlineStatusRepository;
         this.productMilestoneMapRepository = productMilestoneMapRepository;
         this.projectDocumentUploadRepository = projectDocumentUploadRepository;
         this.milestoneStatusHistoryRepository = milestoneStatusHistoryRepository;
@@ -461,59 +447,107 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public List<ProjectResponseDto> getAllProjects(Long userId, int page, int size, List<String> statuses) {
+    @Transactional(readOnly = true)
+    public List<ProjectResponseDto> getAllProjects(
+            Long userId,
+            int page,
+            int size,
+            List<String> statuses
+    ) {
+        logger.info(
+                "Fetching projects for userId={}, page={}, size={}, statuses={}",
+                userId, page, size, statuses
+        );
+
+        if (page < 0) {
+            throw new ValidationException(
+                    "Page number cannot be negative",
+                    "ERR_INVALID_PAGE"
+            );
+        }
+
+        if (size < 1) {
+            throw new ValidationException(
+                    "Page size must be greater than zero",
+                    "ERR_INVALID_PAGE_SIZE"
+            );
+        }
+
         User user = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with ID: " + userId,
+                        "ERR_USER_NOT_FOUND"
+                ));
 
-        boolean isAdmin = user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getName()));
-        boolean isOpHead = user.getRoles().stream().anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isAdmin = user.getRoles() != null
+                && user.getRoles().stream()
+                .filter(Objects::nonNull)
+                .map(role -> role.getName())
+                .filter(Objects::nonNull)
+                .anyMatch(roleName -> "ADMIN".equalsIgnoreCase(roleName));
 
-        Pageable pageable = PageRequest.of(page, size,
-                Sort.by(Sort.Direction.DESC, "createdDate"));
+        boolean isOperationHead = user.getRoles() != null
+                && user.getRoles().stream()
+                .filter(Objects::nonNull)
+                .map(role -> role.getName())
+                .filter(Objects::nonNull)
+                .anyMatch(roleName ->
+                        "OPERATION_HEAD".equalsIgnoreCase(roleName));
 
-        Page<Project> projectPage;
+        boolean fullAccess = isAdmin || isOperationHead;
 
-        // Normalize statuses (trim + uppercase)
-        List<String> normalizedStatuses = statuses.stream()
-                .map(s -> s.trim().toUpperCase())
-                .collect(Collectors.toList());
+        List<String> normalizedStatuses;
 
-        if (isAdmin || isOpHead) {
-            projectPage = projectRepository.findByIsDeletedFalseAndStatusIn(normalizedStatuses, pageable);
+        if (statuses == null || statuses.isEmpty()) {
+            normalizedStatuses = List.of(
+                    "OPEN",
+                    "IN_PROGRESS",
+                    "REOPENED"
+            );
         } else {
-            List<Long> candidateUserIds = new ArrayList<>(List.of(userId));
-            if (user.isManagerFlag()) {
-                List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
-                candidateUserIds.addAll(subordinates.stream().map(User::getId).toList());
-            }
+            normalizedStatuses = statuses.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(status -> !status.isBlank())
+                    .map(String::toUpperCase)
+                    .distinct()
+                    .toList();
 
-            projectPage = projectRepository.findByAssignedUserIdsAndStatusIn(candidateUserIds, normalizedStatuses, pageable);
-
-            // For regular users - filter projects with no visible milestones
-            if (!user.isManagerFlag()) {
-                List<Project> filteredProjects = new ArrayList<>();
-
-                for (Project project : projectPage.getContent()) {
-                    updateMilestoneVisibilities(project, userId);
-
-                    boolean hasVisibleMilestone = projectMilestoneAssignmentRepository
-                            .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(project.getId(), userId)
-                            .size() > 0;
-
-                    if (hasVisibleMilestone) {
-                        filteredProjects.add(project);
-                    }
-                }
-
-                filteredProjects.sort(Comparator.comparing(Project::getCreatedDate, Comparator.reverseOrder()));
-                projectPage = new PageImpl<>(filteredProjects, pageable, filteredProjects.size());
+            if (normalizedStatuses.isEmpty()) {
+                normalizedStatuses = List.of(
+                        "OPEN",
+                        "IN_PROGRESS",
+                        "REOPENED"
+                );
             }
         }
 
-        return projectPage.map(this::mapToResponseDto).getContent();
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+
+        Page<Project> projectPage =
+                projectRepository.findAccessibleProjects(
+                        userId,
+                        fullAccess,
+                        normalizedStatuses,
+                        pageable
+                );
+
+        logger.info(
+                "Found {} projects for userId={}, fullAccess={}",
+                projectPage.getNumberOfElements(),
+                userId,
+                fullAccess
+        );
+
+        return projectPage.getContent()
+                .stream()
+                .map(this::mapToResponseDto)
+                .toList();
     }
-
-
 
 
     @Override

@@ -85,12 +85,6 @@ public class DocumentationApplication {
 			);
 
 
-			createMilestoneStatusIfMissing(
-					milestoneStatusRepository,
-					7L,
-					"REJECTED",
-					"Milestone permanently rejected"
-			);
 
 			createProjectStatusIfMissing(
 					projectStatusRepository,

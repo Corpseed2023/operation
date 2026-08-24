@@ -182,27 +182,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     long countBySalesPersonIdAndStatus_NameAndIsDeletedFalseAndIsCancelledFalse(Long salesPersonId, String statusName);
 
 
-    /**
-     * Find non-deleted projects with given statuses (for Admin / Op Head).
-     * Supports CANCELLED status.
-     */
-    @Query("SELECT p FROM Project p " +
-            "WHERE p.isDeleted = false " +
-            "AND p.status.name IN :statuses")
-    Page<Project> findByIsDeletedFalseAndStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
 
-    /**
-     * Find non-deleted projects assigned to users with given statuses.
-     * Supports CANCELLED status.
-     */
-    @Query("SELECT DISTINCT p FROM Project p " +
-            "WHERE p.isDeleted = false " +
-            "AND p.status.name IN :statuses " +
-            "AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a " +
-            "WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
-    Page<Project> findByAssignedUserIdsAndStatusIn(@Param("userIds") List<Long> userIds,
-                                                   @Param("statuses") List<String> statuses,
-                                                   Pageable pageable);
 
     @Query(
             value = """
@@ -791,6 +771,61 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 """)
     List<Project> findProjectsByUnitId(@Param("unitId") Long unitId);
 
+
+    @Query(
+            value = """
+                SELECT p
+                FROM Project p
+                WHERE p.isDeleted = false
+                  AND UPPER(p.status.name) IN :statuses
+                  AND (
+                        :fullAccess = true
+                        OR EXISTS (
+                            SELECT a.id
+                            FROM ProjectMilestoneAssignment a
+                            WHERE a.project = p
+                              AND a.isDeleted = false
+                              AND a.assignedUser IS NOT NULL
+                              AND (
+                                    (
+                                        a.assignedUser.id = :userId
+                                        AND a.isVisible = true
+                                    )
+                                    OR a.assignedUser.manager.id = :userId
+                              )
+                        )
+                  )
+                """,
+            countQuery = """
+                SELECT COUNT(p)
+                FROM Project p
+                WHERE p.isDeleted = false
+                  AND UPPER(p.status.name) IN :statuses
+                  AND (
+                        :fullAccess = true
+                        OR EXISTS (
+                            SELECT a.id
+                            FROM ProjectMilestoneAssignment a
+                            WHERE a.project = p
+                              AND a.isDeleted = false
+                              AND a.assignedUser IS NOT NULL
+                              AND (
+                                    (
+                                        a.assignedUser.id = :userId
+                                        AND a.isVisible = true
+                                    )
+                                    OR a.assignedUser.manager.id = :userId
+                              )
+                        )
+                  )
+                """
+    )
+    Page<Project> findAccessibleProjects(
+            @Param("userId") Long userId,
+            @Param("fullAccess") boolean fullAccess,
+            @Param("statuses") List<String> statuses,
+            Pageable pageable
+    );
 
 
 
