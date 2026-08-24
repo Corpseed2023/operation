@@ -84,12 +84,6 @@ public class DocumentationApplication {
 					"Milestone paused"
 			);
 
-			createMilestoneStatusIfMissing(
-					milestoneStatusRepository,
-					6L,
-					"QUEUED",
-					"Milestone queued for manual assignment"
-			);
 
 			createMilestoneStatusIfMissing(
 					milestoneStatusRepository,

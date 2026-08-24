@@ -25,19 +25,14 @@ import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
 import com.doc.repository.vendor.ProcurementPaymentRequestRepository;
 import com.doc.repository.vendor.PurchaseOrderRepository;
-import com.doc.service.AutoAssignmentService;
+import com.doc.service.*;
 //import com.doc.service.NotificationPublisherService;
-import com.doc.service.NotificationPublisherService;
-import com.doc.service.ProjectMilestoneAssignmentService;
-import com.doc.service.ProjectService;
 import com.doc.validation.MilestoneValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.doc.repository.documentRepo.DocumentStatusRepository;
 import com.doc.entity.document.ProjectDocumentUpload;
-import com.doc.entity.document.DocumentStatus;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,6 +72,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
     private static final long DEFAULT_RENEWAL_LEAD_DAYS = 30L;
 
+    private final MilestoneOnHoldApprovalService milestoneOnHoldApprovalService;
+
     public ProjectMilestoneAssignmentServiceImpl(
             ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
             UserRepository userRepository,
@@ -95,7 +92,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             NotificationPublisherService notificationPublisherService,
             DocumentStatusRepository documentStatusRepository,
             PurchaseOrderRepository purchaseOrderRepository,
-            ProcurementPaymentRequestRepository procurementPaymentRequestRepository
+            ProcurementPaymentRequestRepository procurementPaymentRequestRepository,
+            MilestoneOnHoldApprovalService milestoneOnHoldApprovalService
 
 
     ) {
@@ -117,6 +115,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         this.documentStatusRepository = documentStatusRepository;
         this.purchaseOrderRepository=purchaseOrderRepository;
         this.procurementPaymentRequestRepository=procurementPaymentRequestRepository;
+        this.milestoneOnHoldApprovalService = milestoneOnHoldApprovalService;
 
 
     }
@@ -124,16 +123,22 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     @Override
     public void updateMilestoneStatus(UpdateMilestoneStatusDto updateDto) {
 
-        logger.info("Updating milestone assignment ID: {} to status: {} by user ID: {}",
+        logger.info(
+                "Updating milestone assignment ID: {} to status: {} by user ID: {}",
                 updateDto.getAssignmentId(),
                 updateDto.getNewStatusName(),
-                updateDto.getChangedById());
+                updateDto.getChangedById()
+        );
 
         ProjectMilestoneAssignment assignment =
-                projectMilestoneAssignmentRepository.findActiveUserById(updateDto.getAssignmentId())
+                projectMilestoneAssignmentRepository
+                        .findActiveUserById(updateDto.getAssignmentId())
                         .orElseThrow(() -> {
-                            logger.error("Milestone assignment ID {} not found or is deleted",
-                                    updateDto.getAssignmentId());
+                            logger.error(
+                                    "Milestone assignment ID {} not found or is deleted",
+                                    updateDto.getAssignmentId()
+                            );
+
                             return new ResourceNotFoundException(
                                     "Milestone assignment not found",
                                     "MILESTONE_ASSIGNMENT_NOT_FOUND"
@@ -141,10 +146,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         });
 
         User changedBy =
-                userRepository.findActiveUserById(updateDto.getChangedById())
+                userRepository
+                        .findActiveUserById(updateDto.getChangedById())
                         .orElseThrow(() -> {
-                            logger.error("User ID {} not found or is deleted",
-                                    updateDto.getChangedById());
+                            logger.error(
+                                    "User ID {} not found or is deleted",
+                                    updateDto.getChangedById()
+                            );
+
                             return new ResourceNotFoundException(
                                     "User not found",
                                     "USER_NOT_FOUND"
@@ -152,10 +161,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         });
 
         MilestoneStatus newStatus =
-                milestoneStatusRepository.findByName(updateDto.getNewStatusName())
+                milestoneStatusRepository
+                        .findByName(updateDto.getNewStatusName())
                         .orElseThrow(() -> {
-                            logger.error("Milestone status {} not found",
-                                    updateDto.getNewStatusName());
+                            logger.error(
+                                    "Milestone status {} not found",
+                                    updateDto.getNewStatusName()
+                            );
+
                             return new ResourceNotFoundException(
                                     "Milestone status not found",
                                     "STATUS_NOT_FOUND"
@@ -169,9 +182,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         String requestedStatusName = newStatus.getName();
 
         /*
-         * Final-state validation:
-         * Once milestone is COMPLETED, no further status change is allowed.
-         * This prevents COMPLETED -> NEW / IN_PROGRESS / ON_HOLD / REJECTED / REWORK etc.
+         * Once a milestone is COMPLETED, no further status change is allowed.
          */
         if ("COMPLETED".equalsIgnoreCase(currentStatusName)) {
             throw new ValidationException(
@@ -182,11 +193,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         /*
          * Prevent duplicate same-status update.
-         * Important because COMPLETED -> COMPLETED can duplicate performance count,
-         * time spent, history, and visibility recalculation.
          */
         if (currentStatusName != null
                 && currentStatusName.equalsIgnoreCase(requestedStatusName)) {
+
             throw new ValidationException(
                     "Milestone is already in " + requestedStatusName + " status",
                     "MILESTONE_ALREADY_IN_REQUESTED_STATUS"
@@ -194,9 +204,44 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
+         * ON_HOLD APPROVAL FLOW
+         *
+         * Do not update the milestone status directly.
+         * Create a pending request for the assigned user's manager and stop here.
+         *
+         * After manager approval, MilestoneOnHoldApprovalService will:
+         * 1. Change the milestone status to ON_HOLD.
+         * 2. Create milestone status history.
+         * 3. Close the approval request.
+         */
+        if ("ON_HOLD".equalsIgnoreCase(requestedStatusName)) {
+
+            logger.info(
+                    "[MILESTONE-ON-HOLD-APPROVAL-REQUEST] assignmentId={}, " +
+                            "projectId={}, requestedById={}, currentStatus={}, reason={}",
+                    assignment.getId(),
+                    assignment.getProject() != null
+                            ? assignment.getProject().getId()
+                            : null,
+                    changedBy.getId(),
+                    currentStatusName,
+                    updateDto.getStatusReason()
+            );
+
+            milestoneOnHoldApprovalService.requestOnHold(updateDto);
+
+            logger.info(
+                    "[MILESTONE-ON-HOLD-APPROVAL-SUBMITTED] " +
+                            "assignmentId={}, requestedById={}",
+                    assignment.getId(),
+                    changedBy.getId()
+            );
+
+            return;
+        }
+
+        /*
          * Business validation before starting Filing/Filling milestone.
-         * Before user changes Filing/Filling milestone to IN_PROGRESS,
-         * portal details must already be added.
          */
         String milestoneName = getMilestoneName(assignment);
 
@@ -217,6 +262,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
             if ("Legal Verification".equalsIgnoreCase(milestoneName)
                     || "Legal Verfication".equalsIgnoreCase(milestoneName)) {
+
                 milestoneValidator.validateLegalMilestone(assignment);
             }
 
@@ -238,7 +284,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         /*
          * Rollback handling: REJECTED -> NEW.
-         * This is allowed only when rollback is enabled in ProductMilestoneMap.
          */
         if ("NEW".equalsIgnoreCase(newStatus.getName())
                 && "REJECTED".equalsIgnoreCase(currentStatusName)) {
@@ -252,20 +297,23 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
             if (assignment.getReworkAttempts()
                     >= assignment.getProductMilestoneMap().getMaxAttempts()) {
+
                 throw new ValidationException(
                         "Maximum rework attempts reached",
                         "MAX_REWORK_ATTEMPTS_REACHED"
                 );
             }
 
-            assignment.setReworkAttempts(assignment.getReworkAttempts() + 1);
+            assignment.setReworkAttempts(
+                    assignment.getReworkAttempts() + 1
+            );
         }
 
         /*
-         * If milestone is getting completed:
-         * 1. Reduce old user's active assignment count
-         * 2. Add time spent
-         * 3. Mark user-product map as unassigned
+         * If the milestone is getting completed:
+         * 1. Reduce the old user's active assignment count.
+         * 2. Add time spent.
+         * 3. Mark the user-product map as unassigned.
          */
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
 
@@ -274,19 +322,30 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 User oldUser = assignment.getAssignedUser();
 
                 UserPerformanceCount count =
-                        userPerformanceCountRepository.findByUserIdAndProductId(
-                                oldUser.getId(),
-                                assignment.getProject().getProduct().getId()
-                        );
+                        userPerformanceCountRepository
+                                .findByUserIdAndProductId(
+                                        oldUser.getId(),
+                                        assignment.getProject()
+                                                .getProduct()
+                                                .getId()
+                                );
 
                 if (count != null) {
+
                     count.setTimeSpent(
                             count.getTimeSpent()
-                                    + assignment.getProductMilestoneMap().getTatInDays()
+                                    + assignment
+                                    .getProductMilestoneMap()
+                                    .getTatInDays()
                     );
+
                     count.setAssignmentCount(
-                            Math.max(0, count.getAssignmentCount() - 1)
+                            Math.max(
+                                    0,
+                                    count.getAssignmentCount() - 1
+                            )
                     );
+
                     count.setLastUpdatedDate(new Date());
                     count.setUpdatedDate(new Date());
                     count.setUpdatedBy(updateDto.getChangedById());
@@ -298,7 +357,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         userProductMapRepository
                                 .findByUserIdAndProductIdAndIsDeletedFalse(
                                         oldUser.getId(),
-                                        assignment.getProject().getProduct().getId()
+                                        assignment.getProject()
+                                                .getProduct()
+                                                .getId()
                                 )
                                 .orElse(null);
 
@@ -306,15 +367,17 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     userMap.setAssigned(false);
                     userMap.setUpdatedDate(new Date());
                     userMap.setUpdatedBy(updateDto.getChangedById());
+
                     userProductMapRepository.save(userMap);
                 }
             }
         }
 
         /*
-         * Save status history before changing assignment status.
+         * Save status history before changing the assignment status.
          */
         MilestoneStatusHistory history = new MilestoneStatusHistory();
+
         history.setMilestoneAssignment(assignment);
         history.setPreviousStatus(assignment.getStatus());
         history.setNewStatus(newStatus);
@@ -326,7 +389,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         milestoneStatusHistoryRepository.save(history);
 
         /*
-         * Update assignment status.
+         * Update the assignment status.
          */
         assignment.setStatus(newStatus);
         assignment.setStatusReason(updateDto.getStatusReason());
@@ -342,34 +405,42 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         assignment.setUpdatedBy(updateDto.getChangedById());
         assignment.setUpdatedDate(new Date());
 
-        assignment = projectMilestoneAssignmentRepository.save(assignment);
+        assignment =
+                projectMilestoneAssignmentRepository.save(assignment);
 
-        logger.info("Milestone assignment ID {} status updated from {} to {} by user {}",
+        logger.info(
+                "Milestone assignment ID {} status updated from {} to {} by user {}",
                 updateDto.getAssignmentId(),
                 currentStatusName,
                 newStatus.getName(),
-                changedBy.getFullName());
+                changedBy.getFullName()
+        );
 
         Project project = assignment.getProject();
 
         /*
-         * After completing one milestone, recalculate visibility of all project milestones.
-         * This will make the next milestone visible if payment and previous milestone conditions are satisfied.
+         * After completing a milestone, recalculate milestone visibility.
          */
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
+
             projectService.updateMilestoneVisibilities(
                     project,
                     updateDto.getChangedById()
             );
 
-            logger.info("Milestone visibility recalculated after completion. Project ID: {}",
-                    project.getId());
+            logger.info(
+                    "Milestone visibility recalculated after completion. Project ID: {}",
+                    project.getId()
+            );
         }
 
         /*
-         * Update project status after milestone status/visibility update.
+         * Update the overall project status.
          */
-        updateProjectStatus(project, updateDto.getChangedById());
+        updateProjectStatus(
+                project,
+                updateDto.getChangedById()
+        );
     }
 
     private boolean isCertificationMilestone(String milestoneName) {
