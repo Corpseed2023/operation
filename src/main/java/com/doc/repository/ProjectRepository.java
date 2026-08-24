@@ -780,19 +780,27 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                   AND UPPER(p.status.name) IN :statuses
                   AND (
                         :fullAccess = true
+
                         OR EXISTS (
                             SELECT a.id
                             FROM ProjectMilestoneAssignment a
                             WHERE a.project = p
                               AND a.isDeleted = false
-                              AND a.assignedUser IS NOT NULL
-                              AND (
-                                    (
-                                        a.assignedUser.id = :userId
-                                        AND a.isVisible = true
-                                    )
-                                    OR a.assignedUser.manager.id = :userId
-                              )
+                              AND a.isVisible = true
+                              AND a.assignedUser.id = :userId
+                        )
+
+                        OR (
+                            :managerAccess = true
+                            AND EXISTS (
+                                SELECT a.id
+                                FROM ProjectMilestoneAssignment a
+                                JOIN a.milestone.departments department
+                                WHERE a.project = p
+                                  AND a.isDeleted = false
+                                  AND a.isVisible = true
+                                  AND department.id IN :departmentIds
+                            )
                         )
                   )
                 """,
@@ -803,19 +811,27 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                   AND UPPER(p.status.name) IN :statuses
                   AND (
                         :fullAccess = true
+
                         OR EXISTS (
                             SELECT a.id
                             FROM ProjectMilestoneAssignment a
                             WHERE a.project = p
                               AND a.isDeleted = false
-                              AND a.assignedUser IS NOT NULL
-                              AND (
-                                    (
-                                        a.assignedUser.id = :userId
-                                        AND a.isVisible = true
-                                    )
-                                    OR a.assignedUser.manager.id = :userId
-                              )
+                              AND a.isVisible = true
+                              AND a.assignedUser.id = :userId
+                        )
+
+                        OR (
+                            :managerAccess = true
+                            AND EXISTS (
+                                SELECT a.id
+                                FROM ProjectMilestoneAssignment a
+                                JOIN a.milestone.departments department
+                                WHERE a.project = p
+                                  AND a.isDeleted = false
+                                  AND a.isVisible = true
+                                  AND department.id IN :departmentIds
+                            )
                         )
                   )
                 """
@@ -823,6 +839,8 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Page<Project> findAccessibleProjects(
             @Param("userId") Long userId,
             @Param("fullAccess") boolean fullAccess,
+            @Param("managerAccess") boolean managerAccess,
+            @Param("departmentIds") List<Long> departmentIds,
             @Param("statuses") List<String> statuses,
             Pageable pageable
     );

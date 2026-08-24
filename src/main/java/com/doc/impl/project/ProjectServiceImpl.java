@@ -455,7 +455,7 @@ public class ProjectServiceImpl implements ProjectService {
             List<String> statuses
     ) {
         logger.info(
-                "Fetching projects for userId={}, page={}, size={}, statuses={}",
+                "[GET-PROJECTS-START] userId={} | page={} | size={} | statuses={}",
                 userId, page, size, statuses
         );
 
@@ -479,22 +479,29 @@ public class ProjectServiceImpl implements ProjectService {
                         "ERR_USER_NOT_FOUND"
                 ));
 
-        boolean isAdmin = user.getRoles() != null
-                && user.getRoles().stream()
-                .filter(Objects::nonNull)
-                .map(role -> role.getName())
-                .filter(Objects::nonNull)
-                .anyMatch(roleName -> "ADMIN".equalsIgnoreCase(roleName));
-
-        boolean isOperationHead = user.getRoles() != null
-                && user.getRoles().stream()
-                .filter(Objects::nonNull)
-                .map(role -> role.getName())
-                .filter(Objects::nonNull)
-                .anyMatch(roleName ->
-                        "OPERATION_HEAD".equalsIgnoreCase(roleName));
-
+        boolean isAdmin = hasRole(user, "ADMIN");
+        boolean isOperationHead = hasRole(user, "OPERATION_HEAD");
         boolean fullAccess = isAdmin || isOperationHead;
+
+        boolean managerAccess = user.isManagerFlag();
+
+        List<Long> departmentIds = managerAccess
+                ? user.getDepartments()
+                .stream()
+                .filter(Objects::nonNull)
+                .map(Department::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList()
+                : List.of();
+
+        /*
+         * Avoid an empty IN (:departmentIds) parameter.
+         * -1 should never match a real department.
+         */
+        if (departmentIds.isEmpty()) {
+            departmentIds = List.of(-1L);
+        }
 
         List<String> normalizedStatuses;
 
@@ -528,25 +535,50 @@ public class ProjectServiceImpl implements ProjectService {
                 Sort.by(Sort.Direction.DESC, "createdDate")
         );
 
+        logger.info(
+                "[GET-PROJECTS-ACCESS] userId={} | admin={} | operationHead={} " +
+                        "| manager={} | departmentIds={}",
+                userId,
+                isAdmin,
+                isOperationHead,
+                managerAccess,
+                departmentIds
+        );
+
         Page<Project> projectPage =
                 projectRepository.findAccessibleProjects(
                         userId,
                         fullAccess,
+                        managerAccess,
+                        departmentIds,
                         normalizedStatuses,
                         pageable
                 );
 
         logger.info(
-                "Found {} projects for userId={}, fullAccess={}",
-                projectPage.getNumberOfElements(),
+                "[GET-PROJECTS-SUCCESS] userId={} | projectsOnPage={} | totalProjects={}",
                 userId,
-                fullAccess
+                projectPage.getNumberOfElements(),
+                projectPage.getTotalElements()
         );
 
         return projectPage.getContent()
                 .stream()
                 .map(this::mapToResponseDto)
                 .toList();
+    }
+
+    private boolean hasRole(User user, String requiredRole) {
+        if (user.getRoles() == null) {
+            return false;
+        }
+
+        return user.getRoles()
+                .stream()
+                .filter(Objects::nonNull)
+                .map(role -> role.getName())
+                .filter(Objects::nonNull)
+                .anyMatch(roleName -> requiredRole.equalsIgnoreCase(roleName));
     }
 
 
