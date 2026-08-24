@@ -939,6 +939,72 @@ public class VendorServiceImpl implements VendorService {
         return requests.map(this::mapRestrictionToResponse);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<VendorByProductResponseDto> getVendorsByProductId(
+            Long productId,
+            int page,
+            int size,
+            Long userId
+    ) {
+
+        if (userId == null) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ERR_ACTIVE_USER_NOT_FOUND"
+                ));
+
+        if (productId == null) {
+            throw new ValidationException(
+                    "Product ID is required",
+                    "ERR_PRODUCT_ID_REQUIRED"
+            );
+        }
+
+        int pageIndex = page <= 0 ? 0 : page - 1;
+        int pageSize = size <= 0 ? 10 : size;
+
+        Pageable pageable = PageRequest.of(
+                pageIndex,
+                pageSize,
+                Sort.by("vendor.name").ascending()
+        );
+
+        Page<ProductVendorMapping> mappings =
+                productVendorMappingRepository.findMappingsByProductId(
+                        productId,
+                        pageable
+                );
+
+        return mappings.map(this::mapToVendorByProductDto);
+    }
+
+    private VendorByProductResponseDto mapToVendorByProductDto(
+            ProductVendorMapping mapping
+    ) {
+        Vendor vendor = mapping.getVendor();
+
+        VendorByProductResponseDto dto = new VendorByProductResponseDto();
+
+        dto.setVendorId(vendor.getId());
+        dto.setVendorName(vendor.getName());
+        dto.setEmail(vendor.getEmail());
+        dto.setMobile(vendor.getMobile());
+        dto.setGstNumber(vendor.getGstNumber());
+        dto.setPanNumber(vendor.getPanNumber());
+        dto.setVendorStatus(vendor.getStatus());
+        dto.setMappingActive(mapping.isActive());
+
+        return dto;
+    }
+
     private String findUserName(Long userId) {
 
         if (userId == null) {

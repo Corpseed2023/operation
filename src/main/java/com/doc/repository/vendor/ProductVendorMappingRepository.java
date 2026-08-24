@@ -125,4 +125,26 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
     );
 
 
+    @Query(
+            value = """
+        SELECT pvm
+        FROM ProductVendorMapping pvm
+        JOIN FETCH pvm.vendor v
+        WHERE pvm.product.id = :productId
+          AND pvm.isDeleted = false
+          AND v.isDeleted = false
+        """,
+            countQuery = """
+        SELECT COUNT(pvm)
+        FROM ProductVendorMapping pvm
+        JOIN pvm.vendor v
+        WHERE pvm.product.id = :productId
+          AND pvm.isDeleted = false
+          AND v.isDeleted = false
+        """
+    )
+    Page<ProductVendorMapping> findMappingsByProductId(
+            @Param("productId") Long productId,
+            Pageable pageable
+    );
 }

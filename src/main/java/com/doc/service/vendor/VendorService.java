@@ -60,4 +60,12 @@ public interface VendorService {
             int size,
             VendorRestrictionRequestStatus status
     );
+
+    Page<VendorByProductResponseDto> getVendorsByProductId(
+            Long productId,
+            int page,
+            int size,
+            Long userId
+    );
+
 }
