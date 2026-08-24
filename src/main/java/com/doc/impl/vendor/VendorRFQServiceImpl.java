@@ -545,9 +545,6 @@ public class VendorRFQServiceImpl implements VendorRFQService {
         return vendorResponseList;
     }
 
-
-
-
     @Override
     @Transactional(readOnly = true)
     public RFQVendorResponseDto getVendorByRfqIdAndVendorId(Long rfqId, Long vendorId) {
