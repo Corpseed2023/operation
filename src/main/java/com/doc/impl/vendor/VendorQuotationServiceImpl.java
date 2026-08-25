@@ -431,6 +431,25 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
 
         return mapToResponse(saved);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VendorQuotationResponseDto getVendorQuotationByRfqIdAndVendorId(Long rfqId, Long vendorId) {
+
+        List<VendorQuotation> quotations = vendorQuotationRepository
+                .findByRfqIdAndVendorIdAndIsDeletedFalseOrderByCreatedDateDesc(rfqId, vendorId);
+
+        if (quotations.isEmpty()) {
+            throw new ResourceNotFoundException(
+                    "Vendor quotation not found for the given RFQ and vendor",
+                    "ERR_VENDOR_QUOTATION_NOT_FOUND"
+            );
+        }
+
+        // Latest quotation first, due to OrderByCreatedDateDesc
+        return mapToResponse(quotations.get(0));
+    }
+
     private void mapProductWithActiveVendor(
             VendorQuotation quotation,
             Vendor vendor,

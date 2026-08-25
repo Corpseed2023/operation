@@ -24,4 +24,6 @@ public interface VendorQuotationService {
             Long userId,
             SendAgreementToVendorRequestDto requestDto
     );
+
+    VendorQuotationResponseDto getVendorQuotationByRfqIdAndVendorId(Long rfqId, Long vendorId);
 }

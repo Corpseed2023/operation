@@ -86,4 +86,8 @@ public interface VendorQuotationRepository extends JpaRepository<VendorQuotation
             @Param("productId") Long productId,
             @Param("statuses") List<VendorQuotationStatus> statuses
     );
+
+    List<VendorQuotation> findByRfqIdAndVendorIdAndIsDeletedFalseOrderByCreatedDateDesc(
+            Long rfqId, Long vendorId
+    );
 }
