@@ -1861,143 +1861,325 @@ public class ProjectServiceImpl implements ProjectService {
 
 
     @Override
-    public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
-
+    public ProjectMilestoneResponseDto getProjectMilestones(
+            Long projectId,
+            Long userId
+    ) {
         logger.info(
-                "Fetching project details and milestones for project ID: {}, user ID: {}",
+                "[GET-PROJECT-MILESTONES-START] projectId={} | userId={}",
                 projectId,
                 userId
         );
 
         Project project = projectRepository.findActiveUserById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project not found",
-                        "ERR_PROJECT_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.warn(
+                            "[GET-PROJECT-MILESTONES-PROJECT-NOT-FOUND] projectId={}",
+                            projectId
+                    );
+
+                    return new ResourceNotFoundException(
+                            "Project not found with ID: " + projectId,
+                            "ERR_PROJECT_NOT_FOUND"
+                    );
+                });
 
         User user = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found",
-                        "ERR_USER_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.warn(
+                            "[GET-PROJECT-MILESTONES-USER-NOT-FOUND] userId={}",
+                            userId
+                    );
 
-        boolean isAdmin = user.getRoles()
-                .stream()
-                .anyMatch(r -> "ADMIN".equals(r.getName()));
+                    return new ResourceNotFoundException(
+                            "User not found with ID: " + userId,
+                            "ERR_USER_NOT_FOUND"
+                    );
+                });
 
-        boolean isOperationHead = user.getRoles()
-                .stream()
-                .anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isAdmin = hasRole(user, "ADMIN");
+        boolean isOperationHead = hasRole(user, "OPERATION_HEAD");
+        boolean isManager = user.isManagerFlag();
+
+        logger.info(
+                "[GET-PROJECT-MILESTONES-ROLE] projectId={} | userId={} | " +
+                        "admin={} | operationHead={} | manager={}",
+                projectId,
+                userId,
+                isAdmin,
+                isOperationHead,
+                isManager
+        );
 
         /*
-         * Important:
-         * Recalculate visibility for everyone before returning milestones.
-         * Previously admin/op-head returned before this call.
+         * Recalculate milestone visibility before checking access.
          */
         updateMilestoneVisibilities(project, userId);
 
-        List<ProjectMilestoneAssignment> assignments;
+        List<ProjectMilestoneAssignment> allProjectAssignments =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(projectId);
 
+        /*
+         * ADMIN and OPERATION_HEAD can see every milestone.
+         */
         if (isAdmin || isOperationHead) {
+            List<ProjectMilestoneAssignment> sortedAssignments =
+                    sortMilestoneAssignments(allProjectAssignments);
 
-            assignments = projectMilestoneAssignmentRepository
-                    .findByProjectIdAndIsDeletedFalse(projectId);
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-FULL-ACCESS] projectId={} | " +
+                            "userId={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    sortedAssignments.size()
+            );
 
-            assignments = sortMilestoneAssignments(assignments);
-
-            ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
-            response.setProjectDetails(mapToProjectDetailsDto(project, userId));
-            response.setMilestones(assignments.stream()
-                    .map(this::mapToAssignedMilestoneDto)
-                    .collect(Collectors.toList()));
-
-            return response;
+            return buildProjectMilestoneResponse(
+                    project,
+                    userId,
+                    sortedAssignments
+            );
         }
 
-        boolean isAssignedToAnyMilestone = projectMilestoneAssignmentRepository
-                .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId)
-                .isPresent();
+        /*
+         * Check whether the logged-in user is directly assigned to any
+         * milestone in this project.
+         *
+         * Using the already fetched list avoids Optional returning multiple
+         * results when the same user has more than one project milestone.
+         */
+        boolean isAssignedToProject = allProjectAssignments.stream()
+                .filter(Objects::nonNull)
+                .map(ProjectMilestoneAssignment::getAssignedUser)
+                .filter(Objects::nonNull)
+                .map(User::getId)
+                .anyMatch(userId::equals);
 
-        List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+        /*
+         * Department-based manager access.
+         *
+         * Example:
+         * - First CRT milestone is visible.
+         * - assignedUser is null.
+         * - CRT manager belongs to the CRT department.
+         *
+         * The CRT manager will still receive the milestone.
+         */
+        List<Long> managerDepartmentIds = new ArrayList<>();
+
+        if (isManager && user.getDepartments() != null) {
+            managerDepartmentIds = user.getDepartments()
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .map(Department::getId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
+
+        List<ProjectMilestoneAssignment> departmentMilestones =
+                new ArrayList<>();
+
+        if (isManager && !managerDepartmentIds.isEmpty()) {
+            departmentMilestones = projectMilestoneAssignmentRepository
+                    .findVisibleMilestonesByProjectAndDepartments(
+                            projectId,
+                            managerDepartmentIds
+                    );
+        }
+
+        boolean hasDepartmentManagerAccess =
+                isManager && !departmentMilestones.isEmpty();
+
+        logger.info(
+                "[GET-PROJECT-MILESTONES-DEPARTMENT-CHECK] projectId={} | " +
+                        "userId={} | manager={} | departmentIds={} | " +
+                        "matchingVisibleMilestones={}",
+                projectId,
+                userId,
+                isManager,
+                managerDepartmentIds,
+                departmentMilestones.size()
+        );
+
+        /*
+         * Preserve existing direct-manager access.
+         */
+        List<User> subordinates =
+                userRepository.findByManagerIdAndIsDeletedFalse(userId);
 
         List<Long> managedUserIds = subordinates.stream()
+                .filter(Objects::nonNull)
                 .map(User::getId)
+                .filter(Objects::nonNull)
+                .distinct()
                 .collect(Collectors.toList());
 
-        boolean isManagerOfAssignedUser = projectMilestoneAssignmentRepository
-                .findByProjectIdAndIsDeletedFalse(projectId)
-                .stream()
-                .filter(a -> a.getAssignedUser() != null)
-                .map(a -> a.getAssignedUser().getId())
+        boolean isManagerOfAssignedUser = allProjectAssignments.stream()
+                .filter(Objects::nonNull)
+                .map(ProjectMilestoneAssignment::getAssignedUser)
+                .filter(Objects::nonNull)
+                .map(User::getId)
                 .anyMatch(managedUserIds::contains);
 
-        if (!isAssignedToAnyMilestone && !isManagerOfAssignedUser) {
+        logger.info(
+                "[GET-PROJECT-MILESTONES-ACCESS-CHECK] projectId={} | " +
+                        "userId={} | directlyAssigned={} | " +
+                        "departmentManagerAccess={} | directReportAccess={}",
+                projectId,
+                userId,
+                isAssignedToProject,
+                hasDepartmentManagerAccess,
+                isManagerOfAssignedUser
+        );
+
+        if (!isAssignedToProject
+                && !hasDepartmentManagerAccess
+                && !isManagerOfAssignedUser) {
+
+            logger.warn(
+                    "[GET-PROJECT-MILESTONES-ACCESS-DENIED] projectId={} | userId={}",
+                    projectId,
+                    userId
+            );
+
             throw new ValidationException(
                     "You are not authorized to view this project",
                     "ERR_UNAUTHORIZED_ACCESS"
             );
         }
 
-        if (isManagerOfAssignedUser) {
+        List<ProjectMilestoneAssignment> visibleAssignments;
 
+        /*
+         * Department manager receives all visible milestones mapped to
+         * their department, including unassigned milestones.
+         */
+        if (hasDepartmentManagerAccess) {
+            visibleAssignments = departmentMilestones;
+
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-DEPARTMENT-MANAGER] projectId={} | " +
+                            "managerId={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    visibleAssignments.size()
+            );
+        } else if (isManagerOfAssignedUser) {
+            /*
+             * Preserve old manager/subordinate behavior.
+             */
             List<Long> teamIds = new ArrayList<>(managedUserIds);
 
             if (!teamIds.contains(userId)) {
                 teamIds.add(userId);
             }
 
-            assignments = projectMilestoneAssignmentRepository
-                    .findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(projectId, teamIds);
+            visibleAssignments = projectMilestoneAssignmentRepository
+                    .findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(
+                            projectId,
+                            teamIds
+                    );
 
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-DIRECT-MANAGER] projectId={} | " +
+                            "managerId={} | teamIds={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    teamIds,
+                    visibleAssignments.size()
+            );
         } else {
-
-            assignments = projectMilestoneAssignmentRepository
+            /*
+             * Regular user receives only visible milestones assigned to them.
+             */
+            visibleAssignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(
                             projectId,
                             userId
                     );
-        }
 
-        assignments = sortMilestoneAssignments(assignments);
-
-        logger.debug(
-                "Project milestone visibility result. projectId={}, userId={}, managerOfAssignedUser={}, visibleMilestoneCount={}",
-                projectId,
-                userId,
-                isManagerOfAssignedUser,
-                assignments.size()
-        );
-
-        assignments.forEach(a -> logger.debug(
-                "Visible milestone details. projectId={}, userId={}, milestone={}, order={}, visible={}, status={}, assignedUserId={}",
-                projectId,
-                userId,
-                a.getMilestone().getName(),
-                a.getProductMilestoneMap() != null
-                        ? a.getProductMilestoneMap().getOrder()
-                        : null,
-                a.isVisible(),
-                a.getStatus().getName(),
-                a.getAssignedUser() != null
-                        ? a.getAssignedUser().getId()
-                        : null
-        ));
-
-        if (!isManagerOfAssignedUser && assignments.isEmpty()) {
-            throw new ValidationException(
-                    "This project is currently not accessible. It will become available once the required payment is completed.",
-                    "ERR_PROJECT_HIDDEN_DUE_TO_PAYMENT"
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-ASSIGNED-USER] projectId={} | " +
+                            "userId={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    visibleAssignments.size()
             );
         }
 
-        ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
-        response.setProjectDetails(mapToProjectDetailsDto(project, userId));
-        response.setMilestones(assignments.stream()
-                .map(this::mapToAssignedMilestoneDto)
-                .collect(Collectors.toList()));
+        visibleAssignments = sortMilestoneAssignments(visibleAssignments);
+
+        if (visibleAssignments.isEmpty()) {
+            logger.warn(
+                    "[GET-PROJECT-MILESTONES-NO-VISIBLE-MILESTONE] " +
+                            "projectId={} | userId={}",
+                    projectId,
+                    userId
+            );
+
+            throw new ValidationException(
+                    "This project currently has no accessible visible milestone",
+                    "ERR_PROJECT_NO_ACCESSIBLE_MILESTONE"
+            );
+        }
+
+        visibleAssignments.forEach(assignment -> logger.debug(
+                "[GET-PROJECT-MILESTONE] projectId={} | userId={} | " +
+                        "assignmentId={} | milestone={} | visible={} | " +
+                        "status={} | assignedUserId={}",
+                projectId,
+                userId,
+                assignment.getId(),
+                assignment.getMilestone() != null
+                        ? assignment.getMilestone().getName()
+                        : null,
+                assignment.isVisible(),
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null,
+                assignment.getAssignedUser() != null
+                        ? assignment.getAssignedUser().getId()
+                        : null
+        ));
+
+        logger.info(
+                "[GET-PROJECT-MILESTONES-SUCCESS] projectId={} | " +
+                        "userId={} | milestoneCount={}",
+                projectId,
+                userId,
+                visibleAssignments.size()
+        );
+
+        return buildProjectMilestoneResponse(
+                project,
+                userId,
+                visibleAssignments
+        );
+    }
+
+    private ProjectMilestoneResponseDto buildProjectMilestoneResponse(
+            Project project,
+            Long userId,
+            List<ProjectMilestoneAssignment> assignments
+    ) {
+        ProjectMilestoneResponseDto response =
+                new ProjectMilestoneResponseDto();
+
+        response.setProjectDetails(
+                mapToProjectDetailsDto(project, userId)
+        );
+
+        response.setMilestones(
+                assignments.stream()
+                        .map(this::mapToAssignedMilestoneDto)
+                        .collect(Collectors.toList())
+        );
 
         return response;
     }
+
 
     private List<ProjectMilestoneAssignment> sortMilestoneAssignments(
             List<ProjectMilestoneAssignment> assignments

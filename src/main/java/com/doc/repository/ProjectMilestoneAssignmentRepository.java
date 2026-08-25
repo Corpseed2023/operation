@@ -542,4 +542,33 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
         @Param("assignedUserId") Long assignedUserId,
         @Param("projectId") Long projectId
 );
+
+    /**
+     * Returns visible milestones belonging to any of the manager's departments.
+     *
+     * The milestone can be assigned or unassigned.
+     */
+    @Query("""
+        SELECT DISTINCT assignment
+        FROM ProjectMilestoneAssignment assignment
+        JOIN assignment.milestone milestone
+        JOIN milestone.departments department
+        WHERE assignment.project.id = :projectId
+          AND department.id IN :departmentIds
+          AND assignment.isVisible = true
+          AND assignment.isDeleted = false
+        """)
+    List<ProjectMilestoneAssignment> findVisibleMilestonesByProjectAndDepartments(
+            @Param("projectId") Long projectId,
+            @Param("departmentIds") List<Long> departmentIds
+    );
+
+
+
+
+
+
+
+
+
 }
