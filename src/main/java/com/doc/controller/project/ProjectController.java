@@ -110,10 +110,6 @@ public class ProjectController {
                 projects = projectSearchService.searchProjectsByProjectNumber(value, userId);
                 break;
 
-            case "contact":
-                projects = projectSearchService.searchProjectsByContactName(value, userId);
-                break;
-
             case "projectname":
                 projects = projectSearchService.searchProjectsByProjectName(value, userId);
                 break;

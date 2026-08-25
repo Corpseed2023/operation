@@ -12,8 +12,6 @@ public interface ProjectSearchService {
 
     List<ProjectResponseDto> searchProjectsByProjectNumber(String projectNumber, Long userId);
 
-    List<ProjectResponseDto> searchProjectsByContactName(String contactName, Long userId);
-
     List<ProjectResponseDto> searchProjectsByProjectName(String projectName, Long userId);
 
     List<ProjectResponseDto> searchProjects(String type, String value, Long userId, String statusName,LocalDate fromDate,LocalDate toDate);

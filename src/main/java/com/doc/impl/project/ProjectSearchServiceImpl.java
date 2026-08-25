@@ -61,20 +61,7 @@ public class ProjectSearchServiceImpl implements ProjectSearchService {
         );
     }
 
-    @Override
-    public List<ProjectResponseDto> searchProjectsByContactName(
-            String contactName,
-            Long userId
-    ) {
-        return searchProjects(
-                "contact",
-                contactName,
-                userId,
-                null,
-                null,
-                null
-        );
-    }
+
 
     @Override
     public List<ProjectResponseDto> searchProjectsByProjectName(
