@@ -455,7 +455,7 @@ public class ProjectServiceImpl implements ProjectService {
             List<String> statuses
     ) {
         logger.info(
-                "Fetching projects for userId={}, page={}, size={}, statuses={}",
+                "[GET-PROJECTS-START] userId={} | page={} | size={} | statuses={}",
                 userId, page, size, statuses
         );
 
@@ -479,22 +479,29 @@ public class ProjectServiceImpl implements ProjectService {
                         "ERR_USER_NOT_FOUND"
                 ));
 
-        boolean isAdmin = user.getRoles() != null
-                && user.getRoles().stream()
-                .filter(Objects::nonNull)
-                .map(role -> role.getName())
-                .filter(Objects::nonNull)
-                .anyMatch(roleName -> "ADMIN".equalsIgnoreCase(roleName));
-
-        boolean isOperationHead = user.getRoles() != null
-                && user.getRoles().stream()
-                .filter(Objects::nonNull)
-                .map(role -> role.getName())
-                .filter(Objects::nonNull)
-                .anyMatch(roleName ->
-                        "OPERATION_HEAD".equalsIgnoreCase(roleName));
-
+        boolean isAdmin = hasRole(user, "ADMIN");
+        boolean isOperationHead = hasRole(user, "OPERATION_HEAD");
         boolean fullAccess = isAdmin || isOperationHead;
+
+        boolean managerAccess = user.isManagerFlag();
+
+        List<Long> departmentIds = managerAccess
+                ? user.getDepartments()
+                .stream()
+                .filter(Objects::nonNull)
+                .map(Department::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList()
+                : List.of();
+
+        /*
+         * Avoid an empty IN (:departmentIds) parameter.
+         * -1 should never match a real department.
+         */
+        if (departmentIds.isEmpty()) {
+            departmentIds = List.of(-1L);
+        }
 
         List<String> normalizedStatuses;
 
@@ -528,25 +535,50 @@ public class ProjectServiceImpl implements ProjectService {
                 Sort.by(Sort.Direction.DESC, "createdDate")
         );
 
+        logger.info(
+                "[GET-PROJECTS-ACCESS] userId={} | admin={} | operationHead={} " +
+                        "| manager={} | departmentIds={}",
+                userId,
+                isAdmin,
+                isOperationHead,
+                managerAccess,
+                departmentIds
+        );
+
         Page<Project> projectPage =
                 projectRepository.findAccessibleProjects(
                         userId,
                         fullAccess,
+                        managerAccess,
+                        departmentIds,
                         normalizedStatuses,
                         pageable
                 );
 
         logger.info(
-                "Found {} projects for userId={}, fullAccess={}",
-                projectPage.getNumberOfElements(),
+                "[GET-PROJECTS-SUCCESS] userId={} | projectsOnPage={} | totalProjects={}",
                 userId,
-                fullAccess
+                projectPage.getNumberOfElements(),
+                projectPage.getTotalElements()
         );
 
         return projectPage.getContent()
                 .stream()
                 .map(this::mapToResponseDto)
                 .toList();
+    }
+
+    private boolean hasRole(User user, String requiredRole) {
+        if (user.getRoles() == null) {
+            return false;
+        }
+
+        return user.getRoles()
+                .stream()
+                .filter(Objects::nonNull)
+                .map(role -> role.getName())
+                .filter(Objects::nonNull)
+                .anyMatch(roleName -> requiredRole.equalsIgnoreCase(roleName));
     }
 
 
@@ -1829,143 +1861,325 @@ public class ProjectServiceImpl implements ProjectService {
 
 
     @Override
-    public ProjectMilestoneResponseDto getProjectMilestones(Long projectId, Long userId) {
-
+    public ProjectMilestoneResponseDto getProjectMilestones(
+            Long projectId,
+            Long userId
+    ) {
         logger.info(
-                "Fetching project details and milestones for project ID: {}, user ID: {}",
+                "[GET-PROJECT-MILESTONES-START] projectId={} | userId={}",
                 projectId,
                 userId
         );
 
         Project project = projectRepository.findActiveUserById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Project not found",
-                        "ERR_PROJECT_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.warn(
+                            "[GET-PROJECT-MILESTONES-PROJECT-NOT-FOUND] projectId={}",
+                            projectId
+                    );
+
+                    return new ResourceNotFoundException(
+                            "Project not found with ID: " + projectId,
+                            "ERR_PROJECT_NOT_FOUND"
+                    );
+                });
 
         User user = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found",
-                        "ERR_USER_NOT_FOUND"
-                ));
+                .orElseThrow(() -> {
+                    logger.warn(
+                            "[GET-PROJECT-MILESTONES-USER-NOT-FOUND] userId={}",
+                            userId
+                    );
 
-        boolean isAdmin = user.getRoles()
-                .stream()
-                .anyMatch(r -> "ADMIN".equals(r.getName()));
+                    return new ResourceNotFoundException(
+                            "User not found with ID: " + userId,
+                            "ERR_USER_NOT_FOUND"
+                    );
+                });
 
-        boolean isOperationHead = user.getRoles()
-                .stream()
-                .anyMatch(r -> "OPERATION_HEAD".equals(r.getName()));
+        boolean isAdmin = hasRole(user, "ADMIN");
+        boolean isOperationHead = hasRole(user, "OPERATION_HEAD");
+        boolean isManager = user.isManagerFlag();
+
+        logger.info(
+                "[GET-PROJECT-MILESTONES-ROLE] projectId={} | userId={} | " +
+                        "admin={} | operationHead={} | manager={}",
+                projectId,
+                userId,
+                isAdmin,
+                isOperationHead,
+                isManager
+        );
 
         /*
-         * Important:
-         * Recalculate visibility for everyone before returning milestones.
-         * Previously admin/op-head returned before this call.
+         * Recalculate milestone visibility before checking access.
          */
         updateMilestoneVisibilities(project, userId);
 
-        List<ProjectMilestoneAssignment> assignments;
+        List<ProjectMilestoneAssignment> allProjectAssignments =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(projectId);
 
+        /*
+         * ADMIN and OPERATION_HEAD can see every milestone.
+         */
         if (isAdmin || isOperationHead) {
+            List<ProjectMilestoneAssignment> sortedAssignments =
+                    sortMilestoneAssignments(allProjectAssignments);
 
-            assignments = projectMilestoneAssignmentRepository
-                    .findByProjectIdAndIsDeletedFalse(projectId);
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-FULL-ACCESS] projectId={} | " +
+                            "userId={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    sortedAssignments.size()
+            );
 
-            assignments = sortMilestoneAssignments(assignments);
-
-            ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
-            response.setProjectDetails(mapToProjectDetailsDto(project, userId));
-            response.setMilestones(assignments.stream()
-                    .map(this::mapToAssignedMilestoneDto)
-                    .collect(Collectors.toList()));
-
-            return response;
+            return buildProjectMilestoneResponse(
+                    project,
+                    userId,
+                    sortedAssignments
+            );
         }
 
-        boolean isAssignedToAnyMilestone = projectMilestoneAssignmentRepository
-                .findByProjectIdAndAssignedUserIdAndIsDeletedFalse(projectId, userId)
-                .isPresent();
+        /*
+         * Check whether the logged-in user is directly assigned to any
+         * milestone in this project.
+         *
+         * Using the already fetched list avoids Optional returning multiple
+         * results when the same user has more than one project milestone.
+         */
+        boolean isAssignedToProject = allProjectAssignments.stream()
+                .filter(Objects::nonNull)
+                .map(ProjectMilestoneAssignment::getAssignedUser)
+                .filter(Objects::nonNull)
+                .map(User::getId)
+                .anyMatch(userId::equals);
 
-        List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+        /*
+         * Department-based manager access.
+         *
+         * Example:
+         * - First CRT milestone is visible.
+         * - assignedUser is null.
+         * - CRT manager belongs to the CRT department.
+         *
+         * The CRT manager will still receive the milestone.
+         */
+        List<Long> managerDepartmentIds = new ArrayList<>();
+
+        if (isManager && user.getDepartments() != null) {
+            managerDepartmentIds = user.getDepartments()
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .map(Department::getId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
+
+        List<ProjectMilestoneAssignment> departmentMilestones =
+                new ArrayList<>();
+
+        if (isManager && !managerDepartmentIds.isEmpty()) {
+            departmentMilestones = projectMilestoneAssignmentRepository
+                    .findVisibleMilestonesByProjectAndDepartments(
+                            projectId,
+                            managerDepartmentIds
+                    );
+        }
+
+        boolean hasDepartmentManagerAccess =
+                isManager && !departmentMilestones.isEmpty();
+
+        logger.info(
+                "[GET-PROJECT-MILESTONES-DEPARTMENT-CHECK] projectId={} | " +
+                        "userId={} | manager={} | departmentIds={} | " +
+                        "matchingVisibleMilestones={}",
+                projectId,
+                userId,
+                isManager,
+                managerDepartmentIds,
+                departmentMilestones.size()
+        );
+
+        /*
+         * Preserve existing direct-manager access.
+         */
+        List<User> subordinates =
+                userRepository.findByManagerIdAndIsDeletedFalse(userId);
 
         List<Long> managedUserIds = subordinates.stream()
+                .filter(Objects::nonNull)
                 .map(User::getId)
+                .filter(Objects::nonNull)
+                .distinct()
                 .collect(Collectors.toList());
 
-        boolean isManagerOfAssignedUser = projectMilestoneAssignmentRepository
-                .findByProjectIdAndIsDeletedFalse(projectId)
-                .stream()
-                .filter(a -> a.getAssignedUser() != null)
-                .map(a -> a.getAssignedUser().getId())
+        boolean isManagerOfAssignedUser = allProjectAssignments.stream()
+                .filter(Objects::nonNull)
+                .map(ProjectMilestoneAssignment::getAssignedUser)
+                .filter(Objects::nonNull)
+                .map(User::getId)
                 .anyMatch(managedUserIds::contains);
 
-        if (!isAssignedToAnyMilestone && !isManagerOfAssignedUser) {
+        logger.info(
+                "[GET-PROJECT-MILESTONES-ACCESS-CHECK] projectId={} | " +
+                        "userId={} | directlyAssigned={} | " +
+                        "departmentManagerAccess={} | directReportAccess={}",
+                projectId,
+                userId,
+                isAssignedToProject,
+                hasDepartmentManagerAccess,
+                isManagerOfAssignedUser
+        );
+
+        if (!isAssignedToProject
+                && !hasDepartmentManagerAccess
+                && !isManagerOfAssignedUser) {
+
+            logger.warn(
+                    "[GET-PROJECT-MILESTONES-ACCESS-DENIED] projectId={} | userId={}",
+                    projectId,
+                    userId
+            );
+
             throw new ValidationException(
                     "You are not authorized to view this project",
                     "ERR_UNAUTHORIZED_ACCESS"
             );
         }
 
-        if (isManagerOfAssignedUser) {
+        List<ProjectMilestoneAssignment> visibleAssignments;
 
+        /*
+         * Department manager receives all visible milestones mapped to
+         * their department, including unassigned milestones.
+         */
+        if (hasDepartmentManagerAccess) {
+            visibleAssignments = departmentMilestones;
+
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-DEPARTMENT-MANAGER] projectId={} | " +
+                            "managerId={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    visibleAssignments.size()
+            );
+        } else if (isManagerOfAssignedUser) {
+            /*
+             * Preserve old manager/subordinate behavior.
+             */
             List<Long> teamIds = new ArrayList<>(managedUserIds);
 
             if (!teamIds.contains(userId)) {
                 teamIds.add(userId);
             }
 
-            assignments = projectMilestoneAssignmentRepository
-                    .findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(projectId, teamIds);
+            visibleAssignments = projectMilestoneAssignmentRepository
+                    .findByProjectIdAndAssignedUserIdInAndIsVisibleTrue(
+                            projectId,
+                            teamIds
+                    );
 
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-DIRECT-MANAGER] projectId={} | " +
+                            "managerId={} | teamIds={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    teamIds,
+                    visibleAssignments.size()
+            );
         } else {
-
-            assignments = projectMilestoneAssignmentRepository
+            /*
+             * Regular user receives only visible milestones assigned to them.
+             */
+            visibleAssignments = projectMilestoneAssignmentRepository
                     .findByProjectIdAndAssignedUserIdAndIsVisibleTrueAndIsDeletedFalse(
                             projectId,
                             userId
                     );
-        }
 
-        assignments = sortMilestoneAssignments(assignments);
-
-        logger.debug(
-                "Project milestone visibility result. projectId={}, userId={}, managerOfAssignedUser={}, visibleMilestoneCount={}",
-                projectId,
-                userId,
-                isManagerOfAssignedUser,
-                assignments.size()
-        );
-
-        assignments.forEach(a -> logger.debug(
-                "Visible milestone details. projectId={}, userId={}, milestone={}, order={}, visible={}, status={}, assignedUserId={}",
-                projectId,
-                userId,
-                a.getMilestone().getName(),
-                a.getProductMilestoneMap() != null
-                        ? a.getProductMilestoneMap().getOrder()
-                        : null,
-                a.isVisible(),
-                a.getStatus().getName(),
-                a.getAssignedUser() != null
-                        ? a.getAssignedUser().getId()
-                        : null
-        ));
-
-        if (!isManagerOfAssignedUser && assignments.isEmpty()) {
-            throw new ValidationException(
-                    "This project is currently not accessible. It will become available once the required payment is completed.",
-                    "ERR_PROJECT_HIDDEN_DUE_TO_PAYMENT"
+            logger.info(
+                    "[GET-PROJECT-MILESTONES-ASSIGNED-USER] projectId={} | " +
+                            "userId={} | milestoneCount={}",
+                    projectId,
+                    userId,
+                    visibleAssignments.size()
             );
         }
 
-        ProjectMilestoneResponseDto response = new ProjectMilestoneResponseDto();
-        response.setProjectDetails(mapToProjectDetailsDto(project, userId));
-        response.setMilestones(assignments.stream()
-                .map(this::mapToAssignedMilestoneDto)
-                .collect(Collectors.toList()));
+        visibleAssignments = sortMilestoneAssignments(visibleAssignments);
+
+        if (visibleAssignments.isEmpty()) {
+            logger.warn(
+                    "[GET-PROJECT-MILESTONES-NO-VISIBLE-MILESTONE] " +
+                            "projectId={} | userId={}",
+                    projectId,
+                    userId
+            );
+
+            throw new ValidationException(
+                    "This project currently has no accessible visible milestone",
+                    "ERR_PROJECT_NO_ACCESSIBLE_MILESTONE"
+            );
+        }
+
+        visibleAssignments.forEach(assignment -> logger.debug(
+                "[GET-PROJECT-MILESTONE] projectId={} | userId={} | " +
+                        "assignmentId={} | milestone={} | visible={} | " +
+                        "status={} | assignedUserId={}",
+                projectId,
+                userId,
+                assignment.getId(),
+                assignment.getMilestone() != null
+                        ? assignment.getMilestone().getName()
+                        : null,
+                assignment.isVisible(),
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null,
+                assignment.getAssignedUser() != null
+                        ? assignment.getAssignedUser().getId()
+                        : null
+        ));
+
+        logger.info(
+                "[GET-PROJECT-MILESTONES-SUCCESS] projectId={} | " +
+                        "userId={} | milestoneCount={}",
+                projectId,
+                userId,
+                visibleAssignments.size()
+        );
+
+        return buildProjectMilestoneResponse(
+                project,
+                userId,
+                visibleAssignments
+        );
+    }
+
+    private ProjectMilestoneResponseDto buildProjectMilestoneResponse(
+            Project project,
+            Long userId,
+            List<ProjectMilestoneAssignment> assignments
+    ) {
+        ProjectMilestoneResponseDto response =
+                new ProjectMilestoneResponseDto();
+
+        response.setProjectDetails(
+                mapToProjectDetailsDto(project, userId)
+        );
+
+        response.setMilestones(
+                assignments.stream()
+                        .map(this::mapToAssignedMilestoneDto)
+                        .collect(Collectors.toList())
+        );
 
         return response;
     }
+
 
     private List<ProjectMilestoneAssignment> sortMilestoneAssignments(
             List<ProjectMilestoneAssignment> assignments
@@ -1987,26 +2201,45 @@ public class ProjectServiceImpl implements ProjectService {
                 .collect(Collectors.toList());
     }
 
-    private ProjectDetailsDto mapToProjectDetailsDto(Project project, Long userId) {
+    private ProjectDetailsDto mapToProjectDetailsDto(
+            Project project,
+            Long userId
+    ) {
+        logger.debug(
+                "[MAP-PROJECT-DETAILS-START] projectId={} | requestingUserId={}",
+                project.getId(),
+                userId
+        );
+
         ProjectDetailsDto dto = new ProjectDetailsDto();
+
         dto.setId(project.getId());
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
-        dto.setPriority(project.getPriority() != null ? project.getPriority().name() : null);
+
+        dto.setPriority(
+                project.getPriority() != null
+                        ? project.getPriority().name()
+                        : null
+        );
+
         dto.setDate(project.getDate());
 
-        dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
-        dto.setProductName(project.getProduct() != null ? project.getProduct().getProductName() : null);
+        if (project.getProduct() != null) {
+            dto.setProductId(project.getProduct().getId());
+            dto.setProductName(project.getProduct().getProductName());
+        }
 
-        dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
-        dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
-        dto.setRating(project.getCompany() != null ? project.getCompany().getRating() : null);
+        if (project.getCompany() != null) {
+            dto.setCompanyId(project.getCompany().getId());
+            dto.setCompanyName(project.getCompany().getName());
+            dto.setRating(project.getCompany().getRating());
+        }
 
         if (project.getUnit() != null) {
             dto.setCompanyUnitId(project.getUnit().getId());
             dto.setCompanyUnitName(project.getUnit().getUnitName());
         }
-
 
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
@@ -2016,71 +2249,156 @@ public class ProjectServiceImpl implements ProjectService {
             dto.setApplicantName(project.getApplicantType().getName());
         }
 
-        // ──────────────────────────────────────────────
-        // Determine visibility rules
-        // ──────────────────────────────────────────────
+        /*
+         * Determine whether the requesting user can see complete
+         * client contact information.
+         */
         User requestingUser = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+                .orElseThrow(() -> {
+                    logger.warn(
+                            "[MAP-PROJECT-DETAILS-USER-NOT-FOUND] userId={}",
+                            userId
+                    );
 
-        boolean isAdmin = requestingUser.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getName()));
-        boolean isOperationHead = requestingUser.getRoles().stream().anyMatch(role -> "OPERATION_HEAD".equals(role.getName()));
-        boolean canSeeFullContactInfo = isAdmin || isOperationHead;
+                    return new ResourceNotFoundException(
+                            "User not found with ID: " + userId,
+                            "ERR_USER_NOT_FOUND"
+                    );
+                });
+
+        boolean isAdmin = hasRole(requestingUser, "ADMIN");
+
+        boolean isOperationHead =
+                hasRole(requestingUser, "OPERATION_HEAD");
+
+        boolean belongsToCrtDepartment =
+                requestingUser.getDepartments() != null
+                        && requestingUser.getDepartments()
+                        .stream()
+                        .filter(Objects::nonNull)
+                        .map(Department::getName)
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .anyMatch(name -> "CRT".equalsIgnoreCase(name));
+
+        /*
+         * Complete email and phone numbers are visible only to:
+         *
+         * 1. ADMIN
+         * 2. OPERATION_HEAD
+         * 3. Users belonging to the CRT department
+         */
+        boolean canSeeFullContactInfo =
+                isAdmin
+                        || isOperationHead
+                        || belongsToCrtDepartment;
+
+        logger.info(
+                "[CLIENT-CONTACT-VISIBILITY] projectId={} | userId={} | " +
+                        "admin={} | operationHead={} | crtDepartment={} | " +
+                        "fullContactAccess={}",
+                project.getId(),
+                userId,
+                isAdmin,
+                isOperationHead,
+                belongsToCrtDepartment,
+                canSeeFullContactInfo
+        );
 
         List<ContactDetailsDto> contactDtos = new ArrayList<>();
 
-        // 1. Unit-level contacts (priority – most relevant for this project/branch)
+        /*
+         * Unit-level contacts.
+         */
         if (project.getUnit() != null) {
-            // Fetch unit contacts
-            List<Contact> unitContacts = contactRepository.findByCompanyUnitIdAndIsDeletedFalseAndIsActiveTrue(
-                    project.getUnit().getId());
-
+            List<Contact> unitContacts =
+                    contactRepository
+                            .findByCompanyUnitIdAndIsDeletedFalseAndIsActiveTrue(
+                                    project.getUnit().getId()
+                            );
 
             for (Contact contact : unitContacts) {
-                contactDtos.add(buildContactDetailsDto(contact, canSeeFullContactInfo, "Unit", project.getUnit().getUnitName()));
+                contactDtos.add(
+                        buildContactDetailsDto(
+                                contact,
+                                canSeeFullContactInfo,
+                                "Unit",
+                                project.getUnit().getUnitName()
+                        )
+                );
             }
         }
 
-        // 2. Company-level contacts (fallback / group / HO contacts)
+        /*
+         * Company-level contacts.
+         */
         if (project.getCompany() != null) {
-            // Fetch only company-level contacts (no unit assigned or flagged as company-level)
-            List<Contact> companyContacts = contactRepository.findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(
-                    project.getCompany().getId());
-
+            List<Contact> companyContacts =
+                    contactRepository
+                            .findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(
+                                    project.getCompany().getId()
+                            );
 
             for (Contact contact : companyContacts) {
                 boolean alreadyAdded = contactDtos.stream()
-                        .anyMatch(d -> d.getId().equals(contact.getId()));
+                        .anyMatch(existingContact ->
+                                Objects.equals(
+                                        existingContact.getId(),
+                                        contact.getId()
+                                )
+                        );
 
                 if (!alreadyAdded) {
-                    contactDtos.add(buildContactDetailsDto(contact, canSeeFullContactInfo, "Company", null));
+                    contactDtos.add(
+                            buildContactDetailsDto(
+                                    contact,
+                                    canSeeFullContactInfo,
+                                    "Company",
+                                    null
+                            )
+                    );
                 }
             }
         }
 
         dto.setContacts(contactDtos);
 
-        // === Procurement Milestone Assignment ID (Using Native Query) ===
         procurementMilestoneAssignmentRepository
                 .findActiveByProjectIdNative(project.getId())
                 .ifPresent(assignment ->
-                        dto.setProcurementMilestoneAssignmentId(assignment.getId())
+                        dto.setProcurementMilestoneAssignmentId(
+                                assignment.getId()
+                        )
                 );
 
+        logger.debug(
+                "[MAP-PROJECT-DETAILS-SUCCESS] projectId={} | userId={} | " +
+                        "contacts={} | fullContactAccess={}",
+                project.getId(),
+                userId,
+                contactDtos.size(),
+                canSeeFullContactInfo
+        );
 
         return dto;
     }
-
-    private ContactDetailsDto buildContactDetailsDto(Contact contact, boolean canSeeFullInfo, String level, String unitName) {
+    private ContactDetailsDto buildContactDetailsDto(
+            Contact contact,
+            boolean canSeeFullInfo,
+            String level,
+            String unitName
+    ) {
         ContactDetailsDto dto = new ContactDetailsDto();
 
         dto.setId(contact.getId());
         dto.setTitle(contact.getTitle());
         dto.setName(contact.getName());
 
-        // designation logic (same as before)
-        dto.setDesignation(contact.getDesignation() != null
-                ? contact.getDesignation()
-                : contact.getClientDesignation());
+        dto.setDesignation(
+                contact.getDesignation() != null
+                        ? contact.getDesignation()
+                        : contact.getClientDesignation()
+        );
 
         dto.setLevel(level);
         dto.setUnitName(unitName);
@@ -2098,7 +2416,12 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         return dto;
-    }    private String maskPhoneNumber(String phoneNumber) {
+    }
+
+
+
+
+    private String maskPhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.length() < 7) {
             return phoneNumber;
         }
