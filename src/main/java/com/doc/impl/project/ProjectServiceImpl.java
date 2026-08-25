@@ -2201,26 +2201,45 @@ public class ProjectServiceImpl implements ProjectService {
                 .collect(Collectors.toList());
     }
 
-    private ProjectDetailsDto mapToProjectDetailsDto(Project project, Long userId) {
+    private ProjectDetailsDto mapToProjectDetailsDto(
+            Project project,
+            Long userId
+    ) {
+        logger.debug(
+                "[MAP-PROJECT-DETAILS-START] projectId={} | requestingUserId={}",
+                project.getId(),
+                userId
+        );
+
         ProjectDetailsDto dto = new ProjectDetailsDto();
+
         dto.setId(project.getId());
         dto.setName(project.getName());
         dto.setProjectNo(project.getProjectNo());
-        dto.setPriority(project.getPriority() != null ? project.getPriority().name() : null);
+
+        dto.setPriority(
+                project.getPriority() != null
+                        ? project.getPriority().name()
+                        : null
+        );
+
         dto.setDate(project.getDate());
 
-        dto.setProductId(project.getProduct() != null ? project.getProduct().getId() : null);
-        dto.setProductName(project.getProduct() != null ? project.getProduct().getProductName() : null);
+        if (project.getProduct() != null) {
+            dto.setProductId(project.getProduct().getId());
+            dto.setProductName(project.getProduct().getProductName());
+        }
 
-        dto.setCompanyId(project.getCompany() != null ? project.getCompany().getId() : null);
-        dto.setCompanyName(project.getCompany() != null ? project.getCompany().getName() : null);
-        dto.setRating(project.getCompany() != null ? project.getCompany().getRating() : null);
+        if (project.getCompany() != null) {
+            dto.setCompanyId(project.getCompany().getId());
+            dto.setCompanyName(project.getCompany().getName());
+            dto.setRating(project.getCompany().getRating());
+        }
 
         if (project.getUnit() != null) {
             dto.setCompanyUnitId(project.getUnit().getId());
             dto.setCompanyUnitName(project.getUnit().getUnitName());
         }
-
 
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
@@ -2230,71 +2249,156 @@ public class ProjectServiceImpl implements ProjectService {
             dto.setApplicantName(project.getApplicantType().getName());
         }
 
-        // ──────────────────────────────────────────────
-        // Determine visibility rules
-        // ──────────────────────────────────────────────
+        /*
+         * Determine whether the requesting user can see complete
+         * client contact information.
+         */
         User requestingUser = userRepository.findActiveUserById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+                .orElseThrow(() -> {
+                    logger.warn(
+                            "[MAP-PROJECT-DETAILS-USER-NOT-FOUND] userId={}",
+                            userId
+                    );
 
-        boolean isAdmin = requestingUser.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getName()));
-        boolean isOperationHead = requestingUser.getRoles().stream().anyMatch(role -> "OPERATION_HEAD".equals(role.getName()));
-        boolean canSeeFullContactInfo = isAdmin || isOperationHead;
+                    return new ResourceNotFoundException(
+                            "User not found with ID: " + userId,
+                            "ERR_USER_NOT_FOUND"
+                    );
+                });
+
+        boolean isAdmin = hasRole(requestingUser, "ADMIN");
+
+        boolean isOperationHead =
+                hasRole(requestingUser, "OPERATION_HEAD");
+
+        boolean belongsToCrtDepartment =
+                requestingUser.getDepartments() != null
+                        && requestingUser.getDepartments()
+                        .stream()
+                        .filter(Objects::nonNull)
+                        .map(Department::getName)
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .anyMatch(name -> "CRT".equalsIgnoreCase(name));
+
+        /*
+         * Complete email and phone numbers are visible only to:
+         *
+         * 1. ADMIN
+         * 2. OPERATION_HEAD
+         * 3. Users belonging to the CRT department
+         */
+        boolean canSeeFullContactInfo =
+                isAdmin
+                        || isOperationHead
+                        || belongsToCrtDepartment;
+
+        logger.info(
+                "[CLIENT-CONTACT-VISIBILITY] projectId={} | userId={} | " +
+                        "admin={} | operationHead={} | crtDepartment={} | " +
+                        "fullContactAccess={}",
+                project.getId(),
+                userId,
+                isAdmin,
+                isOperationHead,
+                belongsToCrtDepartment,
+                canSeeFullContactInfo
+        );
 
         List<ContactDetailsDto> contactDtos = new ArrayList<>();
 
-        // 1. Unit-level contacts (priority – most relevant for this project/branch)
+        /*
+         * Unit-level contacts.
+         */
         if (project.getUnit() != null) {
-            // Fetch unit contacts
-            List<Contact> unitContacts = contactRepository.findByCompanyUnitIdAndIsDeletedFalseAndIsActiveTrue(
-                    project.getUnit().getId());
-
+            List<Contact> unitContacts =
+                    contactRepository
+                            .findByCompanyUnitIdAndIsDeletedFalseAndIsActiveTrue(
+                                    project.getUnit().getId()
+                            );
 
             for (Contact contact : unitContacts) {
-                contactDtos.add(buildContactDetailsDto(contact, canSeeFullContactInfo, "Unit", project.getUnit().getUnitName()));
+                contactDtos.add(
+                        buildContactDetailsDto(
+                                contact,
+                                canSeeFullContactInfo,
+                                "Unit",
+                                project.getUnit().getUnitName()
+                        )
+                );
             }
         }
 
-        // 2. Company-level contacts (fallback / group / HO contacts)
+        /*
+         * Company-level contacts.
+         */
         if (project.getCompany() != null) {
-            // Fetch only company-level contacts (no unit assigned or flagged as company-level)
-            List<Contact> companyContacts = contactRepository.findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(
-                    project.getCompany().getId());
-
+            List<Contact> companyContacts =
+                    contactRepository
+                            .findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(
+                                    project.getCompany().getId()
+                            );
 
             for (Contact contact : companyContacts) {
                 boolean alreadyAdded = contactDtos.stream()
-                        .anyMatch(d -> d.getId().equals(contact.getId()));
+                        .anyMatch(existingContact ->
+                                Objects.equals(
+                                        existingContact.getId(),
+                                        contact.getId()
+                                )
+                        );
 
                 if (!alreadyAdded) {
-                    contactDtos.add(buildContactDetailsDto(contact, canSeeFullContactInfo, "Company", null));
+                    contactDtos.add(
+                            buildContactDetailsDto(
+                                    contact,
+                                    canSeeFullContactInfo,
+                                    "Company",
+                                    null
+                            )
+                    );
                 }
             }
         }
 
         dto.setContacts(contactDtos);
 
-        // === Procurement Milestone Assignment ID (Using Native Query) ===
         procurementMilestoneAssignmentRepository
                 .findActiveByProjectIdNative(project.getId())
                 .ifPresent(assignment ->
-                        dto.setProcurementMilestoneAssignmentId(assignment.getId())
+                        dto.setProcurementMilestoneAssignmentId(
+                                assignment.getId()
+                        )
                 );
 
+        logger.debug(
+                "[MAP-PROJECT-DETAILS-SUCCESS] projectId={} | userId={} | " +
+                        "contacts={} | fullContactAccess={}",
+                project.getId(),
+                userId,
+                contactDtos.size(),
+                canSeeFullContactInfo
+        );
 
         return dto;
     }
-
-    private ContactDetailsDto buildContactDetailsDto(Contact contact, boolean canSeeFullInfo, String level, String unitName) {
+    private ContactDetailsDto buildContactDetailsDto(
+            Contact contact,
+            boolean canSeeFullInfo,
+            String level,
+            String unitName
+    ) {
         ContactDetailsDto dto = new ContactDetailsDto();
 
         dto.setId(contact.getId());
         dto.setTitle(contact.getTitle());
         dto.setName(contact.getName());
 
-        // designation logic (same as before)
-        dto.setDesignation(contact.getDesignation() != null
-                ? contact.getDesignation()
-                : contact.getClientDesignation());
+        dto.setDesignation(
+                contact.getDesignation() != null
+                        ? contact.getDesignation()
+                        : contact.getClientDesignation()
+        );
 
         dto.setLevel(level);
         dto.setUnitName(unitName);
@@ -2312,7 +2416,12 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         return dto;
-    }    private String maskPhoneNumber(String phoneNumber) {
+    }
+
+
+
+
+    private String maskPhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.length() < 7) {
             return phoneNumber;
         }
