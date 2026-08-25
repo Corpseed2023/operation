@@ -7,10 +7,12 @@ import com.doc.dto.vendor.VendorQuotationResponseDto;
 import com.doc.dto.vendor.request.VendorQuotationDocumentRequestDto;
 import com.doc.dto.mail.MailRequestDto;
 import com.doc.dto.vendor.*;
+import com.doc.entity.client.PaymentType;
 import com.doc.entity.product.Product;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.repository.PaymentTypeRepository;
 import com.doc.repository.vendor.*;
 import com.doc.service.mail.MailService;
 import com.doc.service.vendor.VendorQuotationService;
@@ -35,6 +37,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
     private final MailService mailService;
     private final ProductVendorMappingRepository productVendorMappingRepository;
     private final VendorFinalizationRepository vendorFinalizationRepository;
+    private final PaymentTypeRepository paymentTypeRepository;
 
     @Override
     @Transactional
@@ -173,6 +176,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
                 .ifPresent(legalRequest ->
                         response.setVendorQuotationLegalRequestId(legalRequest.getId())
                 );
+        PaymentType payment = paymentTypeRepository.getReferenceById(Long.parseLong(quotation.getPaymentTerms()));
 
         if (quotation.getVendor() != null) {
             response.setVendorId(quotation.getVendor().getId());
@@ -193,7 +197,7 @@ public class VendorQuotationServiceImpl implements VendorQuotationService {
         response.setGrandTotal(quotation.getGrandTotal());
 
         response.setDeliveryDays(quotation.getDeliveryDays());
-        response.setPaymentTerms(quotation.getPaymentTerms());
+        response.setPaymentTerms(payment.getName());
         response.setWarrantyTerms(quotation.getWarrantyTerms());
         response.setRemarks(quotation.getRemarks());
         response.setAgreementFileUrl(quotation.getAgreementFileUrl());
