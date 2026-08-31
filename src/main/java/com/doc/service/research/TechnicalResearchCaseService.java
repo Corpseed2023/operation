@@ -38,4 +38,11 @@ public interface TechnicalResearchCaseService {
             Long assignedByUserId
     );
 
+    Page<TechnicalResearchCaseResponseDto> getCasesByLeadId(
+            Long leadId,
+            Pageable pageable
+    );
+
+
+
 }

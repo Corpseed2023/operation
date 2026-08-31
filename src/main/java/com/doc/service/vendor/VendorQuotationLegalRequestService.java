@@ -1,9 +1,6 @@
 package com.doc.service.vendor;
 
-import com.doc.dto.vendor.SendAgreementToProcurementRequestDto;
-import com.doc.dto.vendor.VendorAgreementDecisionRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalResponseDto;
+import com.doc.dto.vendor.*;
 
 import java.util.List;
 
@@ -24,5 +21,9 @@ public interface VendorQuotationLegalRequestService {
     VendorQuotationLegalResponseDto agreementDecision(
             Long id,
             VendorAgreementDecisionRequestDto requestDto
+    );
+
+    List<LegalUserWorkloadResponseDto> getAssignedRequestCounts(
+            LegalUserWorkloadRequestDto requestDto
     );
 }

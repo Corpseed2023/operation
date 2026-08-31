@@ -60,4 +60,20 @@ public interface TechnicalResearchCaseRepository
             @Param("userId") Long userId,
             Pageable pageable
     );
+
+
+    @EntityGraph(attributePaths = {
+            "product",
+            "raisedBy",
+            "currentAssignee",
+            "lastAssignedBy",
+            "closedBy"
+    })
+    Page<TechnicalResearchCase>
+    findByOriginatingLeadIdAndDeletedFalse(
+            Long originatingLeadId,
+            Pageable pageable
+    );
+
+
 }

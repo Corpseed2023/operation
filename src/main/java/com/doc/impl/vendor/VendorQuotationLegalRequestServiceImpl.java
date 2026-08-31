@@ -12,9 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.doc.entity.vendor.VendorQuotationLegalRequestStatus;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -205,6 +204,59 @@ public class VendorQuotationLegalRequestServiceImpl
         legalRequest.setUpdatedBy(requestDto.getDecisionBy());
 
         return mapToResponse(legalRequestRepository.save(legalRequest));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LegalUserWorkloadResponseDto> getAssignedRequestCounts(
+            LegalUserWorkloadRequestDto requestDto
+    ) {
+        if (requestDto == null || requestDto.getUsers() == null) {
+            return List.of();
+        }
+
+        // De-duplicate by id, keep the first name seen, preserve request order.
+        Map<Long, String> nameById = new LinkedHashMap<>();
+
+        for (LegalUserWorkloadRequestDto.LegalUserDto user : requestDto.getUsers()) {
+            if (user != null && user.getId() != null) {
+                nameById.putIfAbsent(user.getId(), user.getName());
+            }
+        }
+
+        if (nameById.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Long> countByUserId = legalRequestRepository
+                .countByAssignedToLegalGrouped(
+                        VendorQuotationLegalRequestStatus.SERVICE_AGREEMENT_REQUESTED,
+                        nameById.keySet()
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        VendorQuotationLegalRequestRepository
+                                .LegalRequestCountProjection::getUserId,
+                        VendorQuotationLegalRequestRepository
+                                .LegalRequestCountProjection::getTotal
+                ));
+
+        List<LegalUserWorkloadResponseDto> response = new ArrayList<>();
+
+        // Merge back against the requested list so users with no open
+        // requests still come back with 0 — GROUP BY only returns rows
+        // that exist, so they'd otherwise silently vanish.
+        for (Map.Entry<Long, String> entry : nameById.entrySet()) {
+            LegalUserWorkloadResponseDto dto = new LegalUserWorkloadResponseDto();
+
+            dto.setUserId(entry.getKey());
+            dto.setName(entry.getValue());
+            dto.setPendingRequestCount(countByUserId.getOrDefault(entry.getKey(), 0L));
+
+            response.add(dto);
+        }
+
+        return response;
     }
 
     private VendorQuotationLegalResponseDto mapToResponse(

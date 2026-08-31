@@ -57,5 +57,26 @@ public class ProjectResponseDto {
     private boolean reopened;
     private boolean lifecycleActionAllowed;
 
+    private Long lastCompletedMilestoneAssignmentId;
+    private Long lastCompletedMilestoneId;
+    private String lastCompletedMilestoneName;
+    private Integer lastCompletedMilestoneOrder;
+    private Date lastCompletedMilestoneCompletedDate;
+
+    private Long lastCompletedMilestoneUserId;
+    private String lastCompletedMilestoneUserName;
+    private String lastCompletedMilestoneUserEmail;
+    private String lastCompletedMilestoneUserMobile;
+
+    private Long currentMilestoneAssignmentId;
+    private Long currentMilestoneId;
+    private String currentMilestoneName;
+    private Integer currentMilestoneOrder;
+    private String currentMilestoneStatusName;
+
+    private Long currentAssignedUserId;
+    private String currentAssignedUserName;
+    private String currentAssignedUserEmail;
+    private String currentAssignedUserMobile;
 
 }

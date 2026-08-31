@@ -58,6 +58,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.*;
+import java.util.function.BinaryOperator;
 import java.util.stream.Collectors;
 
 @Service
@@ -563,10 +564,268 @@ public class ProjectServiceImpl implements ProjectService {
                 projectPage.getTotalElements()
         );
 
-        return projectPage.getContent()
-                .stream()
+        List<Project> projects = projectPage.getContent();
+
+        List<ProjectResponseDto> responses = projects.stream()
                 .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+
+        enrichWithMilestoneUserDetails(projects, responses);
+
+        return responses;
+    }
+
+    /*
+     * Attaches the last completed milestone and its assigned user to each
+     * project on the page using a single batch query, avoiding N+1.
+     *
+     * "Last" is resolved by completedDate. Legacy rows where completedDate
+     * was never stamped fall back to milestone order.
+     */
+    /*
+     * Attaches two things to every project on the page, using batch
+     * queries so the page cost stays flat regardless of page size:
+     *
+     * 1. Last completed milestone and the user who completed it.
+     *    Resolved by completedDate, falling back to milestone order
+     *    for legacy rows where completedDate was never stamped.
+     *
+     * 2. Current milestone and its assigned user. This is the
+     *    lowest-order visible milestone that is not yet completed.
+     */
+    private void enrichWithMilestoneUserDetails(
+            List<Project> projects,
+            List<ProjectResponseDto> responses
+    ) {
+        if (projects == null || projects.isEmpty()) {
+            return;
+        }
+
+        List<Long> projectIds = projects.stream()
+                .filter(Objects::nonNull)
+                .map(Project::getId)
+                .filter(Objects::nonNull)
                 .toList();
+
+        if (projectIds.isEmpty()) {
+            return;
+        }
+
+        // =========================================================
+        // 1. LAST COMPLETED MILESTONE
+        // =========================================================
+
+        List<ProjectMilestoneAssignment> completedAssignments =
+                projectMilestoneAssignmentRepository
+                        .findCompletedAssignmentsByProjectIds(
+                                projectIds,
+                                StatusConstants.MILESTONE_COMPLETED_ID
+                        );
+
+        /*
+         * Newest sorts last, so maxBy gives the latest completed
+         * milestone. nullsFirst stops rows without completedDate
+         * from beating rows that actually have one.
+         */
+        Comparator<ProjectMilestoneAssignment> latestLast =
+                Comparator
+                        .comparing(
+                                ProjectMilestoneAssignment::getCompletedDate,
+                                Comparator.nullsFirst(Comparator.naturalOrder())
+                        )
+                        .thenComparingInt(a ->
+                                a.getProductMilestoneMap() != null
+                                        ? a.getProductMilestoneMap().getOrder()
+                                        : Integer.MIN_VALUE
+                        )
+                        .thenComparing(ProjectMilestoneAssignment::getId);
+
+        Map<Long, ProjectMilestoneAssignment> lastCompletedByProject =
+                completedAssignments == null
+                        ? Map.of()
+                        : completedAssignments.stream()
+                        .filter(Objects::nonNull)
+                        .filter(a -> a.getProject() != null
+                                && a.getProject().getId() != null)
+                        .collect(Collectors.toMap(
+                                a -> a.getProject().getId(),
+                                a -> a,
+                                BinaryOperator.maxBy(latestLast)
+                        ));
+
+        // =========================================================
+        // 2. CURRENT MILESTONE
+        // =========================================================
+
+        List<ProjectMilestoneAssignment> activeAssignments =
+                projectMilestoneAssignmentRepository
+                        .findActiveAssignmentsByProjectIds(
+                                projectIds,
+                                StatusConstants.MILESTONE_COMPLETED_ID
+                        );
+
+        Comparator<ProjectMilestoneAssignment> earliestFirst =
+                Comparator
+                        .comparingInt((ProjectMilestoneAssignment a) ->
+                                a.getProductMilestoneMap() != null
+                                        ? a.getProductMilestoneMap().getOrder()
+                                        : Integer.MAX_VALUE
+                        )
+                        .thenComparing(ProjectMilestoneAssignment::getId);
+
+        Map<Long, ProjectMilestoneAssignment> currentByProject =
+                activeAssignments == null
+                        ? Map.of()
+                        : activeAssignments.stream()
+                        .filter(Objects::nonNull)
+                        .filter(a -> a.getProject() != null
+                                && a.getProject().getId() != null)
+                        .collect(Collectors.toMap(
+                                a -> a.getProject().getId(),
+                                a -> a,
+                                BinaryOperator.minBy(earliestFirst)
+                        ));
+
+        logger.info(
+                "[MILESTONE-ENRICHMENT] projects={} | withCompleted={} | withCurrent={}",
+                projectIds.size(),
+                lastCompletedByProject.size(),
+                currentByProject.size()
+        );
+
+        // =========================================================
+        // 3. MAP ONTO RESPONSE
+        // =========================================================
+
+        for (ProjectResponseDto dto : responses) {
+
+            // ---- Current milestone ----
+
+            ProjectMilestoneAssignment current =
+                    currentByProject.get(dto.getId());
+
+            if (current != null) {
+
+                User currentUser = current.getAssignedUser();
+
+                dto.setCurrentMilestoneAssignmentId(current.getId());
+
+                dto.setCurrentMilestoneId(
+                        current.getMilestone() != null
+                                ? current.getMilestone().getId()
+                                : null
+                );
+
+                dto.setCurrentMilestoneName(
+                        getProjectMilestoneName(current)
+                );
+
+                dto.setCurrentMilestoneOrder(
+                        current.getProductMilestoneMap() != null
+                                ? current.getProductMilestoneMap().getOrder()
+                                : null
+                );
+
+                dto.setCurrentMilestoneStatusName(
+                        current.getStatus() != null
+                                ? current.getStatus().getName()
+                                : null
+                );
+
+                dto.setCurrentAssignedUserId(
+                        currentUser != null ? currentUser.getId() : null
+                );
+
+                dto.setCurrentAssignedUserName(
+                        currentUser != null ? currentUser.getFullName() : null
+                );
+
+                dto.setCurrentAssignedUserEmail(
+                        currentUser != null ? currentUser.getEmail() : null
+                );
+
+                dto.setCurrentAssignedUserMobile(
+                        currentUser != null ? currentUser.getContactNo() : null
+                );
+
+                logger.debug(
+                        "[CURRENT-MILESTONE] projectId={} | assignmentId={} | milestone={} | status={} | assignedUserId={}",
+                        dto.getId(),
+                        current.getId(),
+                        dto.getCurrentMilestoneName(),
+                        dto.getCurrentMilestoneStatusName(),
+                        currentUser != null ? currentUser.getId() : null
+                );
+
+            } else {
+                logger.debug(
+                        "[CURRENT-MILESTONE] No active visible milestone for projectId={}",
+                        dto.getId()
+                );
+            }
+
+            // ---- Last completed milestone ----
+
+            ProjectMilestoneAssignment assignment =
+                    lastCompletedByProject.get(dto.getId());
+
+            if (assignment == null) {
+                logger.debug(
+                        "[LAST-COMPLETED-MILESTONE] No completed milestone for projectId={}",
+                        dto.getId()
+                );
+                continue;
+            }
+
+            User assignedUser = assignment.getAssignedUser();
+
+            dto.setLastCompletedMilestoneAssignmentId(assignment.getId());
+
+            dto.setLastCompletedMilestoneId(
+                    assignment.getMilestone() != null
+                            ? assignment.getMilestone().getId()
+                            : null
+            );
+
+            dto.setLastCompletedMilestoneName(
+                    getProjectMilestoneName(assignment)
+            );
+
+            dto.setLastCompletedMilestoneOrder(
+                    assignment.getProductMilestoneMap() != null
+                            ? assignment.getProductMilestoneMap().getOrder()
+                            : null
+            );
+
+            dto.setLastCompletedMilestoneCompletedDate(
+                    assignment.getCompletedDate()
+            );
+
+            dto.setLastCompletedMilestoneUserId(
+                    assignedUser != null ? assignedUser.getId() : null
+            );
+
+            dto.setLastCompletedMilestoneUserName(
+                    assignedUser != null ? assignedUser.getFullName() : null
+            );
+
+            dto.setLastCompletedMilestoneUserEmail(
+                    assignedUser != null ? assignedUser.getEmail() : null
+            );
+
+            dto.setLastCompletedMilestoneUserMobile(
+                    assignedUser != null ? assignedUser.getContactNo() : null
+            );
+
+            logger.debug(
+                    "[LAST-COMPLETED-MILESTONE] projectId={} | assignmentId={} | milestone={} | completedDate={} | assignedUserId={}",
+                    dto.getId(),
+                    assignment.getId(),
+                    dto.getLastCompletedMilestoneName(),
+                    assignment.getCompletedDate(),
+                    assignedUser != null ? assignedUser.getId() : null
+            );
+        }
     }
 
     private boolean hasRole(User user, String requiredRole) {
