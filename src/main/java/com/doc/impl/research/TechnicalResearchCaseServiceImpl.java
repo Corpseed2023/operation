@@ -14,6 +14,8 @@ import com.doc.repository.UserRepository;
 
 import com.doc.repository.research.TechnicalResearchCaseRepository;
 import com.doc.service.research.TechnicalResearchCaseService;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,30 +161,147 @@ public class TechnicalResearchCaseServiceImpl
         return mapToResponseDto(getCase(caseId));
     }
 
+
     @Override
     @Transactional(readOnly = true)
     public Page<TechnicalResearchCaseResponseDto> getCases(
+            Long userId,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
             Long productId,
-            Long raisedByUserId,
-            Long assigneeUserId,
             String search,
             Pageable pageable
     ) {
+        User user = getActiveUser(userId, "User");
+
+        logger.info(
+                "Fetching research cases. userId={}, status={}, "
+                        + "priority={}, productId={}, search={}",
+                user.getId(),
+                status,
+                priority,
+                productId,
+                search
+        );
+
         Specification<TechnicalResearchCase> specification =
-                buildSpecification(
+                buildUserCaseSpecification(
+                        userId,
                         status,
                         priority,
                         productId,
-                        raisedByUserId,
-                        assigneeUserId,
                         search
                 );
 
         return researchCaseRepository
                 .findAll(specification, pageable)
                 .map(this::mapToResponseDto);
+    }
+
+    private Specification<TechnicalResearchCase>
+    buildUserCaseSpecification(
+            Long userId,
+            TechnicalResearchCaseStatus status,
+            ResearchPriority priority,
+            Long productId,
+            String search
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            /*
+             * LEFT JOIN is important because a newly raised request
+             * may not have an assignee yet.
+             */
+            Join<TechnicalResearchCase, User> raisedByJoin =
+                    root.join("raisedBy", JoinType.INNER);
+
+            Join<TechnicalResearchCase, User> assigneeJoin =
+                    root.join("currentAssignee", JoinType.LEFT);
+
+            predicates.add(
+                    criteriaBuilder.isFalse(root.get("deleted"))
+            );
+
+            /*
+             * Salesperson sees requests raised by them.
+             * Technical user sees requests assigned to them.
+             */
+            predicates.add(
+                    criteriaBuilder.or(
+                            criteriaBuilder.equal(
+                                    raisedByJoin.get("id"),
+                                    userId
+                            ),
+                            criteriaBuilder.equal(
+                                    assigneeJoin.get("id"),
+                                    userId
+                            )
+                    )
+            );
+
+            if (status != null) {
+                predicates.add(
+                        criteriaBuilder.equal(
+                                root.get("status"),
+                                status
+                        )
+                );
+            }
+
+            if (priority != null) {
+                predicates.add(
+                        criteriaBuilder.equal(
+                                root.get("priority"),
+                                priority
+                        )
+                );
+            }
+
+            if (productId != null) {
+                predicates.add(
+                        criteriaBuilder.equal(
+                                root.get("product").get("id"),
+                                productId
+                        )
+                );
+            }
+
+            if (StringUtils.hasText(search)) {
+                String searchPattern =
+                        "%" + search.trim()
+                                .toLowerCase(Locale.ROOT) + "%";
+
+                predicates.add(
+                        criteriaBuilder.or(
+                                criteriaBuilder.like(
+                                        criteriaBuilder.lower(
+                                                root.get("caseNumber")
+                                        ),
+                                        searchPattern
+                                ),
+                                criteriaBuilder.like(
+                                        criteriaBuilder.lower(
+                                                root.get("subject")
+                                        ),
+                                        searchPattern
+                                ),
+                                criteriaBuilder.like(
+                                        criteriaBuilder.lower(
+                                                root.get("businessContext")
+                                        ),
+                                        searchPattern
+                                )
+                        )
+                );
+            }
+
+            query.distinct(true);
+
+            return criteriaBuilder.and(
+                    predicates.toArray(new Predicate[0])
+            );
+        };
     }
 
     @Override
@@ -546,6 +665,222 @@ public class TechnicalResearchCaseServiceImpl
                 .updatedAt(researchCase.getUpdatedAt())
                 .build();
     }
+
+
+    @Override
+    @Transactional
+    public TechnicalResearchCaseResponseDto assignCase(
+            Long caseId,
+            Long assigneeUserId,
+            Long assignedByUserId
+    ) {
+        TechnicalResearchCase researchCase =
+                researchCaseRepository
+                        .findByIdForAssignment(caseId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Technical research case not found",
+                                "ERR_RESEARCH_CASE_NOT_FOUND"
+                        ));
+
+        User assignee = getActiveUser(
+                assigneeUserId,
+                "Assignee"
+        );
+
+        User assignedBy = getActiveUser(
+                assignedByUserId,
+                "Assigning user"
+        );
+
+        validateCaseCanBeAssigned(researchCase);
+
+        /*
+         * The assigning user must either:
+         * 1. Be the direct manager of the assignee, or
+         * 2. Have the ADMIN role.
+         */
+        validateAssignmentAuthority(
+                assignedBy,
+                assignee
+        );
+
+        validateProductMapping(
+                assignee,
+                researchCase.getProduct()
+        );
+
+        if (Objects.equals(
+                assignee.getId(),
+                assignedBy.getId()
+        )) {
+            throw new ValidationException(
+                    "User cannot assign the case to themselves",
+                    "ERR_SELF_ASSIGNMENT_NOT_ALLOWED"
+            );
+        }
+
+        if (researchCase.getCurrentAssignee() != null
+                && Objects.equals(
+                researchCase.getCurrentAssignee().getId(),
+                assignee.getId()
+        )) {
+            throw new ValidationException(
+                    "Research case is already assigned to this user",
+                    "ERR_RESEARCH_CASE_ALREADY_ASSIGNED"
+            );
+        }
+
+        Instant assignedAt = Instant.now();
+
+        /*
+         * Set only once during the first assignment.
+         */
+        if (researchCase.getFirstAssignedAt() == null) {
+            researchCase.setFirstAssignedAt(assignedAt);
+        }
+
+        /*
+         * Updated during every assignment or reassignment.
+         */
+        researchCase.setCurrentAssignee(assignee);
+        researchCase.setLastAssignedBy(assignedBy);
+        researchCase.setLastAssignedAt(assignedAt);
+
+        int currentCount =
+                researchCase.getAssignmentCount() == null
+                        ? 0
+                        : researchCase.getAssignmentCount();
+
+        researchCase.setAssignmentCount(currentCount + 1);
+        researchCase.setStatus(
+                TechnicalResearchCaseStatus.ASSIGNED
+        );
+        researchCase.setUpdatedBy(assignedBy);
+
+        TechnicalResearchCase savedCase =
+                researchCaseRepository.save(researchCase);
+
+        logger.info(
+                "Research case assigned. caseId={}, "
+                        + "assigneeUserId={}, assignedByUserId={}, "
+                        + "assignmentCount={}",
+                caseId,
+                assigneeUserId,
+                assignedByUserId,
+                savedCase.getAssignmentCount()
+        );
+
+        return mapToResponseDto(savedCase);
+    }
+
+
+    private void validateCaseCanBeAssigned(
+            TechnicalResearchCase researchCase
+    ) {
+        if (researchCase.getStatus()
+                == TechnicalResearchCaseStatus.COMPLETED
+                || researchCase.getStatus()
+                == TechnicalResearchCaseStatus.REJECTED
+                || researchCase.getStatus()
+                == TechnicalResearchCaseStatus.CANCELLED) {
+
+            throw new ValidationException(
+                    "Completed, rejected or cancelled research case "
+                            + "cannot be assigned",
+                    "ERR_RESEARCH_CASE_CLOSED"
+            );
+        }
+    }
+
+
+    private void validateProductMapping(
+            User assignee,
+            Product product
+    ) {
+        if (assignee.getUserProductMaps() == null
+                || assignee.getUserProductMaps().isEmpty()) {
+
+            throw new ValidationException(
+                    "Assignee is not mapped to any product",
+                    "ERR_ASSIGNEE_PRODUCT_MAPPING_NOT_FOUND"
+            );
+        }
+
+        boolean mappedToProduct =
+                assignee.getUserProductMaps()
+                        .stream()
+                        .filter(Objects::nonNull)
+                        .anyMatch(mapping ->
+                                !mapping.isDeleted()
+                                        && mapping.isAssigned()
+                                        && mapping.getProduct() != null
+                                        && Objects.equals(
+                                        mapping.getProduct().getId(),
+                                        product.getId()
+                                )
+                        );
+
+        if (!mappedToProduct) {
+            throw new ValidationException(
+                    "Assignee is not mapped to product: "
+                            + product.getProductName(),
+                    "ERR_ASSIGNEE_PRODUCT_MAPPING_NOT_FOUND"
+            );
+        }
+    }
+
+    private boolean hasAdminRole(User user) {
+        if (user.getRoles() == null
+                || user.getRoles().isEmpty()) {
+            return false;
+        }
+
+        return user.getRoles()
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(role -> !role.isDeleted())
+                .map(Role::getName)
+                .filter(StringUtils::hasText)
+                .map(roleName ->
+                        roleName.trim().toUpperCase(Locale.ROOT)
+                )
+                .anyMatch(roleName ->
+                        roleName.equals("ADMIN")
+                                || roleName.equals("ROLE_ADMIN")
+                );
+    }
+
+    private void validateAssignmentAuthority(
+            User assignedBy,
+            User assignee
+    ) {
+        /*
+         * ADMIN can assign a case to any eligible user.
+         */
+        if (hasAdminRole(assignedBy)) {
+            return;
+        }
+
+        /*
+         * Otherwise, the assigning user must be the
+         * direct manager of the selected assignee.
+         */
+        boolean directManager =
+                assignee.getManager() != null
+                        && Objects.equals(
+                        assignee.getManager().getId(),
+                        assignedBy.getId()
+                );
+
+        if (!directManager) {
+            throw new ValidationException(
+                    "Only the assignee's direct manager "
+                            + "or an ADMIN can assign this case",
+                    "ERR_RESEARCH_ASSIGNMENT_ACCESS_DENIED"
+            );
+        }
+    }
+
 
 
 }
