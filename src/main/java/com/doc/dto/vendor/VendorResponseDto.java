@@ -48,4 +48,6 @@ public class VendorResponseDto {
     private List<VendorQuotationResponseDto> quotations;
     private List<VendorFinalizationResponseDto> finalizations;
     private List<VendorOnboardingResponseDto> onboardingForms;
+
+    private List<VendorMappedProductDto> mappedProducts;
 }

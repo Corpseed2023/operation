@@ -4,6 +4,7 @@ import com.doc.dto.vendor.SendAgreementToVendorRequestDto;
 import com.doc.dto.vendor.VendorQuotationRequestDto;
 import com.doc.dto.vendor.VendorQuotationResponseDto;
 import com.doc.service.vendor.VendorQuotationService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -82,6 +83,18 @@ public class VendorQuotationController {
     ) {
         List<VendorQuotationResponseDto> response =
                 vendorQuotationService.getVendorQuotationsByVendorId(vendorId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/rfq/{rfqId}/vendor/{vendorId}")
+    @Operation(summary = "Get Vendor Quotation by RFQ ID and Vendor ID")
+    public ResponseEntity<VendorQuotationResponseDto> getQuotationByRfqIdAndVendorId(
+            @PathVariable Long rfqId,
+            @PathVariable Long vendorId
+    ) {
+        VendorQuotationResponseDto response =
+                vendorQuotationService.getVendorQuotationByRfqIdAndVendorId(rfqId, vendorId);
 
         return ResponseEntity.ok(response);
     }

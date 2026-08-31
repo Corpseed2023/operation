@@ -26,9 +26,6 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
 
     Page<ProductVendorMapping> findByProductIdAndIsDeletedFalse(Long productId, Pageable pageable);
 
-
-
-
     @Query("""
         SELECT COUNT(m)
         FROM ProductVendorMapping m
@@ -115,6 +112,39 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
 
 
 
+    @Query("""
+    SELECT pvm
+    FROM ProductVendorMapping pvm
+    JOIN FETCH pvm.product p
+    WHERE pvm.vendor.id = :vendorId
+      AND pvm.isDeleted = false
+    ORDER BY p.productName ASC
+    """)
+    List<ProductVendorMapping> findActiveMappingsByVendorId(
+            @Param("vendorId") Long vendorId
+    );
 
 
+    @Query(
+            value = """
+        SELECT pvm
+        FROM ProductVendorMapping pvm
+        JOIN FETCH pvm.vendor v
+        WHERE pvm.product.id = :productId
+          AND pvm.isDeleted = false
+          AND v.isDeleted = false
+        """,
+            countQuery = """
+        SELECT COUNT(pvm)
+        FROM ProductVendorMapping pvm
+        JOIN pvm.vendor v
+        WHERE pvm.product.id = :productId
+          AND pvm.isDeleted = false
+          AND v.isDeleted = false
+        """
+    )
+    Page<ProductVendorMapping> findMappingsByProductId(
+            @Param("productId") Long productId,
+            Pageable pageable
+    );
 }

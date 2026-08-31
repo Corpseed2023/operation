@@ -52,4 +52,5 @@ public class Role {
 	protected void onUpdate() {
 		this.updatedDate = new Date();
 	}
+
 }

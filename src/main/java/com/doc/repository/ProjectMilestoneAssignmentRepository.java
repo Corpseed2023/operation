@@ -411,76 +411,6 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     List<ProjectMilestoneTrackerProjection> findTrackerMilestones(
             @Param("projectIds") List<Long> projectIds
     );
-///  //////////////////////////////////////////////////////////////////////////////
-
-/*
-@Query(
-        value = """
-                SELECT
-                    pma.id AS assignmentId,
-
-                    u.id AS userId,
-                    u.full_name AS userName,
-
-                    p.id AS projectId,
-                    p.project_no AS projectNumber,
-                    p.name AS projectName,
-
-                    pr.id AS productId,
-                    pr.product_name AS productName,
-
-                    m.id AS milestoneId,
-                    m.name AS milestoneName,
-
-                    pma.status_id AS statusId,
-
-                    pmm.performance_tat_applicable AS performanceTatApplicable,
-                    pmm.performance_tat_hours AS performanceTatHours,
-
-                    pma.started_date AS startedDate,
-                    pma.completed_date AS completedDate
-
-                FROM project_milestone_assignment pma
-
-                INNER JOIN project p
-                        ON p.id = pma.project_id
-
-                INNER JOIN products pr
-                        ON pr.id = p.product_id
-
-                INNER JOIN milestones m
-                        ON m.id = pma.milestone_id
-
-                INNER JOIN users u
-                        ON u.id = pma.assigned_user_id
-
-                INNER JOIN product_milestone_map pmm
-                        ON pmm.id = pma.product_milestone_map_id
-
-                WHERE pma.assigned_user_id = :assignedUserId
-
-                  AND (:projectId IS NULL OR pma.project_id = :projectId)
-
-                  AND pma.is_deleted = 0
-                  AND pma.is_visible = 1
-
-                  AND p.is_deleted = 0
-
-                  AND pmm.is_active = 1
-                  AND pmm.is_deleted = 0
-
-                ORDER BY
-                    p.id ASC,
-                    pmm.step_order ASC,
-                    pma.id ASC
-                """,
-        nativeQuery = true
-)
-List<UserMilestonePerformanceProjection> findUserProjectPerformance(
-        @Param("assignedUserId") Long assignedUserId,
-        @Param("projectId") Long projectId
-);
-*/
 
 @Query(
         value = """
@@ -542,4 +472,33 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
         @Param("assignedUserId") Long assignedUserId,
         @Param("projectId") Long projectId
 );
+
+    /**
+     * Returns visible milestones belonging to any of the manager's departments.
+     *
+     * The milestone can be assigned or unassigned.
+     */
+    @Query("""
+        SELECT DISTINCT assignment
+        FROM ProjectMilestoneAssignment assignment
+        JOIN assignment.milestone milestone
+        JOIN milestone.departments department
+        WHERE assignment.project.id = :projectId
+          AND department.id IN :departmentIds
+          AND assignment.isVisible = true
+          AND assignment.isDeleted = false
+        """)
+    List<ProjectMilestoneAssignment> findVisibleMilestonesByProjectAndDepartments(
+            @Param("projectId") Long projectId,
+            @Param("departmentIds") List<Long> departmentIds
+    );
+
+
+
+
+
+
+
+
+
 }

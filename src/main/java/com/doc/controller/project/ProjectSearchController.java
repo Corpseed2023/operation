@@ -48,19 +48,6 @@ public class ProjectSearchController {
         return ResponseEntity.ok(projects);
     }
 
-    @Operation(summary = "Search projects by contact name")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Projects found"),
-            @ApiResponse(responseCode = "400", description = "Invalid parameters"),
-            @ApiResponse(responseCode = "404", description = "User not found or deleted")
-    })
-    @GetMapping("/by-contact-name")
-    public ResponseEntity<List<ProjectResponseDto>> searchByContactName(
-            @RequestParam String contactName,
-            @RequestParam Long userId) {
-        List<ProjectResponseDto> projects = projectSearchService.searchProjectsByContactName(contactName, userId);
-        return ResponseEntity.ok(projects);
-    }
 
     @Operation(summary = "Search projects by project name")
     @ApiResponses({

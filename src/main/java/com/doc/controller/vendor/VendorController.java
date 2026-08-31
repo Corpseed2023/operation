@@ -250,6 +250,19 @@ public class VendorController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/product/{productId}")
+    public ResponseEntity<Page<VendorByProductResponseDto>> getVendorsByProductId(
+            @PathVariable Long productId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam Long userId
+    ) {
+        Page<VendorByProductResponseDto> vendors =
+                vendorService.getVendorsByProductId(productId, page, size, userId);
+
+        return ResponseEntity.ok(vendors);
+    }
+
     private VendorRestrictionRequestStatus parseRestrictionStatus(
             String status) {
 

@@ -1,5 +1,6 @@
 package com.doc.repository;
 
+import com.doc.dto.project.dashboard.ProjectStatusCountDto;
 import com.doc.entity.project.Project;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -121,24 +122,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.contact.name) LIKE LOWER(CONCAT('%', :contactName, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
     List<Project> findByContactNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("contactName") String contactName, @Param("userIds") List<Long> userIds);
 
-    /**
-     * Finds projects by project name (case-insensitive partial match) and not deleted.
-     *
-     * @param name the project name to search
-     * @return a list of matching projects
-     */
-    @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false")
-    List<Project> findByNameContainingAndIsDeletedFalse(@Param("name") String name);
-
-    /**
-     * Finds projects by project name (case-insensitive partial match) for specific assigned users and not deleted.
-     *
-     * @param name    the project name to search
-     * @param userIds the list of user IDs
-     * @return a list of matching projects
-     */
-    @Query("SELECT DISTINCT p FROM Project p WHERE  p.isCancelled=false AND  LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isDeleted = false AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
-    List<Project> findByNameContainingAndAssignedUserIdsAndIsDeletedFalse(@Param("name") String name, @Param("userIds") List<Long> userIds);
 
     @Query("SELECT p FROM Project p WHERE  p.isCancelled=false AND p.unbilledNumber = :unbilledNumber AND p.isDeleted = false")
     Optional<Project> findByUnbilledNumberAndIsDeletedFalse(@Param("unbilledNumber") String unbilledNumber);
@@ -175,34 +158,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Optional<Project> findByIdAndIsDeletedFalse(@Param("id") Long id);
 
 
-    long countByStatus_NameAndIsDeletedFalseAndIsCancelledFalse(String statusName);
-
-    long countBySalesPersonIdAndIsDeletedFalseAndIsCancelledFalse(Long salesPersonId);
-
-    long countBySalesPersonIdAndStatus_NameAndIsDeletedFalseAndIsCancelledFalse(Long salesPersonId, String statusName);
-
-
-    /**
-     * Find non-deleted projects with given statuses (for Admin / Op Head).
-     * Supports CANCELLED status.
-     */
-    @Query("SELECT p FROM Project p " +
-            "WHERE p.isDeleted = false " +
-            "AND p.status.name IN :statuses")
-    Page<Project> findByIsDeletedFalseAndStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
-
-    /**
-     * Find non-deleted projects assigned to users with given statuses.
-     * Supports CANCELLED status.
-     */
-    @Query("SELECT DISTINCT p FROM Project p " +
-            "WHERE p.isDeleted = false " +
-            "AND p.status.name IN :statuses " +
-            "AND EXISTS (SELECT 1 FROM ProjectMilestoneAssignment a " +
-            "WHERE a.project = p AND a.assignedUser.id IN :userIds AND a.isDeleted = false)")
-    Page<Project> findByAssignedUserIdsAndStatusIn(@Param("userIds") List<Long> userIds,
-                                                   @Param("statuses") List<String> statuses,
-                                                   Pageable pageable);
 
     @Query(
             value = """
@@ -505,27 +460,26 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
 
     @Query("""
-    SELECT new com.doc.dto.project.dashboard.ProjectStatusCountDto(
-        UPPER(p.status.name),
-        COUNT(DISTINCT p)
-    )
-    FROM Project p
-    WHERE p.isDeleted = false
-    AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-    AND (:toDate IS NULL OR p.createdDate < :toDate)
-    AND (
-        p.salesPersonId IN :userIds
-        OR EXISTS (
-            SELECT 1
-            FROM ProjectMilestoneAssignment a
-            WHERE a.project = p
-            AND a.assignedUser.id IN :userIds
-            AND a.isDeleted = false
-        )
-    )
-    GROUP BY UPPER(p.status.name)
-    """)
-    List<com.doc.dto.project.dashboard.ProjectStatusCountDto> getStatusCountsForDashboardUser(
+        SELECT
+            UPPER(p.status.name),
+            COUNT(DISTINCT p)
+        FROM Project p
+        WHERE p.isDeleted = false
+          AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+          AND (:toDate IS NULL OR p.createdDate < :toDate)
+          AND (
+                p.salesPersonId IN :userIds
+                OR EXISTS (
+                    SELECT assignment.id
+                    FROM ProjectMilestoneAssignment assignment
+                    WHERE assignment.project = p
+                      AND assignment.assignedUser.id IN :userIds
+                      AND assignment.isDeleted = false
+                )
+          )
+        GROUP BY UPPER(p.status.name)
+        """)
+    List<ProjectStatusCountDto> getStatusCountsForDashboardUser(
             @Param("userIds") List<Long> userIds,
             @Param("fromDate") Date fromDate,
             @Param("toDate") Date toDate
@@ -791,6 +745,79 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 """)
     List<Project> findProjectsByUnitId(@Param("unitId") Long unitId);
 
+
+    @Query(
+            value = """
+                SELECT p
+                FROM Project p
+                WHERE p.isDeleted = false
+                  AND UPPER(p.status.name) IN :statuses
+                  AND (
+                        :fullAccess = true
+
+                        OR EXISTS (
+                            SELECT a.id
+                            FROM ProjectMilestoneAssignment a
+                            WHERE a.project = p
+                              AND a.isDeleted = false
+                              AND a.isVisible = true
+                              AND a.assignedUser.id = :userId
+                        )
+
+                        OR (
+                            :managerAccess = true
+                            AND EXISTS (
+                                SELECT a.id
+                                FROM ProjectMilestoneAssignment a
+                                JOIN a.milestone.departments department
+                                WHERE a.project = p
+                                  AND a.isDeleted = false
+                                  AND a.isVisible = true
+                                  AND department.id IN :departmentIds
+                            )
+                        )
+                  )
+                """,
+            countQuery = """
+                SELECT COUNT(p)
+                FROM Project p
+                WHERE p.isDeleted = false
+                  AND UPPER(p.status.name) IN :statuses
+                  AND (
+                        :fullAccess = true
+
+                        OR EXISTS (
+                            SELECT a.id
+                            FROM ProjectMilestoneAssignment a
+                            WHERE a.project = p
+                              AND a.isDeleted = false
+                              AND a.isVisible = true
+                              AND a.assignedUser.id = :userId
+                        )
+
+                        OR (
+                            :managerAccess = true
+                            AND EXISTS (
+                                SELECT a.id
+                                FROM ProjectMilestoneAssignment a
+                                JOIN a.milestone.departments department
+                                WHERE a.project = p
+                                  AND a.isDeleted = false
+                                  AND a.isVisible = true
+                                  AND department.id IN :departmentIds
+                            )
+                        )
+                  )
+                """
+    )
+    Page<Project> findAccessibleProjects(
+            @Param("userId") Long userId,
+            @Param("fullAccess") boolean fullAccess,
+            @Param("managerAccess") boolean managerAccess,
+            @Param("departmentIds") List<Long> departmentIds,
+            @Param("statuses") List<String> statuses,
+            Pageable pageable
+    );
 
 
 

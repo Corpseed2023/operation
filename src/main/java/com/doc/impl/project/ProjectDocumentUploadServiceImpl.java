@@ -10,6 +10,7 @@ import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.document.ProjectDocumentUpload;
 import com.doc.entity.project.Project;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -31,7 +32,8 @@ import java.util.Optional;
 @Transactional
 public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadService {
 
-    private static final Logger logger = LoggerFactory.getLogger(ProjectDocumentUploadServiceImpl.class);
+    private static final Logger logger =
+            LoggerFactory.getLogger(ProjectDocumentUploadServiceImpl.class);
 
     private final ProjectDocumentUploadRepository projectDocumentUploadRepository;
     private final ProjectRepository projectRepository;
@@ -39,6 +41,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
     private final UserRepository userRepository;
     private final DocumentStatusRepository documentStatusRepository;
     private final CompanyDocumentRepository companyDocumentRepository;
+    private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
 
     @Value("${aws_path}")
     private String awsPath;
@@ -49,7 +52,8 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             ProductRequiredDocumentsRepository productRequiredDocumentsRepository,
             UserRepository userRepository,
             DocumentStatusRepository documentStatusRepository,
-            CompanyDocumentRepository companyDocumentRepository) {
+            CompanyDocumentRepository companyDocumentRepository,
+            ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository) {
 
         this.projectDocumentUploadRepository = projectDocumentUploadRepository;
         this.projectRepository = projectRepository;
@@ -57,6 +61,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         this.userRepository = userRepository;
         this.documentStatusRepository = documentStatusRepository;
         this.companyDocumentRepository = companyDocumentRepository;
+        this.projectMilestoneAssignmentRepository = projectMilestoneAssignmentRepository;
     }
 
 
@@ -153,28 +158,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                     admin
             );
 
-            if ("VERIFIED".equalsIgnoreCase(existingStatus) && !admin) {
-                logger.warn(
-                        "[DOC-UPLOAD-DENIED] VERIFIED document can only be replaced by ADMIN. documentId={}, projectId={}, uploadedById={}, roles={}",
-                        doc.getId(),
-                        requestDto.getProjectId(),
-                        uploadedBy.getId(),
-                        getRoleNames(uploadedBy)
-                );
-
-                throw new ValidationException(
-                        "Only ADMIN can replace a VERIFIED document",
-                        "VERIFIED_DOCUMENT_REPLACEMENT_ADMIN_ONLY"
-                );
-            }
-
-            if ("VERIFIED".equalsIgnoreCase(existingStatus)) {
-                logger.info(
-                        "[DOC-UPLOAD-ADMIN-ALLOWED] ADMIN is replacing VERIFIED document. documentId={}, adminUserId={}",
-                        doc.getId(),
-                        uploadedBy.getId()
-                );
-            }
+            validateReplacementAuthorization(doc, uploadedBy, "UPLOAD_EXISTING");
 
             doc.setOldFileUrl(doc.getFileUrl());
             doc.setOldFileName(doc.getFileName());
@@ -613,24 +597,56 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 requestDto.getFileSizeKb()
         );
 
+        if (documentId == null) {
+            throw new ValidationException(
+                    "Document ID is required",
+                    "INVALID_DOCUMENT_ID"
+            );
+        }
+
         ProjectDocumentUpload doc = projectDocumentUploadRepository.findActiveUserById(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Document not found",
                         "DOCUMENT_UPLOAD_NOT_FOUND"
                 ));
 
-        if (!doc.getProject().getId().equals(requestDto.getProjectId())) {
+        if (doc.getProject() == null
+                || doc.getProject().getId() == null
+                || !doc.getProject().getId().equals(requestDto.getProjectId())) {
+
+            logger.warn(
+                    "[DOC-REPLACE-DENIED-PROJECT] documentId={}, documentProjectId={}, requestProjectId={}, uploadedById={}",
+                    documentId,
+                    doc.getProject() != null ? doc.getProject().getId() : null,
+                    requestDto.getProjectId(),
+                    requestDto.getUploadedById()
+            );
+
             throw new ValidationException(
                     "Document does not belong to this project",
                     "DOCUMENT_PROJECT_MISMATCH"
             );
         }
 
-        /*
-         * Keep existing replacement flow unchanged.
-         * Only add authorization validation before replacement.
-         */
-        User replacementRequestedBy = userRepository.findActiveUserById(requestDto.getUploadedById())
+        if (doc.getRequiredDocument() == null
+                || doc.getRequiredDocument().getId() == null
+                || !doc.getRequiredDocument().getId().equals(requestDto.getRequiredDocumentId())) {
+
+            logger.warn(
+                    "[DOC-REPLACE-DENIED-REQUIRED-DOC] documentId={}, existingRequiredDocumentId={}, requestedRequiredDocumentId={}",
+                    documentId,
+                    doc.getRequiredDocument() != null ? doc.getRequiredDocument().getId() : null,
+                    requestDto.getRequiredDocumentId()
+            );
+
+            throw new ValidationException(
+                    "Required document ID cannot be changed during replacement",
+                    "REQUIRED_DOCUMENT_MISMATCH"
+            );
+        }
+
+        User replacementRequestedBy = userRepository
+                .findActiveUserById(requestDto.getUploadedById())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Uploader not found",
                         "USER_NOT_FOUND"
@@ -640,46 +656,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 ? doc.getStatus().getName()
                 : null;
 
-        boolean admin = isAdmin(replacementRequestedBy);
-
-        logger.info(
-                "[DOC-REPLACE-AUTH] documentId={}, projectId={}, currentStatus={}, userId={}, roles={}, isAdmin={}",
-                doc.getId(),
-                doc.getProject() != null ? doc.getProject().getId() : null,
-                currentDocumentStatus,
-                replacementRequestedBy.getId(),
-                getRoleNames(replacementRequestedBy),
-                admin
-        );
-
-        if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus) && !admin) {
-            logger.warn(
-                    "[DOC-REPLACE-DENIED] Only ADMIN can replace VERIFIED document. documentId={}, projectId={}, userId={}, roles={}",
-                    doc.getId(),
-                    doc.getProject() != null ? doc.getProject().getId() : null,
-                    replacementRequestedBy.getId(),
-                    getRoleNames(replacementRequestedBy)
-            );
-
-            throw new ValidationException(
-                    "Only ADMIN can replace a VERIFIED document",
-                    "VERIFIED_DOCUMENT_REPLACEMENT_ADMIN_ONLY"
-            );
-        }
-
-        if ("VERIFIED".equalsIgnoreCase(currentDocumentStatus)) {
-            logger.info(
-                    "[DOC-REPLACE-ADMIN-ALLOWED] ADMIN is replacing VERIFIED document. documentId={}, adminUserId={}",
-                    doc.getId(),
-                    replacementRequestedBy.getId()
-            );
-        }
-
-        User uploadedBy = userRepository.findActiveUserById(requestDto.getUploadedById())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Uploader not found",
-                        "USER_NOT_FOUND"
-                ));
+        validateReplacementAuthorization(doc, replacementRequestedBy, "REPLACE_API");
 
         DocumentStatus uploadedStatus = documentStatusRepository.findByName("UPLOADED")
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -687,7 +664,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                         "STATUS_NOT_FOUND"
                 ));
 
-        String fileUrl = requestDto.getFileName();
+        String fileUrl = requestDto.getFileUrl();
 
         if (!StringUtils.hasText(fileUrl)) {
             throw new ValidationException("File URL cannot be empty", "INVALID_FILE_URL");
@@ -717,7 +694,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
         doc.setRemarks(requestDto.getRemarks());
 
         doc.setStatus(uploadedStatus);
-        doc.setUploadedBy(uploadedBy);
+        doc.setUploadedBy(replacementRequestedBy);
         doc.setUploadTime(new Date());
 
         doc.setUpdatedBy(requestDto.getUploadedById());
@@ -736,13 +713,184 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
                 saved.getProject() != null ? saved.getProject().getId() : null,
                 currentDocumentStatus,
                 saved.getStatus() != null ? saved.getStatus().getName() : null,
-                uploadedBy.getId(),
+                replacementRequestedBy.getId(),
                 saved.getReplacementCount(),
                 saved.getOldFileUrl(),
                 saved.getFileUrl()
         );
 
         return mapToDocumentResponseDto(saved);
+    }
+
+    /**
+     * Replacement authorization shared by the explicit replacement endpoint
+     * and the upload endpoint when an active project-level document already exists.
+     *
+     * Rules:
+     * 1. ADMIN may replace any document.
+     * 2. VERIFIED may only be replaced directly by ADMIN.
+     * 3. REJECTED may be replaced by the user assigned to an active REWORK
+     *    milestone for the same project.
+     * 4. PENDING/UPLOADED may be replaced by the original uploader or by the
+     *    user assigned to an active REWORK milestone.
+     * 5. Any other state is denied for non-admin users.
+     */
+    private void validateReplacementAuthorization(
+            ProjectDocumentUpload document,
+            User requestedBy,
+            String source
+    ) {
+        Long projectId = document.getProject() != null
+                ? document.getProject().getId()
+                : null;
+
+        String statusName = document.getStatus() != null
+                ? document.getStatus().getName()
+                : null;
+
+        boolean admin = isAdmin(requestedBy);
+        boolean originalUploader = document.getUploadedBy() != null
+                && document.getUploadedBy().getId() != null
+                && document.getUploadedBy().getId().equals(requestedBy.getId());
+
+        List<ProjectMilestoneAssignment> reworkAssignments = projectId == null
+                ? List.of()
+                : projectMilestoneAssignmentRepository
+                .findByProjectIdAndIsDeletedFalse(projectId);
+
+        boolean assignedToReworkMilestone = reworkAssignments.stream()
+                .anyMatch(assignment ->
+                        assignment.getStatus() != null
+                                && assignment.getStatus().getName() != null
+                                && "REWORK".equalsIgnoreCase(
+                                assignment.getStatus().getName()
+                        )
+                                && assignment.getAssignedUser() != null
+                                && assignment.getAssignedUser().getId() != null
+                                && assignment.getAssignedUser().getId()
+                                .equals(requestedBy.getId())
+                );
+
+        List<Long> reworkAssignmentIds = reworkAssignments.stream()
+                .filter(assignment ->
+                        assignment.getStatus() != null
+                                && assignment.getStatus().getName() != null
+                                && "REWORK".equalsIgnoreCase(
+                                assignment.getStatus().getName()
+                        )
+                )
+                .map(ProjectMilestoneAssignment::getId)
+                .toList();
+
+        logger.info(
+                "[DOC-REPLACE-AUTH-CHECK] source={}, documentId={}, projectId={}, status={}, " +
+                        "requestedById={}, roles={}, isAdmin={}, originalUploader={}, " +
+                        "assignedToReworkMilestone={}, reworkAssignmentIds={}",
+                source,
+                document.getId(),
+                projectId,
+                statusName,
+                requestedBy.getId(),
+                getRoleNames(requestedBy),
+                admin,
+                originalUploader,
+                assignedToReworkMilestone,
+                reworkAssignmentIds
+        );
+
+        if (admin) {
+            logger.info(
+                    "[DOC-REPLACE-AUTH-ALLOWED] source={}, documentId={}, reason=ADMIN, userId={}",
+                    source,
+                    document.getId(),
+                    requestedBy.getId()
+            );
+            return;
+        }
+
+        if ("VERIFIED".equalsIgnoreCase(statusName)) {
+            denyReplacement(
+                    source,
+                    document,
+                    requestedBy,
+                    "Only ADMIN can directly replace a VERIFIED document",
+                    "VERIFIED_DOCUMENT_REPLACEMENT_ADMIN_ONLY"
+            );
+        }
+
+        if ("REJECTED".equalsIgnoreCase(statusName)) {
+            if (!assignedToReworkMilestone) {
+                denyReplacement(
+                        source,
+                        document,
+                        requestedBy,
+                        "Only the user assigned to the REWORK milestone can replace this rejected document",
+                        "REWORK_DOCUMENT_REPLACEMENT_NOT_ALLOWED"
+                );
+            }
+
+            logger.info(
+                    "[DOC-REPLACE-AUTH-ALLOWED] source={}, documentId={}, reason=ASSIGNED_REWORK_USER, userId={}",
+                    source,
+                    document.getId(),
+                    requestedBy.getId()
+            );
+            return;
+        }
+
+        if ("PENDING".equalsIgnoreCase(statusName)
+                || "UPLOADED".equalsIgnoreCase(statusName)) {
+
+            if (!originalUploader && !assignedToReworkMilestone) {
+                denyReplacement(
+                        source,
+                        document,
+                        requestedBy,
+                        "Only the original uploader or assigned REWORK user can replace this document",
+                        "DOCUMENT_REPLACEMENT_NOT_ALLOWED"
+                );
+            }
+
+            logger.info(
+                    "[DOC-REPLACE-AUTH-ALLOWED] source={}, documentId={}, reason={}, userId={}",
+                    source,
+                    document.getId(),
+                    assignedToReworkMilestone ? "ASSIGNED_REWORK_USER" : "ORIGINAL_UPLOADER",
+                    requestedBy.getId()
+            );
+            return;
+        }
+
+        denyReplacement(
+                source,
+                document,
+                requestedBy,
+                "Document cannot be replaced in its current status: " + statusName,
+                "INVALID_DOCUMENT_STATUS_FOR_REPLACEMENT"
+        );
+    }
+
+    private void denyReplacement(
+            String source,
+            ProjectDocumentUpload document,
+            User requestedBy,
+            String message,
+            String errorCode
+    ) {
+        logger.warn(
+                "[DOC-REPLACE-AUTH-DENIED] source={}, documentId={}, projectId={}, " +
+                        "status={}, requestedById={}, roles={}, errorCode={}, message={}",
+                source,
+                document.getId(),
+                document.getProject() != null ? document.getProject().getId() : null,
+                document.getStatus() != null ? document.getStatus().getName() : null,
+                requestedBy.getId(),
+                getRoleNames(requestedBy),
+                errorCode,
+                message
+        );
+
+        throw new ValidationException(message, errorCode);
     }
 
     private DocumentResponseDto mapToDocumentResponseDto(ProjectDocumentUpload doc) {
