@@ -494,9 +494,35 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
     );
 
 
+    @Query("""
+        SELECT a
+        FROM ProjectMilestoneAssignment a
+        LEFT JOIN FETCH a.assignedUser
+        LEFT JOIN FETCH a.milestone
+        LEFT JOIN FETCH a.productMilestoneMap
+        WHERE a.project.id IN :projectIds
+          AND a.isDeleted = false
+          AND a.status.id = :completedStatusId
+        """)
+    List<ProjectMilestoneAssignment> findCompletedAssignmentsByProjectIds(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("completedStatusId") Long completedStatusId);
 
 
-
+    @Query("""
+        SELECT a
+        FROM ProjectMilestoneAssignment a
+        LEFT JOIN FETCH a.assignedUser
+        LEFT JOIN FETCH a.milestone
+        LEFT JOIN FETCH a.productMilestoneMap
+        WHERE a.project.id IN :projectIds
+          AND a.isDeleted = false
+          AND a.isVisible = true
+          AND a.status.id <> :completedStatusId
+        """)
+    List<ProjectMilestoneAssignment> findActiveAssignmentsByProjectIds(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("completedStatusId") Long completedStatusId);
 
 
 
