@@ -40,131 +40,6 @@ public class TechnicalResearchCaseController {
                 .body(researchCaseService.createCase(request));
     }
 
-    /**
-     * Manager assigns or reassigns a case.
-     */
-    @PostMapping("/{caseId}/assignments")
-    public ResponseEntity<TechnicalResearchCaseResponseDto> assignCase(
-            @PathVariable
-            @Positive(message = "Case ID must be greater than zero")
-            Long caseId,
-
-            @Valid
-            @RequestBody
-            TechnicalResearchAssignmentRequestDto request
-    ) {
-        return ResponseEntity.ok(
-                researchCaseService.assignCase(caseId, request)
-        );
-    }
-
-    /**
-     * Assigned technical person starts the research.
-     */
-    @PatchMapping("/{caseId}/start")
-    public ResponseEntity<TechnicalResearchCaseResponseDto> startWork(
-            @PathVariable
-            @Positive(message = "Case ID must be greater than zero")
-            Long caseId,
-
-            @Valid
-            @RequestBody
-            TechnicalResearchActionRequestDto request
-    ) {
-        return ResponseEntity.ok(
-                researchCaseService.startWork(caseId, request)
-        );
-    }
-
-    /**
-     * Assigned technical person submits findings and recommendation.
-     */
-    @PatchMapping("/{caseId}/submit")
-    public ResponseEntity<TechnicalResearchCaseResponseDto> submitCase(
-            @PathVariable
-            @Positive(message = "Case ID must be greater than zero")
-            Long caseId,
-
-            @Valid
-            @RequestBody
-            TechnicalResearchSubmissionRequestDto request
-    ) {
-        return ResponseEntity.ok(
-                researchCaseService.submitCase(caseId, request)
-        );
-    }
-
-    /**atua
-     * Manager returns submitted research for revision.
-     */
-    @PatchMapping("/{caseId}/request-revision")
-    public ResponseEntity<TechnicalResearchCaseResponseDto> requestRevision(
-            @PathVariable
-            @Positive(message = "Case ID must be greater than zero")
-            Long caseId,
-
-            @Valid
-            @RequestBody
-            TechnicalResearchClosureRequestDto request
-    ) {
-        return ResponseEntity.ok(
-                researchCaseService.requestRevision(caseId, request)
-        );
-    }
-
-    /**
-     * Manager approves and completes submitted research.
-     */
-    @PatchMapping("/{caseId}/complete")
-    public ResponseEntity<TechnicalResearchCaseResponseDto> completeCase(
-            @PathVariable
-            @Positive(message = "Case ID must be greater than zero")
-            Long caseId,
-
-            @Valid
-            @RequestBody
-            TechnicalResearchActionRequestDto request
-    ) {
-        return ResponseEntity.ok(
-                researchCaseService.completeCase(caseId, request)
-        );
-    }
-
-    /**
-     * Manager rejects the research case.
-     */
-    @PatchMapping("/{caseId}/reject")
-    public ResponseEntity<TechnicalResearchCaseResponseDto> rejectCase(
-            @PathVariable
-            @Positive(message = "Case ID must be greater than zero")
-            Long caseId,
-
-            @Valid
-            @RequestBody
-            TechnicalResearchClosureRequestDto request
-    ) {
-        return ResponseEntity.ok(
-                researchCaseService.rejectCase(caseId, request)
-        );
-    }
-
-    /**
-     * Salesperson or manager cancels the case.
-     */
-    @PatchMapping("/{caseId}/cancel")
-    public ResponseEntity<TechnicalResearchCaseResponseDto> cancelCase(
-            @PathVariable
-            @Positive(message = "Case ID must be greater than zero")
-            Long caseId,
-
-            @Valid
-            @RequestBody
-            TechnicalResearchClosureRequestDto request
-    ) {
-        return ResponseEntity.ok(
-                researchCaseService.cancelCase(caseId, request)
-        );
-    }
 
     @GetMapping("/{caseId}")
     public ResponseEntity<TechnicalResearchCaseResponseDto> getCaseById(
@@ -244,4 +119,38 @@ public class TechnicalResearchCaseController {
                 )
         );
     }
+
+
+    /**
+     * Returns all research cases visible to the user.
+     *
+     * A case is returned when the user:
+     * 1. Raised it as a salesperson, or
+     * 2. Is currently assigned to it as a technical person.
+     */
+    @GetMapping("/users/{userId}")
+    public ResponseEntity<Page<TechnicalResearchCaseResponseDto>>
+    getCasesForUser(
+            @PathVariable
+            @Positive(message = "User ID must be greater than zero")
+            Long userId,
+
+            @PageableDefault(
+                    page = 0,
+                    size = 20,
+                    sort = "createdAt",
+                    direction = DESC
+            )
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(
+                researchCaseService.getCasesForUser(
+                        userId,
+                        pageable
+                )
+        );
+    }
+
+
+
 }

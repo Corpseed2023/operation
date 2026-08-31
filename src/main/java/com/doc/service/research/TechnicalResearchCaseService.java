@@ -12,40 +12,7 @@ public interface TechnicalResearchCaseService {
             TechnicalResearchCaseCreateRequestDto request
     );
 
-    TechnicalResearchCaseResponseDto assignCase(
-            Long caseId,
-            TechnicalResearchAssignmentRequestDto request
-    );
 
-    TechnicalResearchCaseResponseDto startWork(
-            Long caseId,
-            TechnicalResearchActionRequestDto request
-    );
-
-    TechnicalResearchCaseResponseDto submitCase(
-            Long caseId,
-            TechnicalResearchSubmissionRequestDto request
-    );
-
-    TechnicalResearchCaseResponseDto requestRevision(
-            Long caseId,
-            TechnicalResearchClosureRequestDto request
-    );
-
-    TechnicalResearchCaseResponseDto completeCase(
-            Long caseId,
-            TechnicalResearchActionRequestDto request
-    );
-
-    TechnicalResearchCaseResponseDto rejectCase(
-            Long caseId,
-            TechnicalResearchClosureRequestDto request
-    );
-
-    TechnicalResearchCaseResponseDto cancelCase(
-            Long caseId,
-            TechnicalResearchClosureRequestDto request
-    );
 
     TechnicalResearchCaseResponseDto getCaseById(Long caseId);
 
@@ -60,4 +27,11 @@ public interface TechnicalResearchCaseService {
     );
 
     long getActiveAssignmentCount(Long assigneeUserId);
+
+    Page<TechnicalResearchCaseResponseDto> getCasesForUser(
+            Long userId,
+            Pageable pageable
+    );
+
+
 }
