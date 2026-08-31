@@ -20,7 +20,6 @@ public interface TechnicalResearchCaseService {
             Long userId,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
-            Long productId,
             String search,
             Pageable pageable
     );
@@ -38,5 +37,12 @@ public interface TechnicalResearchCaseService {
             Long assigneeUserId,
             Long assignedByUserId
     );
+
+    Page<TechnicalResearchCaseResponseDto> getCasesByLeadId(
+            Long leadId,
+            Pageable pageable
+    );
+
+
 
 }

@@ -168,7 +168,6 @@ public class TechnicalResearchCaseServiceImpl
             Long userId,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
-            Long productId,
             String search,
             Pageable pageable
     ) {
@@ -180,7 +179,6 @@ public class TechnicalResearchCaseServiceImpl
                 user.getId(),
                 status,
                 priority,
-                productId,
                 search
         );
 
@@ -189,7 +187,6 @@ public class TechnicalResearchCaseServiceImpl
                         userId,
                         status,
                         priority,
-                        productId,
                         search
                 );
 
@@ -203,7 +200,6 @@ public class TechnicalResearchCaseServiceImpl
             Long userId,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
-            Long productId,
             String search
     ) {
         return (root, query, criteriaBuilder) -> {
@@ -258,14 +254,6 @@ public class TechnicalResearchCaseServiceImpl
                 );
             }
 
-            if (productId != null) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                root.get("product").get("id"),
-                                productId
-                        )
-                );
-            }
 
             if (StringUtils.hasText(search)) {
                 String searchPattern =
@@ -328,113 +316,6 @@ public class TechnicalResearchCaseServiceImpl
         return researchCaseRepository.count(specification);
     }
 
-    private Specification<TechnicalResearchCase>
-    buildSpecification(
-            TechnicalResearchCaseStatus status,
-            ResearchPriority priority,
-            Long productId,
-            Long raisedByUserId,
-            Long assigneeUserId,
-            String search
-    ) {
-        return (root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            predicates.add(
-                    criteriaBuilder.isFalse(root.get("deleted"))
-            );
-
-            if (status != null) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                root.get("status"),
-                                status
-                        )
-                );
-            }
-
-            if (priority != null) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                root.get("priority"),
-                                priority
-                        )
-                );
-            }
-
-            if (productId != null) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                root.get("product").get("id"),
-                                productId
-                        )
-                );
-            }
-
-            if (raisedByUserId != null) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                root.get("raisedBy").get("id"),
-                                raisedByUserId
-                        )
-                );
-            }
-
-            if (assigneeUserId != null) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                root.get("currentAssignee").get("id"),
-                                assigneeUserId
-                        )
-                );
-            }
-
-            if (StringUtils.hasText(search)) {
-                String searchPattern =
-                        "%" + search.trim()
-                                .toLowerCase(Locale.ROOT) + "%";
-
-                predicates.add(
-                        criteriaBuilder.or(
-                                criteriaBuilder.like(
-                                        criteriaBuilder.lower(
-                                                root.get("caseNumber")
-                                        ),
-                                        searchPattern
-                                ),
-                                criteriaBuilder.like(
-                                        criteriaBuilder.lower(
-                                                root.get("subject")
-                                        ),
-                                        searchPattern
-                                ),
-                                criteriaBuilder.like(
-                                        criteriaBuilder.lower(
-                                                root.get(
-                                                        "solutionNameSnapshot"
-                                                )
-                                        ),
-                                        searchPattern
-                                ),
-                                criteriaBuilder.like(
-                                        criteriaBuilder.lower(
-                                                root.get(
-                                                        "customerNameSnapshot"
-                                                )
-                                        ),
-                                        searchPattern
-                                )
-                        )
-                );
-            }
-
-            return criteriaBuilder.and(
-                    predicates.toArray(new Predicate[0])
-            );
-        };
-    }
-
-
 
     private TechnicalResearchCase getCase(Long caseId) {
         return researchCaseRepository
@@ -479,24 +360,6 @@ public class TechnicalResearchCaseServiceImpl
     }
 
 
-    private boolean hasManagementAuthority(User user) {
-        if (user.isManagerFlag()) {
-            return true;
-        }
-
-        if (user.getRoles() == null) {
-            return false;
-        }
-
-        return user.getRoles()
-                .stream()
-                .filter(Objects::nonNull)
-                .filter(role -> !role.isDeleted())
-                .map(Role::getName)
-                .filter(StringUtils::hasText)
-                .map(this::normalizeRoleName)
-                .anyMatch(MANAGEMENT_ROLES::contains);
-    }
 
     private String normalizeRoleName(String roleName) {
         String normalized = roleName
@@ -881,6 +744,25 @@ public class TechnicalResearchCaseServiceImpl
         }
     }
 
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TechnicalResearchCaseResponseDto> getCasesByLeadId(
+            Long leadId,
+            Pageable pageable
+    ) {
+        logger.info(
+                "Fetching technical research cases for leadId={}",
+                leadId
+        );
+
+        return researchCaseRepository
+                .findByOriginatingLeadIdAndDeletedFalse(
+                        leadId,
+                        pageable
+                )
+                .map(this::mapToResponseDto);
+    }
 
 
 }

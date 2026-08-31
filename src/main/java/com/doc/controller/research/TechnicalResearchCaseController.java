@@ -84,7 +84,6 @@ public class TechnicalResearchCaseController {
                         userId,
                         status,
                         priority,
-                        productId,
                         search,
                         pageable
                 )
@@ -157,6 +156,29 @@ public class TechnicalResearchCaseController {
                         caseId,
                         assigneeUserId,
                         assignedByUserId
+                )
+        );
+    }
+
+    @GetMapping("/lead/{leadId}")
+    public ResponseEntity<Page<TechnicalResearchCaseResponseDto>>
+    getCasesByLeadId(
+            @PathVariable
+            @Positive(message = "Lead ID must be greater than zero")
+            Long leadId,
+
+            @PageableDefault(
+                    page = 0,
+                    size = 20,
+                    sort = "createdAt",
+                    direction = DESC
+            )
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(
+                researchCaseService.getCasesByLeadId(
+                        leadId,
+                        pageable
                 )
         );
     }

@@ -1,9 +1,6 @@
 package com.doc.controller.vendor;
 
-import com.doc.dto.vendor.SendAgreementToProcurementRequestDto;
-import com.doc.dto.vendor.VendorAgreementDecisionRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalRequestDto;
-import com.doc.dto.vendor.VendorQuotationLegalResponseDto;
+import com.doc.dto.vendor.*;
 import com.doc.service.vendor.VendorQuotationLegalRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -62,6 +59,16 @@ public class VendorQuotationLegalRequestController {
     ) {
         return ResponseEntity.ok(
                 legalRequestService.agreementDecision(id, requestDto)
+        );
+    }
+
+    @PostMapping("/assigned-counts")
+    @Operation(summary = "Count SERVICE_AGREEMENT_REQUESTED requests per assigned legal user")
+    public ResponseEntity<List<LegalUserWorkloadResponseDto>> getAssignedRequestCounts(
+            @Valid @RequestBody LegalUserWorkloadRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(
+                legalRequestService.getAssignedRequestCounts(requestDto)
         );
     }
 }
