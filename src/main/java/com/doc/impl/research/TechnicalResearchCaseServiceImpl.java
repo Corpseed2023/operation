@@ -46,14 +46,6 @@ public class TechnicalResearchCaseServiceImpl
                     TechnicalResearchCaseServiceImpl.class
             );
 
-    private static final Set<String> MANAGEMENT_ROLES = Set.of(
-            "ADMIN",
-            "SUPER_ADMIN",
-            "OPERATION_HEAD",
-            "OPERATIONS_HEAD",
-            "TECHNICAL_HEAD",
-            "MANAGER"
-    );
 
     private static final Set<TechnicalResearchCaseStatus>
             ACTIVE_ASSIGNMENT_STATUSES = Set.of(
@@ -672,6 +664,7 @@ public class TechnicalResearchCaseServiceImpl
                 .anyMatch(roleName ->
                         roleName.equals("ADMIN")
                                 || roleName.equals("ROLE_ADMIN")
+                                || roleName.equals("OPERATION_HEAD")
                 );
     }
 

@@ -188,6 +188,8 @@ public class ProjectDashboardController {
 
         return ResponseEntity.ok(response);
     }
+
+
 /// User performance for milestones assigned to the user,
 /// grouped by project
     @GetMapping("/user-performance/{userId}")
