@@ -1,11 +1,13 @@
 package com.doc.repository.research;
 
 import com.doc.entity.research.TechnicalResearchCase;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,10 +22,23 @@ public interface TechnicalResearchCaseRepository
     boolean existsByCaseNumber(String caseNumber);
 
     /**
-     * Returns cases where the user:
+     * Loads and locks the case during assignment.
      *
-     * 1. Raised the request as a salesperson, or
-     * 2. Is currently assigned as the technical person.
+     * This prevents simultaneous assignment by multiple managers.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT researchCase
+            FROM TechnicalResearchCase researchCase
+            WHERE researchCase.id = :caseId
+              AND researchCase.deleted = false
+            """)
+    Optional<TechnicalResearchCase> findByIdForAssignment(
+            @Param("caseId") Long caseId
+    );
+
+    /**
+     * Returns cases raised by or currently assigned to the user.
      */
     @EntityGraph(attributePaths = {
             "product",

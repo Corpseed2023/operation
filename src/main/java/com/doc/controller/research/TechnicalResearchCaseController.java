@@ -52,16 +52,12 @@ public class TechnicalResearchCaseController {
         );
     }
 
-    /**
-     * Search and filter research cases.
-     *
-     * Examples:
-     * GET /technical-research-cases?status=IN_PROGRESS
-     * GET /technical-research-cases?assigneeUserId=15
-     * GET /technical-research-cases?productId=8
-     */
     @GetMapping
     public ResponseEntity<Page<TechnicalResearchCaseResponseDto>> getCases(
+            @RequestParam
+            @Positive(message = "User ID must be greater than zero")
+            Long userId,
+
             @RequestParam(required = false)
             TechnicalResearchCaseStatus status,
 
@@ -71,14 +67,6 @@ public class TechnicalResearchCaseController {
             @RequestParam(required = false)
             @Positive(message = "Product ID must be greater than zero")
             Long productId,
-
-            @RequestParam(required = false)
-            @Positive(message = "Raised-by user ID must be greater than zero")
-            Long raisedByUserId,
-
-            @RequestParam(required = false)
-            @Positive(message = "Assignee user ID must be greater than zero")
-            Long assigneeUserId,
 
             @RequestParam(required = false)
             String search,
@@ -93,11 +81,10 @@ public class TechnicalResearchCaseController {
     ) {
         return ResponseEntity.ok(
                 researchCaseService.getCases(
+                        userId,
                         status,
                         priority,
                         productId,
-                        raisedByUserId,
-                        assigneeUserId,
                         search,
                         pageable
                 )
@@ -147,6 +134,29 @@ public class TechnicalResearchCaseController {
                 researchCaseService.getCasesForUser(
                         userId,
                         pageable
+                )
+        );
+    }
+
+    @PostMapping("/{caseId}/assignments")
+    public ResponseEntity<TechnicalResearchCaseResponseDto> assignCase(
+            @PathVariable
+            @Positive(message = "Case ID must be greater than zero")
+            Long caseId,
+
+            @RequestParam
+            @Positive(message = "Assignee user ID must be greater than zero")
+            Long assigneeUserId,
+
+            @RequestParam
+            @Positive(message = "Assigned-by user ID must be greater than zero")
+            Long assignedByUserId
+    ) {
+        return ResponseEntity.ok(
+                researchCaseService.assignCase(
+                        caseId,
+                        assigneeUserId,
+                        assignedByUserId
                 )
         );
     }
