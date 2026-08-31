@@ -149,330 +149,7 @@ public class TechnicalResearchCaseServiceImpl
         return mapToResponseDto(savedCase);
     }
 
-    @Override
-    @Transactional
-    public TechnicalResearchCaseResponseDto assignCase(
-            Long caseId,
-            TechnicalResearchAssignmentRequestDto request
-    ) {
-        TechnicalResearchCase researchCase = getCase(caseId);
-        User assignedBy = getActiveUser(
-                request.getAssignedByUserId(),
-                "Assigning manager"
-        );
-        User assignee = getActiveUser(
-                request.getAssigneeUserId(),
-                "Assignee"
-        );
 
-        validateManagementAuthority(assignedBy);
-        validateCaseIsOpen(researchCase);
-        validateDueDate(request.getDueDate());
-
-        if (Objects.equals(
-                assignedBy.getId(),
-                assignee.getId()
-        )) {
-            throw new ValidationException(
-                    "Manager cannot assign the research case to themselves",
-                    "ERR_SELF_ASSIGNMENT_NOT_ALLOWED"
-            );
-        }
-
-        if (researchCase.getCurrentAssignee() != null
-                && Objects.equals(
-                researchCase.getCurrentAssignee().getId(),
-                assignee.getId()
-        )) {
-            throw new ValidationException(
-                    "Research case is already assigned to this user",
-                    "ERR_CASE_ALREADY_ASSIGNED_TO_USER"
-            );
-        }
-
-        validateProductMapping(
-                assignee,
-                researchCase.getProduct()
-        );
-
-        Instant now = Instant.now();
-
-        if (researchCase.getFirstAssignedAt() == null) {
-            researchCase.setFirstAssignedAt(now);
-        }
-
-        researchCase.setCurrentAssignee(assignee);
-        researchCase.setLastAssignedBy(assignedBy);
-        researchCase.setLastAssignedAt(now);
-
-        int currentAssignmentCount =
-                researchCase.getAssignmentCount() == null
-                        ? 0
-                        : researchCase.getAssignmentCount();
-
-        researchCase.setAssignmentCount(
-                currentAssignmentCount + 1
-        );
-
-        if (request.getDueDate() != null) {
-            researchCase.setDueDate(request.getDueDate());
-        }
-
-        /*
-         * A reassigned case returns to ASSIGNED so the new
-         * technical person must explicitly start the work.
-         */
-        researchCase.setStatus(
-                TechnicalResearchCaseStatus.ASSIGNED
-        );
-        researchCase.setUpdatedBy(assignedBy);
-
-        TechnicalResearchCase savedCase =
-                researchCaseRepository.save(researchCase);
-
-        logger.info(
-                "Research case assigned. caseId={}, assigneeId={}, "
-                        + "assignedBy={}, assignmentCount={}",
-                caseId,
-                assignee.getId(),
-                assignedBy.getId(),
-                savedCase.getAssignmentCount()
-        );
-
-        return mapToResponseDto(savedCase);
-    }
-
-    @Override
-    @Transactional
-    public TechnicalResearchCaseResponseDto startWork(
-            Long caseId,
-            TechnicalResearchActionRequestDto request
-    ) {
-        TechnicalResearchCase researchCase = getCase(caseId);
-        User actor = getActiveUser(
-                request.getActorUserId(),
-                "Technical user"
-        );
-
-        validateCurrentAssignee(researchCase, actor);
-
-        if (researchCase.getStatus()
-                != TechnicalResearchCaseStatus.ASSIGNED
-                && researchCase.getStatus()
-                != TechnicalResearchCaseStatus.REVISION_REQUIRED) {
-
-            throw invalidTransition(
-                    researchCase,
-                    TechnicalResearchCaseStatus.IN_PROGRESS
-            );
-        }
-
-        researchCase.setStatus(
-                TechnicalResearchCaseStatus.IN_PROGRESS
-        );
-
-        if (researchCase.getWorkStartedAt() == null) {
-            researchCase.setWorkStartedAt(Instant.now());
-        }
-
-        researchCase.setUpdatedBy(actor);
-
-        return mapToResponseDto(
-                researchCaseRepository.save(researchCase)
-        );
-    }
-
-    @Override
-    @Transactional
-    public TechnicalResearchCaseResponseDto submitCase(
-            Long caseId,
-            TechnicalResearchSubmissionRequestDto request
-    ) {
-        TechnicalResearchCase researchCase = getCase(caseId);
-        User actor = getActiveUser(
-                request.getSubmittedByUserId(),
-                "Technical user"
-        );
-
-        validateCurrentAssignee(researchCase, actor);
-
-        if (researchCase.getStatus()
-                != TechnicalResearchCaseStatus.IN_PROGRESS) {
-            throw invalidTransition(
-                    researchCase,
-                    TechnicalResearchCaseStatus.UNDER_REVIEW
-            );
-        }
-
-        researchCase.setFindings(request.getFindings().trim());
-        researchCase.setRecommendation(
-                trimToNull(request.getRecommendation())
-        );
-        researchCase.setSubmittedAt(Instant.now());
-        researchCase.setStatus(
-                TechnicalResearchCaseStatus.UNDER_REVIEW
-        );
-        researchCase.setUpdatedBy(actor);
-
-        TechnicalResearchCase savedCase =
-                researchCaseRepository.save(researchCase);
-
-        logger.info(
-                "Research case submitted. caseId={}, submittedBy={}",
-                caseId,
-                actor.getId()
-        );
-
-        return mapToResponseDto(savedCase);
-    }
-
-    @Override
-    @Transactional
-    public TechnicalResearchCaseResponseDto requestRevision(
-            Long caseId,
-            TechnicalResearchClosureRequestDto request
-    ) {
-        TechnicalResearchCase researchCase = getCase(caseId);
-        User reviewer = getActiveUser(
-                request.getActorUserId(),
-                "Reviewer"
-        );
-
-        validateManagementAuthority(reviewer);
-
-        if (researchCase.getStatus()
-                != TechnicalResearchCaseStatus.UNDER_REVIEW) {
-            throw invalidTransition(
-                    researchCase,
-                    TechnicalResearchCaseStatus.REVISION_REQUIRED
-            );
-        }
-
-        researchCase.setClosureReason(request.getReason().trim());
-        researchCase.setStatus(
-                TechnicalResearchCaseStatus.REVISION_REQUIRED
-        );
-        researchCase.setUpdatedBy(reviewer);
-
-        return mapToResponseDto(
-                researchCaseRepository.save(researchCase)
-        );
-    }
-
-    @Override
-    @Transactional
-    public TechnicalResearchCaseResponseDto completeCase(
-            Long caseId,
-            TechnicalResearchActionRequestDto request
-    ) {
-        TechnicalResearchCase researchCase = getCase(caseId);
-        User reviewer = getActiveUser(
-                request.getActorUserId(),
-                "Reviewer"
-        );
-
-        validateManagementAuthority(reviewer);
-
-        if (researchCase.getStatus()
-                != TechnicalResearchCaseStatus.UNDER_REVIEW) {
-            throw invalidTransition(
-                    researchCase,
-                    TechnicalResearchCaseStatus.COMPLETED
-            );
-        }
-
-        if (!StringUtils.hasText(researchCase.getFindings())) {
-            throw new ValidationException(
-                    "Research findings are required before completion",
-                    "ERR_RESEARCH_FINDINGS_REQUIRED"
-            );
-        }
-
-        researchCase.setStatus(
-                TechnicalResearchCaseStatus.COMPLETED
-        );
-        researchCase.setClosedAt(Instant.now());
-        researchCase.setClosedBy(reviewer);
-        researchCase.setClosureReason(null);
-        researchCase.setUpdatedBy(reviewer);
-
-        TechnicalResearchCase savedCase =
-                researchCaseRepository.save(researchCase);
-
-        logger.info(
-                "Research case completed. caseId={}, completedBy={}",
-                caseId,
-                reviewer.getId()
-        );
-
-        return mapToResponseDto(savedCase);
-    }
-
-    @Override
-    @Transactional
-    public TechnicalResearchCaseResponseDto rejectCase(
-            Long caseId,
-            TechnicalResearchClosureRequestDto request
-    ) {
-        TechnicalResearchCase researchCase = getCase(caseId);
-        User actor = getActiveUser(
-                request.getActorUserId(),
-                "Rejecting user"
-        );
-
-        validateManagementAuthority(actor);
-        validateCaseIsOpen(researchCase);
-
-        closeCase(
-                researchCase,
-                actor,
-                TechnicalResearchCaseStatus.REJECTED,
-                request.getReason()
-        );
-
-        return mapToResponseDto(
-                researchCaseRepository.save(researchCase)
-        );
-    }
-
-    @Override
-    @Transactional
-    public TechnicalResearchCaseResponseDto cancelCase(
-            Long caseId,
-            TechnicalResearchClosureRequestDto request
-    ) {
-        TechnicalResearchCase researchCase = getCase(caseId);
-        User actor = getActiveUser(
-                request.getActorUserId(),
-                "Cancelling user"
-        );
-
-        validateCaseIsOpen(researchCase);
-
-        boolean raisedByActor = Objects.equals(
-                researchCase.getRaisedBy().getId(),
-                actor.getId()
-        );
-
-        if (!raisedByActor && !hasManagementAuthority(actor)) {
-            throw new ValidationException(
-                    "Only the salesperson who raised the case "
-                            + "or an authorized manager can cancel it",
-                    "ERR_CASE_CANCELLATION_NOT_ALLOWED"
-            );
-        }
-
-        closeCase(
-                researchCase,
-                actor,
-                TechnicalResearchCaseStatus.CANCELLED,
-                request.getReason()
-        );
-
-        return mapToResponseDto(
-                researchCaseRepository.save(researchCase)
-        );
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -638,25 +315,7 @@ public class TechnicalResearchCaseServiceImpl
         };
     }
 
-    private void closeCase(
-            TechnicalResearchCase researchCase,
-            User actor,
-            TechnicalResearchCaseStatus status,
-            String reason
-    ) {
-        if (!StringUtils.hasText(reason)) {
-            throw new ValidationException(
-                    "Closure reason is required",
-                    "ERR_CLOSURE_REASON_REQUIRED"
-            );
-        }
 
-        researchCase.setStatus(status);
-        researchCase.setClosureReason(reason.trim());
-        researchCase.setClosedAt(Instant.now());
-        researchCase.setClosedBy(actor);
-        researchCase.setUpdatedBy(actor);
-    }
 
     private TechnicalResearchCase getCase(Long caseId) {
         return researchCaseRepository
@@ -700,14 +359,6 @@ public class TechnicalResearchCaseServiceImpl
                 ));
     }
 
-    private void validateManagementAuthority(User user) {
-        if (!hasManagementAuthority(user)) {
-            throw new ValidationException(
-                    "User is not authorized to manage research assignments",
-                    "ERR_RESEARCH_MANAGEMENT_ACCESS_DENIED"
-            );
-        }
-    }
 
     private boolean hasManagementAuthority(User user) {
         if (user.isManagerFlag()) {
@@ -740,71 +391,25 @@ public class TechnicalResearchCaseServiceImpl
         return normalized;
     }
 
-    /**
-     * Ensures that the technical user is configured for the
-     * product being researched.
-     */
-    private void validateProductMapping(
-            User assignee,
-            Product product
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TechnicalResearchCaseResponseDto> getCasesForUser(
+            Long userId,
+            Pageable pageable
     ) {
-        boolean mappedToProduct =
-                assignee.getUserProductMaps() != null
-                        && assignee.getUserProductMaps()
-                        .stream()
-                        .anyMatch(mapping ->
-                                mapping != null
-                                        && !mapping.isDeleted()
-                                        && mapping.isAssigned()
-                                        && mapping.getProduct() != null
-                                        && Objects.equals(
-                                        mapping.getProduct().getId(),
-                                        product.getId()
-                                )
-                        );
+        User user = getActiveUser(userId, "User");
 
-        if (!mappedToProduct) {
-            throw new ValidationException(
-                    "Selected technical user is not mapped "
-                            + "to product " + product.getProductName(),
-                    "ERR_ASSIGNEE_PRODUCT_MAPPING_NOT_FOUND"
-            );
-        }
+        logger.info(
+                "Fetching technical research cases for userId={}, userName={}",
+                user.getId(),
+                user.getFullName()
+        );
+
+        return researchCaseRepository
+                .findCasesForUser(userId, pageable)
+                .map(this::mapToResponseDto);
     }
 
-    private void validateCurrentAssignee(
-            TechnicalResearchCase researchCase,
-            User actor
-    ) {
-        if (researchCase.getCurrentAssignee() == null) {
-            throw new ValidationException(
-                    "Research case has not been assigned",
-                    "ERR_RESEARCH_CASE_NOT_ASSIGNED"
-            );
-        }
-
-        if (!Objects.equals(
-                researchCase.getCurrentAssignee().getId(),
-                actor.getId()
-        )) {
-            throw new ValidationException(
-                    "Only the currently assigned technical user "
-                            + "can perform this action",
-                    "ERR_RESEARCH_CASE_ASSIGNEE_MISMATCH"
-            );
-        }
-    }
-
-    private void validateCaseIsOpen(
-            TechnicalResearchCase researchCase
-    ) {
-        if (CLOSED_STATUSES.contains(researchCase.getStatus())) {
-            throw new ValidationException(
-                    "Closed research case cannot be modified",
-                    "ERR_RESEARCH_CASE_ALREADY_CLOSED"
-            );
-        }
-    }
 
     private void validateDueDate(LocalDate dueDate) {
         if (dueDate != null
@@ -814,18 +419,6 @@ public class TechnicalResearchCaseServiceImpl
                     "ERR_INVALID_RESEARCH_DUE_DATE"
             );
         }
-    }
-
-    private ValidationException invalidTransition(
-            TechnicalResearchCase researchCase,
-            TechnicalResearchCaseStatus targetStatus
-    ) {
-        return new ValidationException(
-                "Research case cannot move from "
-                        + researchCase.getStatus()
-                        + " to " + targetStatus,
-                "ERR_INVALID_RESEARCH_STATUS_TRANSITION"
-        );
     }
 
     private String generateCaseNumber() {
@@ -953,4 +546,6 @@ public class TechnicalResearchCaseServiceImpl
                 .updatedAt(researchCase.getUpdatedAt())
                 .build();
     }
+
+
 }

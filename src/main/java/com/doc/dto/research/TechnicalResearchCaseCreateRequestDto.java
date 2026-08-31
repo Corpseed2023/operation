@@ -27,22 +27,6 @@ public class TechnicalResearchCaseCreateRequestDto {
     @Positive(message = "Originating lead ID must be greater than zero")
     private Long originatingLeadId;
 
-//    /**
-//     * Optional Solution reference from Lead Service.
-//     */
-//    @Positive(message = "Originating solution ID must be greater than zero")
-//    private Long originatingSolutionId;
-//
-//    /**
-//     * Snapshot of the solution name.
-//     *
-//     * Example: FSSAI Central License
-//     */
-//    @Size(
-//            max = 255,
-//            message = "Solution name cannot exceed 255 characters"
-//    )
-//    private String solutionName;
 
     /**
      * Operation Service product.
