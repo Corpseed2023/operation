@@ -568,10 +568,7 @@ public class TechnicalResearchCaseServiceImpl
                 assignee
         );
 
-        validateProductMapping(
-                assignee,
-                researchCase.getProduct()
-        );
+
 
         if (Objects.equals(
                 assignee.getId(),
@@ -656,42 +653,6 @@ public class TechnicalResearchCaseServiceImpl
         }
     }
 
-
-    private void validateProductMapping(
-            User assignee,
-            Product product
-    ) {
-        if (assignee.getUserProductMaps() == null
-                || assignee.getUserProductMaps().isEmpty()) {
-
-            throw new ValidationException(
-                    "Assignee is not mapped to any product",
-                    "ERR_ASSIGNEE_PRODUCT_MAPPING_NOT_FOUND"
-            );
-        }
-
-        boolean mappedToProduct =
-                assignee.getUserProductMaps()
-                        .stream()
-                        .filter(Objects::nonNull)
-                        .anyMatch(mapping ->
-                                !mapping.isDeleted()
-                                        && mapping.isAssigned()
-                                        && mapping.getProduct() != null
-                                        && Objects.equals(
-                                        mapping.getProduct().getId(),
-                                        product.getId()
-                                )
-                        );
-
-        if (!mappedToProduct) {
-            throw new ValidationException(
-                    "Assignee is not mapped to product: "
-                            + product.getProductName(),
-                    "ERR_ASSIGNEE_PRODUCT_MAPPING_NOT_FOUND"
-            );
-        }
-    }
 
     private boolean hasAdminRole(User user) {
         if (user.getRoles() == null
