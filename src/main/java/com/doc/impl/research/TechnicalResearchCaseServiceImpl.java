@@ -30,12 +30,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class TechnicalResearchCaseServiceImpl
@@ -166,31 +162,37 @@ public class TechnicalResearchCaseServiceImpl
     ) {
         User user = getActiveUser(userId, "User");
 
-        logger.info(
-                "Fetching research cases. userId={}, status={}, "
-                        + "priority={}, productId={}, search={}",
-                user.getId(),
-                status,
-                priority,
-                search
-        );
+        boolean canViewAllCases =
+                hasOperationHeadRole(user)
+                        || hasAdminRole(user);
 
         Specification<TechnicalResearchCase> specification =
-                buildUserCaseSpecification(
+                buildCaseSpecification(
                         userId,
+                        canViewAllCases,
                         status,
                         priority,
                         search
                 );
+
+        logger.info(
+                "Fetching research cases. userId={}, canViewAll={}, "
+                        + "status={}, priority={}, productId={}, search={}",
+                userId,
+                canViewAllCases,
+                status,
+                priority,
+                search
+        );
 
         return researchCaseRepository
                 .findAll(specification, pageable)
                 .map(this::mapToResponseDto);
     }
 
-    private Specification<TechnicalResearchCase>
-    buildUserCaseSpecification(
+    private Specification<TechnicalResearchCase> buildCaseSpecification(
             Long userId,
+            boolean canViewAllCases,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
             String search
@@ -198,36 +200,37 @@ public class TechnicalResearchCaseServiceImpl
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            /*
-             * LEFT JOIN is important because a newly raised request
-             * may not have an assignee yet.
-             */
-            Join<TechnicalResearchCase, User> raisedByJoin =
-                    root.join("raisedBy", JoinType.INNER);
-
-            Join<TechnicalResearchCase, User> assigneeJoin =
-                    root.join("currentAssignee", JoinType.LEFT);
-
             predicates.add(
                     criteriaBuilder.isFalse(root.get("deleted"))
             );
 
             /*
-             * Salesperson sees requests raised by them.
-             * Technical user sees requests assigned to them.
+             * OPERATION_HEAD and ADMIN can see every case.
+             *
+             * Other users only see:
+             * 1. Cases raised by them, or
+             * 2. Cases currently assigned to them.
              */
-            predicates.add(
-                    criteriaBuilder.or(
-                            criteriaBuilder.equal(
-                                    raisedByJoin.get("id"),
-                                    userId
-                            ),
-                            criteriaBuilder.equal(
-                                    assigneeJoin.get("id"),
-                                    userId
-                            )
-                    )
-            );
+            if (!canViewAllCases) {
+                Join<TechnicalResearchCase, User> raisedByJoin =
+                        root.join("raisedBy", JoinType.INNER);
+
+                Join<TechnicalResearchCase, User> assigneeJoin =
+                        root.join("currentAssignee", JoinType.LEFT);
+
+                predicates.add(
+                        criteriaBuilder.or(
+                                criteriaBuilder.equal(
+                                        raisedByJoin.get("id"),
+                                        userId
+                                ),
+                                criteriaBuilder.equal(
+                                        assigneeJoin.get("id"),
+                                        userId
+                                )
+                        )
+                );
+            }
 
             if (status != null) {
                 predicates.add(
@@ -283,6 +286,42 @@ public class TechnicalResearchCaseServiceImpl
                     predicates.toArray(new Predicate[0])
             );
         };
+    }
+
+
+    private boolean hasOperationHeadRole(User user) {
+        return hasRole(
+                user,
+                "OPERATION_HEAD",
+                "ROLE_OPERATION_HEAD"
+        );
+    }
+
+
+
+    private boolean hasRole(
+            User user,
+            String... allowedRoles
+    ) {
+        if (user.getRoles() == null
+                || user.getRoles().isEmpty()) {
+            return false;
+        }
+
+        Set<String> allowedRoleSet = Arrays.stream(allowedRoles)
+                .map(role -> role.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+
+        return user.getRoles()
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(role -> !role.isDeleted())
+                .map(Role::getName)
+                .filter(StringUtils::hasText)
+                .map(roleName ->
+                        roleName.trim().toUpperCase(Locale.ROOT)
+                )
+                .anyMatch(allowedRoleSet::contains);
     }
 
     @Override
