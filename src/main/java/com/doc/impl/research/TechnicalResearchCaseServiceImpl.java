@@ -71,6 +71,7 @@ public class TechnicalResearchCaseServiceImpl
             TechnicalResearchCaseStatus.CANCELLED
     );
 
+
     private final TechnicalResearchCaseRepository researchCaseRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
