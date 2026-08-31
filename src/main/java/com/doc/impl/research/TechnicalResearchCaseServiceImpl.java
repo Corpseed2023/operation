@@ -108,12 +108,7 @@ public class TechnicalResearchCaseServiceImpl
         researchCase.setOriginatingLeadId(
                 request.getOriginatingLeadId()
         );
-        researchCase.setOriginatingSolutionId(
-                request.getOriginatingSolutionId()
-        );
-        researchCase.setSolutionNameSnapshot(
-                trimToNull(request.getSolutionName())
-        );
+
 
         researchCase.setProduct(product);
         researchCase.setSubject(request.getSubject().trim());
@@ -873,12 +868,6 @@ public class TechnicalResearchCaseServiceImpl
 
                 .originatingLeadId(
                         researchCase.getOriginatingLeadId()
-                )
-                .originatingSolutionId(
-                        researchCase.getOriginatingSolutionId()
-                )
-                .solutionName(
-                        researchCase.getSolutionNameSnapshot()
                 )
 
                 .productId(

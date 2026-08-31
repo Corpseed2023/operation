@@ -27,8 +27,6 @@ public class TechnicalResearchCaseResponseDto {
      * Origin references
      */
     private Long originatingLeadId;
-    private Long originatingSolutionId;
-    private String solutionName;
 
     /*
      * Product information

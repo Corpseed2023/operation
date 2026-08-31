@@ -76,22 +76,22 @@ public class TechnicalResearchCase {
     @Comment("Lead Service identifier from which the case originated")
     private Long originatingLeadId;
 
-    /**
-     * Reference to the originating solution.
-     *
-     * This is not a JPA relationship because Solution belongs
-     * to Lead Service.
-     */
-    @Column(name = "originating_solution_id")
-    @Comment("Lead Service solution identifier")
-    private Long originatingSolutionId;
+//    /**
+//     * Reference to the originating solution.
+//     *
+//     * This is not a JPA relationship because Solution belongs
+//     * to Lead Service.
+//     */
+//    @Column(name = "originating_solution_id")
+//    @Comment("Lead Service solution identifier")
+//    private Long originatingSolutionId;
 
-    /**
-     * Snapshot retained for display and historical reporting.
-     */
-    @Column(name = "solution_name_snapshot", length = 255)
-    @Comment("Solution name captured when the case was created")
-    private String solutionNameSnapshot;
+//    /**
+//     * Snapshot retained for display and historical reporting.
+//     */
+//    @Column(name = "solution_name_snapshot", length = 255)
+//    @Comment("Solution name captured when the case was created")
+//    private String solutionNameSnapshot;
 
     /**
      * Product belongs to Operation Service and can therefore
@@ -126,7 +126,6 @@ public class TechnicalResearchCase {
     @Column(name = "research_scope", columnDefinition = "TEXT")
     @Comment("Scope and questions to be covered during research")
     private String researchScope;
-
 
 
     /**
