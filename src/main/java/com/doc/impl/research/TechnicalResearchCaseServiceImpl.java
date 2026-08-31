@@ -168,7 +168,6 @@ public class TechnicalResearchCaseServiceImpl
             Long userId,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
-            Long productId,
             String search,
             Pageable pageable
     ) {
@@ -180,7 +179,6 @@ public class TechnicalResearchCaseServiceImpl
                 user.getId(),
                 status,
                 priority,
-                productId,
                 search
         );
 
@@ -189,7 +187,6 @@ public class TechnicalResearchCaseServiceImpl
                         userId,
                         status,
                         priority,
-                        productId,
                         search
                 );
 
@@ -203,7 +200,6 @@ public class TechnicalResearchCaseServiceImpl
             Long userId,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
-            Long productId,
             String search
     ) {
         return (root, query, criteriaBuilder) -> {
@@ -258,14 +254,6 @@ public class TechnicalResearchCaseServiceImpl
                 );
             }
 
-            if (productId != null) {
-                predicates.add(
-                        criteriaBuilder.equal(
-                                root.get("product").get("id"),
-                                productId
-                        )
-                );
-            }
 
             if (StringUtils.hasText(search)) {
                 String searchPattern =

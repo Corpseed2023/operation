@@ -20,7 +20,6 @@ public interface TechnicalResearchCaseService {
             Long userId,
             TechnicalResearchCaseStatus status,
             ResearchPriority priority,
-            Long productId,
             String search,
             Pageable pageable
     );

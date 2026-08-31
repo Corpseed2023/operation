@@ -84,7 +84,6 @@ public class TechnicalResearchCaseController {
                         userId,
                         status,
                         priority,
-                        productId,
                         search,
                         pageable
                 )
