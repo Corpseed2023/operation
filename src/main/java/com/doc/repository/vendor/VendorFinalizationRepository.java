@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -123,4 +125,20 @@ public interface VendorFinalizationRepository
 
     Optional<VendorFinalization>
     findFirstByVendor_IdOrderByIdDesc(Long vendorId);
+
+
+    @Query("""
+            SELECT COALESCE(SUM(vf.totalFinalizedAmount), 0)
+            FROM VendorFinalization vf
+            WHERE vf.rfq.procurementAssignment.id = :procurementAssignmentId
+              AND vf.isDeleted = false
+              AND vf.status IN :statuses
+            """)
+    BigDecimal findTotalFinalizedAmount(
+            @Param("procurementAssignmentId")
+            Long procurementAssignmentId,
+
+            @Param("statuses")
+            Collection<VendorFinalizationStatus> statuses
+    );
 }
