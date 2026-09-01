@@ -39,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -75,6 +76,11 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     private static final long DEFAULT_RENEWAL_LEAD_DAYS = 30L;
 
     private final MilestoneOnHoldApprovalService milestoneOnHoldApprovalService;
+
+    private static final String SYSTEM_REWORK_HOLD_PREFIX =
+            "SYSTEM_REWORK_HOLD";
+
+    private static final int MAX_STATUS_REASON_LENGTH = 1000;
 
     public ProjectMilestoneAssignmentServiceImpl(
             ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository,
@@ -446,6 +452,20 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
+         * If a REWORK milestone has been completed again, automatically
+         * resume the immediately next milestone when that milestone was
+         * put ON_HOLD by this specific rework.
+         */
+        if ("REWORK".equalsIgnoreCase(currentStatusName)
+                && "COMPLETED".equalsIgnoreCase(newStatus.getName())) {
+
+            resumeNextMilestoneAfterReworkCompletion(
+                    assignment,
+                    changedBy
+            );
+        }
+
+        /*
          * Recalculate the overall project status.
          */
         updateProjectStatus(
@@ -465,6 +485,272 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         );
     }
 
+
+    private void resumeNextMilestoneAfterReworkCompletion(
+            ProjectMilestoneAssignment completedReworkAssignment,
+            User changedBy
+    ) {
+        if (completedReworkAssignment == null
+                || completedReworkAssignment.getId() == null) {
+            logger.warn(
+                    "[REWORK-RESUME-SKIPPED] Completed rework assignment is missing"
+            );
+            return;
+        }
+
+        Project project = completedReworkAssignment.getProject();
+
+        if (project == null || project.getId() == null) {
+            logger.warn(
+                    "[REWORK-RESUME-SKIPPED] Project is missing. assignmentId={}",
+                    completedReworkAssignment.getId()
+            );
+            return;
+        }
+
+        if (completedReworkAssignment.getProductMilestoneMap() == null
+                || completedReworkAssignment
+                .getProductMilestoneMap()
+                .getOrder() <= 0) {
+
+            logger.warn(
+                    "[REWORK-RESUME-SKIPPED] Milestone order is missing. assignmentId={}",
+                    completedReworkAssignment.getId()
+            );
+            return;
+        }
+
+
+        int completedOrder =
+                completedReworkAssignment
+                        .getProductMilestoneMap()
+                        .getOrder();
+
+        /*
+         * Find the immediately next milestone:
+         *
+         * Documentation -> Filing
+         * Filing        -> Certification
+         */
+        ProjectMilestoneAssignment nextAssignment =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(project.getId())
+                        .stream()
+                        .filter(candidate ->
+                                candidate != null
+                                        && candidate.getId() != null
+                                        && !candidate.getId().equals(
+                                        completedReworkAssignment.getId()
+                                )
+                        )
+                        .filter(candidate ->
+                                candidate.getProductMilestoneMap() != null
+                                        && candidate.getProductMilestoneMap().getOrder() > 0
+                        )
+
+                        .filter(candidate ->
+                                candidate
+                                        .getProductMilestoneMap()
+                                        .getOrder() > completedOrder
+                        )
+                        .min((first, second) ->
+                                Integer.compare(
+                                        first.getProductMilestoneMap().getOrder(),
+                                        second.getProductMilestoneMap().getOrder()
+                                )
+                        )
+                        .orElse(null);
+
+        if (nextAssignment == null) {
+            logger.info(
+                    "[REWORK-RESUME-NO-NEXT-MILESTONE] projectId={}, completedAssignmentId={}",
+                    project.getId(),
+                    completedReworkAssignment.getId()
+            );
+            return;
+        }
+
+        String nextCurrentStatus =
+                nextAssignment.getStatus() != null
+                        ? nextAssignment.getStatus().getName()
+                        : null;
+
+        /*
+         * Only an ON_HOLD milestone can be automatically resumed.
+         */
+        if (!"ON_HOLD".equalsIgnoreCase(nextCurrentStatus)) {
+            logger.info(
+                    "[REWORK-RESUME-SKIPPED] Next milestone is not ON_HOLD. " +
+                            "projectId={}, nextAssignmentId={}, currentStatus={}",
+                    project.getId(),
+                    nextAssignment.getId(),
+                    nextCurrentStatus
+            );
+            return;
+        }
+
+        /*
+         * Confirm that this is a system-generated hold caused by the
+         * milestone that has just completed its rework.
+         *
+         * This protects manually approved ON_HOLD milestones.
+         */
+        if (!isSystemReworkHoldForAssignment(
+                nextAssignment.getStatusReason(),
+                completedReworkAssignment.getId()
+        )) {
+            logger.info(
+                    "[REWORK-RESUME-SKIPPED] Next milestone has a manual or unrelated hold. " +
+                            "projectId={}, nextAssignmentId={}, statusReason={}",
+                    project.getId(),
+                    nextAssignment.getId(),
+                    nextAssignment.getStatusReason()
+            );
+            return;
+        }
+
+        /*
+         * Find the history entry created when the next milestone was
+         * automatically changed from NEW/IN_PROGRESS to ON_HOLD.
+         */
+        MilestoneStatusHistory holdHistory =
+                milestoneStatusHistoryRepository
+                        .findByMilestoneAssignmentIdAndIsDeletedFalse(
+                                nextAssignment.getId()
+                        )
+                        .stream()
+                        .filter(history ->
+                                history != null
+                                        && history.getNewStatus() != null
+                                        && "ON_HOLD".equalsIgnoreCase(
+                                        history.getNewStatus().getName()
+                                )
+                        )
+                        .filter(history ->
+                                isSystemReworkHoldForAssignment(
+                                        history.getChangeReason(),
+                                        completedReworkAssignment.getId()
+                                )
+                        )
+                        .max(
+                                Comparator
+                                        .comparing(
+                                                MilestoneStatusHistory::getChangeDate,
+                                                Comparator.nullsFirst(
+                                                        Comparator.naturalOrder()
+                                                )
+                                        )
+                                        .thenComparing(
+                                                MilestoneStatusHistory::getId,
+                                                Comparator.nullsFirst(
+                                                        Comparator.naturalOrder()
+                                                )
+                                        )
+                        )
+                        .orElse(null);
+
+        if (holdHistory == null
+                || holdHistory.getPreviousStatus() == null) {
+
+            logger.warn(
+                    "[REWORK-RESUME-SKIPPED] ON_HOLD history was not found. " +
+                            "projectId={}, nextAssignmentId={}",
+                    project.getId(),
+                    nextAssignment.getId()
+            );
+            return;
+        }
+
+        MilestoneStatus statusToRestore =
+                holdHistory.getPreviousStatus();
+
+        String restoreStatusName =
+                statusToRestore.getName();
+
+        /*
+         * sendBackToPreviousMilestone() only allows the current milestone
+         * to be NEW or IN_PROGRESS, so only those statuses can be restored.
+         */
+        if (!"NEW".equalsIgnoreCase(restoreStatusName)
+                && !"IN_PROGRESS".equalsIgnoreCase(restoreStatusName)) {
+
+            logger.warn(
+                    "[REWORK-RESUME-SKIPPED] Invalid restore status. " +
+                            "projectId={}, nextAssignmentId={}, restoreStatus={}",
+                    project.getId(),
+                    nextAssignment.getId(),
+                    restoreStatusName
+            );
+            return;
+        }
+
+        String completedMilestoneName =
+                getMilestoneName(completedReworkAssignment);
+
+        String resumeReason =
+                (completedMilestoneName == null
+                        ? "Previous milestone"
+                        : completedMilestoneName)
+                        + " rework completed; milestone automatically resumed";
+
+        /*
+         * Save ON_HOLD -> previous status history.
+         */
+        saveMilestoneStatusHistory(
+                nextAssignment,
+                nextAssignment.getStatus(),
+                statusToRestore,
+                resumeReason,
+                changedBy
+        );
+
+        nextAssignment.setStatus(statusToRestore);
+        nextAssignment.setStatusReason(resumeReason);
+        nextAssignment.setUpdatedBy(changedBy.getId());
+        nextAssignment.setUpdatedDate(new Date());
+
+        /*
+         * Preserve the original startedDate when restoring IN_PROGRESS.
+         * A NEW milestone should not have a started date.
+         */
+        if ("NEW".equalsIgnoreCase(restoreStatusName)) {
+            nextAssignment.setStartedDate(null);
+        }
+
+        projectMilestoneAssignmentRepository.save(
+                nextAssignment
+        );
+
+        logger.info(
+                "[REWORK-NEXT-MILESTONE-RESUMED] " +
+                        "projectId={}, completedReworkAssignmentId={}, " +
+                        "nextAssignmentId={}, restoredStatus={}, changedById={}",
+                project.getId(),
+                completedReworkAssignment.getId(),
+                nextAssignment.getId(),
+                restoreStatusName,
+                changedBy.getId()
+        );
+    }
+
+
+    private boolean isSystemReworkHoldForAssignment(
+            String statusReason,
+            Long blockedByAssignmentId
+    ) {
+        if (statusReason == null
+                || blockedByAssignmentId == null) {
+            return false;
+        }
+
+        String expectedMarker =
+                SYSTEM_REWORK_HOLD_PREFIX
+                        + "|blockedByAssignmentId="
+                        + blockedByAssignmentId
+                        + "|";
+
+        return statusReason.startsWith(expectedMarker);
+    }
 
 
     private boolean isCertificationMilestone(String milestoneName) {
@@ -1264,10 +1550,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         List<ProjectMilestoneAssignment> assignments =
                 projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(project.getId());
 
-//        if (assignments.isEmpty()) {
-//            project.setProgressPercentage(0.0);
-//            return;
-//        }
 
         long completedCount = assignments.stream()
                 .filter(a -> a.getStatus() != null)
@@ -1276,7 +1558,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         double progress = (completedCount * 100.0) / assignments.size();
 
-//        project.setProgressPercentage(progress);
     }
 
 
@@ -1847,13 +2128,11 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
          * This is a system-generated hold caused by dependency failure.
          * It is different from a user manually requesting ON_HOLD.
          */
-        String holdReason =
-                "Waiting for rework of "
-                        + (previousMilestoneName != null
-                        ? previousMilestoneName
-                        : "the previous milestone")
-                        + ": "
-                        + reworkReason;
+        String holdReason = buildSystemReworkHoldReason(
+                previousAssignment,
+                previousMilestoneName,
+                reworkReason
+        );
 
         saveMilestoneStatusHistory(
                 currentAssignment,
@@ -1932,37 +2211,33 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
 
 
+    private String buildSystemReworkHoldReason(
+            ProjectMilestoneAssignment blockedByAssignment,
+            String blockedByMilestoneName,
+            String reworkReason
+    ) {
+        String milestoneName =
+                blockedByMilestoneName == null
+                        || blockedByMilestoneName.isBlank()
+                        ? "the previous milestone"
+                        : blockedByMilestoneName.trim();
 
+        String reason =
+                SYSTEM_REWORK_HOLD_PREFIX
+                        + "|blockedByAssignmentId="
+                        + blockedByAssignment.getId()
+                        + "|Waiting for rework of "
+                        + milestoneName
+                        + ": "
+                        + reworkReason;
 
-    /**
-     * ADMIN validation helper used only for VERIFIED document protection
-     * during send-back/rework flow.
-     */
-    private boolean isAdminUser(User user) {
-        if (user == null || user.getRoles() == null) {
-            return false;
+        if (reason.length() > MAX_STATUS_REASON_LENGTH) {
+            return reason.substring(
+                    0,
+                    MAX_STATUS_REASON_LENGTH
+            );
         }
 
-        return user.getRoles().stream()
-                .anyMatch(role ->
-                        role != null
-                                && role.getName() != null
-                                && "ADMIN".equalsIgnoreCase(role.getName())
-                );
+        return reason;
     }
-
-    /**
-     * Used only for readable authorization logs.
-     */
-    private List<String> getRoleNamesForLog(User user) {
-        if (user == null || user.getRoles() == null) {
-            return List.of();
-        }
-
-        return user.getRoles().stream()
-                .filter(role -> role != null && role.getName() != null)
-                .map(role -> role.getName())
-                .toList();
-    }
-
 }
