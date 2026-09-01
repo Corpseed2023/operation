@@ -1,5 +1,6 @@
 package com.doc.service.project;
 
+import com.doc.dto.project.directory.DirectoryDocumentRequestDto;
 import com.doc.dto.project.directory.ProjectDirectoryResponseDto;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,14 +14,16 @@ public interface ProjectDirectoryService {
             Long userId
     );
 
-    ProjectDirectoryResponseDto uploadDocuments(
-            Long projectId,
-            Long directoryId,
-            Long userId,
-            List<MultipartFile> files
-    );
 
     List<ProjectDirectoryResponseDto> getProjectDirectories(
             Long projectId
     );
+
+    ProjectDirectoryResponseDto uploadDocuments(
+            Long projectId,
+            Long directoryId,
+            Long userId,
+            DirectoryDocumentRequestDto requestDto
+    );
+
 }

@@ -2,6 +2,7 @@ package com.doc.impl.project;
 
 import com.doc.config.S3Service;
 import com.doc.dto.document.DocumentUploadResponse;
+import com.doc.dto.project.directory.DirectoryDocumentRequestDto;
 import com.doc.dto.project.directory.ProjectDirectoryResponseDto;
 import com.doc.entity.document.Document;
 import com.doc.entity.project.Project;
@@ -104,7 +105,7 @@ public class ProjectDirectoryServiceImpl
             Long projectId,
             Long directoryId,
             Long userId,
-            List<MultipartFile> files
+            DirectoryDocumentRequestDto requestDto
     ) {
         userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -119,60 +120,27 @@ public class ProjectDirectoryServiceImpl
                         "ERR_PROJECT_DIRECTORY_NOT_FOUND"
                 ));
 
-        if (!directory.getProject().getId().equals(projectId)) {
+        if (directory.getProject() == null
+                || !directory.getProject().getId().equals(projectId)) {
             throw new ValidationException(
                     "Directory does not belong to this project",
                     "ERR_DIRECTORY_PROJECT_MISMATCH"
             );
         }
 
-        if (files == null || files.isEmpty()) {
-            throw new ValidationException(
-                    "At least one document is required",
-                    "ERR_DOCUMENT_REQUIRED"
-            );
-        }
+        Document document = new Document();
+        document.setUuid(UUID.randomUUID().toString());
+        document.setFileName(requestDto.getFileName().trim());
+        document.setFileUrl(requestDto.getFileUrl().trim());
 
-        List<Document> uploadedDocuments = new ArrayList<>();
+        Document savedDocument = documentRepository.save(document);
 
-        for (MultipartFile file : files) {
-            if (file == null || file.isEmpty()) {
-                continue;
-            }
+        directory.getDocuments().add(savedDocument);
 
-            try {
-                String s3Key = s3Service.uploadFile(file);
-                String fileUrl = s3Service.getFullUrl(s3Key);
+        ProjectDirectory savedDirectory =
+                directoryRepository.save(directory);
 
-                Document document = new Document();
-                document.setUuid(UUID.randomUUID().toString());
-                document.setFileName(file.getOriginalFilename());
-                document.setFileUrl(fileUrl);
-
-                uploadedDocuments.add(document);
-
-            } catch (IOException exception) {
-                throw new RuntimeException(
-                        "Failed to upload document: "
-                                + file.getOriginalFilename(),
-                        exception
-                );
-            }
-        }
-
-        if (uploadedDocuments.isEmpty()) {
-            throw new ValidationException(
-                    "No valid documents were provided",
-                    "ERR_NO_VALID_DOCUMENT"
-            );
-        }
-
-        documentRepository.saveAll(uploadedDocuments);
-        directory.getDocuments().addAll(uploadedDocuments);
-
-        directory = directoryRepository.save(directory);
-
-        return mapResponse(directory);
+        return mapResponse(savedDirectory);
     }
 
     @Override
