@@ -149,43 +149,131 @@ public class MilestoneOnHoldApprovalServiceImpl
     }
 
     @Override
+    @Transactional
     public MilestoneOnHoldResponseDto decide(
             Long requestId,
             MilestoneOnHoldDecisionDto dto
     ) {
-        log.info("[MILESTONE-ON-HOLD-DECISION-START] requestId={}, managerId={}, decision={}",
-                requestId, dto.getManagerId(), dto.getDecision());
+        log.info(
+                "[MILESTONE-ON-HOLD-DECISION-START] requestId={}, userId={}, decision={}",
+                requestId,
+                dto.getManagerId(),
+                dto.getDecision()
+        );
 
-        MilestoneOnHoldRequest request = requestRepository.findByIdForDecision(requestId)
+        MilestoneOnHoldRequest request = requestRepository
+                .findByIdForDecision(requestId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "ON_HOLD approval request not found",
                         "ON_HOLD_REQUEST_NOT_FOUND"
                 ));
 
-        if (request.getApprovalStatus() != MilestoneOnHoldApprovalStatus.PENDING) {
+        if (request.getApprovalStatus()
+                != MilestoneOnHoldApprovalStatus.PENDING) {
+
             throw new ValidationException(
                     "This ON_HOLD request has already been decided",
                     "ON_HOLD_REQUEST_ALREADY_DECIDED"
             );
         }
 
-        User manager = userRepository.findActiveUserById(dto.getManagerId())
+        User decisionBy = userRepository
+                .findActiveUserById(dto.getManagerId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Manager not found",
-                        "MANAGER_NOT_FOUND"
+                        "Decision user not found",
+                        "USER_NOT_FOUND"
                 ));
 
-        if (!request.getApprover().getId().equals(manager.getId())) {
-            log.warn("[MILESTONE-ON-HOLD-DECISION-DENIED] requestId={}, expectedManagerId={}, actualUserId={}",
-                    requestId, request.getApprover().getId(), manager.getId());
+        boolean isAssignedManager =
+                request.getApprover() != null
+                        && request.getApprover().getId() != null
+                        && request.getApprover()
+                        .getId()
+                        .equals(decisionBy.getId());
+
+        boolean isAdmin =
+                decisionBy.getRoles() != null
+                        && decisionBy.getRoles()
+                        .stream()
+                        .anyMatch(role ->
+                                role != null
+                                        && role.getName() != null
+                                        && (
+                                        "ADMIN".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                                || "ROLE_ADMIN".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                )
+                        );
+
+        boolean isOperationHead =
+                decisionBy.getRoles() != null
+                        && decisionBy.getRoles()
+                        .stream()
+                        .anyMatch(role ->
+                                role != null
+                                        && role.getName() != null
+                                        && (
+                                        "OPERATION_HEAD".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                                || "ROLE_OPERATION_HEAD".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                )
+                        );
+
+        boolean canDecide =
+                isAssignedManager
+                        || isAdmin
+                        || isOperationHead;
+
+        log.info(
+                "[MILESTONE-ON-HOLD-DECISION-AUTHORIZATION] " +
+                        "requestId={}, decisionById={}, assignedManagerId={}, " +
+                        "assignedManager={}, admin={}, operationHead={}, allowed={}",
+                requestId,
+                decisionBy.getId(),
+                request.getApprover() != null
+                        ? request.getApprover().getId()
+                        : null,
+                isAssignedManager,
+                isAdmin,
+                isOperationHead,
+                canDecide
+        );
+
+        if (!canDecide) {
+            log.warn(
+                    "[MILESTONE-ON-HOLD-DECISION-DENIED] " +
+                            "requestId={}, expectedManagerId={}, actualUserId={}",
+                    requestId,
+                    request.getApprover() != null
+                            ? request.getApprover().getId()
+                            : null,
+                    decisionBy.getId()
+            );
+
             throw new ValidationException(
-                    "Only the requester's manager can decide this request",
+                    "Only ADMIN, OPERATION_HEAD, or the assigned manager can decide this request",
                     "NOT_AUTHORIZED_ON_HOLD_APPROVER"
             );
         }
 
+        if (dto.getDecision() == null) {
+            throw new ValidationException(
+                    "Decision is required",
+                    "ON_HOLD_DECISION_REQUIRED"
+            );
+        }
+
         if (dto.getDecision() == MilestoneOnHoldDecision.REJECT
-                && (dto.getDecisionReason() == null || dto.getDecisionReason().isBlank())) {
+                && (
+                dto.getDecisionReason() == null
+                        || dto.getDecisionReason().isBlank()
+        )) {
             throw new ValidationException(
                     "Decision reason is required when rejecting an ON_HOLD request",
                     "ON_HOLD_REJECTION_REASON_REQUIRED"
@@ -193,21 +281,42 @@ public class MilestoneOnHoldApprovalServiceImpl
         }
 
         if (dto.getDecision() == MilestoneOnHoldDecision.APPROVE) {
-            approveRequest(request, manager, dto.getDecisionReason());
+            approveRequest(
+                    request,
+                    decisionBy,
+                    dto.getDecisionReason()
+            );
+        } else if (dto.getDecision() == MilestoneOnHoldDecision.REJECT) {
+            rejectRequest(
+                    request,
+                    dto.getDecisionReason()
+            );
         } else {
-            rejectRequest(request, dto.getDecisionReason());
+            throw new ValidationException(
+                    "Invalid ON_HOLD decision",
+                    "INVALID_ON_HOLD_DECISION"
+            );
         }
 
         request.setDecidedAt(LocalDateTime.now());
-        MilestoneOnHoldRequest saved = requestRepository.save(request);
 
-        log.info("[MILESTONE-ON-HOLD-DECISION-SUCCESS] requestId={}, assignmentId={}, " +
-                        "managerId={}, approvalStatus={}",
-                saved.getId(), saved.getMilestoneAssignment().getId(), manager.getId(),
-                saved.getApprovalStatus());
+        MilestoneOnHoldRequest saved =
+                requestRepository.save(request);
+
+        log.info(
+                "[MILESTONE-ON-HOLD-DECISION-SUCCESS] " +
+                        "requestId={}, assignmentId={}, decisionById={}, " +
+                        "assignedManagerId={}, approvalStatus={}",
+                saved.getId(),
+                saved.getMilestoneAssignment().getId(),
+                decisionBy.getId(),
+                saved.getApprover().getId(),
+                saved.getApprovalStatus()
+        );
 
         return toResponse(saved);
     }
+
 
     private void approveRequest(
             MilestoneOnHoldRequest request,

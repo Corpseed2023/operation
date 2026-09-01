@@ -334,10 +334,7 @@ public class ProductVendorServiceImpl implements ProductVendorService {
                 ));
 
         return productVendorMappingRepository
-                .findVendorListByProductIdAndAccountsSubmissionStatus(
-                        productId,
-                        VendorAccountsSubmissionStatus.APPROVED
-                )
+                .findVendorListByProductIdAndAccountsSubmissionStatus(productId)
                 .stream()
                 .map(mapping -> mapToResponse(
                         mapping,

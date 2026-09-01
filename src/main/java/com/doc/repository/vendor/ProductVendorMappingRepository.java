@@ -41,31 +41,21 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
     Long countActiveVendorsByProductId(@Param("productId") Long productId);
 
     @Query("""
-        SELECT DISTINCT m
-        FROM ProductVendorMapping m
-        JOIN FETCH m.product p
-        JOIN FETCH m.vendor v
-        WHERE p.id = :productId
-          AND m.isDeleted = false
-          AND m.isActive = true
-          AND p.isDeleted = false
-          AND p.isActive = true
-          AND v.isDeleted = false
-          AND EXISTS (
-                SELECT 1
-                FROM VendorAccountsSubmission vas
-                JOIN vas.vendorFinalization vf
-                WHERE vas.vendor.id = v.id
-                  AND vf.rfq.product.id = p.id
-                  AND vas.status = :status
-                  AND vas.isDeleted = false
-                  AND vf.isDeleted = false
-          )
-        ORDER BY m.createdDate DESC
-        """)
+    SELECT DISTINCT m
+    FROM ProductVendorMapping m
+    JOIN FETCH m.product p
+    JOIN FETCH m.vendor v
+    WHERE p.id = :productId
+      AND m.isDeleted = false
+      AND m.isActive = true
+      AND p.isDeleted = false
+      AND p.isActive = true
+      AND v.isDeleted = false
+      AND v.status = com.doc.entity.vendor.VendorStatus.ACTIVE
+    ORDER BY m.createdDate DESC
+    """)
     List<ProductVendorMapping> findVendorListByProductIdAndAccountsSubmissionStatus(
-            @Param("productId") Long productId,
-            @Param("status") VendorAccountsSubmissionStatus status
+            @Param("productId") Long productId
     );
 
     @Query("""
@@ -146,5 +136,23 @@ public interface ProductVendorMappingRepository extends JpaRepository<ProductVen
     Page<ProductVendorMapping> findMappingsByProductId(
             @Param("productId") Long productId,
             Pageable pageable
+    );
+
+    @Query("""
+    SELECT DISTINCT m
+    FROM ProductVendorMapping m
+    JOIN FETCH m.product p
+    JOIN FETCH m.vendor v
+    WHERE p.id = :productId
+      AND m.isDeleted = false
+      AND m.isActive = true
+      AND p.isDeleted = false
+      AND p.isActive = true
+      AND v.isDeleted = false
+      AND v.status = com.doc.entity.vendor.VendorStatus.ACTIVE
+    ORDER BY m.createdDate DESC
+    """)
+    List<ProductVendorMapping> findActiveStatusVendorMappingsByProductId(
+            @Param("productId") Long productId
     );
 }
