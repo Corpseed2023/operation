@@ -1,8 +1,10 @@
 package com.doc.controller.project;
 
+import com.doc.dto.project.directory.DirectoryDocumentRequestDto;
 import com.doc.dto.project.directory.ProjectDirectoryResponseDto;
 import com.doc.service.project.ProjectDirectoryService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -42,30 +44,27 @@ public class ProjectDirectoryController {
                 .body(response);
     }
 
-    @PostMapping(
-            value = "/{directoryId}/documents",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
-    @Operation(summary = "Upload multiple documents into directory")
+    @PostMapping("/{directoryId}/documents")
+    @Operation(summary = "Add document into project directory")
     public ResponseEntity<ProjectDirectoryResponseDto> uploadDocuments(
             @PathVariable Long projectId,
             @PathVariable Long directoryId,
             @RequestParam Long userId,
-            @RequestPart("files") List<MultipartFile> files
+            @Valid @RequestBody
+            DirectoryDocumentRequestDto directoryDocumentRequestDto
     ) {
         ProjectDirectoryResponseDto response =
                 projectDirectoryService.uploadDocuments(
                         projectId,
                         directoryId,
                         userId,
-                        files
+                        directoryDocumentRequestDto
                 );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
     }
-
     @GetMapping
     @Operation(summary = "Get all project directories with documents")
     public ResponseEntity<List<ProjectDirectoryResponseDto>>
