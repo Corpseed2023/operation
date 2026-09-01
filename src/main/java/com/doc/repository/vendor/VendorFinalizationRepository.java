@@ -141,4 +141,23 @@ public interface VendorFinalizationRepository
             @Param("statuses")
             Collection<VendorFinalizationStatus> statuses
     );
+
+    @Query("""
+            SELECT COALESCE(SUM(vf.totalFinalizedAmount), 0)
+            FROM VendorFinalization vf
+            WHERE vf.rfq.procurementAssignment.id = :procurementAssignmentId
+              AND vf.vendor.id = :vendorId
+              AND vf.isDeleted = false
+              AND vf.status IN :statuses
+            """)
+    BigDecimal findTotalFinalizedAmount(
+            @Param("procurementAssignmentId")
+            Long procurementAssignmentId,
+
+            @Param("vendorId")
+            Long vendorId,
+
+            @Param("statuses")
+            Collection<VendorFinalizationStatus> statuses
+    );
 }

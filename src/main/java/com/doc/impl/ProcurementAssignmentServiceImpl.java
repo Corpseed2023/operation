@@ -33,7 +33,6 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
     private final VendorRepository vendorRepository;
     private final UserRepository userRepository;
     private final ProcurementVendorQuotationRepository procurementVendorQuotationRepository;
-
     private final VendorFinalizationRepository vendorFinalizationRepository;
 
     public ProcurementAssignmentServiceImpl(

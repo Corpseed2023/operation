@@ -6,21 +6,18 @@ import com.doc.dto.vendor.PurchaseOrderResponseDto;
 import com.doc.entity.client.PaymentType;
 import com.doc.entity.project.ProcurementStatus;
 import com.doc.entity.user.User;
-import com.doc.entity.vendor.ProcurementMilestoneAssignment;
-import com.doc.entity.vendor.ProcurementOrder;
-import com.doc.entity.vendor.ProcurementOrderStatus;
-import com.doc.entity.vendor.Vendor;
+import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.PaymentTypeRepository;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.vendor.PurchaseOrderRepository;
+import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.vendor.PurchaseOrderService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +30,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.EnumSet;
+
 @Service
 @Transactional
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
@@ -40,12 +39,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private static final Logger logger =
             LogManager.getLogger(PurchaseOrderServiceImpl.class);
 
+
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final ProcurementMilestoneAssignmentRepository procurementRepository;
     private final VendorRepository vendorRepository;
     private final UserRepository userRepository;
     private final PaymentTypeRepository paymentTypeRepository;
     private final String companyStateCode;
+    private final VendorFinalizationRepository vendorFinalizationRepository;
 
     public PurchaseOrderServiceImpl(
             PurchaseOrderRepository purchaseOrderRepository,
@@ -53,13 +54,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             VendorRepository vendorRepository,
             UserRepository userRepository,
             PaymentTypeRepository paymentTypeRepository,
-            @Value("${company.gst.state-code}") String companyStateCode) {
-
+            VendorFinalizationRepository vendorFinalizationRepository,
+            @Value("${company.gst.state-code}") String companyStateCode
+    ) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.procurementRepository = procurementRepository;
         this.vendorRepository = vendorRepository;
         this.userRepository = userRepository;
         this.paymentTypeRepository = paymentTypeRepository;
+        this.vendorFinalizationRepository = vendorFinalizationRepository;
         this.companyStateCode = companyStateCode;
     }
 
@@ -102,10 +105,42 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 gstRate
         );
 
+        BigDecimal vendorFinalizedAmount =
+                getVendorFinalizedAmount(procurement, vendor);
+
+        BigDecimal requestedPoAmount =
+                amountBreakup.getGrandTotal();
+
+        boolean exceedsFinalizedAmount =
+                requestedPoAmount.compareTo(vendorFinalizedAmount) > 0;
+
         boolean exceedsProjectValue = isPoValueExceedingProjectValue(
                 amountBreakup.getGrandTotal(),
                 amountBreakup.getFinalAmount(),
                 procurement
+        );
+
+        boolean adminApprovalRequired =
+                exceedsFinalizedAmount || exceedsProjectValue;
+
+        BigDecimal excessAmount = exceedsFinalizedAmount
+                ? requestedPoAmount.subtract(vendorFinalizedAmount)
+                .setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
+        logger.info(
+                "PO amount validation. procurementAssignmentId={}, vendorId={}, "
+                        + "finalizedAmount={}, requestedPoAmount={}, excessAmount={}, "
+                        + "exceedsFinalizedAmount={}, exceedsProjectValue={}, "
+                        + "adminApprovalRequired={}",
+                procurement.getId(),
+                vendor.getId(),
+                vendorFinalizedAmount,
+                requestedPoAmount,
+                excessAmount,
+                exceedsFinalizedAmount,
+                exceedsProjectValue,
+                adminApprovalRequired
         );
 
         Date currentDate = new Date();
@@ -139,12 +174,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             po.setAttachmentUrls(dto.getAttachmentUrls());
         }
 
-        po.setStatus(exceedsProjectValue
+        po.setStatus(adminApprovalRequired
                 ? ProcurementOrderStatus.ADMIN_APPROVAL_PENDING
                 : ProcurementOrderStatus.DRAFT);
         po.setPoCreatedDate(currentDate);
 
-        if (exceedsProjectValue) {
+        if (adminApprovalRequired) {
             po.setPoSubmittedForApprovalDate(currentDate);
         }
 
@@ -385,10 +420,45 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 gstRate
         );
 
+        BigDecimal vendorFinalizedAmount =
+                getVendorFinalizedAmount(
+                        procurementForValidation,
+                        vendorForCalculation
+                );
+
+        BigDecimal requestedPoAmount = amountBreakup.getGrandTotal();
+
+        boolean exceedsFinalizedAmount =
+                requestedPoAmount.compareTo(vendorFinalizedAmount) > 0;
+
         boolean exceedsProjectValue = isPoValueExceedingProjectValue(
                 amountBreakup.getGrandTotal(),
                 amountBreakup.getFinalAmount(),
                 procurementForValidation
+        );
+
+        boolean adminApprovalRequired =
+                exceedsFinalizedAmount || exceedsProjectValue;
+
+        BigDecimal excessAmount = exceedsFinalizedAmount
+                ? requestedPoAmount.subtract(vendorFinalizedAmount)
+                .setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
+        logger.info(
+                "PO update amount validation. poId={}, procurementAssignmentId={}, "
+                        + "vendorId={}, finalizedAmount={}, requestedPoAmount={}, "
+                        + "excessAmount={}, exceedsFinalizedAmount={}, "
+                        + "exceedsProjectValue={}, adminApprovalRequired={}",
+                poId,
+                procurementForValidation.getId(),
+                vendorForCalculation.getId(),
+                vendorFinalizedAmount,
+                requestedPoAmount,
+                excessAmount,
+                exceedsFinalizedAmount,
+                exceedsProjectValue,
+                adminApprovalRequired
         );
 
         if (dto.getProcurementAssignmentId() != null) {
@@ -444,13 +514,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             po.setPaymentType(paymentType);
         }
 
-        po.setStatus(exceedsProjectValue
+        po.setStatus(adminApprovalRequired
                 ? ProcurementOrderStatus.ADMIN_APPROVAL_PENDING
                 : ProcurementOrderStatus.DRAFT);
 
-        if (exceedsProjectValue) {
-            po.setPoSubmittedForApprovalDate(new Date());
-        }
+        po.setPoSubmittedForApprovalDate(
+                adminApprovalRequired ? new Date() : null
+        );
 
         po.setUpdatedDate(new Date());
 
@@ -492,6 +562,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         User adminUser = userRepository.findActiveUserById(adminUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Admin user not found", "ERR_USER_NOT_FOUND"));
+
+        validateAdminUser(adminUser);
 
         Date currentDate = new Date();
 
@@ -653,9 +725,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Admin user not found", "ERR_USER_NOT_FOUND"));
 
+        validateAdminUser(adminUser);
+
         Date currentDate = new Date();
 
-        po.setStatus(ProcurementOrderStatus.DRAFT);
+        po.setStatus(ProcurementOrderStatus.ADMIN_APPROVED);
         po.setUpdatedBy(adminUser.getId());
         po.setUpdatedDate(currentDate);
 
@@ -666,7 +740,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         ProcurementOrder savedPo = purchaseOrderRepository.save(po);
 
         logger.info(
-                "Purchase Order admin-approved and reverted to DRAFT. poNumber={}, adminUserId={}",
+                "Purchase Order excess amount approved by admin. poNumber={}, adminUserId={}",
                 savedPo.getPoNumber(),
                 adminUser.getId()
         );
@@ -707,9 +781,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        if (po.getStatus() != ProcurementOrderStatus.DRAFT) {
+        if (po.getStatus() != ProcurementOrderStatus.DRAFT
+                && po.getStatus() != ProcurementOrderStatus.ADMIN_APPROVED) {
             throw new ValidationException(
-                    "Only DRAFT Purchase Order can be approved. Current status: " + po.getStatus(),
+                    "Only DRAFT or ADMIN_APPROVED Purchase Order can be approved. Current status: "
+                            + po.getStatus(),
                     "ERR_INVALID_PO_STATUS"
             );
         }
@@ -810,10 +886,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     }
 
-    /**
-     * GST is supplied explicitly for the Purchase Order. When GST is not
-     * applicable, the backend always stores/calculates a zero GST rate.
-     */
+    /***
+     ** GST is supplied explicitly for the Purchase Order. When GST is not*
+     ** applicable, the backend always stores/calculates a zero GST rate.*
+     **/
     private BigDecimal resolveRequestedGstRate(PurchaseOrderRequestDto dto) {
         if (!Boolean.TRUE.equals(dto.getGstApplicable())) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -1332,6 +1408,65 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         private BigDecimal getGrandTotal() {
             return grandTotal;
+        }
+    }
+
+    private BigDecimal getVendorFinalizedAmount(
+            ProcurementMilestoneAssignment procurement,
+            Vendor vendor
+    ) {
+        if (procurement == null || procurement.getId() == null) {
+            throw new ValidationException(
+                    "Procurement assignment is required",
+                    "ERR_PROCUREMENT_ASSIGNMENT_REQUIRED"
+            );
+        }
+
+        if (vendor == null || vendor.getId() == null) {
+            throw new ValidationException(
+                    "Vendor is required",
+                    "ERR_VENDOR_REQUIRED"
+            );
+        }
+
+        BigDecimal finalizedAmount =
+                vendorFinalizationRepository.findTotalFinalizedAmount(
+                        procurement.getId(),
+                        vendor.getId(),
+                        EnumSet.of(
+                                VendorFinalizationStatus.FINALIZED,
+                                VendorFinalizationStatus.SENT_TO_ACCOUNTS,
+                                VendorFinalizationStatus.ACCOUNTS_APPROVED,
+                                VendorFinalizationStatus.ONBOARDING_STARTED,
+                                VendorFinalizationStatus.ACTIVE_VENDOR_MAPPED
+                        )
+                );
+
+        if (finalizedAmount == null
+                || finalizedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException(
+                    "No finalized amount found for the selected vendor",
+                    "ERR_VENDOR_FINALIZED_AMOUNT_NOT_FOUND"
+            );
+        }
+
+        return finalizedAmount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void validateAdminUser(User user) {
+        boolean isAdmin = user != null
+                && user.getRoles() != null
+                && user.getRoles().stream()
+                .filter(role -> role != null && role.getName() != null)
+                .map(role -> role.getName().trim().toUpperCase())
+                .anyMatch(roleName -> roleName.equals("ADMIN")
+                        || roleName.equals("ROLE_ADMIN"));
+
+        if (!isAdmin) {
+            throw new ValidationException(
+                    "Only ADMIN can approve or reject an over-budget Purchase Order",
+                    "ERR_ADMIN_ROLE_REQUIRED"
+            );
         }
     }
 }
