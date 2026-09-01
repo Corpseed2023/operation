@@ -3,7 +3,7 @@ package com.doc.controller.project;
 import com.doc.dto.project.lifecycle.CreateProjectLifecycleRequestDto;
 import com.doc.dto.project.lifecycle.ProjectLifecycleDecisionDto;
 import com.doc.dto.project.lifecycle.ProjectLifecycleResponseDto;
-import com.doc.service.ProjectLifecycleRequestService;
+import com.doc.service.project.ProjectLifecycleRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;

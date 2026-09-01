@@ -4,7 +4,7 @@ import com.doc.dto.project.activity.CreateCommentRequestDto;
 import com.doc.dto.project.activity.CreateNoteRequestDto;
 import com.doc.dto.project.activity.ProjectActivityResponseDto;
 import com.doc.em.ActivityType;
-import com.doc.service.ProjectActivityService;
+import com.doc.service.project.ProjectActivityService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;

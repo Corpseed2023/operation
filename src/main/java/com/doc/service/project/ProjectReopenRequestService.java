@@ -1,4 +1,4 @@
-package com.doc.service;
+package com.doc.service.project;
 
 import com.doc.dto.project.reopen.ProjectReopenCreateRequestDto;
 import com.doc.dto.project.reopen.ProjectReopenDecisionDto;

@@ -6,7 +6,7 @@ import com.doc.entity.project.ProjectStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
-import com.doc.service.ProjectStatusService;
+import com.doc.service.project.ProjectStatusService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

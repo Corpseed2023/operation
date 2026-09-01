@@ -3,7 +3,7 @@ package com.doc.controller.project;
 import com.doc.dto.project.reopen.ProjectReopenCreateRequestDto;
 import com.doc.dto.project.reopen.ProjectReopenDecisionDto;
 import com.doc.dto.project.reopen.ProjectReopenRequestResponseDto;
-import com.doc.service.ProjectReopenRequestService;
+import com.doc.service.project.ProjectReopenRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;

@@ -8,7 +8,7 @@ import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.repository.UserRepository;
-import com.doc.service.ProjectSearchService;
+import com.doc.service.project.ProjectSearchService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.*;
 import lombok.RequiredArgsConstructor;

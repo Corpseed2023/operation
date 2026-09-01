@@ -4,7 +4,7 @@ import com.doc.dto.project.portal.ProjectPortalDetailApprovalDto;
 import com.doc.dto.project.portal.ProjectPortalDetailListResponseDto;
 import com.doc.dto.project.portal.ProjectPortalDetailRequestDto;
 import com.doc.dto.project.portal.ProjectPortalDetailResponseDto;
-import com.doc.service.ProjectPortalDetailService;
+import com.doc.service.project.ProjectPortalDetailService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

@@ -37,7 +37,7 @@ import com.doc.repository.projectRepo.activity.ProjectCommentRepository;
 import com.doc.repository.projectRepo.activity.ProjectExpenseRepository;
 import com.doc.repository.projectRepo.activity.ProjectNoteRepository;
 import com.doc.service.ExpenseAccountPostingService;
-import com.doc.service.ProjectActivityService;
+import com.doc.service.project.ProjectActivityService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;

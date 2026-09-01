@@ -11,7 +11,7 @@ import com.doc.repository.ProjectMilestoneAssignmentRepository;
 import com.doc.repository.ProjectRepository;
 import com.doc.repository.projectRepo.ProjectPortalDetailRepository;
 import com.doc.repository.UserRepository;
-import com.doc.service.ProjectPortalDetailService;
+import com.doc.service.project.ProjectPortalDetailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

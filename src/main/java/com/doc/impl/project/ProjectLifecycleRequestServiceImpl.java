@@ -12,7 +12,7 @@ import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.projectRepo.ProjectLifecycleRequestRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
-import com.doc.service.ProjectLifecycleRequestService;
+import com.doc.service.project.ProjectLifecycleRequestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.data.domain.*;
@@ -22,7 +22,6 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
