@@ -2,6 +2,7 @@ package com.doc.repository;
 
 import com.doc.entity.milestone.MilestoneOnHoldApprovalStatus;
 import com.doc.entity.milestone.MilestoneOnHoldRequest;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,7 +10,6 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import jakarta.persistence.LockModeType;
 import java.util.Optional;
 
 public interface MilestoneOnHoldRequestRepository
@@ -22,42 +22,87 @@ public interface MilestoneOnHoldRequestRepository
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-            select r
-            from MilestoneOnHoldRequest r
-            join fetch r.milestoneAssignment a
-            join fetch a.project p
-            join fetch r.requestedBy requestedBy
-            join fetch r.approver approver
-            join fetch r.previousStatus previousStatus
-            where r.id = :requestId
+            SELECT r
+            FROM MilestoneOnHoldRequest r
+            JOIN FETCH r.milestoneAssignment a
+            JOIN FETCH a.project p
+            JOIN FETCH r.requestedBy requestedBy
+            JOIN FETCH r.approver approver
+            JOIN FETCH r.previousStatus previousStatus
+            WHERE r.id = :requestId
             """)
     Optional<MilestoneOnHoldRequest> findByIdForDecision(
             @Param("requestId") Long requestId
     );
 
+    /*
+     * Manager access:
+     * Returns only requests assigned to this manager.
+     */
     @Query(
             value = """
-                    select r
-                    from MilestoneOnHoldRequest r
-                    join fetch r.milestoneAssignment a
-                    join fetch a.project p
-                    join fetch r.requestedBy requestedBy
-                    join fetch r.approver approver
-                    join fetch r.previousStatus previousStatus
-                    where r.approver.id = :managerId
-                      and (:approvalStatus is null or r.approvalStatus = :approvalStatus)
-                    order by r.requestedAt desc
+                    SELECT r
+                    FROM MilestoneOnHoldRequest r
+                    JOIN FETCH r.milestoneAssignment a
+                    JOIN FETCH a.project p
+                    JOIN FETCH r.requestedBy requestedBy
+                    JOIN FETCH r.approver approver
+                    JOIN FETCH r.previousStatus previousStatus
+                    WHERE r.approver.id = :managerId
+                      AND (
+                            :approvalStatus IS NULL
+                            OR r.approvalStatus = :approvalStatus
+                      )
+                    ORDER BY r.requestedAt DESC
                     """,
             countQuery = """
-                    select count(r)
-                    from MilestoneOnHoldRequest r
-                    where r.approver.id = :managerId
-                      and (:approvalStatus is null or r.approvalStatus = :approvalStatus)
+                    SELECT COUNT(r)
+                    FROM MilestoneOnHoldRequest r
+                    WHERE r.approver.id = :managerId
+                      AND (
+                            :approvalStatus IS NULL
+                            OR r.approvalStatus = :approvalStatus
+                      )
                     """
     )
     Page<MilestoneOnHoldRequest> findManagerQueue(
             @Param("managerId") Long managerId,
-            @Param("approvalStatus") MilestoneOnHoldApprovalStatus approvalStatus,
+            @Param("approvalStatus")
+            MilestoneOnHoldApprovalStatus approvalStatus,
+            Pageable pageable
+    );
+
+    /*
+     * ADMIN and OPERATION_HEAD access:
+     * Returns all requests.
+     */
+    @Query(
+            value = """
+                    SELECT r
+                    FROM MilestoneOnHoldRequest r
+                    JOIN FETCH r.milestoneAssignment a
+                    JOIN FETCH a.project p
+                    JOIN FETCH r.requestedBy requestedBy
+                    JOIN FETCH r.approver approver
+                    JOIN FETCH r.previousStatus previousStatus
+                    WHERE (
+                            :approvalStatus IS NULL
+                            OR r.approvalStatus = :approvalStatus
+                          )
+                    ORDER BY r.requestedAt DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(r)
+                    FROM MilestoneOnHoldRequest r
+                    WHERE (
+                            :approvalStatus IS NULL
+                            OR r.approvalStatus = :approvalStatus
+                          )
+                    """
+    )
+    Page<MilestoneOnHoldRequest> findAllRequestQueue(
+            @Param("approvalStatus")
+            MilestoneOnHoldApprovalStatus approvalStatus,
             Pageable pageable
     );
 }

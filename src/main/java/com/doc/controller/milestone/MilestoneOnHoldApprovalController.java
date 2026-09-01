@@ -24,21 +24,41 @@ public class MilestoneOnHoldApprovalController {
         this.approvalService = approvalService;
     }
 
-    @GetMapping("/manager/{managerId}")
-    @Operation(summary = "Get milestone ON_HOLD requests assigned to a manager")
+    @GetMapping("/manager/{userId}")
+    @Operation(
+            summary = "Get milestone ON_HOLD requests",
+            description = """
+                    ADMIN and OPERATION_HEAD can see all requests.
+                    A manager can see only requests assigned to them.
+                    """
+    )
     public ResponseEntity<Page<MilestoneOnHoldResponseDto>> getManagerQueue(
-            @PathVariable Long managerId,
-            @RequestParam(required = false) MilestoneOnHoldApprovalStatus status,
+            @PathVariable Long userId,
+            @RequestParam(required = false)
+            MilestoneOnHoldApprovalStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        if (page < 0 || size < 1 || size > 100) {
-            throw new IllegalArgumentException("page must be >= 0 and size must be between 1 and 100");
+        if (page < 0) {
+            throw new IllegalArgumentException(
+                    "Page number must be greater than or equal to zero"
+            );
+        }
+
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException(
+                    "Page size must be between 1 and 100"
+            );
         }
 
         Pageable pageable = PageRequest.of(page, size);
+
         return ResponseEntity.ok(
-                approvalService.getManagerQueue(managerId, status, pageable)
+                approvalService.getManagerQueue(
+                        userId,
+                        status,
+                        pageable
+                )
         );
     }
 
@@ -48,6 +68,8 @@ public class MilestoneOnHoldApprovalController {
             @PathVariable Long requestId,
             @Valid @RequestBody MilestoneOnHoldDecisionDto dto
     ) {
-        return ResponseEntity.ok(approvalService.decide(requestId, dto));
+        return ResponseEntity.ok(
+                approvalService.decide(requestId, dto)
+        );
     }
 }

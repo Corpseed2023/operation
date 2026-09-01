@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.List;
 
 @Service
 @Transactional
@@ -270,17 +271,58 @@ public class MilestoneOnHoldApprovalServiceImpl
     @Override
     @Transactional(readOnly = true)
     public Page<MilestoneOnHoldResponseDto> getManagerQueue(
-            Long managerId,
+            Long userId,
             MilestoneOnHoldApprovalStatus approvalStatus,
             Pageable pageable
     ) {
-        userRepository.findActiveUserById(managerId)
+        User user = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Manager not found",
-                        "MANAGER_NOT_FOUND"
+                        "User not found",
+                        "USER_NOT_FOUND"
                 ));
 
-        return requestRepository.findManagerQueue(managerId, approvalStatus, pageable)
+        boolean isAdmin = hasRole(user, "ADMIN");
+        boolean isOperationHead = hasRole(user, "OPERATION_HEAD");
+
+        log.info(
+                "[MILESTONE-ON-HOLD-QUEUE-ACCESS] userId={}, admin={}, " +
+                        "operationHead={}, manager={}",
+                userId,
+                isAdmin,
+                isOperationHead,
+                user.isManagerFlag()
+        );
+
+        /*
+         * ADMIN and OPERATION_HEAD can see every request.
+         */
+        if (isAdmin || isOperationHead) {
+            return requestRepository
+                    .findAllRequestQueue(approvalStatus, pageable)
+                    .map(this::toResponse);
+        }
+
+        /*
+         * Other users must be managers.
+         */
+        if (!user.isManagerFlag()) {
+            log.warn(
+                    "[MILESTONE-ON-HOLD-QUEUE-DENIED] userId={}, roles={}",
+                    userId,
+                    getRoleNames(user)
+            );
+
+            throw new ValidationException(
+                    "Only ADMIN, OPERATION_HEAD, or a manager can view ON_HOLD requests",
+                    "NOT_AUTHORIZED_TO_VIEW_ON_HOLD_REQUESTS"
+            );
+        }
+
+        /*
+         * A normal manager sees only requests where they are the approver.
+         */
+        return requestRepository
+                .findManagerQueue(userId, approvalStatus, pageable)
                 .map(this::toResponse);
     }
 
@@ -330,6 +372,46 @@ public class MilestoneOnHoldApprovalServiceImpl
                 .requestedAt(request.getRequestedAt())
                 .decidedAt(request.getDecidedAt())
                 .build();
+    }
+
+    private boolean hasRole(User user, String expectedRole) {
+        if (user == null || user.getRoles() == null || expectedRole == null) {
+            return false;
+        }
+
+        return user.getRoles()
+                .stream()
+                .filter(role -> role != null && role.getName() != null)
+                .map(role -> normalizeRoleName(role.getName()))
+                .anyMatch(expectedRole::equalsIgnoreCase);
+    }
+
+    private String normalizeRoleName(String roleName) {
+        String normalized = roleName.trim();
+
+        if (normalized.regionMatches(
+                true,
+                0,
+                "ROLE_",
+                0,
+                "ROLE_".length()
+        )) {
+            normalized = normalized.substring("ROLE_".length());
+        }
+
+        return normalized;
+    }
+
+    private List<String> getRoleNames(User user) {
+        if (user == null || user.getRoles() == null) {
+            return List.of();
+        }
+
+        return user.getRoles()
+                .stream()
+                .filter(role -> role != null && role.getName() != null)
+                .map(role -> role.getName())
+                .toList();
     }
 
     private String resolveMilestoneName(ProjectMilestoneAssignment assignment) {
