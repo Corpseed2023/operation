@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -207,87 +208,59 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     );
 
     @Query("""
-        SELECT
-            m.id AS milestoneId,
-            m.name AS milestoneName,
-
-            COUNT(DISTINCT p.id) AS totalProjects,
-
-            COUNT(
-                DISTINCT CASE
-                    WHEN s.id = 3 THEN p.id
-                    ELSE NULL
-                END
-            ) AS completedProjects
-
-        FROM ProjectMilestoneAssignment pma
-
-        JOIN pma.project p
-        JOIN pma.milestone m
-        JOIN pma.status s
-
-        JOIN pma.assignedUser u
-        JOIN u.departments d
-
-        WHERE pma.isDeleted = false
-          AND pma.isVisible = true
-          AND p.isDeleted = false
-          AND pma.assignedUser IS NOT NULL
-
-          AND (
-                :departmentId IS NULL
-                OR d.id = :departmentId
-          )
-
-        GROUP BY
-            m.id,
-            m.name
-
-        ORDER BY m.id
-        """)
+    SELECT
+        m.id AS milestoneId,
+        m.name AS milestoneName,
+        COUNT(DISTINCT p.id) AS totalProjects,
+        COUNT(DISTINCT CASE WHEN s.id = 3 THEN p.id ELSE NULL END) AS completedProjects
+    FROM ProjectMilestoneAssignment pma
+    JOIN pma.project p
+    JOIN pma.milestone m
+    JOIN pma.status s
+    JOIN pma.assignedUser u
+    JOIN u.departments d
+    WHERE pma.isDeleted = false
+      AND pma.isVisible = true
+      AND p.isDeleted = false
+      AND pma.assignedUser IS NOT NULL
+      AND (:fromDate IS NULL OR pma.createdDate >= :fromDate)
+      AND (:toDate IS NULL OR pma.createdDate < :toDate)
+      AND (:departmentId IS NULL OR d.id = :departmentId)
+    GROUP BY m.id, m.name
+    ORDER BY m.id
+    """)
     List<MilestoneOverviewProjection> getMilestoneOverview(
-            @Param("departmentId") Long departmentId
+            @Param("departmentId") Long departmentId,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
     );
 
     @Query("""
-        SELECT
-            d.id AS departmentId,
-            d.name AS departmentName,
-
-            COUNT(pma.id) AS assignedCount,
-
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN pma.status.id = 3 THEN 1
-                        ELSE 0
-                    END
-                ),
-                0
-            ) AS completedCount
-
-        FROM ProjectMilestoneAssignment pma
-        JOIN pma.assignedUser u
-        JOIN u.departments d
-        JOIN pma.project p
-
-        WHERE pma.isDeleted = false
-          AND p.isDeleted = false
-          AND pma.assignedUser IS NOT NULL
-
-          AND (
-                :departmentId IS NULL
-                OR d.id = :departmentId
-          )
-
-        GROUP BY
-            d.id,
-            d.name
-
-        ORDER BY d.name
-        """)
+    SELECT
+        d.id AS departmentId,
+        d.name AS departmentName,
+        COUNT(pma.id) AS assignedCount,
+        COALESCE(
+            SUM(CASE WHEN pma.status.id = 3 THEN 1 ELSE 0 END),
+            0
+        ) AS completedCount
+    FROM ProjectMilestoneAssignment pma
+    JOIN pma.assignedUser u
+    JOIN u.departments d
+    JOIN pma.project p
+    WHERE pma.isDeleted = false
+      AND p.isDeleted = false
+      AND pma.assignedUser IS NOT NULL
+      AND (:fromDate IS NULL OR pma.createdDate >= :fromDate)
+      AND (:toDate IS NULL OR pma.createdDate < :toDate)
+      AND (:departmentId IS NULL OR d.id = :departmentId)
+    GROUP BY d.id, d.name
+    ORDER BY d.name
+    """)
     List<TeamWorkloadProjection> getTeamWorkload(
-            @Param("departmentId") Long departmentId
+            @Param("departmentId") Long departmentId,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
     );
 
 

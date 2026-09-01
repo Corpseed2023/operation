@@ -333,14 +333,23 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     }
 
     @Override
-    public List<ProjectStatusCountResponseDto>
-    getProjectStatusWiseSummary(Long userId) {
+    public List<ProjectStatusCountResponseDto> getProjectStatusWiseSummary(
+            Long userId, LocalDate fromDate, LocalDate toDate
+    ) {
+        Long departmentId = validateUserAndGetDepartmentId(userId);
 
-        //validateDepartmentAccess(userId);
-        Long departmentId =
-                validateUserAndGetDepartmentId(userId);
+        Date fromDateTime = fromDate != null
+                ? Date.from(fromDate.atStartOfDay(INDIA_ZONE).toInstant())
+                : null;
+
+        Date toDateTimeExclusive = toDate != null
+                ? Date.from(toDate.plusDays(1).atStartOfDay(INDIA_ZONE).toInstant())
+                : null;
+
         List<ProjectStatusCountProjection> projections =
-                projectRepository.getProjectStatusWiseCount(departmentId);
+                projectRepository.getProjectStatusWiseCount(
+                        departmentId, fromDateTime, toDateTimeExclusive
+                );
 
         long totalProjectCount = projections.stream()
                 .map(ProjectStatusCountProjection::getProjectCount)
@@ -350,22 +359,13 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
 
         return projections.stream()
                 .map(projection -> {
-
-                    long projectCount =
-                            projection.getProjectCount() == null
-                                    ? 0L
-                                    : projection.getProjectCount();
+                    long projectCount = projection.getProjectCount() == null ? 0L : projection.getProjectCount();
 
                     return ProjectStatusCountResponseDto.builder()
                             .statusId(projection.getStatusId())
                             .statusName(projection.getStatusName())
                             .projectCount(projectCount)
-                            .percentage(
-                                    calculateStatusPercentage(
-                                            projectCount,
-                                            totalProjectCount
-                                    )
-                            )
+                            .percentage(calculateStatusPercentage(projectCount, totalProjectCount))
                             .build();
                 })
                 .toList();
@@ -373,34 +373,30 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
 
     @Override
     public List<MilestoneOverviewResponseDto> getMilestoneOverview(
-            Long userId
+            Long userId, LocalDate fromDate, LocalDate toDate
     ) {
+        Long departmentId = validateUserAndGetDepartmentId(userId);
 
-        //validateDepartmentAccess(userId);
-        Long departmentId =
-                validateUserAndGetDepartmentId(userId);
+        Date fromDateTime = fromDate != null
+                ? Date.from(fromDate.atStartOfDay(INDIA_ZONE).toInstant())
+                : null;
+
+        Date toDateTimeExclusive = toDate != null
+                ? Date.from(toDate.plusDays(1).atStartOfDay(INDIA_ZONE).toInstant())
+                : null;
 
         List<MilestoneOverviewProjection> projections =
-                projectMilestoneAssignmentRepository.getMilestoneOverview(departmentId);
+                projectMilestoneAssignmentRepository.getMilestoneOverview(
+                        departmentId, fromDateTime, toDateTimeExclusive
+                );
 
         return projections.stream()
                 .map(projection -> {
-
-                    long totalProjects =
-                            projection.getTotalProjects() == null
-                                    ? 0L
-                                    : projection.getTotalProjects();
-
-                    long completedProjects =
-                            projection.getCompletedProjects() == null
-                                    ? 0L
-                                    : projection.getCompletedProjects();
+                    long totalProjects = projection.getTotalProjects() == null ? 0L : projection.getTotalProjects();
+                    long completedProjects = projection.getCompletedProjects() == null ? 0L : projection.getCompletedProjects();
 
                     BigDecimal completionPercentage =
-                            calculateMilestonePercentage(
-                                    completedProjects,
-                                    totalProjects
-                            );
+                            calculateMilestonePercentage(completedProjects, totalProjects);
 
                     return MilestoneOverviewResponseDto.builder()
                             .milestoneId(projection.getMilestoneId())
@@ -414,39 +410,35 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     }
 
     @Override
-    public List<TeamWorkloadResponseDto> getTeamWorkload(Long userId) {
+    public List<TeamWorkloadResponseDto> getTeamWorkload(
+            Long userId, LocalDate fromDate, LocalDate toDate
+    ) {
+        Long departmentId = validateUserAndGetDepartmentId(userId);
 
-        //validateDepartmentAccess(userId);
-        Long departmentId =
-                validateUserAndGetDepartmentId(userId);
+        Date fromDateTime = fromDate != null
+                ? Date.from(fromDate.atStartOfDay(INDIA_ZONE).toInstant())
+                : null;
+
+        Date toDateTimeExclusive = toDate != null
+                ? Date.from(toDate.plusDays(1).atStartOfDay(INDIA_ZONE).toInstant())
+                : null;
 
         List<TeamWorkloadProjection> projections =
-                projectMilestoneAssignmentRepository.getTeamWorkload(departmentId);
+                projectMilestoneAssignmentRepository.getTeamWorkload(
+                        departmentId, fromDateTime, toDateTimeExclusive
+                );
 
         return projections.stream()
                 .map(projection -> {
-
-                    long assignedCount =
-                            projection.getAssignedCount() == null
-                                    ? 0L
-                                    : projection.getAssignedCount();
-
-                    long completedCount =
-                            projection.getCompletedCount() == null
-                                    ? 0L
-                                    : projection.getCompletedCount();
+                    long assignedCount = projection.getAssignedCount() == null ? 0L : projection.getAssignedCount();
+                    long completedCount = projection.getCompletedCount() == null ? 0L : projection.getCompletedCount();
 
                     BigDecimal completionPercentage =
-                            calculateTeamCompletionPercentage(
-                                    completedCount,
-                                    assignedCount
-                            );
+                            calculateTeamCompletionPercentage(completedCount, assignedCount);
 
                     return TeamWorkloadResponseDto.builder()
                             .departmentId(projection.getDepartmentId())
-                            .departmentName(
-                                    projection.getDepartmentName() + " Team"
-                            )
+                            .departmentName(projection.getDepartmentName() + " Team")
                             .assignedCount(assignedCount)
                             .completedCount(completedCount)
                             .completionPercentage(completionPercentage)

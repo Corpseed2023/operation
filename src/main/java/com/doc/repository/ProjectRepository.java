@@ -532,38 +532,36 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
     @Query("""
-        SELECT
-            ps.id AS statusId,
-            ps.name AS statusName,
-            COUNT(DISTINCT p.id) AS projectCount
-
-        FROM ProjectStatus ps
-
-        LEFT JOIN Project p
-               ON p.status.id = ps.id
-              AND p.isDeleted = false
-              AND (
-                    :departmentId IS NULL
-                    OR EXISTS (
-                        SELECT pma.id
-                        FROM ProjectMilestoneAssignment pma
-                        JOIN pma.assignedUser u
-                        JOIN u.departments d
-                        WHERE pma.project.id = p.id
-                          AND pma.isDeleted = false
-                          AND pma.isVisible = true
-                          AND d.id = :departmentId
-                    )
-              )
-
-        GROUP BY
-            ps.id,
-            ps.name
-
-        ORDER BY ps.id
-        """)
+    SELECT
+        ps.id AS statusId,
+        ps.name AS statusName,
+        COUNT(DISTINCT p.id) AS projectCount
+    FROM ProjectStatus ps
+    LEFT JOIN Project p
+           ON p.status.id = ps.id
+          AND p.isDeleted = false
+          AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+          AND (:toDate IS NULL OR p.createdDate < :toDate)
+          AND (
+                :departmentId IS NULL
+                OR EXISTS (
+                    SELECT pma.id
+                    FROM ProjectMilestoneAssignment pma
+                    JOIN pma.assignedUser u
+                    JOIN u.departments d
+                    WHERE pma.project.id = p.id
+                      AND pma.isDeleted = false
+                      AND pma.isVisible = true
+                      AND d.id = :departmentId
+                )
+          )
+    GROUP BY ps.id, ps.name
+    ORDER BY ps.id
+    """)
     List<ProjectStatusCountProjection> getProjectStatusWiseCount(
-            @Param("departmentId") Long departmentId
+            @Param("departmentId") Long departmentId,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
     );
 
     @Query(
