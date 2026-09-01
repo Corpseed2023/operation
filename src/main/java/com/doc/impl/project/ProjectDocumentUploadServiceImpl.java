@@ -16,7 +16,7 @@ import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.*;
-import com.doc.service.ProjectDocumentUploadService;
+import com.doc.service.project.ProjectDocumentUploadService;
 import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

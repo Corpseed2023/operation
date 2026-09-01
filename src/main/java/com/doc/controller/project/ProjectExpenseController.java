@@ -11,7 +11,7 @@ import com.doc.dto.project.activity.expense.ProjectExpenseResponseDto;
 import com.doc.em.ApprovalStatus;
 import com.doc.em.ExpenseApprovalStage;
 import com.doc.em.ExpensePaymentStatus;
-import com.doc.service.ProjectActivityService;
+import com.doc.service.project.ProjectActivityService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;

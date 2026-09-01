@@ -4,7 +4,7 @@ import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
 import com.doc.dto.ProjectMilestoneassignment.SendBackToPreviousMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
-import com.doc.service.ProjectMilestoneAssignmentService;
+import com.doc.service.project.ProjectMilestoneAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;

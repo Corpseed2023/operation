@@ -1,6 +1,6 @@
 package com.doc.controller.project;
 
-import com.doc.service.ProjectStatusService;
+import com.doc.service.project.ProjectStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;

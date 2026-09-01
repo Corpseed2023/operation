@@ -43,4 +43,11 @@ public class ProcurementAssignmentResponseDto {
 
     private Date createdDate;
     private Date updatedDate;
+
+    private Long selectedQuotationId;
+    private BigDecimal finalizedAmount;
+    private BigDecimal latestQuotedAmount;
+    private boolean quotationAmountChanged;
+
+    private BigDecimal totalFinalizedAmount;
 }

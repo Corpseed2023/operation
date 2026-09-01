@@ -2,7 +2,7 @@ package com.doc.controller.project;
 
 import com.doc.dto.project.ProjectCountResponseDto;
 import com.doc.dto.project.ProjectResponseDto;
-import com.doc.service.ProjectSearchService;
+import com.doc.service.project.ProjectSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;

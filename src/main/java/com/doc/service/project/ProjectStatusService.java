@@ -1,4 +1,4 @@
-package com.doc.service;
+package com.doc.service.project;
 
 import com.doc.dto.project.status.ProjectStatusRequestDto;
 import com.doc.dto.project.status.ProjectStatusResponseDto;
