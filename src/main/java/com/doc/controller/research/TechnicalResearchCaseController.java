@@ -65,10 +65,6 @@ public class TechnicalResearchCaseController {
             ResearchPriority priority,
 
             @RequestParam(required = false)
-            @Positive(message = "Product ID must be greater than zero")
-            Long productId,
-
-            @RequestParam(required = false)
             String search,
 
             @PageableDefault(

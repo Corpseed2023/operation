@@ -6,7 +6,7 @@ import com.doc.entity.document.ProductRequiredDocuments;
 import com.doc.entity.project.Project;
 import com.doc.repository.CompanyDocumentRepository;
 import com.doc.repository.ProductDocumentMappingRepository;
-import com.doc.service.ProjectMailService;
+import com.doc.service.project.ProjectMailService;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

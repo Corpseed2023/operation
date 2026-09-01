@@ -1,4 +1,4 @@
-package com.doc.service;
+package com.doc.service.project;
 
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
 import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;

@@ -1,4 +1,4 @@
-package com.doc.service;
+package com.doc.service.project;
 
 import com.doc.dto.project.activity.CreateCommentRequestDto;
 import com.doc.dto.project.activity.CreateNoteRequestDto;

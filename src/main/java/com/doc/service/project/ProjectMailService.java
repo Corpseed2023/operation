@@ -1,4 +1,4 @@
-package com.doc.service;
+package com.doc.service.project;
 
 import com.doc.entity.project.Project;
 import com.doc.entity.client.Contact;
