@@ -177,34 +177,33 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     @Override
     public List<RecentActivityResponseDto> getRecentActivities(Long userId, Integer limit) {
 
-        Long departmentId = validateUserAndGetDepartmentId(userId);
+        List<Long> userIds = resolveAccessibleUserIdsOrNull(userId);
 
-        int recordLimit = limit == null || limit <= 0
-                ? 10
-                : Math.min(limit, 50);
-
+        int recordLimit = limit == null || limit <= 0 ? 10 : Math.min(limit, 50);
         Pageable pageable = PageRequest.of(0, recordLimit);
 
-        List<RecentActivityResponseDto> milestoneActivities =
-                projectMilestoneAssignmentRepository
-                        .findRecentMilestoneCompletions(departmentId, pageable)
-                        .stream()
-                        .map(record -> RecentActivityResponseDto.builder()
-                                .activityType("MILESTONE_COMPLETED")
-                                .title("Milestone completed")
-                                .description(record.getMilestoneName() + " completed for " + record.getCompanyName())
-                                .colorCode("GREEN")
-                                .timestamp(record.getCompletedDate())
-                                .build())
-                        .toList();
+        List<RecentActivityResponseDto> milestoneActivities = (
+                userIds == null
+                        ? projectMilestoneAssignmentRepository.findRecentMilestoneCompletionsAdmin(pageable)
+                        : projectMilestoneAssignmentRepository.findRecentMilestoneCompletionsForUsers(userIds, pageable)
+        ).stream()
+                .map(record -> RecentActivityResponseDto.builder()
+                        .activityType("MILESTONE_COMPLETED")
+                        .title("Milestone completed")
+                        .description(record.getMilestoneName() + " completed for " + record.getCompanyName())
+                        .colorCode("GREEN")
+                        .timestamp(record.getCompletedDate())
+                        .build())
+                .toList();
 
-        List<RecentActivityResponseDto> projectActivities =
-                projectRepository
-                        .findRecentProjectStatusChanges(departmentId, pageable)
-                        .stream()
-                        .map(this::mapProjectActivity)
-                        .filter(Objects::nonNull)
-                        .toList();
+        List<RecentActivityResponseDto> projectActivities = (
+                userIds == null
+                        ? projectRepository.findRecentProjectStatusChangesAdmin(pageable)
+                        : projectRepository.findRecentProjectStatusChangesForUsers(userIds, pageable)
+        ).stream()
+                .map(this::mapProjectActivity)
+                .filter(Objects::nonNull)
+                .toList();
 
         return Stream.concat(milestoneActivities.stream(), projectActivities.stream())
                 .sorted(Comparator.comparing(RecentActivityResponseDto::getTimestamp).reversed())
@@ -373,16 +372,18 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     }
 
     @Override
-    public ProjectCompletionResponseDto getProjectCompletionSummary(
-            Long userId
-    ) {
+    public ProjectCompletionResponseDto getProjectCompletionSummary(Long userId) {
+
+        List<Long> userIds = resolveAccessibleUserIdsOrNull(userId);
+
+        ProjectCompletionProjection projection = userIds == null
+                ? projectRepository.getProjectCompletionSummaryAdmin()
+                : projectRepository.getProjectCompletionSummaryForUsers(userIds);
 
         //validateDepartmentAccess(userId);
         Long departmentId =
                 validateUserAndGetDepartmentId(userId);
 
-        ProjectCompletionProjection projection =
-                projectRepository.getProjectCompletionSummary(departmentId);
 
         long totalProjectCount =
                 projection == null
@@ -413,7 +414,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     public List<ProjectStatusCountResponseDto> getProjectStatusWiseSummary(
             Long userId, LocalDate fromDate, LocalDate toDate
     ) {
-        Long departmentId = validateUserAndGetDepartmentId(userId);
+        List<Long> userIds = resolveAccessibleUserIdsOrNull(userId);
 
         Date fromDateTime = fromDate != null
                 ? Date.from(fromDate.atStartOfDay(INDIA_ZONE).toInstant())
@@ -423,10 +424,10 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 ? Date.from(toDate.plusDays(1).atStartOfDay(INDIA_ZONE).toInstant())
                 : null;
 
-        List<ProjectStatusCountProjection> projections =
-                projectRepository.getProjectStatusWiseCount(
-                        departmentId, fromDateTime, toDateTimeExclusive
-                );
+        List<ProjectStatusCountProjection> projections = userIds == null
+                ? projectRepository.getProjectStatusWiseCountAdmin(fromDateTime, toDateTimeExclusive)
+                : projectRepository.getProjectStatusWiseCountForUsers(userIds, fromDateTime, toDateTimeExclusive);
+
 
         long totalProjectCount = projections.stream()
                 .map(ProjectStatusCountProjection::getProjectCount)
@@ -452,7 +453,7 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
     public List<MilestoneOverviewResponseDto> getMilestoneOverview(
             Long userId, LocalDate fromDate, LocalDate toDate
     ) {
-        Long departmentId = validateUserAndGetDepartmentId(userId);
+        List<Long> userIds = resolveAccessibleUserIdsOrNull(userId);
 
         Date fromDateTime = fromDate != null
                 ? Date.from(fromDate.atStartOfDay(INDIA_ZONE).toInstant())
@@ -462,10 +463,10 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 ? Date.from(toDate.plusDays(1).atStartOfDay(INDIA_ZONE).toInstant())
                 : null;
 
-        List<MilestoneOverviewProjection> projections =
-                projectMilestoneAssignmentRepository.getMilestoneOverview(
-                        departmentId, fromDateTime, toDateTimeExclusive
-                );
+        List<MilestoneOverviewProjection> projections = userIds == null
+                ? projectMilestoneAssignmentRepository.getMilestoneOverviewAdmin(fromDateTime, toDateTimeExclusive)
+                : projectMilestoneAssignmentRepository.getMilestoneOverviewForUsers(userIds, fromDateTime, toDateTimeExclusive);
+
 
         return projections.stream()
                 .map(projection -> {
@@ -531,25 +532,17 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
             Integer limit
     ) {
 
-        //validateDepartmentAccess(userId);
-        Long departmentId =
-                validateUserAndGetDepartmentId(userId);
+        List<Long> userIds = resolveAccessibleUserIdsOrNull(userId);
 
-        int days = upcomingDays == null || upcomingDays < 0
-                ? 7
-                : upcomingDays;
-
-        int recordLimit = limit == null || limit <= 0
-                ? 5
-                : Math.min(limit, 100);
+        int days = upcomingDays == null || upcomingDays < 0 ? 7 : upcomingDays;
+        int recordLimit = limit == null || limit <= 0 ? 5 : Math.min(limit, 100);
 
         LocalDate today = LocalDate.now();
 
-        List<DueRiskQueueProjection> projections =
-                projectMilestoneAssignmentRepository.findDueRiskQueue(departmentId,
-                        days,
-                        recordLimit
-                );
+        List<DueRiskQueueProjection> projections = userIds == null
+                ? projectMilestoneAssignmentRepository.findDueRiskQueueAdmin(days, recordLimit)
+                : projectMilestoneAssignmentRepository.findDueRiskQueueForUsers(userIds, days, recordLimit);
+
 
         return projections.stream()
                 .map(record -> {
@@ -769,6 +762,28 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
         return userIds;
     }
 
+    private List<Long> resolveAccessibleUserIdsOrNull(Long userId) {
+
+        if (userId == null) {
+            throw new ValidationException("User ID is required", "USER_ID_REQUIRED");
+        }
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active user not found with ID: " + userId,
+                        "ACTIVE_USER_NOT_FOUND"
+                ));
+
+        boolean isAdmin = hasRole(user, "ADMIN");
+        boolean isOperationHead = hasRole(user, "OPERATION_HEAD");
+
+        if (isAdmin || isOperationHead) {
+            return null; // signals "no restriction" — same convention as validateUserAndGetDepartmentId
+        }
+
+        return resolveAccessibleUserIds(user); // self + subordinates
+    }
+
     private boolean hasRole(User user, String roleName) {
         if (user.getRoles() == null || user.getRoles().isEmpty()) {
             return false;
@@ -814,23 +829,16 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
         Long departmentId =
                 validateUserAndGetDepartmentId(userId);
 
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(
-                        Sort.Direction.DESC,
-                        "id"
-                )
-        );
+        List<Long> userIds = resolveAccessibleUserIdsOrNull(userId);
+        boolean hasUserFilter = userIds != null;
 
-        String normalizedSearch =
-                search == null || search.isBlank()
-                        ? null
-                        : search.trim();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+        String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
 
         Page<ProjectTrackerSummaryProjection> projectPage =
                 projectRepository.findProjectMilestoneTrackerProjects(
-                        departmentId,
+                        hasUserFilter,
+                        hasUserFilter ? userIds : Collections.emptyList(),
                         stageId,
                         normalizedSearch,
                         pageable

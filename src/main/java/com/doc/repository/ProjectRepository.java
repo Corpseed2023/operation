@@ -461,25 +461,26 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
 
     @Query("""
-        SELECT
-            UPPER(p.status.name),
-            COUNT(DISTINCT p)
-        FROM Project p
-        WHERE p.isDeleted = false
-          AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
-          AND (:toDate IS NULL OR p.createdDate < :toDate)
-          AND (
-                p.salesPersonId IN :userIds
-                OR EXISTS (
-                    SELECT assignment.id
-                    FROM ProjectMilestoneAssignment assignment
-                    WHERE assignment.project = p
-                      AND assignment.assignedUser.id IN :userIds
-                      AND assignment.isDeleted = false
-                )
-          )
-        GROUP BY UPPER(p.status.name)
-        """)
+    SELECT new com.doc.dto.project.dashboard.ProjectStatusCountDto(
+        UPPER(p.status.name),
+        COUNT(DISTINCT p)
+    )
+    FROM Project p
+    WHERE p.isDeleted = false
+      AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+      AND (:toDate IS NULL OR p.createdDate < :toDate)
+      AND (
+            p.salesPersonId IN :userIds
+            OR EXISTS (
+                SELECT assignment.id
+                FROM ProjectMilestoneAssignment assignment
+                WHERE assignment.project = p
+                  AND assignment.assignedUser.id IN :userIds
+                  AND assignment.isDeleted = false
+            )
+      )
+    GROUP BY UPPER(p.status.name)
+    """)
     List<ProjectStatusCountDto> getStatusCountsForDashboardUser(
             @Param("userIds") List<Long> userIds,
             @Param("fromDate") Date fromDate,
@@ -531,6 +532,34 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     ProjectCompletionProjection getProjectCompletionSummary(
             @Param("departmentId") Long departmentId
     );
+
+    @Query("""
+    SELECT
+        COUNT(DISTINCT p.id) AS totalProjectCount,
+        COUNT(DISTINCT CASE WHEN p.status.id = 3 THEN p.id ELSE NULL END) AS completedProjectCount
+    FROM Project p
+    WHERE p.isDeleted = false
+      AND p.isCancelled = false
+    """)
+    ProjectCompletionProjection getProjectCompletionSummaryAdmin();
+
+    @Query("""
+    SELECT
+        COUNT(DISTINCT p.id) AS totalProjectCount,
+        COUNT(DISTINCT CASE WHEN p.status.id = 3 THEN p.id ELSE NULL END) AS completedProjectCount
+    FROM Project p
+    WHERE p.isDeleted = false
+      AND p.isCancelled = false
+      AND EXISTS (
+            SELECT pma.id
+            FROM ProjectMilestoneAssignment pma
+            WHERE pma.project.id = p.id
+              AND pma.isDeleted = false
+              AND pma.isVisible = true
+              AND pma.assignedUser.id IN :userIds
+      )
+    """)
+    ProjectCompletionProjection getProjectCompletionSummaryForUsers(@Param("userIds") List<Long> userIds);
 
     @Query("""
     SELECT
@@ -838,6 +867,178 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     """)
     List<ProjectActivityProjection> findRecentProjectStatusChanges(
             @Param("departmentId") Long departmentId,
+            Pageable pageable
+    );
+
+    @Query("""
+    SELECT
+        ps.id AS statusId,
+        ps.name AS statusName,
+        COUNT(DISTINCT p.id) AS projectCount
+    FROM ProjectStatus ps
+    LEFT JOIN Project p
+           ON p.status.id = ps.id
+          AND p.isDeleted = false
+          AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+          AND (:toDate IS NULL OR p.createdDate < :toDate)
+    GROUP BY ps.id, ps.name
+    ORDER BY ps.id
+    """)
+    List<ProjectStatusCountProjection> getProjectStatusWiseCountAdmin(
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+    @Query("""
+    SELECT
+        ps.id AS statusId,
+        ps.name AS statusName,
+        COUNT(DISTINCT p.id) AS projectCount
+    FROM ProjectStatus ps
+    LEFT JOIN Project p
+           ON p.status.id = ps.id
+          AND p.isDeleted = false
+          AND (:fromDate IS NULL OR p.createdDate >= :fromDate)
+          AND (:toDate IS NULL OR p.createdDate < :toDate)
+          AND EXISTS (
+                SELECT pma.id
+                FROM ProjectMilestoneAssignment pma
+                WHERE pma.project.id = p.id
+                  AND pma.isDeleted = false
+                  AND pma.isVisible = true
+                  AND pma.assignedUser.id IN :userIds
+          )
+    GROUP BY ps.id, ps.name
+    ORDER BY ps.id
+    """)
+    List<ProjectStatusCountProjection> getProjectStatusWiseCountForUsers(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+    @Query(
+            value = """
+            SELECT
+                p.id AS projectId,
+                p.project_no AS projectNumber,
+                ppd.total_amount AS projectValue,
+                c.id AS companyId,
+                c.name AS companyName,
+                pr.id AS productId,
+                pr.product_name AS serviceName,
+                ps.id AS stageId,
+                ps.name AS stage,
+                p.priority AS priority,
+                (
+                    SELECT MIN(pma2.date)
+                    FROM project_milestone_assignment pma2
+                    WHERE pma2.project_id = p.id
+                      AND pma2.is_deleted = 0
+                      AND pma2.is_visible = 1
+                      AND pma2.status_id <> 3
+                      AND pma2.date IS NOT NULL
+                      AND (:hasUserFilter = false OR pma2.assigned_user_id IN (:userIds))
+                ) AS dueDate
+            FROM project p
+            INNER JOIN company c ON c.id = p.company_id
+            INNER JOIN products pr ON pr.id = p.product_id
+            INNER JOIN project_statuses ps ON ps.id = p.status_id
+            LEFT JOIN project_payment_detail ppd
+                   ON ppd.project_id = p.id AND ppd.is_deleted = 0
+            WHERE p.is_deleted = 0
+              AND p.is_active = 1
+              AND (
+                    :hasUserFilter = false
+                    OR EXISTS (
+                        SELECT 1
+                        FROM project_milestone_assignment pma
+                        WHERE pma.project_id = p.id
+                          AND pma.is_deleted = 0
+                          AND pma.is_visible = 1
+                          AND pma.assigned_user_id IN (:userIds)
+                    )
+              )
+              AND (:stageId IS NULL OR p.status_id = :stageId)
+              AND (
+                    :search IS NULL OR TRIM(:search) = ''
+                    OR LOWER(p.project_no) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                    OR LOWER(p.name) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                    OR LOWER(c.name) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                    OR LOWER(pr.product_name) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+              )
+            ORDER BY p.id DESC
+            """,
+            countQuery = """
+            SELECT COUNT(DISTINCT p.id)
+            FROM project p
+            INNER JOIN company c ON c.id = p.company_id
+            INNER JOIN products pr ON pr.id = p.product_id
+            INNER JOIN project_statuses ps ON ps.id = p.status_id
+            WHERE p.is_deleted = 0
+              AND p.is_active = 1
+              AND (
+                    :hasUserFilter = false
+                    OR EXISTS (
+                        SELECT 1
+                        FROM project_milestone_assignment pma
+                        WHERE pma.project_id = p.id
+                          AND pma.is_deleted = 0
+                          AND pma.is_visible = 1
+                          AND pma.assigned_user_id IN (:userIds)
+                    )
+              )
+              AND (:stageId IS NULL OR p.status_id = :stageId)
+              AND (
+                    :search IS NULL OR TRIM(:search) = ''
+                    OR LOWER(p.project_no) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                    OR LOWER(p.name) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                    OR LOWER(c.name) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+                    OR LOWER(pr.product_name) LIKE LOWER(CONCAT('%', TRIM(:search), '%'))
+              )
+            """,
+            nativeQuery = true
+    )
+    Page<ProjectTrackerSummaryProjection> findProjectMilestoneTrackerProjects(
+            @Param("hasUserFilter") boolean hasUserFilter,
+            @Param("userIds") List<Long> userIds,
+            @Param("stageId") Long stageId,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query("""
+    SELECT DISTINCT
+        p.status.name AS statusName,
+        p.name AS projectName,
+        c.name AS companyName,
+        p.updatedDate AS updatedDate
+    FROM Project p
+    JOIN p.company c
+    WHERE p.isDeleted = false
+      AND p.status.name IN ('IN_PROGRESS', 'REOPENED', 'COMPLETED')
+      AND p.updatedDate IS NOT NULL
+    ORDER BY p.updatedDate DESC
+    """)
+    List<ProjectActivityProjection> findRecentProjectStatusChangesAdmin(Pageable pageable);
+
+    @Query("""
+    SELECT DISTINCT
+        p.status.name AS statusName,
+        p.name AS projectName,
+        c.name AS companyName,
+        p.updatedDate AS updatedDate
+    FROM Project p
+    JOIN p.company c
+    JOIN p.milestoneAssignments pma
+    WHERE p.isDeleted = false
+      AND p.status.name IN ('IN_PROGRESS', 'REOPENED', 'COMPLETED')
+      AND p.updatedDate IS NOT NULL
+      AND pma.assignedUser.id IN :userIds
+    ORDER BY p.updatedDate DESC
+    """)
+    List<ProjectActivityProjection> findRecentProjectStatusChangesForUsers(
+            @Param("userIds") List<Long> userIds,
             Pageable pageable
     );
 

@@ -522,6 +522,178 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
             @Param("completedStatusId") Long completedStatusId);
 
 
+    @Query("""
+    SELECT
+        m.id AS milestoneId,
+        m.name AS milestoneName,
+        COUNT(DISTINCT p.id) AS totalProjects,
+        COUNT(DISTINCT CASE WHEN s.id = 3 THEN p.id ELSE NULL END) AS completedProjects
+    FROM ProjectMilestoneAssignment pma
+    JOIN pma.project p
+    JOIN pma.milestone m
+    LEFT JOIN pma.status s
+    WHERE pma.isDeleted = false
+      AND pma.isVisible = true
+      AND p.isDeleted = false
+      AND (:fromDate IS NULL OR pma.createdDate >= :fromDate)
+      AND (:toDate IS NULL OR pma.createdDate < :toDate)
+    GROUP BY m.id, m.name
+    ORDER BY m.id
+    """)
+    List<MilestoneOverviewProjection> getMilestoneOverviewAdmin(
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
 
+    @Query("""
+    SELECT
+        m.id AS milestoneId,
+        m.name AS milestoneName,
+        COUNT(DISTINCT p.id) AS totalProjects,
+        COUNT(DISTINCT CASE WHEN s.id = 3 THEN p.id ELSE NULL END) AS completedProjects
+    FROM ProjectMilestoneAssignment pma
+    JOIN pma.project p
+    JOIN pma.milestone m
+    LEFT JOIN pma.status s
+    WHERE pma.isDeleted = false
+      AND pma.isVisible = true
+      AND p.isDeleted = false
+      AND pma.assignedUser.id IN :userIds
+      AND (:fromDate IS NULL OR pma.createdDate >= :fromDate)
+      AND (:toDate IS NULL OR pma.createdDate < :toDate)
+    GROUP BY m.id, m.name
+    ORDER BY m.id
+    """)
+    List<MilestoneOverviewProjection> getMilestoneOverviewForUsers(
+            @Param("userIds") List<Long> userIds,
+            @Param("fromDate") Date fromDate,
+            @Param("toDate") Date toDate
+    );
+
+
+    @Query(
+            value = """
+            SELECT
+                p.id AS projectId,
+                c.name AS companyName,
+                p.project_no AS projectNumber,
+                m.id AS milestoneId,
+                m.name AS milestoneName,
+                pma.date AS dueDate,
+                u.id AS ownerId,
+                u.full_name AS ownerName,
+                p.priority AS priority
+            FROM project_milestone_assignment pma
+            INNER JOIN project p ON p.id = pma.project_id
+            INNER JOIN milestones m ON m.id = pma.milestone_id
+            INNER JOIN company c ON c.id = p.company_id
+            LEFT JOIN users u ON u.id = pma.assigned_user_id
+            WHERE pma.is_deleted = 0
+              AND p.is_deleted = 0
+              AND pma.is_visible = 1
+              AND pma.date IS NOT NULL
+              AND pma.status_id <> 3
+              AND pma.date <= DATE_ADD(CURDATE(), INTERVAL :upcomingDays DAY)
+            ORDER BY
+                CASE WHEN pma.date < CURDATE() THEN 0 ELSE 1 END,
+                CASE p.priority
+                    WHEN 'CRITICAL' THEN 0
+                    WHEN 'HIGH' THEN 1
+                    WHEN 'STANDARD' THEN 2
+                    ELSE 3
+                END,
+                pma.date ASC
+            LIMIT :recordLimit
+            """,
+            nativeQuery = true
+    )
+    List<DueRiskQueueProjection> findDueRiskQueueAdmin(
+            @Param("upcomingDays") Integer upcomingDays,
+            @Param("recordLimit") Integer recordLimit
+    );
+
+    @Query(
+            value = """
+            SELECT
+                p.id AS projectId,
+                c.name AS companyName,
+                p.project_no AS projectNumber,
+                m.id AS milestoneId,
+                m.name AS milestoneName,
+                pma.date AS dueDate,
+                u.id AS ownerId,
+                u.full_name AS ownerName,
+                p.priority AS priority
+            FROM project_milestone_assignment pma
+            INNER JOIN project p ON p.id = pma.project_id
+            INNER JOIN milestones m ON m.id = pma.milestone_id
+            INNER JOIN company c ON c.id = p.company_id
+            LEFT JOIN users u ON u.id = pma.assigned_user_id
+            WHERE pma.is_deleted = 0
+              AND p.is_deleted = 0
+              AND pma.is_visible = 1
+              AND pma.date IS NOT NULL
+              AND pma.status_id <> 3
+              AND pma.assigned_user_id IN (:userIds)
+              AND pma.date <= DATE_ADD(CURDATE(), INTERVAL :upcomingDays DAY)
+            ORDER BY
+                CASE WHEN pma.date < CURDATE() THEN 0 ELSE 1 END,
+                CASE p.priority
+                    WHEN 'CRITICAL' THEN 0
+                    WHEN 'HIGH' THEN 1
+                    WHEN 'STANDARD' THEN 2
+                    ELSE 3
+                END,
+                pma.date ASC
+            LIMIT :recordLimit
+            """,
+            nativeQuery = true
+    )
+    List<DueRiskQueueProjection> findDueRiskQueueForUsers(
+            @Param("userIds") List<Long> userIds,
+            @Param("upcomingDays") Integer upcomingDays,
+            @Param("recordLimit") Integer recordLimit
+    );
+
+
+    @Query("""
+    SELECT
+        m.name AS milestoneName,
+        c.name AS companyName,
+        pma.completedDate AS completedDate
+    FROM ProjectMilestoneAssignment pma
+    JOIN pma.milestone m
+    JOIN pma.project p
+    JOIN p.company c
+    WHERE pma.isDeleted = false
+      AND pma.isVisible = true
+      AND p.isDeleted = false
+      AND pma.status.id = 3
+      AND pma.completedDate IS NOT NULL
+    ORDER BY pma.completedDate DESC
+    """)
+    List<MilestoneActivityProjection> findRecentMilestoneCompletionsAdmin(Pageable pageable);
+
+    @Query("""
+    SELECT
+        m.name AS milestoneName,
+        c.name AS companyName,
+        pma.completedDate AS completedDate
+    FROM ProjectMilestoneAssignment pma
+    JOIN pma.milestone m
+    JOIN pma.project p
+    JOIN p.company c
+    WHERE pma.isDeleted = false
+      AND pma.isVisible = true
+      AND p.isDeleted = false
+      AND pma.status.id = 3
+      AND pma.completedDate IS NOT NULL
+      AND pma.assignedUser.id IN :userIds
+    ORDER BY pma.completedDate DESC
+    """)
+    List<MilestoneActivityProjection> findRecentMilestoneCompletionsForUsers(
+            @Param("userIds") List<Long> userIds,
+            Pageable pageable
+    );
 
 }
