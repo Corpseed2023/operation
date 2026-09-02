@@ -2,6 +2,7 @@ package com.doc.impl.vendor;
 
 import com.doc.dto.vendor.*;
 import com.doc.entity.project.Project;
+import com.doc.entity.user.User;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -2910,4 +2911,153 @@ public class ProcurementPaymentRequestServiceImpl
                 paymentRequest.getTdsPercentage()
         );
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<VendorPaymentTransactionResponseDto>
+    getVendorTransactionsByUser(
+            Long userId,
+            Long vendorId,
+            int page,
+            int size
+    ) {
+        if (userId == null || userId <= 0) {
+            throw new ValidationException(
+                    "Valid user ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "ERR_USER_NOT_FOUND"
+                ));
+
+        boolean canViewAllTransactions =
+                user.getRoles() != null
+                        && user.getRoles()
+                        .stream()
+                        .filter(role ->
+                                role != null
+                                        && role.getName() != null
+                        )
+                        .map(role ->
+                                role.getName()
+                                        .trim()
+                                        .toUpperCase()
+                        )
+                        .anyMatch(roleName ->
+                                roleName.equals("ADMIN")
+                                        || roleName.equals("ROLE_ADMIN")
+                                        || roleName.equals("OPERATION_HEAD")
+                                        || roleName.equals("ROLE_OPERATION_HEAD")
+                        );
+
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                size <= 0 ? 20 : size,
+                Sort.by(
+                        Sort.Order.desc("paymentReleasedDate"),
+                        Sort.Order.desc("id")
+                )
+        );
+
+        Page<ProcurementPaymentRequest> transactions;
+
+        /*
+         * ADMIN and OPERATION_HEAD can view all released transactions.
+         */
+        if (canViewAllTransactions) {
+
+            if (vendorId != null) {
+                transactions =
+                        paymentRequestRepository
+                                .findByVendor_IdAndStatusAndIsDeletedFalse(
+                                        vendorId,
+                                        PaymentRequestStatus.PAYMENT_RELEASED,
+                                        pageable
+                                );
+            } else {
+                transactions =
+                        paymentRequestRepository
+                                .findByStatusAndIsDeletedFalse(
+                                        PaymentRequestStatus.PAYMENT_RELEASED,
+                                        pageable
+                                );
+            }
+
+        } else {
+
+            /*
+             * Normal procurement user can view only transactions
+             * for vendors onboarded by that user.
+             */
+            transactions =
+                    paymentRequestRepository
+                            .findVendorTransactionsByOnboardedUser(
+                                    userId,
+                                    vendorId,
+                                    PaymentRequestStatus.PAYMENT_RELEASED,
+                                    pageable
+                            );
+        }
+
+        return transactions.map(this::mapVendorTransaction);
+    }
+
+
+    private VendorPaymentTransactionResponseDto mapVendorTransaction(
+            ProcurementPaymentRequest payment
+    ) {
+        VendorPaymentTransactionResponseDto dto =
+                new VendorPaymentTransactionResponseDto();
+
+        dto.setPaymentRequestId(payment.getId());
+
+        if (payment.getVendor() != null) {
+            dto.setVendorId(payment.getVendor().getId());
+            dto.setVendorName(payment.getVendor().getName());
+        }
+
+        if (payment.getProcurementOrder() != null) {
+            dto.setProcurementOrderId(
+                    payment.getProcurementOrder().getId()
+            );
+            dto.setPurchaseOrderNumber(
+                    payment.getProcurementOrder().getPoNumber()
+            );
+        }
+
+        dto.setInvoiceNumber(payment.getInvoiceNumber());
+        dto.setInvoiceDate(payment.getInvoiceDate());
+
+        dto.setTaxableAmount(payment.getAmount());
+        dto.setGstAmount(payment.getTotalGstAmount());
+        dto.setInvoiceAmount(payment.getInvoiceAmount());
+        dto.setTdsAmount(payment.getTdsAmount());
+
+        BigDecimal bankPaid = payment.getBankPaymentAmount() != null
+                ? payment.getBankPaymentAmount()
+                : BigDecimal.ZERO;
+
+        BigDecimal tds = payment.getTdsAmount() != null
+                ? payment.getTdsAmount()
+                : BigDecimal.ZERO;
+
+        dto.setAmountPaidToVendor(bankPaid);
+        dto.setSettlementAmount(bankPaid.add(tds));
+
+        dto.setPaymentDate(payment.getPaymentDate());
+        dto.setPaymentMode(payment.getPaymentMode());
+        dto.setTransactionReference(payment.getTransactionReference());
+        dto.setPaymentProof(payment.getPaymentProof());
+
+        dto.setStatus(payment.getStatus());
+        dto.setPaymentReleasedBy(payment.getPaymentReleasedBy());
+        dto.setPaymentReleasedDate(payment.getPaymentReleasedDate());
+
+        return dto;
+    }
+
 }

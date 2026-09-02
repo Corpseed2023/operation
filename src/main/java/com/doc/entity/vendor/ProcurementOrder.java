@@ -220,4 +220,30 @@ public class ProcurementOrder {
     private Date updatedDate;
 
     private boolean isDeleted = false;
+
+    @Column(
+            name = "vendor_finalized_amount",
+            precision = 19,
+            scale = 2
+    )
+    private BigDecimal vendorFinalizedAmount;
+
+    @Column(
+            name = "excess_amount",
+            precision = 19,
+            scale = 2
+    )
+    private BigDecimal excessAmount;
+
+    @Column(name = "admin_approved_by")
+    private Long adminApprovedBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "admin_approved_date")
+    private Date adminApprovedDate;
+
+    @Column(name = "admin_approval_remark", length = 1000)
+    private String adminApprovalRemark;
+
+
 }

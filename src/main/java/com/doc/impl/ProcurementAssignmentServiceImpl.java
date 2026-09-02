@@ -5,24 +5,24 @@ import com.doc.dto.procurement.SelectProcurementVendorRequestDto;
 import com.doc.dto.procurement.VendorSummaryDto;
 import com.doc.dto.vendor.request.SelectVendorQuotationRequestDto;
 import com.doc.entity.product.Product;
-import com.doc.entity.vendor.ProcurementMilestoneAssignment;
+import com.doc.entity.vendor.*;
 import com.doc.entity.project.ProcurementStatus;
 import com.doc.entity.user.User;
-import com.doc.entity.vendor.Vendor;
-import com.doc.entity.vendor.VendorStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.ProcurementMilestoneAssignmentRepository;
 import com.doc.repository.UserRepository;
+import com.doc.repository.vendor.VendorFinalizationRepository;
 import com.doc.repository.vendor.VendorRepository;
 import com.doc.service.ProcurementAssignmentService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.doc.entity.vendor.ProcurementVendorQuotation;
 import com.doc.repository.vendor.ProcurementVendorQuotationRepository;
 
 
+import java.math.BigDecimal;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.List;
 
 @Service
@@ -33,17 +33,22 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
     private final VendorRepository vendorRepository;
     private final UserRepository userRepository;
     private final ProcurementVendorQuotationRepository procurementVendorQuotationRepository;
+    private final VendorFinalizationRepository vendorFinalizationRepository;
 
     public ProcurementAssignmentServiceImpl(
             ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
             VendorRepository vendorRepository,
             UserRepository userRepository,
-            ProcurementVendorQuotationRepository procurementVendorQuotationRepository
+            ProcurementVendorQuotationRepository procurementVendorQuotationRepository,
+            VendorFinalizationRepository vendorFinalizationRepository
     ) {
-        this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
+        this.procurementMilestoneAssignmentRepository =
+                procurementMilestoneAssignmentRepository;
         this.vendorRepository = vendorRepository;
         this.userRepository = userRepository;
-        this.procurementVendorQuotationRepository = procurementVendorQuotationRepository;
+        this.procurementVendorQuotationRepository =
+                procurementVendorQuotationRepository;
+        this.vendorFinalizationRepository = vendorFinalizationRepository;
     }
 
     @Override
@@ -201,6 +206,24 @@ public class ProcurementAssignmentServiceImpl implements ProcurementAssignmentSe
         }
 
         ProcurementAssignmentResponseDto dto = new ProcurementAssignmentResponseDto();
+
+        BigDecimal totalFinalizedAmount =
+                vendorFinalizationRepository.findTotalFinalizedAmount(
+                        assignment.getId(),
+                        EnumSet.of(
+                                VendorFinalizationStatus.FINALIZED,
+                                VendorFinalizationStatus.SENT_TO_ACCOUNTS,
+                                VendorFinalizationStatus.ACCOUNTS_APPROVED,
+                                VendorFinalizationStatus.ONBOARDING_STARTED,
+                                VendorFinalizationStatus.ACTIVE_VENDOR_MAPPED
+                        )
+                );
+
+        dto.setTotalFinalizedAmount(
+                totalFinalizedAmount != null
+                        ? totalFinalizedAmount
+                        : BigDecimal.ZERO
+        );
 
         dto.setProcurementAssignmentId(assignment.getId());
 
