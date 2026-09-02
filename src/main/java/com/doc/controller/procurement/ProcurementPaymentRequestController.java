@@ -3,6 +3,7 @@ package com.doc.controller.procurement;
 import com.doc.dto.vendor.ProcurementPaymentActionRequestDto;
 import com.doc.dto.vendor.ProcurementPaymentRequestDto;
 import com.doc.dto.vendor.ProcurementPaymentRequestResponseDto;
+import com.doc.dto.vendor.VendorPaymentTransactionResponseDto;
 import com.doc.entity.vendor.PaymentRequestStatus;
 import com.doc.service.vendor.ProcurementPaymentRequestService;
 import lombok.RequiredArgsConstructor;
@@ -83,6 +84,25 @@ public class ProcurementPaymentRequestController {
     ) {
         return ResponseEntity.ok(
                 service.releasePayment(paymentRequestId, userId, request)
+        );
+    }
+
+
+    @GetMapping("/vendor-transactions/by-user/{userId}")
+    public ResponseEntity<Page<VendorPaymentTransactionResponseDto>>
+    getVendorTransactionsByUser(
+            @PathVariable Long userId,
+            @RequestParam(required = false) Long vendorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(
+                service.getVendorTransactionsByUser(
+                        userId,
+                        vendorId,
+                        page,
+                        size
+                )
         );
     }
 }
