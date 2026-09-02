@@ -2917,7 +2917,6 @@ public class ProcurementPaymentRequestServiceImpl
     public Page<VendorPaymentTransactionResponseDto>
     getVendorTransactionsByUser(
             Long userId,
-            Long vendorId,
             int page,
             int size
     ) {
@@ -2965,39 +2964,18 @@ public class ProcurementPaymentRequestServiceImpl
 
         Page<ProcurementPaymentRequest> transactions;
 
-        /*
-         * ADMIN and OPERATION_HEAD can view all released transactions.
-         */
         if (canViewAllTransactions) {
-
-            if (vendorId != null) {
-                transactions =
-                        paymentRequestRepository
-                                .findByVendor_IdAndStatusAndIsDeletedFalse(
-                                        vendorId,
-                                        PaymentRequestStatus.PAYMENT_RELEASED,
-                                        pageable
-                                );
-            } else {
-                transactions =
-                        paymentRequestRepository
-                                .findByStatusAndIsDeletedFalse(
-                                        PaymentRequestStatus.PAYMENT_RELEASED,
-                                        pageable
-                                );
-            }
-
+            transactions =
+                    paymentRequestRepository
+                            .findByStatusAndIsDeletedFalse(
+                                    PaymentRequestStatus.PAYMENT_RELEASED,
+                                    pageable
+                            );
         } else {
-
-            /*
-             * Normal procurement user can view only transactions
-             * for vendors onboarded by that user.
-             */
             transactions =
                     paymentRequestRepository
                             .findVendorTransactionsByOnboardedUser(
                                     userId,
-                                    vendorId,
                                     PaymentRequestStatus.PAYMENT_RELEASED,
                                     pageable
                             );
@@ -3005,7 +2983,6 @@ public class ProcurementPaymentRequestServiceImpl
 
         return transactions.map(this::mapVendorTransaction);
     }
-
 
     private VendorPaymentTransactionResponseDto mapVendorTransaction(
             ProcurementPaymentRequest payment

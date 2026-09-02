@@ -168,7 +168,6 @@ public interface ProcurementPaymentRequestRepository
         FROM ProcurementPaymentRequest payment
         WHERE payment.isDeleted = false
           AND payment.status = :status
-          AND (:vendorId IS NULL OR payment.vendor.id = :vendorId)
           AND EXISTS (
                 SELECT onboarding.id
                 FROM VendorOnboarding onboarding
@@ -177,18 +176,13 @@ public interface ProcurementPaymentRequestRepository
                   AND onboarding.isDeleted = false
           )
         """)
-    Page<ProcurementPaymentRequest> findVendorTransactionsByOnboardedUser(
+    Page<ProcurementPaymentRequest>
+    findVendorTransactionsByOnboardedUser(
             @Param("userId") Long userId,
-            @Param("vendorId") Long vendorId,
             @Param("status") PaymentRequestStatus status,
             Pageable pageable
     );
 
-    Page<ProcurementPaymentRequest>
-    findByVendor_IdAndStatusAndIsDeletedFalse(
-            Long vendorId,
-            PaymentRequestStatus status,
-            Pageable pageable
-    );
+
 
 }

@@ -46,7 +46,6 @@ public interface ProcurementPaymentRequestService {
 
     Page<VendorPaymentTransactionResponseDto> getVendorTransactionsByUser(
             Long userId,
-            Long vendorId,
             int page,
             int size
     );

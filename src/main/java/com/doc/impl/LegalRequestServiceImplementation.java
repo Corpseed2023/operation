@@ -273,6 +273,7 @@
                 }
 
                 @Override
+                @Transactional(readOnly = true)
                 public Page<LegalRequestResponseDto> getAllLegalRequests(
                         Long userId,
                         LegalStatus status,
@@ -283,10 +284,10 @@
                         throw new IllegalArgumentException("userId is required");
                     }
 
-                    if (status == null) {
-                        status = LegalStatus.INITIATED;
-                    }
+                    LegalStatus requestedStatus =
+                            status != null ? status : LegalStatus.INITIATED;
 
+                    // API pagination remains 1-based.
                     int pageIndex = page <= 0 ? 0 : page - 1;
                     int pageSize = size <= 0 ? 10 : size;
 
@@ -298,30 +299,78 @@
                                     "ERR_USER_NOT_FOUND"
                             ));
 
-                    String designationName = user.getUserDesignation() != null
-                            ? user.getUserDesignation().getName()
-                            : null;
+                    boolean isAdmin = hasAnyRole(
+                            user,
+                            "ADMIN",
+                            "ROLE_ADMIN"
+                    );
 
-                    boolean isAdmin = designationName != null
-                            && "ADMIN".equalsIgnoreCase(designationName.trim());
+                    boolean isOperationHead = hasAnyRole(
+                            user,
+                            "OPERATION_HEAD",
+                            "ROLE_OPERATION_HEAD"
+                    );
 
-                    Page<LegalRequest> result;
+                    boolean belongsToLegalDepartment =
+                            user.getDepartments() != null
+                                    && user.getDepartments()
+                                    .stream()
+                                    .filter(department -> department != null)
+                                    .filter(department -> !department.isDeleted())
+                                    .map(department -> department.getName())
+                                    .filter(name -> name != null)
+                                    .map(String::trim)
+                                    .anyMatch(name ->
+                                            name.equalsIgnoreCase("LEGAL")
+                                                    || name.equalsIgnoreCase("LEGAL DEPARTMENT")
+                                    );
 
-                    if (isAdmin) {
-                        result = legalRequestRepository.findAllByStatusNative(
-                                status.name(),
-                                pageable
-                        );
+                    boolean canViewAllRequests =
+                            isAdmin
+                                    || isOperationHead
+                                    || belongsToLegalDepartment;
+
+                    Page<LegalRequest> legalRequests;
+
+                    if (canViewAllRequests) {
+                        legalRequests =
+                                legalRequestRepository.findAllByStatusNative(
+                                        requestedStatus.name(),
+                                        pageable
+                                );
                     } else {
-                        result = legalRequestRepository.findByUserRelatedAndStatusNative(
-                                userId,
-                                status.name(),
-                                pageable
-                        );
+                        legalRequests =
+                                legalRequestRepository.findByUserRelatedAndStatusNative(
+                                        userId,
+                                        requestedStatus.name(),
+                                        pageable
+                                );
                     }
 
-                    return result.map(this::mapToResponse);
+                    return legalRequests.map(this::mapToResponse);
                 }
+
+                private boolean hasAnyRole(User user, String... allowedRoles) {
+
+                    if (user.getRoles() == null || user.getRoles().isEmpty()) {
+                        return false;
+                    }
+
+                    return user.getRoles()
+                            .stream()
+                            .filter(role -> role != null && !role.isDeleted())
+                            .map(role -> role.getName())
+                            .filter(roleName -> roleName != null)
+                            .map(String::trim)
+                            .anyMatch(roleName ->
+                                    java.util.Arrays.stream(allowedRoles)
+                                            .anyMatch(allowedRole ->
+                                                    allowedRole.equalsIgnoreCase(roleName)
+                                            )
+                            );
+                }
+
+
 
                 @Override
                 @Transactional
