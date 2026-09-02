@@ -2,6 +2,7 @@ package com.doc.repository;
 
 import com.doc.dto.project.dashboard.ProjectStatusCountDto;
 import com.doc.entity.project.Project;
+import com.doc.repository.projection.ProjectActivityProjection;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -818,5 +819,26 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     );
 
 
+    @Query("""
+    SELECT DISTINCT
+        p.status.name AS statusName,
+        p.name AS projectName,
+        c.name AS companyName,
+        p.updatedDate AS updatedDate
+    FROM Project p
+    JOIN p.company c
+    LEFT JOIN p.milestoneAssignments pma
+    LEFT JOIN pma.assignedUser u
+    LEFT JOIN u.departments d
+    WHERE p.isDeleted = false
+      AND p.status.name IN ('IN_PROGRESS', 'REOPENED', 'COMPLETED')
+      AND p.updatedDate IS NOT NULL
+      AND (:departmentId IS NULL OR d.id = :departmentId)
+    ORDER BY p.updatedDate DESC
+    """)
+    List<ProjectActivityProjection> findRecentProjectStatusChanges(
+            @Param("departmentId") Long departmentId,
+            Pageable pageable
+    );
 
 }

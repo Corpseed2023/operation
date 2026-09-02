@@ -10,6 +10,7 @@ import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
+import com.doc.repository.projection.ProjectActivityProjection;
 import com.doc.service.project.ProjectDashboardService;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class ProjectDashboardServiceImpl implements ProjectDashboardService {
@@ -170,6 +172,81 @@ public class ProjectDashboardServiceImpl implements ProjectDashboardService {
                 countMap.getOrDefault("REOPENED", 0L),
                 statusCounts
         );
+    }
+
+    @Override
+    public List<RecentActivityResponseDto> getRecentActivities(Long userId, Integer limit) {
+
+        Long departmentId = validateUserAndGetDepartmentId(userId);
+
+        int recordLimit = limit == null || limit <= 0
+                ? 10
+                : Math.min(limit, 50);
+
+        Pageable pageable = PageRequest.of(0, recordLimit);
+
+        List<RecentActivityResponseDto> milestoneActivities =
+                projectMilestoneAssignmentRepository
+                        .findRecentMilestoneCompletions(departmentId, pageable)
+                        .stream()
+                        .map(record -> RecentActivityResponseDto.builder()
+                                .activityType("MILESTONE_COMPLETED")
+                                .title("Milestone completed")
+                                .description(record.getMilestoneName() + " completed for " + record.getCompanyName())
+                                .colorCode("GREEN")
+                                .timestamp(record.getCompletedDate())
+                                .build())
+                        .toList();
+
+        List<RecentActivityResponseDto> projectActivities =
+                projectRepository
+                        .findRecentProjectStatusChanges(departmentId, pageable)
+                        .stream()
+                        .map(this::mapProjectActivity)
+                        .filter(Objects::nonNull)
+                        .toList();
+
+        return Stream.concat(milestoneActivities.stream(), projectActivities.stream())
+                .sorted(Comparator.comparing(RecentActivityResponseDto::getTimestamp).reversed())
+                .limit(recordLimit)
+                .toList();
+    }
+
+    private RecentActivityResponseDto mapProjectActivity(ProjectActivityProjection record) {
+
+        return switch (record.getStatusName()) {
+            case "IN_PROGRESS" -> RecentActivityResponseDto.builder()
+                    .activityType("PROJECT_IN_PROGRESS")
+                    .title("Project moved to In Progress")
+                    .description(record.getProjectName() + " - " + record.getCompanyName())
+                    .colorCode("BLUE")
+                    .timestamp(toLocalDateTime(record.getUpdatedDate()))
+                    .build();
+
+            case "REOPENED" -> RecentActivityResponseDto.builder()
+                    .activityType("PROJECT_REWORK")
+                    .title("Project sent for Rework")
+                    .description(record.getProjectName() + " sent for rework - " + record.getCompanyName())
+                    .colorCode("ORANGE")
+                    .timestamp(toLocalDateTime(record.getUpdatedDate()))
+                    .build();
+
+            case "COMPLETED" -> RecentActivityResponseDto.builder()
+                    .activityType("PROJECT_COMPLETED")
+                    .title("Project completed")
+                    .description(record.getProjectName() + " completed for " + record.getCompanyName())
+                    .colorCode("GREEN")
+                    .timestamp(toLocalDateTime(record.getUpdatedDate()))
+                    .build();
+
+            default -> null;
+        };
+    }
+
+    private LocalDateTime toLocalDateTime(Date date) {
+        return date == null
+                ? null
+                : date.toInstant().atZone(INDIA_ZONE).toLocalDateTime();
     }
 
     @Override

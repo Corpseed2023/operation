@@ -213,4 +213,14 @@ public class ProjectDashboardController {
                 )
         );
     }
+
+    @GetMapping("/recent-activities")
+    public ResponseEntity<List<RecentActivityResponseDto>> getRecentActivities(
+            @RequestParam Long userId,
+            @RequestParam(required = false) Integer limit
+    ) {
+        return ResponseEntity.ok(
+                projectDashboardService.getRecentActivities(userId, limit)
+        );
+    }
 }

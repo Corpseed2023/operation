@@ -15,6 +15,8 @@ public interface ProjectDashboardService {
             LocalDate fromDate,
             LocalDate toDate
     );
+    List<RecentActivityResponseDto> getRecentActivities(Long userId, Integer limit);
+
 
     ProjectOverviewResponseDto getProjectOverview(
             Long userId,

@@ -2,6 +2,7 @@ package com.doc.repository;
 
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.project.ProjectMilestoneAssignment;
+import com.doc.repository.projection.MilestoneActivityProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -216,13 +217,12 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     FROM ProjectMilestoneAssignment pma
     JOIN pma.project p
     JOIN pma.milestone m
-    JOIN pma.status s
-    JOIN pma.assignedUser u
-    JOIN u.departments d
+    LEFT JOIN pma.status s
+    LEFT JOIN pma.assignedUser u
+    LEFT JOIN u.departments d
     WHERE pma.isDeleted = false
       AND pma.isVisible = true
       AND p.isDeleted = false
-      AND pma.assignedUser IS NOT NULL
       AND (:fromDate IS NULL OR pma.createdDate >= :fromDate)
       AND (:toDate IS NULL OR pma.createdDate < :toDate)
       AND (:departmentId IS NULL OR d.id = :departmentId)
@@ -249,8 +249,8 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
     JOIN u.departments d
     JOIN pma.project p
     WHERE pma.isDeleted = false
+      AND pma.isVisible = true
       AND p.isDeleted = false
-      AND pma.assignedUser IS NOT NULL
       AND (:fromDate IS NULL OR pma.createdDate >= :fromDate)
       AND (:toDate IS NULL OR pma.createdDate < :toDate)
       AND (:departmentId IS NULL OR d.id = :departmentId)
@@ -480,6 +480,30 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
     List<ProjectMilestoneAssignment> findCompletedAssignmentsByProjectIds(
             @Param("projectIds") List<Long> projectIds,
             @Param("completedStatusId") Long completedStatusId);
+
+    @Query("""
+    SELECT
+        m.name AS milestoneName,
+        c.name AS companyName,
+        pma.completedDate AS completedDate
+    FROM ProjectMilestoneAssignment pma
+    JOIN pma.milestone m
+    JOIN pma.project p
+    JOIN p.company c
+    LEFT JOIN pma.assignedUser u
+    LEFT JOIN u.departments d
+    WHERE pma.isDeleted = false
+      AND pma.isVisible = true
+      AND p.isDeleted = false
+      AND pma.status.id = 3
+      AND pma.completedDate IS NOT NULL
+      AND (:departmentId IS NULL OR d.id = :departmentId)
+    ORDER BY pma.completedDate DESC
+    """)
+    List<MilestoneActivityProjection> findRecentMilestoneCompletions(
+            @Param("departmentId") Long departmentId,
+            Pageable pageable
+    );
 
 
     @Query("""
