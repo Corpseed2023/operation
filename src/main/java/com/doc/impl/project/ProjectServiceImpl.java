@@ -5,6 +5,8 @@ import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.*;
+import com.doc.em.ProjectHistoryEventType;
+import com.doc.em.ProjectHistoryReferenceType;
 import com.doc.dto.project.sales.DepartmentWiseMilestoneDto;
 import com.doc.dto.project.sales.MilestoneAssignmentStatusDto;
 import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
@@ -54,6 +56,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.BinaryOperator;
 import java.util.stream.Collectors;
@@ -87,6 +90,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository;
     private final ProjectMailService projectMailService;
     private final LeadFeignClient leadFeignClient;
+    private final ProjectHistoryEventRepository projectHistoryEventRepository;
 
     public ProjectServiceImpl(
             ProjectRepository projectRepository,
@@ -112,7 +116,8 @@ public class ProjectServiceImpl implements ProjectService {
             ApplicantTypeRepository applicantTypeRepository,
             ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
             ProjectMailService projectMailService,
-            LeadFeignClient leadFeignClient
+            LeadFeignClient leadFeignClient,
+            ProjectHistoryEventRepository projectHistoryEventRepository
     ) {
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
@@ -138,6 +143,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.procurementMilestoneAssignmentRepository = procurementMilestoneAssignmentRepository;
         this.projectMailService = projectMailService;
         this.leadFeignClient = leadFeignClient;
+        this.projectHistoryEventRepository = projectHistoryEventRepository;
     }
 
 
@@ -254,6 +260,26 @@ public class ProjectServiceImpl implements ProjectService {
 
         project = projectRepository.save(project);
 
+        // =========================================================
+        // PROJECT HISTORY - PROJECT CREATED
+        // =========================================================
+        saveProjectHistory(
+                project,
+                null,
+                "PROJECT_CREATED",
+                "PROJECT",
+                project.getId(),
+                "Project created",
+                "Project " + project.getProjectNo() + " created successfully",
+                null,
+                null,
+                project.getStatus() != null ? project.getStatus().getName() : null,
+                createdBy.getId(),
+                null,
+                null,
+                null
+        );
+
         try {
             projectMailService.sendProjectCreatedMail(project, contact);
         } catch (Exception e) {
@@ -268,6 +294,27 @@ public class ProjectServiceImpl implements ProjectService {
             transaction.setCreatedBy(createdBy.getId());
             transaction.setCreatedDate(new Date());
             projectPaymentTransactionRepository.save(transaction);
+
+            // =====================================================
+            // PROJECT HISTORY - INITIAL PAYMENT
+            // =====================================================
+            saveProjectHistory(
+                    project,
+                    null,
+                    "PAYMENT_ADDED",
+                    "PAYMENT",
+                    transaction.getId(),
+                    "Payment received",
+                    "Initial payment of " + paidAmount
+                            + " received for project " + project.getProjectNo(),
+                    null,
+                    String.valueOf(totalAmount),
+                    String.valueOf(dueAmount),
+                    createdBy.getId(),
+                    null,
+                    null,
+                    null
+            );
         }
 
         MilestoneStatus newStatus = milestoneStatusRepository.findById(StatusConstants.MILESTONE_NEW_ID)
@@ -871,6 +918,26 @@ public class ProjectServiceImpl implements ProjectService {
             a.setUpdatedDate(new Date());
         });
         projectRepository.save(project);
+
+        // =========================================================
+        // PROJECT HISTORY - PROJECT DELETED
+        // =========================================================
+        saveProjectHistory(
+                project,
+                null,
+                "PROJECT_DELETED",
+                "PROJECT",
+                project.getId(),
+                "Project deleted",
+                "Project " + project.getProjectNo() + " was marked as deleted",
+                null,
+                "ACTIVE",
+                "DELETED",
+                null,
+                null,
+                null,
+                null
+        );
     }
 
 
@@ -922,6 +989,27 @@ public class ProjectServiceImpl implements ProjectService {
 
         projectPaymentTransactionRepository.save(transaction);
         projectPaymentDetailRepository.save(paymentDetail);
+
+        // =========================================================
+        // PROJECT HISTORY - PAYMENT ADDED
+        // =========================================================
+        saveProjectHistory(
+                project,
+                null,
+                "PAYMENT_ADDED",
+                "PAYMENT",
+                transaction.getId(),
+                "Payment received",
+                "Payment of " + amount
+                        + " received for project " + project.getProjectNo(),
+                null,
+                String.valueOf(dueAmount),
+                String.valueOf(paymentDetail.getDueAmount()),
+                createdBy.getId(),
+                null,
+                null,
+                null
+        );
 
         updateMilestoneVisibilities(project, createdBy.getId());
         return mapToResponseDto(project);
@@ -1530,6 +1618,9 @@ public class ProjectServiceImpl implements ProjectService {
 
         if (visibilityChanged) {
 
+            boolean previousVisible = assignment.isVisible();
+            String previousVisibilityReason = assignment.getVisibilityReason();
+
             logger.info(
                     "Updating milestone visibility. "
                             + "projectId={}, milestoneId={}, visible={}, reason={}",
@@ -1563,6 +1654,28 @@ public class ProjectServiceImpl implements ProjectService {
 
             projectMilestoneAssignmentRepository.save(
                     assignment
+            );
+
+            // =====================================================
+            // PROJECT HISTORY - MILESTONE VISIBILITY CHANGED
+            // =====================================================
+            saveProjectHistory(
+                    project,
+                    assignment,
+                    "MILESTONE_VISIBILITY_CHANGED",
+                    "MILESTONE",
+                    assignment.getId(),
+                    isVisible ? "Milestone became visible" : "Milestone became hidden",
+                    "Milestone " + milestoneName
+                            + " visibility changed from "
+                            + previousVisible + " to " + isVisible,
+                    reason != null ? reason : previousVisibilityReason,
+                    String.valueOf(previousVisible),
+                    String.valueOf(isVisible),
+                    updatedById,
+                    null,
+                    null,
+                    null
             );
 
             logger.info(
@@ -1726,6 +1839,29 @@ public class ProjectServiceImpl implements ProjectService {
                             ? result.getUser().getId()
                             : null
             );
+
+            // =====================================================
+            // PROJECT HISTORY - MILESTONE ASSIGNED
+            // =====================================================
+            if (result != null && result.getUser() != null) {
+                saveProjectHistory(
+                        project,
+                        assignment,
+                        "MILESTONE_ASSIGNED",
+                        "MILESTONE",
+                        assignment.getId(),
+                        "Milestone assigned",
+                        "Milestone " + milestoneName
+                                + " assigned to " + result.getUser().getFullName(),
+                        result.getReason(),
+                        null,
+                        result.getUser().getFullName(),
+                        updatedById,
+                        null,
+                        null,
+                        result.getUser()
+                );
+            }
         }
 
         // =========================================================
@@ -1931,10 +2067,36 @@ public class ProjectServiceImpl implements ProjectService {
                 .findByIdAndIsActiveTrueAndIsDeletedFalse(applicantTypeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Applicant Type not found or is inactive/deleted", "ERR_APPLICANT_TYPE_NOT_FOUND"));
 
+        String previousApplicantType = project.getApplicantType() != null
+                ? project.getApplicantType().getName()
+                : null;
+
         project.setApplicantType(applicantType);
         project.setUpdatedDate(new Date());
 
         projectRepository.save(project);
+
+        // =========================================================
+        // PROJECT HISTORY - APPLICANT TYPE CHANGED
+        // =========================================================
+        saveProjectHistory(
+                project,
+                null,
+                "APPLICANT_TYPE_CHANGED",
+                "PROJECT",
+                project.getId(),
+                "Applicant type changed",
+                "Applicant type changed from "
+                        + (previousApplicantType != null ? previousApplicantType : "Not Set")
+                        + " to " + applicantType.getName(),
+                null,
+                previousApplicantType,
+                applicantType.getName(),
+                null,
+                null,
+                null,
+                null
+        );
 
         logger.info("Applicant Type successfully set to '{}' (ID: {}) for project ID: {}",
                 applicantType.getName(), applicantType.getId(), projectId);
@@ -3059,6 +3221,10 @@ public class ProjectServiceImpl implements ProjectService {
                     "Project is already cancelled"
             );        }
 
+        String previousStatus = project.getStatus() != null
+                ? project.getStatus().getName()
+                : null;
+
         // 🔥 Find or create CANCELLED status
         ProjectStatus cancelledStatus = projectStatusRepository
                 .findByName("CANCELLED")
@@ -3074,6 +3240,27 @@ public class ProjectServiceImpl implements ProjectService {
         project.setCancellerId(user.getId());
 
         projectRepository.save(project);
+
+        // =========================================================
+        // PROJECT HISTORY - PROJECT CANCELLED
+        // =========================================================
+        saveProjectHistory(
+                project,
+                null,
+                "PROJECT_CANCELLED",
+                "PROJECT",
+                project.getId(),
+                "Project cancelled",
+                "Project " + project.getProjectNo()
+                        + " was cancelled by " + user.getFullName(),
+                "Project cancelled",
+                previousStatus,
+                cancelledStatus.getName(),
+                user.getId(),
+                null,
+                null,
+                null
+        );
 
         return mapToResponseDto(project);
     }
@@ -3444,5 +3631,142 @@ public class ProjectServiceImpl implements ProjectService {
 
 
 
+
+
+
+    /**
+     * Saves a row in the unified project history timeline.
+     *
+     * Existing project business logic is intentionally not changed here.
+     * Event/reference enum names are resolved at runtime so this class does
+     * not need hard references to every enum constant.
+     */
+    private void saveProjectHistory(
+            Project project,
+            ProjectMilestoneAssignment milestoneAssignment,
+            String eventTypeName,
+            String referenceTypeName,
+            Long referenceId,
+            String eventTitle,
+            String description,
+            String reason,
+            String previousValue,
+            String newValue,
+            Long performedByUserId,
+            Long triggeredByUserId,
+            User previousAssignee,
+            User newAssignee
+    ) {
+        if (project == null || project.getId() == null) {
+            logger.warn(
+                    "[PROJECT-HISTORY-SKIPPED] Project is null or not persisted"
+            );
+            return;
+        }
+
+        ProjectHistoryEventType eventType;
+        try {
+            eventType = ProjectHistoryEventType.valueOf(eventTypeName);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            logger.warn(
+                    "[PROJECT-HISTORY-SKIPPED] Unknown eventType={} | projectId={}",
+                    eventTypeName,
+                    project.getId()
+            );
+            return;
+        }
+
+        ProjectHistoryReferenceType referenceType = null;
+        if (referenceTypeName != null) {
+            try {
+                referenceType = ProjectHistoryReferenceType.valueOf(referenceTypeName);
+            } catch (IllegalArgumentException ex) {
+                logger.warn(
+                        "[PROJECT-HISTORY-SKIPPED] Unknown referenceType={} | projectId={}",
+                        referenceTypeName,
+                        project.getId()
+                );
+                return;
+            }
+        }
+
+        User performedByUser = null;
+        if (performedByUserId != null) {
+            performedByUser = userRepository
+                    .findActiveUserById(performedByUserId)
+                    .orElse(null);
+        }
+
+        User triggeredByUser = null;
+        if (triggeredByUserId != null) {
+            triggeredByUser = userRepository
+                    .findActiveUserById(triggeredByUserId)
+                    .orElse(null);
+        }
+
+        ProjectHistoryEvent historyEvent = new ProjectHistoryEvent();
+
+        historyEvent.setProject(project);
+        historyEvent.setMilestoneAssignment(milestoneAssignment);
+
+        if (milestoneAssignment != null
+                && milestoneAssignment.getMilestone() != null) {
+            historyEvent.setMilestoneName(
+                    milestoneAssignment.getMilestone().getName()
+            );
+        }
+
+        historyEvent.setEventType(eventType);
+        historyEvent.setReferenceType(referenceType);
+        historyEvent.setReferenceId(referenceId);
+
+        historyEvent.setEventTitle(eventTitle);
+        historyEvent.setDescription(description);
+        historyEvent.setReason(reason);
+
+        historyEvent.setPreviousValue(previousValue);
+        historyEvent.setNewValue(newValue);
+
+        historyEvent.setPerformedByUserId(performedByUserId);
+        historyEvent.setPerformedByName(
+                performedByUser != null
+                        ? performedByUser.getFullName()
+                        : performedByUserId != null
+                        ? "User #" + performedByUserId
+                        : "System"
+        );
+
+        historyEvent.setTriggeredByUserId(triggeredByUserId);
+        historyEvent.setTriggeredByName(
+                triggeredByUser != null
+                        ? triggeredByUser.getFullName()
+                        : triggeredByUserId != null
+                        ? "User #" + triggeredByUserId
+                        : null
+        );
+
+        if (previousAssignee != null) {
+            historyEvent.setPreviousAssigneeId(previousAssignee.getId());
+            historyEvent.setPreviousAssigneeName(previousAssignee.getFullName());
+        }
+
+        if (newAssignee != null) {
+            historyEvent.setNewAssigneeId(newAssignee.getId());
+            historyEvent.setNewAssigneeName(newAssignee.getFullName());
+        }
+
+        historyEvent.setOccurredAt(LocalDateTime.now());
+
+        projectHistoryEventRepository.save(historyEvent);
+
+        logger.info(
+                "[PROJECT-HISTORY-SAVED] projectId={} | eventType={} | referenceType={} | referenceId={} | performedByUserId={}",
+                project.getId(),
+                eventType,
+                referenceType,
+                referenceId,
+                performedByUserId
+        );
+    }
 
 }
