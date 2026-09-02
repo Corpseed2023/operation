@@ -616,7 +616,105 @@ public class ProjectServiceImpl implements ProjectService {
 
         enrichWithMilestoneUserDetails(projects, responses);
 
+// NEW
+        enrichWithMilestones(projects, responses);
+
         return responses;
+    }
+
+    private void enrichWithMilestones(
+            List<Project> projects,
+            List<ProjectResponseDto> responses
+    ) {
+
+        if (projects == null || projects.isEmpty()
+                || responses == null || responses.isEmpty()) {
+            return;
+        }
+
+        List<Long> projectIds = projects.stream()
+                .filter(Objects::nonNull)
+                .map(Project::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (projectIds.isEmpty()) {
+            return;
+        }
+
+        /*
+         * Single batch query for all projects on the current page.
+         *
+         * Avoid:
+         * project 1 -> query milestones
+         * project 2 -> query milestones
+         * project 3 -> query milestones
+         *
+         * Instead:
+         * all project IDs -> one query
+         */
+        List<ProjectMilestoneAssignment> assignments =
+                projectMilestoneAssignmentRepository
+                        .findDashboardAssignmentsByProjectIds(projectIds);
+
+        Map<Long, List<ProjectMilestoneListDto>> milestonesByProject =
+                assignments.stream()
+                        .filter(Objects::nonNull)
+                        .filter(assignment ->
+                                assignment.getProject() != null
+                                        && assignment.getProject().getId() != null
+                        )
+                        .collect(Collectors.groupingBy(
+                                assignment -> assignment.getProject().getId(),
+                                LinkedHashMap::new,
+                                Collectors.mapping(
+                                        this::mapToProjectMilestoneListDto,
+                                        Collectors.toList()
+                                )
+                        ));
+
+        for (ProjectResponseDto response : responses) {
+
+            if (response == null || response.getId() == null) {
+                continue;
+            }
+
+            response.setMilestones(
+                    milestonesByProject.getOrDefault(
+                            response.getId(),
+                            List.of()
+                    )
+            );
+        }
+    }
+
+    private ProjectMilestoneListDto mapToProjectMilestoneListDto(
+            ProjectMilestoneAssignment assignment
+    ) {
+
+        ProjectMilestoneListDto dto =
+                new ProjectMilestoneListDto();
+
+        if (assignment.getMilestone() != null) {
+
+            dto.setId(
+                    assignment.getMilestone().getId()
+            );
+
+            dto.setName(
+                    assignment.getMilestone().getName()
+            );
+        }
+
+        if (assignment.getStatus() != null) {
+
+            dto.setStatus(
+                    assignment.getStatus().getName()
+            );
+        }
+
+        return dto;
     }
 
     /*

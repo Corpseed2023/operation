@@ -35,7 +35,6 @@ public class ProjectController {
     private ProjectSearchService projectSearchService;
 
 
-
     @Operation(summary = "Create a new project")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Project created successfully"),
