@@ -2498,6 +2498,9 @@ public class ProjectServiceImpl implements ProjectService {
             dto.setCompanyUnitName(project.getUnit().getUnitName());
         }
 
+        dto.setSalesPersonId(project.getSalesPersonId());
+        dto.setSalesPersonName(project.getSalesPersonName());
+
         dto.setCreatedDate(project.getCreatedDate());
         dto.setUpdatedDate(project.getUpdatedDate());
 
@@ -2506,10 +2509,59 @@ public class ProjectServiceImpl implements ProjectService {
             dto.setApplicantName(project.getApplicantType().getName());
         }
 
-        /*
-         * Determine whether the requesting user can see complete
-         * client contact information.
-         */
+        // =========================================================
+        // PAYMENT DETAILS
+        // =========================================================
+
+        ProjectPaymentDetail paymentDetail = project.getPaymentDetail();
+
+        if (paymentDetail != null) {
+
+            double totalAmount = paymentDetail.getTotalAmount();
+            double dueAmount = paymentDetail.getDueAmount();
+
+            // Amount already received
+            double paidAmount = totalAmount - dueAmount;
+
+            dto.setTotalAmount(totalAmount);
+            dto.setPaidAmount(paidAmount);
+            dto.setDueAmount(dueAmount);
+
+            if (paymentDetail.getPaymentType() != null) {
+                dto.setPaymentTypeId(
+                        paymentDetail.getPaymentType().getId()
+                );
+
+                dto.setPaymentTypeName(
+                        paymentDetail.getPaymentType().getName()
+                );
+            }
+
+            logger.debug(
+                    "[PROJECT-PAYMENT-DETAILS] projectId={} | totalAmount={} | " +
+                            "paidAmount={} | dueAmount={} | paymentType={}",
+                    project.getId(),
+                    totalAmount,
+                    paidAmount,
+                    dueAmount,
+                    paymentDetail.getPaymentType() != null
+                            ? paymentDetail.getPaymentType().getName()
+                            : null
+            );
+
+        } else {
+
+            dto.setTotalAmount(0.0);
+            dto.setPaidAmount(0.0);
+            dto.setDueAmount(0.0);
+            dto.setPaymentTypeId(null);
+            dto.setPaymentTypeName(null);
+        }
+
+        // =========================================================
+        // CONTACT ACCESS
+        // =========================================================
+
         User requestingUser = userRepository.findActiveUserById(userId)
                 .orElseThrow(() -> {
                     logger.warn(
@@ -2538,13 +2590,6 @@ public class ProjectServiceImpl implements ProjectService {
                         .map(String::trim)
                         .anyMatch(name -> "CRT".equalsIgnoreCase(name));
 
-        /*
-         * Complete email and phone numbers are visible only to:
-         *
-         * 1. ADMIN
-         * 2. OPERATION_HEAD
-         * 3. Users belonging to the CRT department
-         */
         boolean canSeeFullContactInfo =
                 isAdmin
                         || isOperationHead
@@ -2564,10 +2609,12 @@ public class ProjectServiceImpl implements ProjectService {
 
         List<ContactDetailsDto> contactDtos = new ArrayList<>();
 
-        /*
-         * Unit-level contacts.
-         */
+        // =========================================================
+        // UNIT CONTACTS
+        // =========================================================
+
         if (project.getUnit() != null) {
+
             List<Contact> unitContacts =
                     contactRepository
                             .findByCompanyUnitIdAndIsDeletedFalseAndIsActiveTrue(
@@ -2575,6 +2622,7 @@ public class ProjectServiceImpl implements ProjectService {
                             );
 
             for (Contact contact : unitContacts) {
+
                 contactDtos.add(
                         buildContactDetailsDto(
                                 contact,
@@ -2586,10 +2634,12 @@ public class ProjectServiceImpl implements ProjectService {
             }
         }
 
-        /*
-         * Company-level contacts.
-         */
+        // =========================================================
+        // COMPANY CONTACTS
+        // =========================================================
+
         if (project.getCompany() != null) {
+
             List<Contact> companyContacts =
                     contactRepository
                             .findByCompanyIdAndCompanyUnitIsNullAndIsDeletedFalseAndIsActiveTrue(
@@ -2597,6 +2647,7 @@ public class ProjectServiceImpl implements ProjectService {
                             );
 
             for (Contact contact : companyContacts) {
+
                 boolean alreadyAdded = contactDtos.stream()
                         .anyMatch(existingContact ->
                                 Objects.equals(
@@ -2620,6 +2671,10 @@ public class ProjectServiceImpl implements ProjectService {
 
         dto.setContacts(contactDtos);
 
+        // =========================================================
+        // PROCUREMENT ASSIGNMENT
+        // =========================================================
+
         procurementMilestoneAssignmentRepository
                 .findActiveByProjectIdNative(project.getId())
                 .ifPresent(assignment ->
@@ -2639,6 +2694,9 @@ public class ProjectServiceImpl implements ProjectService {
 
         return dto;
     }
+
+
+
     private ContactDetailsDto buildContactDetailsDto(
             Contact contact,
             boolean canSeeFullInfo,

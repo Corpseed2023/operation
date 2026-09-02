@@ -92,17 +92,17 @@ public class ProcurementPaymentRequestController {
     public ResponseEntity<Page<VendorPaymentTransactionResponseDto>>
     getVendorTransactionsByUser(
             @PathVariable Long userId,
-            @RequestParam(required = false) Long vendorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return ResponseEntity.ok(
                 service.getVendorTransactionsByUser(
                         userId,
-                        vendorId,
                         page,
                         size
                 )
         );
     }
+
+
 }
