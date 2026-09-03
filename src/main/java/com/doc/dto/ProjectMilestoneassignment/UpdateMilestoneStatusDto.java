@@ -29,11 +29,21 @@ public class UpdateMilestoneStatusDto {
     private Long changedById;
 
     /*
-     * The following fields are required only when:
+     * Optional acknowledgement/supporting document.
      *
-     * milestoneName = Certification
-     * newStatusName = COMPLETED
+     * Example:
+     * https://erp-corpseed.s3.ap-south-1.amazonaws.com/
+     * milestone-acknowledgement.pdf
      */
+    private String acknowledgementAttachmentUrl;
+
+    /*
+     * Optional original/display filename.
+     *
+     * Example:
+     * FSSAI_Submission_Acknowledgement.pdf
+     */
+    private String acknowledgementAttachmentName;
 
 
     private Integer certificationTenure;

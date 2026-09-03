@@ -3263,14 +3263,50 @@ public class ProjectServiceImpl implements ProjectService {
         return dto;
     }
 
-    private StatusChangeEventDto mapToStatusChangeEventDto(MilestoneStatusHistory history) {
+    private StatusChangeEventDto mapToStatusChangeEventDto(
+            MilestoneStatusHistory history
+    ) {
+
         StatusChangeEventDto dto = new StatusChangeEventDto();
+
         dto.setDate(history.getChangeDate());
-        dto.setPreviousStatus(history.getPreviousStatus().getName());
-        dto.setNewStatus(history.getNewStatus().getName());
-        dto.setChangedBy(history.getChangedBy() != null ? history.getChangedBy().getId() : null);
-        dto.setChangedByName(history.getChangedBy() != null ? history.getChangedBy().getFullName() : "Unknown");
-        dto.setReason(history.getChangeReason());
+
+        dto.setPreviousStatus(
+                history.getPreviousStatus() != null
+                        ? history.getPreviousStatus().getName()
+                        : null
+        );
+
+        dto.setNewStatus(
+                history.getNewStatus() != null
+                        ? history.getNewStatus().getName()
+                        : null
+        );
+
+        dto.setChangedBy(
+                history.getChangedBy() != null
+                        ? history.getChangedBy().getId()
+                        : null
+        );
+
+        dto.setChangedByName(
+                history.getChangedBy() != null
+                        ? history.getChangedBy().getFullName()
+                        : "Unknown"
+        );
+
+        dto.setReason(
+                history.getChangeReason()
+        );
+
+        dto.setAcknowledgementAttachmentUrl(
+                history.getAcknowledgementAttachmentUrl()
+        );
+
+        dto.setAcknowledgementAttachmentName(
+                history.getAcknowledgementAttachmentName()
+        );
+
         return dto;
     }
 

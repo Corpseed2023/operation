@@ -388,6 +388,12 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         history.setPreviousStatus(assignment.getStatus());
         history.setNewStatus(newStatus);
         history.setChangeReason(updateDto.getStatusReason());
+        history.setAcknowledgementAttachmentUrl(
+                normalizeOptionalText(updateDto.getAcknowledgementAttachmentUrl())
+        );
+        history.setAcknowledgementAttachmentName(
+                normalizeOptionalText(updateDto.getAcknowledgementAttachmentName())
+        );
         history.setChangedBy(changedBy);
         history.setChangeDate(new Date());
         history.setDeleted(false);
@@ -415,6 +421,12 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
             assignment.setCompletedDate(new Date());
+            assignment.setAcknowledgementAttachmentUrl(
+                    normalizeOptionalText(updateDto.getAcknowledgementAttachmentUrl())
+            );
+            assignment.setAcknowledgementAttachmentName(
+                    normalizeOptionalText(updateDto.getAcknowledgementAttachmentName())
+            );
         }
 
         assignment.setUpdatedBy(updateDto.getChangedById());
@@ -2207,9 +2219,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         history.setChangeDate(new Date());
         history.setDeleted(false);
 
+
         milestoneStatusHistoryRepository.save(history);
     }
-
 
 
 
@@ -2242,4 +2254,17 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         return reason;
     }
+
+
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmedValue = value.trim();
+        return trimmedValue.isEmpty() ? null : trimmedValue;
+    }
+
+
 }
