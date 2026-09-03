@@ -1365,8 +1365,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 metadataJson
         );
 
-
-
         notificationPublisherService.sendNotification(
                 NotificationCreateRequestDto.builder()
                         .receiverId(assignedUser.getId())
@@ -1729,28 +1727,95 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         );
 
         /*
-         * Only the user assigned to the current milestone can send the
-         * immediately previous milestone back to REWORK.
+         * Authorization for sending the immediately previous milestone
+         * back to REWORK.
+         *
+         * Allowed users:
+         * 1. Currently assigned user
+         * 2. ADMIN / ROLE_ADMIN
+         * 3. OPERATION_HEAD / ROLE_OPERATION_HEAD
+         *
+         * All existing send-back business logic below remains unchanged.
          */
-        if (currentAssignment.getAssignedUser() == null
-                || !currentAssignment.getAssignedUser()
-                .getId()
-                .equals(changedBy.getId())) {
+        boolean isCurrentAssignee =
+                currentAssignment.getAssignedUser() != null
+                        && currentAssignment.getAssignedUser().getId() != null
+                        && currentAssignment.getAssignedUser()
+                        .getId()
+                        .equals(changedBy.getId());
+
+        boolean isAdmin =
+                changedBy.getRoles() != null
+                        && changedBy.getRoles()
+                        .stream()
+                        .anyMatch(role ->
+                                role != null
+                                        && role.getName() != null
+                                        && (
+                                        "ADMIN".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                                || "ROLE_ADMIN".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                )
+                        );
+
+        boolean isOperationHead =
+                changedBy.getRoles() != null
+                        && changedBy.getRoles()
+                        .stream()
+                        .anyMatch(role ->
+                                role != null
+                                        && role.getName() != null
+                                        && (
+                                        "OPERATION_HEAD".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                                || "ROLE_OPERATION_HEAD".equalsIgnoreCase(
+                                                role.getName().trim()
+                                        )
+                                )
+                        );
+
+        boolean canSendBack =
+                isCurrentAssignee
+                        || isAdmin
+                        || isOperationHead;
+
+        logger.info(
+                "[MILESTONE-SEND-BACK-AUTHORIZATION] " +
+                        "currentAssignmentId={}, changedById={}, currentAssignee={}, " +
+                        "admin={}, operationHead={}, allowed={}, assignedUserId={}",
+                currentAssignment.getId(),
+                changedBy.getId(),
+                isCurrentAssignee,
+                isAdmin,
+                isOperationHead,
+                canSendBack,
+                currentAssignment.getAssignedUser() != null
+                        ? currentAssignment.getAssignedUser().getId()
+                        : null
+        );
+
+        if (!canSendBack) {
 
             logger.warn(
                     "[MILESTONE-SEND-BACK-DENIED] " +
-                            "User is not the current milestone assignee. " +
-                            "currentAssignmentId={}, changedById={}, assignedUserId={}",
+                            "currentAssignmentId={}, changedById={}, assignedUserId={}, " +
+                            "admin={}, operationHead={}",
                     currentAssignment.getId(),
                     changedBy.getId(),
                     currentAssignment.getAssignedUser() != null
                             ? currentAssignment.getAssignedUser().getId()
-                            : null
+                            : null,
+                    isAdmin,
+                    isOperationHead
             );
 
             throw new ValidationException(
-                    "Only the currently assigned user can send the previous milestone back for rework",
-                    "NOT_CURRENT_ASSIGNEE"
+                    "Only the currently assigned user, ADMIN, or OPERATION_HEAD can send the previous milestone back for rework",
+                    "NOT_AUTHORIZED_TO_SEND_BACK"
             );
         }
 

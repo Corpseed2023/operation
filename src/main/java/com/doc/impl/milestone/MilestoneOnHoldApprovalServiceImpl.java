@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @Transactional
@@ -106,8 +107,14 @@ public class MilestoneOnHoldApprovalServiceImpl
             );
         }
 
-        if (requestRepository.existsByMilestoneAssignment_IdAndApprovalStatus(
-                assignment.getId(), MilestoneOnHoldApprovalStatus.PENDING)) {
+        /*
+         * A PENDING request is only active when the milestone is still in the
+         * same status that existed when the request was created.
+         *
+         * If another workflow already changed the milestone status, the old
+         * ON_HOLD request is stale and is automatically closed as REJECTED.
+         */
+        if (hasActivePendingRequest(assignment)) {
             throw new ValidationException(
                     "An ON_HOLD approval request is already pending for this milestone",
                     "ON_HOLD_REQUEST_ALREADY_PENDING"
@@ -358,17 +365,42 @@ public class MilestoneOnHoldApprovalServiceImpl
         }
 
         if (dto.getDecision() == MilestoneOnHoldDecision.APPROVE) {
-            approveRequest(
-                    request,
-                    decisionBy,
-                    dto.getDecisionReason()
-            );
+
+            /*
+             * The request may have become stale after it was submitted.
+             *
+             * Example:
+             * request.previousStatus = IN_PROGRESS
+             * current milestone status = NEW / REWORK / another status
+             *
+             * Previously approveRequest() threw an exception here and left the
+             * request PENDING forever. That PENDING row then blocked send-back.
+             *
+             * Now stale requests are closed first and the API returns the closed
+             * request instead of leaving an impossible PENDING state.
+             */
+            if (isRequestStatusStale(request)) {
+                closeStaleRequest(
+                        request,
+                        decisionBy,
+                        buildStaleStatusReason(request)
+                );
+            } else {
+                approveRequest(
+                        request,
+                        decisionBy,
+                        dto.getDecisionReason()
+                );
+            }
+
         } else if (dto.getDecision() == MilestoneOnHoldDecision.REJECT) {
+
             rejectRequest(
                     request,
                     dto.getDecisionReason(),
                     decisionBy
             );
+
         } else {
             throw new ValidationException(
                     "Invalid ON_HOLD decision",
@@ -572,11 +604,173 @@ public class MilestoneOnHoldApprovalServiceImpl
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public boolean hasPendingRequest(Long assignmentId) {
-        return requestRepository.existsByMilestoneAssignment_IdAndApprovalStatus(
-                assignmentId,
-                MilestoneOnHoldApprovalStatus.PENDING
+
+        ProjectMilestoneAssignment assignment = assignmentRepository
+                .findActiveUserById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Milestone assignment not found",
+                        "MILESTONE_ASSIGNMENT_NOT_FOUND"
+                ));
+
+        /*
+         * Important:
+         * Do not treat a stale PENDING row as an active workflow.
+         *
+         * This is what caused:
+         * 1. ON_HOLD approval -> ON_HOLD_REQUEST_STATUS_CHANGED
+         * 2. send-back       -> ON_HOLD_APPROVAL_PENDING
+         *
+         * forever for the same milestone.
+         */
+        return hasActivePendingRequest(assignment);
+    }
+
+    private boolean hasActivePendingRequest(
+            ProjectMilestoneAssignment assignment
+    ) {
+
+        MilestoneOnHoldRequest pendingRequest = requestRepository
+                .findTopByMilestoneAssignment_IdAndApprovalStatusOrderByRequestedAtDesc(
+                        assignment.getId(),
+                        MilestoneOnHoldApprovalStatus.PENDING
+                )
+                .orElse(null);
+
+        if (pendingRequest == null) {
+            return false;
+        }
+
+        if (!isRequestStatusStale(pendingRequest)) {
+            return true;
+        }
+
+        String staleReason = buildStaleStatusReason(pendingRequest);
+
+        closeStaleRequest(
+                pendingRequest,
+                null,
+                staleReason
+        );
+
+        pendingRequest.setDecidedAt(LocalDateTime.now());
+        requestRepository.save(pendingRequest);
+
+        log.warn(
+                "[MILESTONE-ON-HOLD-STALE-PENDING-CLOSED] " +
+                        "requestId={}, assignmentId={}, previousStatus={}, currentStatus={}, reason={}",
+                pendingRequest.getId(),
+                assignment.getId(),
+                pendingRequest.getPreviousStatus() != null
+                        ? pendingRequest.getPreviousStatus().getName()
+                        : null,
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null,
+                staleReason
+        );
+
+        return false;
+    }
+
+    private boolean isRequestStatusStale(
+            MilestoneOnHoldRequest request
+    ) {
+
+        if (request == null
+                || request.getMilestoneAssignment() == null) {
+            return true;
+        }
+
+        MilestoneStatus requestedFromStatus =
+                request.getPreviousStatus();
+
+        MilestoneStatus currentStatus =
+                request.getMilestoneAssignment().getStatus();
+
+        Long requestedFromStatusId =
+                requestedFromStatus != null
+                        ? requestedFromStatus.getId()
+                        : null;
+
+        Long currentStatusId =
+                currentStatus != null
+                        ? currentStatus.getId()
+                        : null;
+
+        return !Objects.equals(
+                requestedFromStatusId,
+                currentStatusId
+        );
+    }
+
+    private String buildStaleStatusReason(
+            MilestoneOnHoldRequest request
+    ) {
+
+        String previousStatusName =
+                request != null
+                        && request.getPreviousStatus() != null
+                        ? request.getPreviousStatus().getName()
+                        : null;
+
+        String currentStatusName =
+                request != null
+                        && request.getMilestoneAssignment() != null
+                        && request.getMilestoneAssignment().getStatus() != null
+                        ? request.getMilestoneAssignment()
+                        .getStatus()
+                        .getName()
+                        : null;
+
+        return "ON_HOLD request automatically closed because milestone status changed from "
+                + previousStatusName
+                + " to "
+                + currentStatusName
+                + " after the request was submitted";
+    }
+
+    private void closeStaleRequest(
+            MilestoneOnHoldRequest request,
+            User closedBy,
+            String reason
+    ) {
+
+        ProjectMilestoneAssignment assignment =
+                request.getMilestoneAssignment();
+
+        request.setApprovalStatus(
+                MilestoneOnHoldApprovalStatus.REJECTED
+        );
+        request.setDecisionReason(reason);
+
+        /*
+         * Use the existing REJECTED event type so no enum/schema change is
+         * required. The description clearly records that this was an automatic
+         * stale-request closure, not a manager rejection.
+         */
+        historyEventService.saveHistory(
+                assignment.getProject().getId(),
+                assignment.getId(),
+                ProjectHistoryEventType.MILESTONE_ON_HOLD_REJECTED,
+                ProjectHistoryReferenceType.ON_HOLD_REQUEST,
+                request.getId(),
+                "Stale milestone ON_HOLD request closed",
+                "Pending ON_HOLD request automatically closed because the milestone status changed after submission",
+                reason,
+                request.getPreviousStatus() != null
+                        ? request.getPreviousStatus().getName()
+                        : null,
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null,
+                closedBy != null
+                        ? closedBy.getId()
+                        : null,
+                closedBy != null
+                        ? closedBy.getFullName()
+                        : "System"
         );
     }
 
