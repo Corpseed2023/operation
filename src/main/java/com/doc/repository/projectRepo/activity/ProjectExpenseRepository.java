@@ -13,6 +13,7 @@ import java.util.Optional;
 @Repository
 public interface ProjectExpenseRepository
         extends JpaRepository<ProjectExpense, Long> {
+    //
 
     Optional<ProjectExpense> findByActivityId(Long activityId);
 
@@ -20,15 +21,47 @@ public interface ProjectExpenseRepository
             Long projectId
     );
 
+    // =========================================================
+    // GENERIC STAGE QUERY
+    // =========================================================
+
     List<ProjectExpense> findByApprovalStageOrderByExpenseDateDesc(
             ExpenseApprovalStage approvalStage
     );
+
+    // =========================================================
+    // CRT APPROVAL QUEUE
+    // =========================================================
+
+    List<ProjectExpense>
+    findByApprovalStageAndCrtApprovalStatusOrderByExpenseDateDesc(
+            ExpenseApprovalStage approvalStage,
+            ApprovalStatus crtApprovalStatus
+    );
+
+    // =========================================================
+    // ACCOUNTS APPROVAL QUEUE
+    // =========================================================
+
+    List<ProjectExpense>
+    findByApprovalStageAndAccountsApprovalStatusOrderByExpenseDateDesc(
+            ExpenseApprovalStage approvalStage,
+            ApprovalStatus accountsApprovalStatus
+    );
+
+    // =========================================================
+    // COMPLETED / OVERALL STATUS
+    // =========================================================
 
     List<ProjectExpense>
     findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
             ExpenseApprovalStage approvalStage,
             ApprovalStatus approvalStatus
     );
+
+    // =========================================================
+    // PAYMENT QUEUE
+    // =========================================================
 
     List<ProjectExpense> findByPaymentStatusOrderByExpenseDateDesc(
             ExpensePaymentStatus paymentStatus

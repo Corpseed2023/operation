@@ -1793,6 +1793,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             ExpenseApprovalStage approvalStage,
             ApprovalStatus approvalStatus
     ) {
+
         log.info(
                 "[EXPENSE-APPROVAL-QUEUE-START] userId={} | approvalStage={} | approvalStatus={}",
                 userId,
@@ -1803,45 +1804,144 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         User user = validateActiveUser(userId);
 
         if (approvalStage == null) {
-            log.warn(
-                    "[EXPENSE-APPROVAL-QUEUE-VALIDATION-FAILED] userId={} | reason=approval-stage-null",
-                    userId
-            );
             throw new ValidationException(
                     "Approval stage is required",
                     "ERR_APPROVAL_STAGE_REQUIRED"
             );
         }
 
-        if (approvalStage == ExpenseApprovalStage.CRT_REVIEW) {
-            validateCrtApprover(user);
-        } else if (approvalStage == ExpenseApprovalStage.ACCOUNTS_REVIEW) {
-            validateAccountsApprover(user);
-        }
+        // =========================================================
+        // DETERMINE ACCESS
+        // =========================================================
+
+        boolean admin = isAdministrator(user);
+
+        boolean crtApprover =
+                admin
+                        || hasRoleContaining(user, "CRT")
+                        || hasDepartmentContaining(user, "CRT")
+                        || hasDepartmentContaining(user, "CUSTOMER RELATIONSHIP");
+
+        boolean accountsApprover =
+                admin
+                        || hasRoleContaining(user, "ACCOUNT")
+                        || hasRoleContaining(user, "FINANCE")
+                        || hasDepartmentContaining(user, "ACCOUNT")
+                        || hasDepartmentContaining(user, "FINANCE");
+
+        /*
+         * Important:
+         *
+         * Do NOT depend on role name "TECHNICAL" for viewing.
+         *
+         * Any user who is not an approver can still view
+         * expenses created by himself.
+         *
+         * Example:
+         * userId = 157 raises expense
+         * -> user 157 can see that expense
+         * -> but cannot approve it.
+         */
+        boolean canViewFullQueue = switch (approvalStage) {
+
+            case CRT_REVIEW -> crtApprover;
+
+            case ACCOUNTS_REVIEW -> accountsApprover;
+
+            case COMPLETED ->
+                    admin || crtApprover || accountsApprover;
+        };
+
+        // =========================================================
+        // FETCH EXPENSES
+        // =========================================================
 
         List<ProjectExpense> expenses;
 
         if (approvalStatus == null) {
-            expenses = expenseRepository.findByApprovalStageOrderByExpenseDateDesc(
-                    approvalStage
-            );
-        } else {
+
             expenses =
-                    expenseRepository.findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
-                            approvalStage,
-                            approvalStatus
-                    );
+                    expenseRepository
+                            .findByApprovalStageOrderByExpenseDateDesc(
+                                    approvalStage
+                            );
+
+        } else {
+
+            expenses = switch (approvalStage) {
+
+                case CRT_REVIEW ->
+                        expenseRepository
+                                .findByApprovalStageAndCrtApprovalStatusOrderByExpenseDateDesc(
+                                        ExpenseApprovalStage.CRT_REVIEW,
+                                        approvalStatus
+                                );
+
+                case ACCOUNTS_REVIEW ->
+                        expenseRepository
+                                .findByApprovalStageAndAccountsApprovalStatusOrderByExpenseDateDesc(
+                                        ExpenseApprovalStage.ACCOUNTS_REVIEW,
+                                        approvalStatus
+                                );
+
+                case COMPLETED ->
+                        expenseRepository
+                                .findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
+                                        ExpenseApprovalStage.COMPLETED,
+                                        approvalStatus
+                                );
+            };
         }
 
+        // =========================================================
+        // NORMAL / TECHNICAL USER
+        // =========================================================
+        //
+        // If user is not an authorized approver,
+        // return ONLY expenses created by that user.
+        //
+        // DO NOT throw authorization exception.
+        // =========================================================
+
+        if (!canViewFullQueue) {
+
+            List<ProjectExpenseResponseDto> ownExpenses =
+                    expenses.stream()
+                            .filter(expense ->
+                                    Objects.equals(
+                                            expense.getCreatedByUserId(),
+                                            userId
+                                    )
+                            )
+                            .map(this::mapToExpenseDto)
+                            .toList();
+
+            log.info(
+                    "[EXPENSE-APPROVAL-QUEUE-OWN] userId={} | approvalStage={} | approvalStatus={} | recordCount={}",
+                    userId,
+                    approvalStage,
+                    approvalStatus,
+                    ownExpenses.size()
+            );
+
+            return ownExpenses;
+        }
+
+        // =========================================================
+        // APPROVER / ADMIN
+        // =========================================================
+
         log.info(
-                "[EXPENSE-APPROVAL-QUEUE-SUCCESS] userId={} | approvalStage={} | approvalStatus={} | recordCount={}",
+                "[EXPENSE-APPROVAL-QUEUE-FULL] userId={} | approvalStage={} | approvalStatus={} | recordCount={}",
                 userId,
                 approvalStage,
                 approvalStatus,
                 expenses.size()
         );
 
-        return expenses.stream().map(this::mapToExpenseDto).toList();
+        return expenses.stream()
+                .map(this::mapToExpenseDto)
+                .toList();
     }
 
     // =========================================================
