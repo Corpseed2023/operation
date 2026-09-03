@@ -16,4 +16,8 @@ public class StatusChangeEventDto {
     private String changedByName;
     private String reason;
 
+    private String acknowledgementAttachmentUrl;
+
+    private String acknowledgementAttachmentName;
+
 }

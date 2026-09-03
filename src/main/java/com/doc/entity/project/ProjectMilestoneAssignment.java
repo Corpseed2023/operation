@@ -137,4 +137,12 @@ public class ProjectMilestoneAssignment {
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
+    @Column(name = "acknowledgement_attachment_url", length = 2000)
+    @Comment("Optional acknowledgement/supporting document URL for the latest milestone status update")
+    private String acknowledgementAttachmentUrl;
+
+    @Column(name = "acknowledgement_attachment_name", length = 500)
+    @Comment("Original/display name of the acknowledgement attachment")
+    private String acknowledgementAttachmentName;
+
 }
