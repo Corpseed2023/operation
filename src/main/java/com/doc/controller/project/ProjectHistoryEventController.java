@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 import static org.springframework.data.domain.Sort.Direction.DESC;
 
 @RestController
@@ -33,38 +35,20 @@ public class ProjectHistoryEventController {
 
     @GetMapping("/{projectId}/timeline")
     @Operation(
-            summary = "Get complete project history timeline"
+            summary = "Get complete project history timeline",
+            description = "Returns complete history of the project including project, milestone, document, legal, procurement, payment and other events"
     )
-    public ResponseEntity<Page<ProjectHistoryEventResponseDto>>
+    public ResponseEntity<List<ProjectHistoryEventResponseDto>>
     getProjectTimeline(
             @PathVariable
             @Positive(message = "Project ID must be greater than zero")
-            Long projectId,
-
-            @RequestParam(required = false)
-            ProjectHistoryEventType eventType,
-
-            @RequestParam(required = false)
-            @Positive(
-                    message = "Milestone assignment ID must be greater than zero"
-            )
-            Long milestoneAssignmentId,
-
-            @PageableDefault(
-                    page = 0,
-                    size = 20,
-                    sort = "occurredAt",
-                    direction = DESC
-            )
-            Pageable pageable
+            Long projectId
     ) {
+
         return ResponseEntity.ok(
-                historyEventService.getProjectTimeline(
-                        projectId,
-                        eventType,
-                        milestoneAssignmentId,
-                        pageable
-                )
+                historyEventService.getProjectTimeline(projectId)
         );
     }
+
+
 }

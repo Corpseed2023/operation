@@ -8,16 +8,14 @@ import com.doc.entity.project.ProjectHistoryEvent;
 import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.repository.ProjectHistoryEventRepository;
-import com.doc.repository.ProjectRepository;
 import com.doc.repository.ProjectMilestoneAssignmentRepository;
+import com.doc.repository.ProjectRepository;
 import com.doc.service.project.ProjectHistoryEventService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class ProjectHistoryEventServiceImpl
@@ -54,8 +52,8 @@ public class ProjectHistoryEventServiceImpl
             String performedByName
     ) {
 
-        Project project = projectRepository.findById(projectId)
-                .filter(p -> !p.isDeleted())
+        Project project = projectRepository
+                .findByIdAndIsDeletedFalse(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Project not found",
                         "ERR_PROJECT_NOT_FOUND"
@@ -64,10 +62,14 @@ public class ProjectHistoryEventServiceImpl
         ProjectMilestoneAssignment milestoneAssignment = null;
 
         if (milestoneAssignmentId != null) {
+
             milestoneAssignment = milestoneAssignmentRepository
-                    .findById(milestoneAssignmentId)
+                    .findByIdAndProjectIdAndIsDeletedFalse(
+                            milestoneAssignmentId,
+                            projectId
+                    )
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Milestone assignment not found",
+                            "Milestone assignment not found for project",
                             "ERR_MILESTONE_ASSIGNMENT_NOT_FOUND"
                     ));
         }
@@ -78,8 +80,10 @@ public class ProjectHistoryEventServiceImpl
         event.setMilestoneAssignment(milestoneAssignment);
 
         /*
-         * Snapshot milestone name so even if milestone name changes later,
-         * old history still shows the original value.
+         * Keep milestone name as snapshot.
+         *
+         * Even if milestone master name changes in future,
+         * old project history remains unchanged.
          */
         if (milestoneAssignment != null
                 && milestoneAssignment.getMilestone() != null) {
@@ -111,58 +115,38 @@ public class ProjectHistoryEventServiceImpl
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProjectHistoryEventResponseDto> getProjectTimeline(
-            Long projectId,
-            ProjectHistoryEventType eventType,
-            Long milestoneAssignmentId,
-            Pageable pageable
+    public List<ProjectHistoryEventResponseDto> getProjectTimeline(
+            Long projectId
     ) {
 
         if (projectId == null || projectId <= 0) {
             throw new IllegalArgumentException(
-                    "projectId must be greater than zero"
+                    "Project ID must be greater than zero"
             );
         }
 
-        if (milestoneAssignmentId != null
-                && milestoneAssignmentId <= 0) {
-            throw new IllegalArgumentException(
-                    "milestoneAssignmentId must be greater than zero"
-            );
-        }
-
-        projectRepository.findById(projectId)
-                .filter(project -> !project.isDeleted())
+        /*
+         * Validate project first.
+         */
+        projectRepository
+                .findByIdAndIsDeletedFalse(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Project not found",
                         "ERR_PROJECT_NOT_FOUND"
                 ));
 
-        int requestedPage = pageable != null
-                ? Math.max(pageable.getPageNumber(), 0)
-                : 0;
-
-        int requestedSize = pageable != null
-                ? pageable.getPageSize()
-                : 20;
-
-        int safeSize = Math.min(
-                Math.max(requestedSize, 1),
-                100
-        );
-
-        Pageable safePageable = PageRequest.of(
-                requestedPage,
-                safeSize
-        );
-
-        return historyRepository.findProjectTimeline(
-                        projectId,
-                        eventType,
-                        milestoneAssignmentId,
-                        safePageable
-                )
-                .map(this::mapToResponse);
+        /*
+         * Fetch complete history of project.
+         *
+         * No event type filter.
+         * No milestone filter.
+         * No pagination.
+         */
+        return historyRepository
+                .findProjectTimeline(projectId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
     private ProjectHistoryEventResponseDto mapToResponse(
@@ -174,41 +158,95 @@ public class ProjectHistoryEventServiceImpl
 
         dto.setId(event.getId());
 
+        /*
+         * Project information
+         */
         if (event.getProject() != null) {
-            dto.setProjectId(event.getProject().getId());
-            dto.setProjectNo(event.getProject().getProjectNo());
-            dto.setProjectName(event.getProject().getName());
+
+            dto.setProjectId(
+                    event.getProject().getId()
+            );
+
+            dto.setProjectNo(
+                    event.getProject().getProjectNo()
+            );
+
+            dto.setProjectName(
+                    event.getProject().getName()
+            );
         }
 
+        /*
+         * Milestone information
+         */
         ProjectMilestoneAssignment assignment =
                 event.getMilestoneAssignment();
 
         if (assignment != null) {
 
-            dto.setMilestoneAssignmentId(assignment.getId());
+            dto.setMilestoneAssignmentId(
+                    assignment.getId()
+            );
 
             if (assignment.getMilestone() != null) {
+
                 dto.setMilestoneId(
                         assignment.getMilestone().getId()
                 );
             }
         }
 
-        dto.setMilestoneName(event.getMilestoneName());
+        /*
+         * Snapshot milestone name
+         */
+        dto.setMilestoneName(
+                event.getMilestoneName()
+        );
 
-        dto.setEventType(event.getEventType());
+        /*
+         * Event information
+         */
+        dto.setEventType(
+                event.getEventType()
+        );
 
-        dto.setReferenceType(event.getReferenceType());
-        dto.setReferenceId(event.getReferenceId());
+        dto.setReferenceType(
+                event.getReferenceType()
+        );
 
-        dto.setEventTitle(event.getEventTitle());
-        dto.setDescription(event.getDescription());
-        dto.setReason(event.getReason());
+        dto.setReferenceId(
+                event.getReferenceId()
+        );
 
-        dto.setPreviousValue(event.getPreviousValue());
-        dto.setNewValue(event.getNewValue());
+        dto.setEventTitle(
+                event.getEventTitle()
+        );
 
-        dto.setActorType(event.getActorType());
+        dto.setDescription(
+                event.getDescription()
+        );
+
+        dto.setReason(
+                event.getReason()
+        );
+
+        /*
+         * Before / after value
+         */
+        dto.setPreviousValue(
+                event.getPreviousValue()
+        );
+
+        dto.setNewValue(
+                event.getNewValue()
+        );
+
+        /*
+         * Actor
+         */
+        dto.setActorType(
+                event.getActorType()
+        );
 
         dto.setPerformedByUserId(
                 event.getPerformedByUserId()
@@ -218,6 +256,9 @@ public class ProjectHistoryEventServiceImpl
                 event.getPerformedByName()
         );
 
+        /*
+         * Triggered by
+         */
         dto.setTriggeredByUserId(
                 event.getTriggeredByUserId()
         );
@@ -226,6 +267,9 @@ public class ProjectHistoryEventServiceImpl
                 event.getTriggeredByName()
         );
 
+        /*
+         * Assignment history
+         */
         dto.setPreviousAssigneeId(
                 event.getPreviousAssigneeId()
         );
@@ -242,7 +286,12 @@ public class ProjectHistoryEventServiceImpl
                 event.getNewAssigneeName()
         );
 
-        dto.setOccurredAt(event.getOccurredAt());
+        /*
+         * Event timestamp
+         */
+        dto.setOccurredAt(
+                event.getOccurredAt()
+        );
 
         return dto;
     }
