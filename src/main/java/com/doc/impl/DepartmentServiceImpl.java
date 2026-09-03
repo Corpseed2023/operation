@@ -10,12 +10,12 @@ import com.doc.exception.ValidationException;
 import com.doc.repository.DepartmentRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.DepartmentService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,173 +24,326 @@ import java.util.stream.Collectors;
 @Transactional
 public class DepartmentServiceImpl implements DepartmentService {
 
-    @Autowired
-    private DepartmentRepository departmentRepository;
+    private final DepartmentRepository departmentRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private UserRepository userRepository;
-
+    public DepartmentServiceImpl(
+            DepartmentRepository departmentRepository,
+            UserRepository userRepository
+    ) {
+        this.departmentRepository = departmentRepository;
+        this.userRepository = userRepository;
+    }
 
     @Override
-    public DepartmentResponseDto createDepartment(DepartmentRequestDto requestDto) {
+    public DepartmentResponseDto createDepartment(
+            DepartmentRequestDto requestDto
+    ) {
+
         validateRequestDto(requestDto);
 
         // Check for duplicate department ID
         if (departmentRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists", "DUPLICATE_DEPARTMENT_ID");
+            throw new ValidationException(
+                    "Department with ID "
+                            + requestDto.getId()
+                            + " already exists",
+                    "DUPLICATE_DEPARTMENT_ID"
+            );
         }
 
-        // Check for duplicate name
-        if (departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Department with name " + requestDto.getName() + " already exists", "DUPLICATE_DEPARTMENT_NAME");
+        // Check for duplicate department name
+        if (departmentRepository.existsByNameAndIsDeletedFalse(
+                requestDto.getName().trim()
+        )) {
+            throw new ValidationException(
+                    "Department with name "
+                            + requestDto.getName()
+                            + " already exists",
+                    "DUPLICATE_DEPARTMENT_NAME"
+            );
         }
-
-        // Validate createdBy user
-//        userRepository.findActiveUserById(requestDto.getCreatedBy())
-//                .orElseThrow(() -> new ResourceNotFoundException("Active user with ID " + requestDto.getCreatedBy() + " not found", "USER_NOT_FOUND"));
 
         Department department = new Department();
+
         department.setId(requestDto.getId());
         department.setName(requestDto.getName().trim());
         department.setCreatedDate(new Date());
         department.setUpdatedDate(new Date());
+        department.setDate(LocalDate.now());
         department.setDeleted(false);
 
         department = departmentRepository.save(department);
+
         return mapToResponseDto(department);
     }
 
     @Override
     public DepartmentResponseDto getDepartmentById(Long id) {
-        Department department = departmentRepository.findById(id)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found", "DEPARTMENT_NOT_FOUND"));
+
+        Department department =
+                departmentRepository.findById(id)
+                        .filter(d -> !d.isDeleted())
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Department with ID "
+                                                + id
+                                                + " not found",
+                                        "DEPARTMENT_NOT_FOUND"
+                                )
+                        );
+
         return mapToResponseDto(department);
     }
 
     @Override
-    public List<DepartmentResponseDto> getAllDepartments(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size);
-        Page<Department> departmentPage = departmentRepository.findByIsDeletedFalse(pageable);
-        return departmentPage.getContent()
+    public List<DepartmentResponseDto> getAllDepartments(
+            int page,
+            int size
+    ) {
+
+        PageRequest pageable =
+                PageRequest.of(page, size);
+
+        Page<Department> departmentPage =
+                departmentRepository.findByIsDeletedFalse(pageable);
+
+        return departmentPage
+                .getContent()
                 .stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
 
     @Override
-    public DepartmentResponseDto updateDepartment(Long id, DepartmentRequestDto requestDto) {
+    public DepartmentResponseDto updateDepartment(
+            Long id,
+            DepartmentRequestDto requestDto
+    ) {
+
         validateRequestDto(requestDto);
 
-        Department department = departmentRepository.findById(id)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found", "DEPARTMENT_NOT_FOUND"));
+        Department department =
+                departmentRepository.findById(id)
+                        .filter(d -> !d.isDeleted())
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Department with ID "
+                                                + id
+                                                + " not found",
+                                        "DEPARTMENT_NOT_FOUND"
+                                )
+                        );
 
-        if (!department.getName().equals(requestDto.getName().trim()) &&
-                departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Department with name " + requestDto.getName() + " already exists", "DUPLICATE_DEPARTMENT_NAME");
+        if (!department.getName().equals(requestDto.getName().trim())
+                && departmentRepository.existsByNameAndIsDeletedFalse(
+                requestDto.getName().trim()
+        )) {
+
+            throw new ValidationException(
+                    "Department with name "
+                            + requestDto.getName()
+                            + " already exists",
+                    "DUPLICATE_DEPARTMENT_NAME"
+            );
         }
 
         department.setName(requestDto.getName().trim());
         department.setUpdatedDate(new Date());
+        department.setDate(LocalDate.now());
+
         department = departmentRepository.save(department);
+
         return mapToResponseDto(department);
     }
 
     @Override
     public void deleteDepartment(Long id) {
-        Department department = departmentRepository.findById(id)
-                .filter(d -> !d.isDeleted())
-                .orElseThrow(() -> new ResourceNotFoundException("Department with ID " + id + " not found", "DEPARTMENT_NOT_FOUND"));
+
+        Department department =
+                departmentRepository.findById(id)
+                        .filter(d -> !d.isDeleted())
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Department with ID "
+                                                + id
+                                                + " not found",
+                                        "DEPARTMENT_NOT_FOUND"
+                                )
+                        );
 
         department.setDeleted(true);
         department.setUpdatedDate(new Date());
+        department.setDate(LocalDate.now());
+
         departmentRepository.save(department);
     }
 
     @Override
-    public DepartmentResponseDto createMasterDepartment(DepartmentRequestDto requestDto) {
+    public DepartmentResponseDto createMasterDepartment(
+            DepartmentRequestDto requestDto
+    ) {
+
         validateRequestDto(requestDto);
 
         // Check for duplicate department ID
         if (departmentRepository.existsById(requestDto.getId())) {
-            throw new ValidationException("Department with ID " + requestDto.getId() + " already exists", "DUPLICATE_DEPARTMENT_ID");
+            throw new ValidationException(
+                    "Department with ID "
+                            + requestDto.getId()
+                            + " already exists",
+                    "DUPLICATE_DEPARTMENT_ID"
+            );
         }
 
-        // Check for duplicate name
-        if (departmentRepository.existsByNameAndIsDeletedFalse(requestDto.getName().trim())) {
-            throw new ValidationException("Department with name " + requestDto.getName() + " already exists", "DUPLICATE_DEPARTMENT_NAME");
+        // Check for duplicate department name
+        if (departmentRepository.existsByNameAndIsDeletedFalse(
+                requestDto.getName().trim()
+        )) {
+            throw new ValidationException(
+                    "Department with name "
+                            + requestDto.getName()
+                            + " already exists",
+                    "DUPLICATE_DEPARTMENT_NAME"
+            );
         }
 
         Department department = new Department();
+
         department.setId(requestDto.getId());
         department.setName(requestDto.getName().trim());
         department.setCreatedDate(new Date());
         department.setUpdatedDate(new Date());
+        department.setDate(LocalDate.now());
         department.setDeleted(false);
 
         department = departmentRepository.save(department);
+
         return mapToResponseDto(department);
     }
 
-    private void validateRequestDto(DepartmentRequestDto requestDto) {
+    private void validateRequestDto(
+            DepartmentRequestDto requestDto
+    ) {
+
         if (requestDto.getId() == null) {
-            throw new ValidationException("Department ID cannot be null", "INVALID_DEPARTMENT_ID");
+            throw new ValidationException(
+                    "Department ID cannot be null",
+                    "INVALID_DEPARTMENT_ID"
+            );
         }
-        if (requestDto.getName() == null || requestDto.getName().trim().isEmpty()) {
-            throw new ValidationException("Department name cannot be empty", "INVALID_DEPARTMENT_NAME");
+
+        if (requestDto.getName() == null
+                || requestDto.getName().trim().isEmpty()) {
+
+            throw new ValidationException(
+                    "Department name cannot be empty",
+                    "INVALID_DEPARTMENT_NAME"
+            );
         }
-//        if (requestDto.getCreatedBy() == null) {
-//            throw new ValidationException("Created by user ID cannot be null", "INVALID_CREATED_BY");
-//        }
     }
 
-    private DepartmentResponseDto mapToResponseDto(Department department) {
-        DepartmentResponseDto dto = new DepartmentResponseDto();
+    private DepartmentResponseDto mapToResponseDto(
+            Department department
+    ) {
+
+        DepartmentResponseDto dto =
+                new DepartmentResponseDto();
+
         dto.setId(department.getId());
         dto.setName(department.getName());
         dto.setCreatedDate(department.getCreatedDate());
         dto.setUpdatedDate(department.getUpdatedDate());
+
         return dto;
     }
 
     @Override
-    public List<UserResponseDto> getUsersByDepartmentId(Long departmentId) {
+    public List<UserResponseDto> getUsersByDepartmentId(
+            Long departmentId
+    ) {
 
-        departmentRepository.findByIdAndIsDeletedFalse(departmentId)
+        departmentRepository
+                .findByIdAndIsDeletedFalse(departmentId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Department ID " + departmentId + " not found",
+                                "Department ID "
+                                        + departmentId
+                                        + " not found",
                                 "DEPARTMENT_NOT_FOUND"
                         )
                 );
 
         List<User> users =
-                userRepository.findActiveUsersByDepartmentId(departmentId);
+                userRepository.findActiveUsersByDepartmentId(
+                        departmentId
+                );
 
         return users.stream()
                 .map(this::mapToUserResponseDto)
                 .collect(Collectors.toList());
     }
 
-    private UserResponseDto mapToUserResponseDto(User user) {
-        UserResponseDto dto = new UserResponseDto();
+    private UserResponseDto mapToUserResponseDto(
+            User user
+    ) {
+
+        UserResponseDto dto =
+                new UserResponseDto();
+
         dto.setId(user.getId());
         dto.setFullName(user.getFullName());
         dto.setEmail(user.getEmail());
         dto.setContactNo(user.getContactNo());
-        dto.setDesignation(user.getUserDesignation() != null ? user.getUserDesignation().getName() : null);
-        dto.setDesignationId(user.getUserDesignation() != null ? user.getUserDesignation().getId() : null);
-        dto.setDepartmentIds(user.getDepartments() != null
-                ? user.getDepartments().stream().map(d -> d.getId()).toList()
-                : List.of());
-        dto.setRoleIds(user.getRoles() != null
-                ? user.getRoles().stream().map(r -> r.getId()).toList()
-                : List.of());
-        dto.setManagerId(user.getManager() != null ? user.getManager().getId() : null);
-        dto.setManagerFlag(user.isManagerFlag());
-        dto.setCreatedDate(user.getCreatedDate());
-        dto.setUpdatedDate(user.getUpdatedDate());
+
+        dto.setDesignation(
+                user.getUserDesignation() != null
+                        ? user.getUserDesignation().getName()
+                        : null
+        );
+
+        dto.setDesignationId(
+                user.getUserDesignation() != null
+                        ? user.getUserDesignation().getId()
+                        : null
+        );
+
+        dto.setDepartmentIds(
+                user.getDepartments() != null
+                        ? user.getDepartments()
+                        .stream()
+                        .map(Department::getId)
+                        .toList()
+                        : List.of()
+        );
+
+        dto.setRoleIds(
+                user.getRoles() != null
+                        ? user.getRoles()
+                        .stream()
+                        .map(role -> role.getId())
+                        .toList()
+                        : List.of()
+        );
+
+        dto.setManagerId(
+                user.getManager() != null
+                        ? user.getManager().getId()
+                        : null
+        );
+
+        dto.setManagerFlag(
+                user.isManagerFlag()
+        );
+
+        dto.setCreatedDate(
+                user.getCreatedDate()
+        );
+
+        dto.setUpdatedDate(
+                user.getUpdatedDate()
+        );
+
         return dto;
     }
 }

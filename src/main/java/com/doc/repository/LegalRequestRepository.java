@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface LegalRequestRepository extends JpaRepository<LegalRequest, Long> {
 
     @Query(
@@ -59,4 +61,25 @@ public interface LegalRequestRepository extends JpaRepository<LegalRequest, Long
             @Param("status") String status,
             Pageable pageable
     );
+    public interface LegalStatusCountProjection {
+        String getStatus();
+        Long getTotal();
+    }
+
+    @Query("""
+    SELECT lr.legalStatus AS status, COUNT(lr) AS total
+    FROM LegalRequest lr
+    WHERE lr.isDeleted = false
+    GROUP BY lr.legalStatus
+    """)
+    List<LegalStatusCountProjection> countGroupedByStatus();
+
+    @Query("""
+    SELECT lr.legalStatus AS status, COUNT(lr) AS total
+    FROM LegalRequest lr
+    WHERE lr.isDeleted = false
+      AND lr.assignedToLegal.id = :userId
+    GROUP BY lr.legalStatus
+    """)
+    List<LegalStatusCountProjection> countGroupedByStatusForUser(@Param("userId") Long userId);
 }

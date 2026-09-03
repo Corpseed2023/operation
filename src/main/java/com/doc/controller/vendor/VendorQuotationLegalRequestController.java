@@ -71,4 +71,10 @@ public class VendorQuotationLegalRequestController {
                 legalRequestService.getAssignedRequestCounts(requestDto)
         );
     }
+    @GetMapping("/summary")
+    @Operation(summary = "Summary counts for vendor quotation legal requests assigned to this user")
+    public ResponseEntity<VendorLegalSummaryResponseDto> getSummary(
+            @RequestParam Long userId) {
+        return ResponseEntity.ok(legalRequestService.getSummary(userId));
+    }
 }

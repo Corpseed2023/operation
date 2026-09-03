@@ -1,10 +1,15 @@
 package com.doc.feign;
 
+import com.doc.dto.legalDashbaord.PaymentLegalClientDto;
 import com.doc.dto.vendor.AccountVendorSyncRequestDto;
 import com.doc.dto.vendor.AccountVendorSyncResponseDto;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
 
 @FeignClient(
         name = "account-service",
@@ -26,5 +31,10 @@ public interface AccountFeignClient {
     @PostMapping("/sync")
     AccountVendorSyncResponseDto syncVendor(
             @RequestBody AccountVendorSyncRequestDto request
+    );
+
+    @GetMapping("/accountService/api/v1/payment-legal-verification/pending")
+    List<PaymentLegalClientDto> getPendingPaymentLegalRequests(
+            @RequestParam("userId") Long userId
     );
 }

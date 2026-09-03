@@ -20,6 +20,19 @@ public interface MilestoneOnHoldRequestRepository
             MilestoneOnHoldApprovalStatus approvalStatus
     );
 
+    /*
+     * Used to validate whether the latest PENDING request is still valid.
+     *
+     * The write lock prevents two concurrent flows from both trying to
+     * close/update the same pending request.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<MilestoneOnHoldRequest>
+    findTopByMilestoneAssignment_IdAndApprovalStatusOrderByRequestedAtDesc(
+            Long assignmentId,
+            MilestoneOnHoldApprovalStatus approvalStatus
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT r

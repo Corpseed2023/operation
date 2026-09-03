@@ -26,4 +26,5 @@ public interface VendorQuotationLegalRequestService {
     List<LegalUserWorkloadResponseDto> getAssignedRequestCounts(
             LegalUserWorkloadRequestDto requestDto
     );
+    VendorLegalSummaryResponseDto getSummary(Long userId);
 }
