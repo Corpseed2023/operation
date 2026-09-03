@@ -4,6 +4,8 @@ import com.doc.constants.StatusConstants;
 import com.doc.dto.ProjectMilestoneassignment.MilestoneOnHoldDecisionDto;
 import com.doc.dto.ProjectMilestoneassignment.MilestoneOnHoldResponseDto;
 import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
+import com.doc.em.ProjectHistoryEventType;
+import com.doc.em.ProjectHistoryReferenceType;
 import com.doc.entity.milestone.*;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
@@ -16,6 +18,7 @@ import com.doc.repository.MilestoneStatusRepository;
 import com.doc.repository.ProjectMilestoneAssignmentRepository;
 import com.doc.repository.UserRepository;
 import com.doc.service.MilestoneOnHoldApprovalService;
+import com.doc.service.project.ProjectHistoryEventService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -40,19 +43,22 @@ public class MilestoneOnHoldApprovalServiceImpl
     private final MilestoneStatusRepository milestoneStatusRepository;
     private final MilestoneStatusHistoryRepository historyRepository;
     private final UserRepository userRepository;
+    private final ProjectHistoryEventService historyEventService;
 
     public MilestoneOnHoldApprovalServiceImpl(
             MilestoneOnHoldRequestRepository requestRepository,
             ProjectMilestoneAssignmentRepository assignmentRepository,
             MilestoneStatusRepository milestoneStatusRepository,
             MilestoneStatusHistoryRepository historyRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            ProjectHistoryEventService historyEventService
     ) {
         this.requestRepository = requestRepository;
         this.assignmentRepository = assignmentRepository;
         this.milestoneStatusRepository = milestoneStatusRepository;
         this.historyRepository = historyRepository;
         this.userRepository = userRepository;
+        this.historyEventService = historyEventService;
     }
 
     @Override
@@ -80,7 +86,7 @@ public class MilestoneOnHoldApprovalServiceImpl
                         "USER_NOT_FOUND"
                 ));
 
-        validateRequesterIsCurrentAssignee(assignment, requester);
+        validateRequesterCanRequestOnHold(assignment, requester);
 
         String currentStatus = assignment.getStatus() == null
                 ? null
@@ -108,20 +114,76 @@ public class MilestoneOnHoldApprovalServiceImpl
             );
         }
 
-        if (requester.getManager() == null || requester.getManager().getId() == null) {
-            throw new ValidationException(
-                    "No manager is configured for the assigned user",
-                    "REQUESTER_MANAGER_NOT_CONFIGURED"
+        /*
+         * Resolve approver for the ON_HOLD request.
+         *
+         * Normal user:
+         * - Must be current assignee.
+         * - Assignee's manager becomes approver.
+         *
+         * ADMIN / ROLE_ADMIN / OPERATION_HEAD / ROLE_OPERATION_HEAD:
+         * - Can request ON_HOLD even when the milestone has no assigned user.
+         * - Can also request when the assignee has no manager configured.
+         * - In those fallback cases, the privileged requester becomes approver.
+         */
+        boolean isAdmin = hasRole(requester, "ADMIN");
+        boolean isOperationHead = hasRole(requester, "OPERATION_HEAD");
+        boolean isPrivilegedRequester = isAdmin || isOperationHead;
+
+        User assignedUser = assignment.getAssignedUser();
+        User manager;
+
+        /*
+         * IMPORTANT:
+         * ADMIN / OPERATION_HEAD are resolved FIRST.
+         * They do not depend on milestone assignee or assignee manager.
+         */
+        if (isPrivilegedRequester) {
+
+            manager = requester;
+
+            log.info(
+                    "[MILESTONE-ON-HOLD-PRIVILEGED-DIRECT] "
+                            + "assignmentId={}, requesterId={}, admin={}, "
+                            + "operationHead={}, assignedUserId={}, approverId={}",
+                    assignment.getId(),
+                    requester.getId(),
+                    isAdmin,
+                    isOperationHead,
+                    assignedUser != null ? assignedUser.getId() : null,
+                    manager.getId()
             );
+
+        } else {
+
+            /*
+             * Normal user flow remains unchanged.
+             */
+            if (assignedUser == null) {
+                throw new ValidationException(
+                        "No user is currently assigned to this milestone",
+                        "MILESTONE_ASSIGNEE_NOT_CONFIGURED"
+                );
+            }
+
+            if (assignedUser.getManager() == null
+                    || assignedUser.getManager().getId() == null) {
+                throw new ValidationException(
+                        "No manager is configured for the assigned user",
+                        "REQUESTER_MANAGER_NOT_CONFIGURED"
+                );
+            }
+
+            manager = userRepository
+                    .findActiveUserById(assignedUser.getManager().getId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Assigned user's manager was not found or is inactive",
+                            "MANAGER_NOT_FOUND"
+                    ));
         }
 
-        User manager = userRepository.findActiveUserById(requester.getManager().getId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Assigned user's manager was not found or is inactive",
-                        "MANAGER_NOT_FOUND"
-                ));
-
-        if (manager.getId().equals(requester.getId())) {
+        if (manager.getId().equals(requester.getId())
+                && !isPrivilegedRequester) {
             throw new ValidationException(
                     "User cannot approve their own ON_HOLD request",
                     "SELF_APPROVAL_NOT_ALLOWED"
@@ -143,6 +205,21 @@ public class MilestoneOnHoldApprovalServiceImpl
                         "projectId={}, requestedById={}, managerId={}, status=PENDING",
                 saved.getId(), assignment.getId(), assignment.getProject().getId(),
                 requester.getId(), manager.getId());
+
+        historyEventService.saveHistory(
+                assignment.getProject().getId(),
+                assignment.getId(),
+                ProjectHistoryEventType.MILESTONE_ON_HOLD_REQUESTED,
+                ProjectHistoryReferenceType.ON_HOLD_REQUEST,
+                saved.getId(),
+                "Milestone ON_HOLD requested",
+                "ON_HOLD requested for milestone " + resolveMilestoneName(assignment),
+                saved.getRequestReason(),
+                currentStatus,
+                "ON_HOLD (PENDING APPROVAL)",
+                requester.getId(),
+                requester.getFullName()
+        );
 
         // Keep the milestone's current status unchanged until the manager approves.
         return toResponse(saved);
@@ -289,7 +366,8 @@ public class MilestoneOnHoldApprovalServiceImpl
         } else if (dto.getDecision() == MilestoneOnHoldDecision.REJECT) {
             rejectRequest(
                     request,
-                    dto.getDecisionReason()
+                    dto.getDecisionReason(),
+                    decisionBy
             );
         } else {
             throw new ValidationException(
@@ -325,8 +403,22 @@ public class MilestoneOnHoldApprovalServiceImpl
     ) {
         ProjectMilestoneAssignment assignment = request.getMilestoneAssignment();
 
-        if (assignment.getAssignedUser() == null
-                || !assignment.getAssignedUser().getId().equals(request.getRequestedBy().getId())) {
+        boolean requestedByPrivilegedUser =
+                hasRole(request.getRequestedBy(), "ADMIN")
+                        || hasRole(request.getRequestedBy(), "OPERATION_HEAD");
+
+        /*
+         * Preserve the original assignee-protection for normal users.
+         * ADMIN / OPERATION_HEAD may create a request on behalf of the current
+         * assignee, so requestedBy does not have to equal assignedUser for them.
+         */
+        if (!requestedByPrivilegedUser
+                && (
+                assignment.getAssignedUser() == null
+                        || !assignment.getAssignedUser()
+                        .getId()
+                        .equals(request.getRequestedBy().getId())
+        )) {
             throw new ValidationException(
                     "Milestone assignee changed after the request was submitted",
                     "ON_HOLD_REQUEST_ASSIGNEE_CHANGED"
@@ -366,15 +458,59 @@ public class MilestoneOnHoldApprovalServiceImpl
 
         request.setApprovalStatus(MilestoneOnHoldApprovalStatus.APPROVED);
         request.setDecisionReason(blankToNull(decisionReason));
+
+        historyEventService.saveHistory(
+                assignment.getProject().getId(),
+                assignment.getId(),
+                ProjectHistoryEventType.MILESTONE_ON_HOLD_APPROVED,
+                ProjectHistoryReferenceType.ON_HOLD_REQUEST,
+                request.getId(),
+                "Milestone ON_HOLD approved",
+                "ON_HOLD request approved for milestone "
+                        + resolveMilestoneName(assignment),
+                blankToNull(decisionReason) != null
+                        ? decisionReason.trim()
+                        : request.getRequestReason(),
+                request.getPreviousStatus() != null
+                        ? request.getPreviousStatus().getName()
+                        : null,
+                onHoldStatus.getName(),
+                manager.getId(),
+                manager.getFullName()
+        );
     }
 
     private void rejectRequest(
             MilestoneOnHoldRequest request,
-            String decisionReason
+            String decisionReason,
+            User decisionBy
     ) {
         // The milestone was never changed, so rejection only closes the request.
         request.setApprovalStatus(MilestoneOnHoldApprovalStatus.REJECTED);
         request.setDecisionReason(decisionReason.trim());
+
+        ProjectMilestoneAssignment assignment =
+                request.getMilestoneAssignment();
+
+        historyEventService.saveHistory(
+                assignment.getProject().getId(),
+                assignment.getId(),
+                ProjectHistoryEventType.MILESTONE_ON_HOLD_REJECTED,
+                ProjectHistoryReferenceType.ON_HOLD_REQUEST,
+                request.getId(),
+                "Milestone ON_HOLD rejected",
+                "ON_HOLD request rejected for milestone "
+                        + resolveMilestoneName(assignment),
+                decisionReason.trim(),
+                request.getPreviousStatus() != null
+                        ? request.getPreviousStatus().getName()
+                        : null,
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null,
+                decisionBy.getId(),
+                decisionBy.getFullName()
+        );
     }
 
     @Override
@@ -444,15 +580,41 @@ public class MilestoneOnHoldApprovalServiceImpl
         );
     }
 
-    private void validateRequesterIsCurrentAssignee(
+    private void validateRequesterCanRequestOnHold(
             ProjectMilestoneAssignment assignment,
             User requester
     ) {
-        if (assignment.getAssignedUser() == null
-                || !assignment.getAssignedUser().getId().equals(requester.getId())) {
+        boolean isCurrentAssignee =
+                assignment.getAssignedUser() != null
+                        && assignment.getAssignedUser().getId() != null
+                        && assignment.getAssignedUser()
+                        .getId()
+                        .equals(requester.getId());
+
+        boolean isAdmin = hasRole(requester, "ADMIN");
+        boolean isOperationHead = hasRole(requester, "OPERATION_HEAD");
+
+        boolean allowed =
+                isCurrentAssignee
+                        || isAdmin
+                        || isOperationHead;
+
+        log.info(
+                "[MILESTONE-ON-HOLD-REQUEST-AUTHORIZATION] "
+                        + "assignmentId={}, requesterId={}, currentAssignee={}, "
+                        + "admin={}, operationHead={}, allowed={}",
+                assignment.getId(),
+                requester.getId(),
+                isCurrentAssignee,
+                isAdmin,
+                isOperationHead,
+                allowed
+        );
+
+        if (!allowed) {
             throw new ValidationException(
-                    "Only the currently assigned user can request ON_HOLD",
-                    "ONLY_ASSIGNEE_CAN_REQUEST_ON_HOLD"
+                    "Only the currently assigned user, ADMIN, or OPERATION_HEAD can request ON_HOLD",
+                    "NOT_AUTHORIZED_TO_REQUEST_ON_HOLD"
             );
         }
     }
@@ -534,4 +696,5 @@ public class MilestoneOnHoldApprovalServiceImpl
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
+
 }

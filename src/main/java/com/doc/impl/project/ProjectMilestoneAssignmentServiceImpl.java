@@ -19,6 +19,8 @@ import com.doc.entity.vendor.ProcurementOrder;
 import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.em.ProjectHistoryEventType;
+import com.doc.em.ProjectHistoryReferenceType;
 import com.doc.notification.*;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
@@ -28,6 +30,7 @@ import com.doc.repository.vendor.PurchaseOrderRepository;
 import com.doc.service.*;
 //import com.doc.service.NotificationPublisherService;
 import com.doc.service.project.ProjectMilestoneAssignmentService;
+import com.doc.service.project.ProjectHistoryEventService;
 import com.doc.service.project.ProjectService;
 import com.doc.validation.MilestoneValidator;
 import org.slf4j.Logger;
@@ -78,6 +81,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     private static final long DEFAULT_RENEWAL_LEAD_DAYS = 30L;
 
     private final MilestoneOnHoldApprovalService milestoneOnHoldApprovalService;
+    private final ProjectHistoryEventService historyEventService;
 
     private static final String SYSTEM_REWORK_HOLD_PREFIX =
             "SYSTEM_REWORK_HOLD";
@@ -103,7 +107,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             DocumentStatusRepository documentStatusRepository,
             PurchaseOrderRepository purchaseOrderRepository,
             ProcurementPaymentRequestRepository procurementPaymentRequestRepository,
-            MilestoneOnHoldApprovalService milestoneOnHoldApprovalService
+            MilestoneOnHoldApprovalService milestoneOnHoldApprovalService,
+            ProjectHistoryEventService historyEventService
 
 
     ) {
@@ -126,6 +131,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         this.purchaseOrderRepository=purchaseOrderRepository;
         this.procurementPaymentRequestRepository=procurementPaymentRequestRepository;
         this.milestoneOnHoldApprovalService = milestoneOnHoldApprovalService;
+        this.historyEventService = historyEventService;
 
 
     }
@@ -434,6 +440,30 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         assignment =
                 projectMilestoneAssignmentRepository.save(assignment);
+
+        /*
+         * Save the milestone status change in the common project timeline.
+         * Existing MilestoneStatusHistory above remains unchanged.
+         */
+        historyEventService.saveHistory(
+                assignment.getProject().getId(),
+                assignment.getId(),
+                ProjectHistoryEventType.MILESTONE_STATUS_CHANGED,
+                ProjectHistoryReferenceType.MILESTONE_ASSIGNMENT,
+                assignment.getId(),
+                "Milestone status changed",
+                "Milestone "
+                        + getMilestoneName(assignment)
+                        + " status changed from "
+                        + currentStatusName
+                        + " to "
+                        + newStatus.getName(),
+                updateDto.getStatusReason(),
+                currentStatusName,
+                newStatus.getName(),
+                changedBy.getId(),
+                getUserDisplayName(changedBy)
+        );
 
         logger.info(
                 "[MILESTONE-STATUS-UPDATED] " +
@@ -1335,6 +1365,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 metadataJson
         );
 
+
+
         notificationPublisherService.sendNotification(
                 NotificationCreateRequestDto.builder()
                         .receiverId(assignedUser.getId())
@@ -1478,6 +1510,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             return;
         }
 
+        String previousProjectStatusName =
+                project.getStatus().getName();
+
         Long currentProjectStatusId =
                 project.getStatus().getId();
 
@@ -1556,6 +1591,38 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         updateProjectProgress(project);
 
         projectRepository.save(project);
+
+        /*
+         * Keep old project-status update behavior unchanged.
+         * Add a timeline event only when the project status actually changed.
+         */
+        if (previousProjectStatusName == null
+                || !previousProjectStatusName.equalsIgnoreCase(newStatusName)) {
+
+            User updatedByUser = updatedById == null
+                    ? null
+                    : userRepository
+                    .findActiveUserById(updatedById)
+                    .orElse(null);
+
+            historyEventService.saveHistory(
+                    project.getId(),
+                    null,
+                    ProjectHistoryEventType.PROJECT_STATUS_CHANGED,
+                    ProjectHistoryReferenceType.PROJECT,
+                    project.getId(),
+                    "Project status changed",
+                    "Project status automatically changed from "
+                            + previousProjectStatusName
+                            + " to "
+                            + newStatusName,
+                    "Updated automatically based on milestone statuses",
+                    previousProjectStatusName,
+                    newStatusName,
+                    updatedById,
+                    getUserDisplayName(updatedByUser)
+            );
+        }
 
     }
 
