@@ -1,0 +1,17 @@
+package com.doc.em;
+
+public enum ProjectHistoryReferenceType {
+    PROJECT,
+    MILESTONE_ASSIGNMENT,
+    ON_HOLD_REQUEST,
+    DOCUMENT,
+    LEGAL_REQUEST,
+    PROCUREMENT_ASSIGNMENT,
+    RFQ,
+    VENDOR_FINALIZATION,
+    PURCHASE_ORDER,
+    PAYMENT_REQUEST,
+    PROJECT_EXPENSE,
+    COMMENT,
+    NOTE
+}

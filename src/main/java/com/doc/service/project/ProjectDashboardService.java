@@ -15,6 +15,8 @@ public interface ProjectDashboardService {
             LocalDate fromDate,
             LocalDate toDate
     );
+    List<RecentActivityResponseDto> getRecentActivities(Long userId, Integer limit);
+
 
     ProjectOverviewResponseDto getProjectOverview(
             Long userId,
@@ -23,10 +25,17 @@ public interface ProjectDashboardService {
             LocalDate toDate
     );
     ProjectCompletionResponseDto getProjectCompletionSummary(Long userId);
-    List<ProjectStatusCountResponseDto> getProjectStatusWiseSummary(Long userId);
-    List<MilestoneOverviewResponseDto> getMilestoneOverview(Long userId);
-    List<TeamWorkloadResponseDto> getTeamWorkload(Long userId);
-    List<DueRiskQueueResponseDto> getDueRiskQueue(
+    List<ProjectStatusCountResponseDto> getProjectStatusWiseSummary(
+            Long userId, LocalDate fromDate, LocalDate toDate
+    );
+    List<TeamWorkloadResponseDto> getTeamWorkload(
+            Long userId, LocalDate fromDate, LocalDate toDate
+    );
+
+    List<MilestoneOverviewResponseDto> getMilestoneOverview(
+            Long userId, LocalDate fromDate, LocalDate toDate
+    );
+     List<DueRiskQueueResponseDto> getDueRiskQueue(
             Long userId,
             Integer upcomingDays,
             Integer limit

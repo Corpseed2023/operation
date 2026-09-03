@@ -96,34 +96,41 @@ public class ProjectDashboardController {
     }
 
     @GetMapping("/status-wise-summary")
-    public ResponseEntity<List<ProjectStatusCountResponseDto>>
-    getProjectStatusWiseSummary(
-            @RequestParam Long userId
+    public ResponseEntity<List<ProjectStatusCountResponseDto>> getProjectStatusWiseSummary(
+            @RequestParam Long userId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
     ) {
-
         return ResponseEntity.ok(
-                projectDashboardService
-                        .getProjectStatusWiseSummary(userId)
+                projectDashboardService.getProjectStatusWiseSummary(userId, fromDate, toDate)
         );
     }
-    @GetMapping("/milestone-overview")
-    public ResponseEntity<List<MilestoneOverviewResponseDto>>
-    getMilestoneOverview(
-            @RequestParam Long userId
-    ) {
 
+    @GetMapping("/milestone-overview")
+    public ResponseEntity<List<MilestoneOverviewResponseDto>> getMilestoneOverview(
+            @RequestParam Long userId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
+    ) {
         return ResponseEntity.ok(
-                projectDashboardService.getMilestoneOverview(userId)
+                projectDashboardService.getMilestoneOverview(userId, fromDate, toDate)
         );
     }
 
     @GetMapping("/team-workload")
     public ResponseEntity<List<TeamWorkloadResponseDto>> getTeamWorkload(
-            @RequestParam Long userId
+            @RequestParam Long userId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
     ) {
-
         return ResponseEntity.ok(
-                projectDashboardService.getTeamWorkload(userId)
+                projectDashboardService.getTeamWorkload(userId, fromDate, toDate)
         );
     }
 
@@ -204,6 +211,16 @@ public class ProjectDashboardController {
                         userId,
                         projectId
                 )
+        );
+    }
+
+    @GetMapping("/recent-activities")
+    public ResponseEntity<List<RecentActivityResponseDto>> getRecentActivities(
+            @RequestParam Long userId,
+            @RequestParam(required = false) Integer limit
+    ) {
+        return ResponseEntity.ok(
+                projectDashboardService.getRecentActivities(userId, limit)
         );
     }
 }

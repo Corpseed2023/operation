@@ -4,7 +4,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Getter
 @Setter
@@ -17,19 +19,20 @@ public class ProjectResponseDto {
     private String estimateNumber;
     private String priority;
 
-    // Sales Person
     private Long salesPersonId;
-    private String salesPersonName;          // NEW
+    private String salesPersonName;
 
     private Long productId;
+
     private Long companyId;
-    private String companyName;              // NEW
+    private String companyName;
 
     private Long contactId;
-    private String contactName;              // NEW
+    private String contactName;
 
     private Long leadId;
     private LocalDate date;
+
     private Double totalAmount;
     private Double dueAmount;
     private String paymentStatus;
@@ -45,7 +48,6 @@ public class ProjectResponseDto {
     private Long statusId;
     private String statusName;
 
-    // Assume this class exists – add:
     private Long unitId;
     private String unitName;
 
@@ -79,4 +81,6 @@ public class ProjectResponseDto {
     private String currentAssignedUserEmail;
     private String currentAssignedUserMobile;
 
+    // NEW
+    private List<ProjectMilestoneListDto> milestones = new ArrayList<>();
 }
