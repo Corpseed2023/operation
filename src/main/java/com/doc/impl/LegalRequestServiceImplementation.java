@@ -1,10 +1,6 @@
 package com.doc.impl;
 
-import com.doc.dto.LegalRequestDto.LegalRequestDocumentDto;
-import com.doc.dto.LegalRequestDto.LegalRequestDocumentResponseDto;
-import com.doc.dto.LegalRequestDto.LegalRequestDto;
-import com.doc.dto.LegalRequestDto.LegalRequestResponseDto;
-import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
+import com.doc.dto.LegalRequestDto.*;
 import com.doc.em.LegalStatus;
 import com.doc.em.ProjectHistoryEventType;
 import com.doc.em.ProjectHistoryReferenceType;
@@ -210,6 +206,57 @@ public class LegalRequestServiceImplementation implements LegalRequestService {
         }
 
         return mapToResponse(savedRequest);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LegalRequestSummaryResponseDto getSummary(Long userId) {
+
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required");
+        }
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = hasAnyRole(user, "ADMIN", "ROLE_ADMIN");
+        boolean isOperationHead = hasAnyRole(user, "OPERATION_HEAD", "ROLE_OPERATION_HEAD");
+
+        boolean belongsToLegalDepartment =
+                user.getDepartments() != null
+                        && user.getDepartments().stream()
+                        .filter(d -> d != null && !d.isDeleted())
+                        .map(d -> d.getName())
+                        .filter(name -> name != null)
+                        .map(String::trim)
+                        .anyMatch(name -> name.equalsIgnoreCase("LEGAL")
+                                || name.equalsIgnoreCase("LEGAL DEPARTMENT"));
+
+        if (!isAdmin && !isOperationHead && !belongsToLegalDepartment) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "Only Legal department, Operation Head or Admin can view this summary"
+            );
+        }
+
+        // Admin / Operation Head see the whole department; individual
+        // legal team members only see requests assigned specifically to them.
+        List<LegalRequestRepository.LegalStatusCountProjection> rows =
+                (isAdmin || isOperationHead)
+                        ? legalRequestRepository.countGroupedByStatus()
+                        : legalRequestRepository.countGroupedByStatusForUser(userId);
+
+        List<LegalRequestStatusCountDto> statusCounts = rows.stream()
+                .map(r -> new LegalRequestStatusCountDto(r.getStatus(), r.getTotal()))
+                .toList();
+
+        long totalPending = statusCounts.stream()
+                .filter(s -> "INITIATED".equalsIgnoreCase(s.getStatus()))
+                .mapToLong(LegalRequestStatusCountDto::getCount)
+                .findFirst()
+                .orElse(0L);
+
+        return new LegalRequestSummaryResponseDto(totalPending, statusCounts);
     }
 
 

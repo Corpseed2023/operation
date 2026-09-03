@@ -41,4 +41,28 @@ public interface VendorQuotationLegalRequestRepository
         Long getTotal();
     }
 
+    interface VendorLegalStatusCountProjection {
+        VendorQuotationLegalRequestStatus getStatus();
+        Long getTotal();
+    }
+
+
+    @Query("""
+    SELECT r.status AS status, COUNT(r) AS total
+    FROM VendorQuotationLegalRequest r
+    WHERE r.isDeleted = false
+    GROUP BY r.status
+    """)
+    List<VendorLegalStatusCountProjection> countGroupedByStatus();
+
+
+    @Query("""
+    SELECT r.status AS status, COUNT(r) AS total
+    FROM VendorQuotationLegalRequest r
+    WHERE r.isDeleted = false
+      AND r.assignedToLegal = :userId
+    GROUP BY r.status
+    """)
+    List<VendorLegalStatusCountProjection> countGroupedByStatusForUser(@Param("userId") Long userId);
+
 }

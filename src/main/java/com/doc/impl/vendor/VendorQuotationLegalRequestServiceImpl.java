@@ -328,5 +328,28 @@ public class VendorQuotationLegalRequestServiceImpl
         return response;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public VendorLegalSummaryResponseDto getSummary(Long userId) {
+
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required");
+        }
+
+        List<VendorQuotationLegalRequestRepository.VendorLegalStatusCountProjection> rows =
+                legalRequestRepository.countGroupedByStatusForUser(userId);
+
+        List<VendorLegalStatusCountDto> statusCounts = rows.stream()
+                .map(r -> new VendorLegalStatusCountDto(r.getStatus().name(), r.getTotal()))
+                .toList();
+
+        long totalPending = statusCounts.stream()
+                .filter(s -> VendorQuotationLegalRequestStatus.SERVICE_AGREEMENT_REQUESTED.name().equals(s.getStatus()))
+                .mapToLong(VendorLegalStatusCountDto::getCount)
+                .findFirst()
+                .orElse(0L);
+
+        return new VendorLegalSummaryResponseDto(totalPending, statusCounts);
+    }
 
 }

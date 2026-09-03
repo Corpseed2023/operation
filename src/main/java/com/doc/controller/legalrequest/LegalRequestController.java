@@ -2,6 +2,7 @@ package com.doc.controller.legalrequest;
 
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
 import com.doc.dto.LegalRequestDto.LegalRequestResponseDto;
+import com.doc.dto.LegalRequestDto.LegalRequestSummaryResponseDto;
 import com.doc.dto.LegalRequestDto.LegalStatusUpdateDto;
 import com.doc.em.LegalStatus;
 import com.doc.service.LegalRequestService;
@@ -82,5 +83,11 @@ public class LegalRequestController {
                 legalRequestService.getAllLegalRequests(userId, status, page, size);
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/summary")
+    public ResponseEntity<LegalRequestSummaryResponseDto> getSummary(
+            @RequestParam Long userId) {
+        return ResponseEntity.ok(legalRequestService.getSummary(userId));
     }
 }
