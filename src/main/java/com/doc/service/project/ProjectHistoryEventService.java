@@ -3,16 +3,13 @@ package com.doc.service.project;
 import com.doc.dto.project.projectHistory.ProjectHistoryEventResponseDto;
 import com.doc.em.ProjectHistoryEventType;
 import com.doc.em.ProjectHistoryReferenceType;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 public interface ProjectHistoryEventService {
 
-    Page<ProjectHistoryEventResponseDto> getProjectTimeline(
-            Long projectId,
-            ProjectHistoryEventType eventType,
-            Long milestoneAssignmentId,
-            Pageable pageable
+    List<ProjectHistoryEventResponseDto> getProjectTimeline(
+            Long projectId
     );
 
     void saveHistory(
