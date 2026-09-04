@@ -9,6 +9,7 @@ import com.doc.entity.product.Product;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.project.ProjectPortalDetail;
+import com.doc.entity.project.ProjectPortalDetailStatus;
 import com.doc.exception.ValidationException;
 import com.doc.repository.ProductDocumentMappingRepository;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
@@ -23,6 +24,7 @@ import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
@@ -106,7 +108,6 @@ public class MilestoneValidator {
     public void validateFillingMilestone(
             ProjectMilestoneAssignment assignment
     ) {
-
         Long assignmentId =
                 assignment != null ? assignment.getId() : null;
 
@@ -116,10 +117,9 @@ public class MilestoneValidator {
         );
 
         if (assignment == null || assignment.getProject() == null) {
-
             logger.error(
-                    "[FILING-MILESTONE-VALIDATION-FAILED] " +
-                            "reason=INVALID_ASSIGNMENT, assignmentId={}",
+                    "[FILING-MILESTONE-VALIDATION-FAILED] "
+                            + "reason=INVALID_ASSIGNMENT, assignmentId={}",
                     assignmentId
             );
 
@@ -132,10 +132,9 @@ public class MilestoneValidator {
         Project project = assignment.getProject();
 
         if (project.getId() == null) {
-
             logger.error(
-                    "[FILING-MILESTONE-VALIDATION-FAILED] " +
-                            "reason=PROJECT_MISSING, assignmentId={}",
+                    "[FILING-MILESTONE-VALIDATION-FAILED] "
+                            + "reason=PROJECT_MISSING, assignmentId={}",
                     assignmentId
             );
 
@@ -148,91 +147,91 @@ public class MilestoneValidator {
         Long projectId = project.getId();
 
         logger.debug(
-                "[PORTAL-DETAIL-FETCH-START] " +
-                        "assignmentId={}, projectId={}",
+                "[PORTAL-DETAIL-FETCH-START] "
+                        + "assignmentId={}, projectId={}",
                 assignmentId,
                 projectId
         );
 
         List<ProjectPortalDetail> portalDetails =
                 portalDetailRepository
-                        .findByProjectIdAndIsDeletedFalse(projectId);
+                        .findByProjectIdAndIsDeletedFalse(
+                                projectId
+                        );
 
         int portalDetailCount =
-                portalDetails != null ? portalDetails.size() : 0;
+                portalDetails != null
+                        ? portalDetails.size()
+                        : 0;
 
         logger.debug(
-                "[PORTAL-DETAIL-FETCH-COMPLETED] " +
-                        "assignmentId={}, projectId={}, count={}",
+                "[PORTAL-DETAIL-FETCH-COMPLETED] "
+                        + "assignmentId={}, projectId={}, count={}",
                 assignmentId,
                 projectId,
                 portalDetailCount
         );
 
         if (portalDetails == null || portalDetails.isEmpty()) {
-
             logger.warn(
-                    "[FILING-MILESTONE-VALIDATION-FAILED] " +
-                            "reason=PORTAL_DETAILS_MISSING, " +
-                            "assignmentId={}, projectId={}",
+                    "[FILING-MILESTONE-VALIDATION-FAILED] "
+                            + "reason=PORTAL_DETAILS_MISSING, "
+                            + "assignmentId={}, projectId={}",
                     assignmentId,
                     projectId
             );
 
             throw new ValidationException(
-                    "Cannot start Filing milestone. " +
-                            "No portal details have been added for this project.",
+                    "Cannot start Filing milestone. "
+                            + "No portal details have been added for this project.",
                     "PORTAL_DETAILS_MISSING"
             );
         }
 
         for (ProjectPortalDetail portalDetail : portalDetails) {
-
             if (portalDetail == null) {
                 continue;
             }
 
             logger.debug(
-                    "[PORTAL-DETAIL] projectId={}, portalDetailId={}, " +
-                            "portalName={}, status={}",
+                    "[PORTAL-DETAIL] projectId={}, portalDetailId={}, "
+                            + "portalName={}, status={}, isDeleted={}",
                     projectId,
                     portalDetail.getId(),
                     portalDetail.getPortalName(),
-                    portalDetail.getStatus()
+                    portalDetail.getStatus(),
+                    portalDetail.isDeleted()
             );
         }
 
         boolean hasApprovedPortal =
                 portalDetails.stream()
-                        .filter(portalDetail -> portalDetail != null)
+                        .filter(Objects::nonNull)
                         .anyMatch(portalDetail ->
-                                portalDetail.getStatus() != null
-                                        && "APPROVED".equalsIgnoreCase(
-                                        portalDetail.getStatus()
-                                )
+                                portalDetail.getStatus()
+                                        == ProjectPortalDetailStatus.APPROVED
                         );
 
         if (!hasApprovedPortal) {
-
             logger.warn(
-                    "[FILING-MILESTONE-VALIDATION-FAILED] " +
-                            "reason=PORTAL_NOT_APPROVED, " +
-                            "assignmentId={}, projectId={}, portalCount={}",
+                    "[FILING-MILESTONE-VALIDATION-FAILED] "
+                            + "reason=PORTAL_NOT_APPROVED, "
+                            + "assignmentId={}, projectId={}, portalCount={}",
                     assignmentId,
                     projectId,
                     portalDetailCount
             );
 
             throw new ValidationException(
-                    "Cannot start Filing milestone. " +
-                            "At least one portal detail must be APPROVED.",
+                    "Cannot start Filing milestone. "
+                            + "At least one portal detail must be APPROVED.",
                     "PORTAL_NOT_APPROVED"
             );
         }
 
         logger.info(
-                "[FILING-MILESTONE-VALIDATION-SUCCESS] " +
-                        "assignmentId={}, projectId={}",
+                "[FILING-MILESTONE-VALIDATION-SUCCESS] "
+                        + "assignmentId={}, projectId={}",
                 assignmentId,
                 projectId
         );

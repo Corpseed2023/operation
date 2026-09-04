@@ -79,10 +79,10 @@ public class ProjectPortalDetail {
     @Comment("Soft delete flag")
     private boolean isDeleted = false;
 
-    // New fields for approval process
-    @Column(name = "status", nullable = false)
-    @Comment("Status of the portal detail: PENDING, APPROVED, REJECTED")
-    private String status = "PENDING";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @Comment("Approval status: PENDING, APPROVED or REJECTED")
+    private ProjectPortalDetailStatus status = ProjectPortalDetailStatus.PENDING;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by")

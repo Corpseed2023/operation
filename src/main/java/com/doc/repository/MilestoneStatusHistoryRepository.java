@@ -12,6 +12,10 @@ import java.util.List;
 public interface MilestoneStatusHistoryRepository
         extends JpaRepository<MilestoneStatusHistory, Long> {
 
+    /*
+     * Existing method:
+     * Returns complete status history for one milestone assignment.
+     */
     @Query("""
             SELECT h
             FROM MilestoneStatusHistory h
@@ -25,6 +29,11 @@ public interface MilestoneStatusHistoryRepository
             Long milestoneAssignmentId
     );
 
+    /*
+     * Existing project-level method:
+     * Returns acknowledgement history from every completed milestone
+     * belonging to the specified project.
+     */
     @Query("""
             SELECT DISTINCT h
             FROM MilestoneStatusHistory h
@@ -43,6 +52,7 @@ public interface MilestoneStatusHistoryRepository
             """)
     List<MilestoneStatusHistory>
     findCompletedAcknowledgementsByProjectId(
-            @Param("projectId") Long projectId
+            @Param("projectId")
+            Long projectId
     );
 }

@@ -2396,91 +2396,84 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     }
 
 
+
     @Override
     @Transactional(readOnly = true)
     public List<MilestoneAcknowledgementResponseDto>
-    getPreviousCompletionAcknowledgements(
-            Long currentAssignmentId,
+    getProjectCompletionAcknowledgements(
+            Long projectId,
             Long userId
     ) {
         logger.info(
-                "[GET-PREVIOUS-ACKNOWLEDGEMENTS-START] " +
-                        "currentAssignmentId={}, userId={}",
-                currentAssignmentId,
+                "[GET-PROJECT-ACKNOWLEDGEMENTS-START] projectId={}, userId={}",
+                projectId,
                 userId
         );
 
-        if (currentAssignmentId == null
-                || currentAssignmentId <= 0) {
+        if (projectId == null || projectId <= 0) {
+            logger.warn(
+                    "[GET-PROJECT-ACKNOWLEDGEMENTS-INVALID-PROJECT] " +
+                            "projectId={}, userId={}",
+                    projectId,
+                    userId
+            );
 
             throw new ValidationException(
-                    "Current milestone assignment ID is required",
-                    "ERR_MILESTONE_ASSIGNMENT_ID_REQUIRED"
+                    "Project ID is required",
+                    "ERR_PROJECT_ID_REQUIRED"
             );
         }
 
         if (userId == null || userId <= 0) {
+            logger.warn(
+                    "[GET-PROJECT-ACKNOWLEDGEMENTS-INVALID-USER] " +
+                            "projectId={}, userId={}",
+                    projectId,
+                    userId
+            );
+
             throw new ValidationException(
                     "User ID is required",
                     "ERR_USER_ID_REQUIRED"
             );
         }
 
-        ProjectMilestoneAssignment currentAssignment =
-                projectMilestoneAssignmentRepository
-                        .findActiveUserById(currentAssignmentId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Current milestone assignment not found",
-                                        "MILESTONE_ASSIGNMENT_NOT_FOUND"
-                                )
-                        );
+        Project project = projectRepository
+                .findById(projectId)
+                .orElseThrow(() -> {
+                    logger.error(
+                            "[GET-PROJECT-ACKNOWLEDGEMENTS-PROJECT-NOT-FOUND] " +
+                                    "projectId={}, userId={}",
+                            projectId,
+                            userId
+                    );
 
-        User requestingUser =
-                userRepository
-                        .findActiveUserById(userId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "User not found",
-                                        "USER_NOT_FOUND"
-                                )
-                        );
+                    return new ResourceNotFoundException(
+                            "Project not found",
+                            "PROJECT_NOT_FOUND"
+                    );
+                });
 
-        if (currentAssignment.getProject() == null
-                || currentAssignment.getProject().getId() == null) {
+        User requestingUser = userRepository
+                .findActiveUserById(userId)
+                .orElseThrow(() -> {
+                    logger.error(
+                            "[GET-PROJECT-ACKNOWLEDGEMENTS-USER-NOT-FOUND] " +
+                                    "projectId={}, userId={}",
+                            projectId,
+                            userId
+                    );
 
-            throw new ValidationException(
-                    "Project is not configured for the milestone assignment",
-                    "ERR_MILESTONE_PROJECT_NOT_CONFIGURED"
-            );
-        }
+                    return new ResourceNotFoundException(
+                            "User not found",
+                            "USER_NOT_FOUND"
+                    );
+                });
 
-        if (currentAssignment.getProductMilestoneMap() == null) {
-            throw new ValidationException(
-                    "Product milestone mapping is not configured",
-                    "ERR_PRODUCT_MILESTONE_MAPPING_NOT_CONFIGURED"
-            );
-        }
-
-        Integer currentMilestoneOrder =
-                currentAssignment
-                        .getProductMilestoneMap()
-                        .getOrder();
-
-        if (currentMilestoneOrder == null) {
-            throw new ValidationException(
-                    "Milestone order is not configured",
-                    "ERR_MILESTONE_ORDER_NOT_CONFIGURED"
-            );
-        }
-
-        validatePreviousAcknowledgementAccess(
-                currentAssignment,
+        validateProjectAcknowledgementAccess(
+                project,
                 requestingUser
         );
-
-        Long projectId =
-                currentAssignment.getProject().getId();
 
         List<MilestoneStatusHistory> completedHistories =
                 milestoneStatusHistoryRepository
@@ -2488,24 +2481,16 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                                 projectId
                         );
 
-        /*
-         * Only return milestones positioned before the current milestone.
-         *
-         * Example:
-         * Documentation order = 1
-         * Filing order        = 2
-         * Certification order = 3
-         *
-         * Certification user receives order 1 and order 2 only.
-         */
+        logger.debug(
+                "[GET-PROJECT-ACKNOWLEDGEMENTS-HISTORIES-FOUND] " +
+                        "projectId={}, userId={}, historyCount={}",
+                projectId,
+                userId,
+                completedHistories.size()
+        );
+
         List<MilestoneAcknowledgementResponseDto> response =
                 completedHistories.stream()
-                        .filter(history ->
-                                isPreviousMilestoneHistory(
-                                        history,
-                                        currentMilestoneOrder
-                                )
-                        )
                         .sorted(
                                 Comparator
                                         .comparingInt(
@@ -2528,12 +2513,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         .toList();
 
         logger.info(
-                "[GET-PREVIOUS-ACKNOWLEDGEMENTS-SUCCESS] " +
-                        "projectId={}, currentAssignmentId={}, " +
-                        "currentOrder={}, userId={}, count={}",
+                "[GET-PROJECT-ACKNOWLEDGEMENTS-SUCCESS] " +
+                        "projectId={}, userId={}, acknowledgementCount={}",
                 projectId,
-                currentAssignmentId,
-                currentMilestoneOrder,
                 userId,
                 response.size()
         );
@@ -2541,80 +2523,95 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         return response;
     }
 
-    private void validatePreviousAcknowledgementAccess(
-            ProjectMilestoneAssignment currentAssignment,
+
+    private void validateProjectAcknowledgementAccess(
+            Project project,
             User requestingUser
     ) {
-        boolean hasFullAccess =
-                hasAnyRole(
-                        requestingUser,
-                        "ADMIN",
-                        "ROLE_ADMIN",
-                        "OPERATION_HEAD",
-                        "ROLE_OPERATION_HEAD"
-                );
+        boolean hasFullAccess = hasAnyRole(
+                requestingUser,
+                "ADMIN",
+                "ROLE_ADMIN",
+                "OPERATION_HEAD",
+                "ROLE_OPERATION_HEAD"
+        );
 
-        /*
-         * ADMIN and OPERATION_HEAD can audit acknowledgements even when the
-         * current milestone is not visible.
-         */
         if (hasFullAccess) {
-            return;
-        }
-
-        /*
-         * Normal users and managers can access acknowledgements only after
-         * their current milestone becomes visible.
-         */
-        if (!currentAssignment.isVisible()) {
-            throw new ValidationException(
-                    "Current milestone is not visible yet",
-                    "ERR_CURRENT_MILESTONE_NOT_VISIBLE"
-            );
-        }
-
-        boolean isAssignedUser =
-                currentAssignment.getAssignedUser() != null
-                        && requestingUser.getId().equals(
-                        currentAssignment
-                                .getAssignedUser()
-                                .getId()
-                );
-
-        if (isAssignedUser) {
-            return;
-        }
-
-        boolean isManagerOfAssignedUser =
-                isManagerOfAssignedUser(
-                        requestingUser,
-                        currentAssignment
-                );
-
-        boolean isDepartmentManager =
-                isManagerOfCurrentMilestoneDepartment(
-                        requestingUser,
-                        currentAssignment
-                );
-
-        if (!isManagerOfAssignedUser
-                && !isDepartmentManager) {
-
-            logger.warn(
-                    "[GET-PREVIOUS-ACKNOWLEDGEMENTS-ACCESS-DENIED] " +
-                            "assignmentId={}, projectId={}, userId={}",
-                    currentAssignment.getId(),
-                    currentAssignment.getProject() != null
-                            ? currentAssignment.getProject().getId()
-                            : null,
+            logger.debug(
+                    "[PROJECT-ACKNOWLEDGEMENT-FULL-ACCESS] " +
+                            "projectId={}, userId={}",
+                    project.getId(),
                     requestingUser.getId()
             );
 
-            throw new ValidationException(
-                    "You are not authorized to view acknowledgements for this milestone",
-                    "ERR_UNAUTHORIZED_MILESTONE_ACKNOWLEDGEMENT_ACCESS"
-            );
+            return;
         }
+
+        List<ProjectMilestoneAssignment> projectAssignments =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(
+                                project.getId()
+                        );
+
+        boolean isAssignedProjectUser =
+                projectAssignments.stream()
+                        .anyMatch(assignment ->
+                                assignment.getAssignedUser() != null
+                                        && requestingUser
+                                        .getId()
+                                        .equals(
+                                                assignment
+                                                        .getAssignedUser()
+                                                        .getId()
+                                        )
+                        );
+
+        if (isAssignedProjectUser) {
+            logger.debug(
+                    "[PROJECT-ACKNOWLEDGEMENT-ASSIGNED-USER-ACCESS] " +
+                            "projectId={}, userId={}",
+                    project.getId(),
+                    requestingUser.getId()
+            );
+
+            return;
+        }
+
+        boolean isAuthorizedManager =
+                projectAssignments.stream()
+                        .anyMatch(assignment ->
+                                isManagerOfAssignedUser(
+                                        requestingUser,
+                                        assignment
+                                )
+                                        || isManagerOfCurrentMilestoneDepartment(
+                                        requestingUser,
+                                        assignment
+                                )
+                        );
+
+        if (isAuthorizedManager) {
+            logger.debug(
+                    "[PROJECT-ACKNOWLEDGEMENT-MANAGER-ACCESS] " +
+                            "projectId={}, userId={}",
+                    project.getId(),
+                    requestingUser.getId()
+            );
+
+            return;
+        }
+
+        logger.warn(
+                "[PROJECT-ACKNOWLEDGEMENT-ACCESS-DENIED] " +
+                        "projectId={}, userId={}",
+                project.getId(),
+                requestingUser.getId()
+        );
+
+        throw new ValidationException(
+                "You are not authorized to view acknowledgement history for this project",
+                "ERR_UNAUTHORIZED_PROJECT_ACKNOWLEDGEMENT_ACCESS"
+        );
     }
 
     private boolean hasAnyRole(

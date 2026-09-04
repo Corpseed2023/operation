@@ -11,8 +11,8 @@ public interface ProjectMilestoneAssignmentService {
     void sendBackToPreviousMilestone(SendBackToPreviousMilestoneDto dto);
 
     List<MilestoneAcknowledgementResponseDto>
-    getPreviousCompletionAcknowledgements(
-            Long currentAssignmentId,
+    getProjectCompletionAcknowledgements(
+            Long projectId,
             Long userId
     );
 

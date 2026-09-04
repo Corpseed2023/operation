@@ -67,46 +67,43 @@ public class ProjectMilestoneAssignmentController {
 
 
     @GetMapping(
-            "/{currentAssignmentId}/previous-completion-acknowledgements"
+            "/{projectId}/completion-acknowledgements"
     )
     @Operation(
-            summary = "Get acknowledgements from previous completed milestones",
+            summary = "Get complete project acknowledgement history",
             description = """
-                    Returns acknowledgements uploaded while completing
-                    milestones positioned before the logged-in user's
-                    current milestone.
-                    """
+                Returns acknowledgements uploaded while completing
+                all milestones belonging to the project.
+                """
     )
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Acknowledgements retrieved successfully"
+                    description = "Project acknowledgement history retrieved successfully"
             ),
             @ApiResponse(
                     responseCode = "403",
-                    description = "User is not authorized or milestone is not visible"
+                    description = "User is not authorized to access this project"
             ),
             @ApiResponse(
                     responseCode = "404",
-                    description = "Milestone assignment or user not found"
+                    description = "Project or user not found"
             )
     })
-    public ResponseEntity<
-            List<MilestoneAcknowledgementResponseDto>
-            > getPreviousCompletionAcknowledgements(
-            @PathVariable Long currentAssignmentId,
+    public ResponseEntity<List<MilestoneAcknowledgementResponseDto>>
+    getProjectCompletionAcknowledgements(
+            @PathVariable Long projectId,
             @RequestParam Long userId
     ) {
         List<MilestoneAcknowledgementResponseDto> response =
                 projectMilestoneAssignmentService
-                        .getPreviousCompletionAcknowledgements(
-                                currentAssignmentId,
+                        .getProjectCompletionAcknowledgements(
+                                projectId,
                                 userId
                         );
 
         return ResponseEntity.ok(response);
     }
-
     @PutMapping("/{assignmentId}/reassign")
     @Operation(
             summary = "Manually reassign project milestone"
