@@ -136,7 +136,7 @@ public class ProjectPortalDetailController {
     }
 
     @Operation(
-            summary = "Get portal-detail approval queue",
+            summary = "Get portal-detail approval queue with pagination",
             description = "Admin and Operation Head see all Technical-user "
                     + "requests. A Technical manager sees requests submitted "
                     + "only by directly reporting Technical users."
@@ -144,11 +144,11 @@ public class ProjectPortalDetailController {
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Approval queue retrieved"
+                    description = "Paged approval queue retrieved"
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "Invalid status"
+                    description = "Invalid status or pagination values"
             ),
             @ApiResponse(
                     responseCode = "403",
@@ -163,7 +163,9 @@ public class ProjectPortalDetailController {
     public ResponseEntity<ProjectPortalApprovalQueueResponseDto>
     getApprovalQueue(
             @RequestParam
-            @Parameter(description = "Logged-in manager/Admin/Operation Head ID")
+            @Parameter(
+                    description = "Logged-in manager/Admin/Operation Head ID"
+            )
             Long userId,
 
             @RequestParam(
@@ -173,12 +175,40 @@ public class ProjectPortalDetailController {
             @Parameter(
                     description = "Portal status: PENDING, APPROVED or REJECTED"
             )
-            ProjectPortalDetailStatus status
+            ProjectPortalDetailStatus status,
+
+            @RequestParam(defaultValue = "1")
+            @Parameter(
+                    description = "Page number (1-based)",
+                    example = "1"
+            )
+            int page,
+
+            @RequestParam(defaultValue = "10")
+            @Parameter(
+                    description = "Number of records per page",
+                    example = "10"
+            )
+            int size
     ) {
+        if (page < 1) {
+            throw new IllegalArgumentException(
+                    "Page number must be at least 1"
+            );
+        }
+
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException(
+                    "Page size must be between 1 and 100"
+            );
+        }
+
         ProjectPortalApprovalQueueResponseDto response =
                 projectPortalDetailService.getApprovalQueue(
                         userId,
-                        status
+                        status,
+                        page - 1,
+                        size
                 );
 
         return ResponseEntity.ok(response);
@@ -272,4 +302,5 @@ public class ProjectPortalDetailController {
 
         return ResponseEntity.ok(response);
     }
+
 }

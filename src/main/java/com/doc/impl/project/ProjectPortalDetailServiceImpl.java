@@ -16,6 +16,10 @@ import com.doc.repository.UserRepository;
 import com.doc.repository.projectRepo.ProjectPortalDetailRepository;
 import com.doc.service.project.ProjectPortalDetailService;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -938,7 +942,9 @@ public class ProjectPortalDetailServiceImpl
     @Transactional(readOnly = true)
     public ProjectPortalApprovalQueueResponseDto getApprovalQueue(
             Long userId,
-            ProjectPortalDetailStatus status
+            ProjectPortalDetailStatus status,
+            int page,
+            int size
     ) {
         ProjectPortalDetailStatus requestedStatus =
                 status != null
@@ -946,9 +952,12 @@ public class ProjectPortalDetailServiceImpl
                         : ProjectPortalDetailStatus.PENDING;
 
         log.info(
-                "Fetching portal approval queue: userId={}, status={}",
+                "Fetching portal approval queue: userId={}, status={}, "
+                        + "page={}, size={}",
                 userId,
-                requestedStatus
+                requestedStatus,
+                page,
+                size
         );
 
         User loggedInUser = getUser(userId);
@@ -973,27 +982,36 @@ public class ProjectPortalDetailServiceImpl
             );
         }
 
-        List<ProjectPortalDetail> portalRequests;
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(
+                        Sort.Order.desc("createdDate"),
+                        Sort.Order.desc("id")
+                )
+        );
+
+        Page<ProjectPortalDetail> portalPage;
 
         if (adminOrOperationHead) {
-
-            portalRequests =
+            portalPage =
                     portalDetailRepo.findAllActiveByStatus(
-                            requestedStatus
+                            requestedStatus,
+                            pageable
                     );
-
         } else {
-
-            portalRequests =
+            portalPage =
                     portalDetailRepo
                             .findTechnicalPortalRequestsForManager(
                                     userId,
-                                    requestedStatus
+                                    requestedStatus,
+                                    pageable
                             );
         }
 
         List<ProjectPortalDetailResponseDto> requestDtos =
-                portalRequests.stream()
+                portalPage.getContent()
+                        .stream()
                         .filter(Objects::nonNull)
                         .map(portal ->
                                 mapToResponseDto(
@@ -1008,15 +1026,27 @@ public class ProjectPortalDetailServiceImpl
 
         response.setUserId(userId);
         response.setRequestedStatus(requestedStatus.name());
-        response.setTotalRequests(requestDtos.size());
+        response.setTotalRequests(portalPage.getTotalElements());
+        response.setTotalPages(portalPage.getTotalPages());
+        response.setCurrentPage(portalPage.getNumber() + 1);
+        response.setPageSize(portalPage.getSize());
+        response.setFirst(portalPage.isFirst());
+        response.setLast(portalPage.isLast());
+        response.setHasNext(portalPage.hasNext());
+        response.setHasPrevious(portalPage.hasPrevious());
         response.setRequests(requestDtos);
 
         log.info(
                 "Portal approval queue fetched successfully: "
-                        + "userId={}, status={}, count={}, accessType={}",
+                        + "userId={}, status={}, currentPage={}, "
+                        + "pageSize={}, pageRecords={}, totalRequests={}, "
+                        + "accessType={}",
                 userId,
                 requestedStatus,
+                response.getCurrentPage(),
+                response.getPageSize(),
                 requestDtos.size(),
+                portalPage.getTotalElements(),
                 adminOrOperationHead
                         ? "ADMIN_OR_OPERATION_HEAD"
                         : "TECHNICAL_MANAGER"
@@ -1024,7 +1054,6 @@ public class ProjectPortalDetailServiceImpl
 
         return response;
     }
-
 
 
 }

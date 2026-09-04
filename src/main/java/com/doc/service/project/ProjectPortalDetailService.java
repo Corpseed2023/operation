@@ -19,9 +19,10 @@ public interface ProjectPortalDetailService {
 
     ProjectPortalApprovalQueueResponseDto getApprovalQueue(
             Long userId,
-            ProjectPortalDetailStatus status
+            ProjectPortalDetailStatus status,
+            int page,
+            int size
     );
-
 
 
 }
