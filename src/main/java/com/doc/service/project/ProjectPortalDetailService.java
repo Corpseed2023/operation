@@ -2,10 +2,8 @@ package com.doc.service.project;
 
 
 
-import com.doc.dto.project.portal.ProjectPortalDetailApprovalDto;
-import com.doc.dto.project.portal.ProjectPortalDetailListResponseDto;
-import com.doc.dto.project.portal.ProjectPortalDetailRequestDto;
-import com.doc.dto.project.portal.ProjectPortalDetailResponseDto;
+import com.doc.dto.project.portal.*;
+import com.doc.entity.project.ProjectPortalDetailStatus;
 
 public interface ProjectPortalDetailService {
 
@@ -18,4 +16,12 @@ public interface ProjectPortalDetailService {
     void deletePortalDetail(Long projectId, Long detailId, Long userId);
 
     ProjectPortalDetailResponseDto approveOrRejectPortalDetail(Long projectId, Long detailId, Long userId, ProjectPortalDetailApprovalDto approvalDto);
+
+    ProjectPortalApprovalQueueResponseDto getApprovalQueue(
+            Long userId,
+            ProjectPortalDetailStatus status
+    );
+
+
+
 }

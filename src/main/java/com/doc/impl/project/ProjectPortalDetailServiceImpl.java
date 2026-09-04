@@ -1,9 +1,6 @@
 package com.doc.impl.project;
 
-import com.doc.dto.project.portal.ProjectPortalDetailApprovalDto;
-import com.doc.dto.project.portal.ProjectPortalDetailListResponseDto;
-import com.doc.dto.project.portal.ProjectPortalDetailRequestDto;
-import com.doc.dto.project.portal.ProjectPortalDetailResponseDto;
+import com.doc.dto.project.portal.*;
 import com.doc.entity.department.Department;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
@@ -934,4 +931,106 @@ public class ProjectPortalDetailServiceImpl
 
         return dto;
     }
+
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectPortalApprovalQueueResponseDto getApprovalQueue(
+            Long userId,
+            ProjectPortalDetailStatus status
+    ) {
+        ProjectPortalDetailStatus requestedStatus =
+                status != null
+                        ? status
+                        : ProjectPortalDetailStatus.PENDING;
+
+        log.info(
+                "Fetching portal approval queue: userId={}, status={}",
+                userId,
+                requestedStatus
+        );
+
+        User loggedInUser = getUser(userId);
+
+        boolean adminOrOperationHead =
+                isAdminOrOperationHead(loggedInUser);
+
+        boolean technicalManager =
+                loggedInUser.isManagerFlag()
+                        && belongsToTechnicalDepartment(loggedInUser);
+
+        if (!adminOrOperationHead && !technicalManager) {
+            log.warn(
+                    "Unauthorized portal approval queue access: userId={}",
+                    userId
+            );
+
+            throw new ValidationException(
+                    "Only a Technical department manager, Admin, or "
+                            + "Operation Head can access the portal approval queue",
+                    "ERR_PORTAL_APPROVAL_QUEUE_UNAUTHORIZED"
+            );
+        }
+
+        List<ProjectPortalDetail> portalRequests;
+
+        if (adminOrOperationHead) {
+            /*
+             * Admin and Operation Head see all requests raised
+             * by Technical department users.
+             */
+            portalRequests =
+                    portalDetailRepo
+                            .findTechnicalPortalRequestsByStatus(
+                                    requestedStatus
+                            );
+        } else {
+            /*
+             * Technical manager sees only requests raised by users
+             * directly reporting to that manager.
+             */
+            portalRequests =
+                    portalDetailRepo
+                            .findTechnicalPortalRequestsForManager(
+                                    userId,
+                                    requestedStatus
+                            );
+        }
+
+        List<ProjectPortalDetailResponseDto> requestDtos =
+                portalRequests.stream()
+                        .filter(Objects::nonNull)
+                        .map(portal ->
+                                mapToResponseDto(
+                                        portal,
+                                        loggedInUser
+                                )
+                        )
+                        .toList();
+
+        ProjectPortalApprovalQueueResponseDto response =
+                new ProjectPortalApprovalQueueResponseDto();
+
+        response.setUserId(userId);
+        response.setRequestedStatus(requestedStatus.name());
+        response.setTotalRequests(requestDtos.size());
+        response.setRequests(requestDtos);
+
+        log.info(
+                "Portal approval queue fetched successfully: "
+                        + "userId={}, status={}, count={}, accessType={}",
+                userId,
+                requestedStatus,
+                requestDtos.size(),
+                adminOrOperationHead
+                        ? "ADMIN_OR_OPERATION_HEAD"
+                        : "TECHNICAL_MANAGER"
+        );
+
+        return response;
+    }
+
+
+
 }

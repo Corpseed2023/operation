@@ -391,4 +391,84 @@ public interface ProjectPortalDetailRepository
                 ProjectPortalDetailStatus.PENDING
         );
     }
+
+
+    /**
+     * Admin and Operation Head approval queue.
+     *
+     * Returns portal requests raised by Technical department users.
+     */
+    @EntityGraph(attributePaths = {
+            "project",
+            "company",
+            "createdBy",
+            "createdBy.manager",
+            "createdBy.departments",
+            "updatedBy",
+            "approvedBy"
+    })
+    @Query("""
+        SELECT DISTINCT portal
+        FROM ProjectPortalDetail portal
+        JOIN portal.createdBy submitter
+        JOIN submitter.departments department
+        WHERE portal.status = :status
+          AND portal.isDeleted = false
+          AND submitter.isDeleted = false
+          AND submitter.isActive = true
+          AND department.isDeleted = false
+          AND UPPER(
+                REPLACE(
+                    REPLACE(TRIM(department.name), '_', ' '),
+                    '-',
+                    ' '
+                )
+              ) IN ('TECHNICAL', 'TECHNICAL DEPARTMENT')
+        ORDER BY portal.createdDate ASC, portal.id ASC
+        """)
+    List<ProjectPortalDetail> findTechnicalPortalRequestsByStatus(
+            @Param("status") ProjectPortalDetailStatus status
+    );
+
+    /**
+     * Technical manager approval queue.
+     *
+     * Returns only requests submitted by users directly reporting
+     * to the supplied manager.
+     */
+    @EntityGraph(attributePaths = {
+            "project",
+            "company",
+            "createdBy",
+            "createdBy.manager",
+            "createdBy.departments",
+            "updatedBy",
+            "approvedBy"
+    })
+    @Query("""
+        SELECT DISTINCT portal
+        FROM ProjectPortalDetail portal
+        JOIN portal.createdBy submitter
+        JOIN submitter.departments department
+        WHERE submitter.manager.id = :managerId
+          AND portal.status = :status
+          AND portal.isDeleted = false
+          AND submitter.isDeleted = false
+          AND submitter.isActive = true
+          AND department.isDeleted = false
+          AND UPPER(
+                REPLACE(
+                    REPLACE(TRIM(department.name), '_', ' '),
+                    '-',
+                    ' '
+                )
+              ) IN ('TECHNICAL', 'TECHNICAL DEPARTMENT')
+        ORDER BY portal.createdDate ASC, portal.id ASC
+        """)
+    List<ProjectPortalDetail> findTechnicalPortalRequestsForManager(
+            @Param("managerId") Long managerId,
+            @Param("status") ProjectPortalDetailStatus status
+    );
+
+
 }
