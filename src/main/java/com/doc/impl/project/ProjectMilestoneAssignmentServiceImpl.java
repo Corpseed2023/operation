@@ -1,10 +1,7 @@
 package com.doc.impl.project;
 
 import com.doc.constants.StatusConstants;
-import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneDto;
-import com.doc.dto.ProjectMilestoneassignment.ReassignMilestoneResponseDto;
-import com.doc.dto.ProjectMilestoneassignment.SendBackToPreviousMilestoneDto;
-import com.doc.dto.ProjectMilestoneassignment.UpdateMilestoneStatusDto;
+import com.doc.dto.ProjectMilestoneassignment.*;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.milestone.MilestoneStatusHistory;
@@ -2396,6 +2393,454 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
         String trimmedValue = value.trim();
         return trimmedValue.isEmpty() ? null : trimmedValue;
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MilestoneAcknowledgementResponseDto>
+    getPreviousCompletionAcknowledgements(
+            Long currentAssignmentId,
+            Long userId
+    ) {
+        logger.info(
+                "[GET-PREVIOUS-ACKNOWLEDGEMENTS-START] " +
+                        "currentAssignmentId={}, userId={}",
+                currentAssignmentId,
+                userId
+        );
+
+        if (currentAssignmentId == null
+                || currentAssignmentId <= 0) {
+
+            throw new ValidationException(
+                    "Current milestone assignment ID is required",
+                    "ERR_MILESTONE_ASSIGNMENT_ID_REQUIRED"
+            );
+        }
+
+        if (userId == null || userId <= 0) {
+            throw new ValidationException(
+                    "User ID is required",
+                    "ERR_USER_ID_REQUIRED"
+            );
+        }
+
+        ProjectMilestoneAssignment currentAssignment =
+                projectMilestoneAssignmentRepository
+                        .findActiveUserById(currentAssignmentId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Current milestone assignment not found",
+                                        "MILESTONE_ASSIGNMENT_NOT_FOUND"
+                                )
+                        );
+
+        User requestingUser =
+                userRepository
+                        .findActiveUserById(userId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found",
+                                        "USER_NOT_FOUND"
+                                )
+                        );
+
+        if (currentAssignment.getProject() == null
+                || currentAssignment.getProject().getId() == null) {
+
+            throw new ValidationException(
+                    "Project is not configured for the milestone assignment",
+                    "ERR_MILESTONE_PROJECT_NOT_CONFIGURED"
+            );
+        }
+
+        if (currentAssignment.getProductMilestoneMap() == null) {
+            throw new ValidationException(
+                    "Product milestone mapping is not configured",
+                    "ERR_PRODUCT_MILESTONE_MAPPING_NOT_CONFIGURED"
+            );
+        }
+
+        Integer currentMilestoneOrder =
+                currentAssignment
+                        .getProductMilestoneMap()
+                        .getOrder();
+
+        if (currentMilestoneOrder == null) {
+            throw new ValidationException(
+                    "Milestone order is not configured",
+                    "ERR_MILESTONE_ORDER_NOT_CONFIGURED"
+            );
+        }
+
+        validatePreviousAcknowledgementAccess(
+                currentAssignment,
+                requestingUser
+        );
+
+        Long projectId =
+                currentAssignment.getProject().getId();
+
+        List<MilestoneStatusHistory> completedHistories =
+                milestoneStatusHistoryRepository
+                        .findCompletedAcknowledgementsByProjectId(
+                                projectId
+                        );
+
+        /*
+         * Only return milestones positioned before the current milestone.
+         *
+         * Example:
+         * Documentation order = 1
+         * Filing order        = 2
+         * Certification order = 3
+         *
+         * Certification user receives order 1 and order 2 only.
+         */
+        List<MilestoneAcknowledgementResponseDto> response =
+                completedHistories.stream()
+                        .filter(history ->
+                                isPreviousMilestoneHistory(
+                                        history,
+                                        currentMilestoneOrder
+                                )
+                        )
+                        .sorted(
+                                Comparator
+                                        .comparingInt(
+                                                this::getHistoryMilestoneOrder
+                                        )
+                                        .thenComparing(
+                                                MilestoneStatusHistory::getChangeDate,
+                                                Comparator.nullsLast(
+                                                        Date::compareTo
+                                                )
+                                        )
+                                        .thenComparing(
+                                                MilestoneStatusHistory::getId,
+                                                Comparator.nullsLast(
+                                                        Long::compareTo
+                                                )
+                                        )
+                        )
+                        .map(this::mapToAcknowledgementResponse)
+                        .toList();
+
+        logger.info(
+                "[GET-PREVIOUS-ACKNOWLEDGEMENTS-SUCCESS] " +
+                        "projectId={}, currentAssignmentId={}, " +
+                        "currentOrder={}, userId={}, count={}",
+                projectId,
+                currentAssignmentId,
+                currentMilestoneOrder,
+                userId,
+                response.size()
+        );
+
+        return response;
+    }
+
+    private void validatePreviousAcknowledgementAccess(
+            ProjectMilestoneAssignment currentAssignment,
+            User requestingUser
+    ) {
+        boolean hasFullAccess =
+                hasAnyRole(
+                        requestingUser,
+                        "ADMIN",
+                        "ROLE_ADMIN",
+                        "OPERATION_HEAD",
+                        "ROLE_OPERATION_HEAD"
+                );
+
+        /*
+         * ADMIN and OPERATION_HEAD can audit acknowledgements even when the
+         * current milestone is not visible.
+         */
+        if (hasFullAccess) {
+            return;
+        }
+
+        /*
+         * Normal users and managers can access acknowledgements only after
+         * their current milestone becomes visible.
+         */
+        if (!currentAssignment.isVisible()) {
+            throw new ValidationException(
+                    "Current milestone is not visible yet",
+                    "ERR_CURRENT_MILESTONE_NOT_VISIBLE"
+            );
+        }
+
+        boolean isAssignedUser =
+                currentAssignment.getAssignedUser() != null
+                        && requestingUser.getId().equals(
+                        currentAssignment
+                                .getAssignedUser()
+                                .getId()
+                );
+
+        if (isAssignedUser) {
+            return;
+        }
+
+        boolean isManagerOfAssignedUser =
+                isManagerOfAssignedUser(
+                        requestingUser,
+                        currentAssignment
+                );
+
+        boolean isDepartmentManager =
+                isManagerOfCurrentMilestoneDepartment(
+                        requestingUser,
+                        currentAssignment
+                );
+
+        if (!isManagerOfAssignedUser
+                && !isDepartmentManager) {
+
+            logger.warn(
+                    "[GET-PREVIOUS-ACKNOWLEDGEMENTS-ACCESS-DENIED] " +
+                            "assignmentId={}, projectId={}, userId={}",
+                    currentAssignment.getId(),
+                    currentAssignment.getProject() != null
+                            ? currentAssignment.getProject().getId()
+                            : null,
+                    requestingUser.getId()
+            );
+
+            throw new ValidationException(
+                    "You are not authorized to view acknowledgements for this milestone",
+                    "ERR_UNAUTHORIZED_MILESTONE_ACKNOWLEDGEMENT_ACCESS"
+            );
+        }
+    }
+
+    private boolean hasAnyRole(
+            User user,
+            String... allowedRoles
+    ) {
+        if (user == null
+                || user.getRoles() == null
+                || allowedRoles == null) {
+
+            return false;
+        }
+
+        return user.getRoles()
+                .stream()
+                .filter(role ->
+                        role != null
+                                && role.getName() != null
+                )
+                .anyMatch(role -> {
+                    String userRoleName =
+                            role.getName().trim();
+
+                    for (String allowedRole : allowedRoles) {
+                        if (allowedRole.equalsIgnoreCase(
+                                userRoleName
+                        )) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                });
+    }
+
+    private boolean isManagerOfAssignedUser(
+            User requestingUser,
+            ProjectMilestoneAssignment currentAssignment
+    ) {
+        if (requestingUser == null
+                || !requestingUser.isManagerFlag()
+                || currentAssignment.getAssignedUser() == null
+                || currentAssignment.getAssignedUser().getId() == null) {
+
+            return false;
+        }
+
+        Long assignedUserId =
+                currentAssignment.getAssignedUser().getId();
+
+        return userRepository
+                .findByManagerIdAndIsDeletedFalse(
+                        requestingUser.getId()
+                )
+                .stream()
+                .filter(user ->
+                        user != null && user.getId() != null
+                )
+                .anyMatch(user ->
+                        assignedUserId.equals(user.getId())
+                );
+    }
+
+    private boolean isManagerOfCurrentMilestoneDepartment(
+            User requestingUser,
+            ProjectMilestoneAssignment currentAssignment
+    ) {
+        if (requestingUser == null
+                || !requestingUser.isManagerFlag()
+                || requestingUser.getDepartments() == null
+                || requestingUser.getDepartments().isEmpty()
+                || currentAssignment.getProductMilestoneMap() == null
+                || currentAssignment
+                .getProductMilestoneMap()
+                .getMilestone() == null
+                || currentAssignment
+                .getProductMilestoneMap()
+                .getMilestone()
+                .getDepartments() == null) {
+
+            return false;
+        }
+
+        return requestingUser
+                .getDepartments()
+                .stream()
+                .filter(department ->
+                        department != null
+                                && department.getId() != null
+                )
+                .anyMatch(managerDepartment ->
+                        currentAssignment
+                                .getProductMilestoneMap()
+                                .getMilestone()
+                                .getDepartments()
+                                .stream()
+                                .filter(department ->
+                                        department != null
+                                                && department.getId() != null
+                                )
+                                .anyMatch(milestoneDepartment ->
+                                        managerDepartment
+                                                .getId()
+                                                .equals(
+                                                        milestoneDepartment
+                                                                .getId()
+                                                )
+                                )
+                );
+    }
+
+    private int getHistoryMilestoneOrder(
+            MilestoneStatusHistory history
+    ) {
+        if (history == null
+                || history.getMilestoneAssignment() == null
+                || history
+                .getMilestoneAssignment()
+                .getProductMilestoneMap() == null) {
+
+            return Integer.MAX_VALUE;
+        }
+
+        return history
+                .getMilestoneAssignment()
+                .getProductMilestoneMap()
+                .getOrder();
+    }
+
+    private MilestoneAcknowledgementResponseDto
+    mapToAcknowledgementResponse(
+            MilestoneStatusHistory history
+    ) {
+        ProjectMilestoneAssignment assignment =
+                history.getMilestoneAssignment();
+
+        Long milestoneId = null;
+        String milestoneName = null;
+        Integer milestoneOrder = null;
+
+        if (assignment.getMilestone() != null) {
+            milestoneId =
+                    assignment.getMilestone().getId();
+
+            milestoneName =
+                    assignment.getMilestone().getName();
+        } else if (assignment.getProductMilestoneMap() != null
+                && assignment
+                .getProductMilestoneMap()
+                .getMilestone() != null) {
+
+            milestoneId =
+                    assignment
+                            .getProductMilestoneMap()
+                            .getMilestone()
+                            .getId();
+
+            milestoneName =
+                    assignment
+                            .getProductMilestoneMap()
+                            .getMilestone()
+                            .getName();
+        }
+
+        if (assignment.getProductMilestoneMap() != null) {
+            milestoneOrder =
+                    assignment
+                            .getProductMilestoneMap()
+                            .getOrder();
+        }
+
+        return MilestoneAcknowledgementResponseDto
+                .builder()
+                .historyId(history.getId())
+                .milestoneAssignmentId(
+                        assignment.getId()
+                )
+                .milestoneId(milestoneId)
+                .milestoneName(milestoneName)
+                .milestoneOrder(milestoneOrder)
+                .acknowledgementAttachmentUrl(
+                        history.getAcknowledgementAttachmentUrl()
+                )
+                .acknowledgementAttachmentName(
+                        history.getAcknowledgementAttachmentName()
+                )
+                .completedById(
+                        history.getChangedBy() != null
+                                ? history.getChangedBy().getId()
+                                : null
+                )
+                .completedByName(
+                        history.getChangedBy() != null
+                                ? history.getChangedBy().getFullName()
+                                : "System"
+                )
+                .completedAt(history.getChangeDate())
+                .completionReason(
+                        history.getChangeReason()
+                )
+                .build();
+    }
+
+    private boolean isPreviousMilestoneHistory(
+            MilestoneStatusHistory history,
+            Integer currentMilestoneOrder
+    ) {
+        if (history == null
+                || history.getMilestoneAssignment() == null
+                || history
+                .getMilestoneAssignment()
+                .getProductMilestoneMap() == null
+                || currentMilestoneOrder == null) {
+
+            return false;
+        }
+
+        Integer historyMilestoneOrder =
+                history
+                        .getMilestoneAssignment()
+                        .getProductMilestoneMap()
+                        .getOrder();
+
+        return historyMilestoneOrder != null
+                && historyMilestoneOrder
+                < currentMilestoneOrder;
     }
 
 
