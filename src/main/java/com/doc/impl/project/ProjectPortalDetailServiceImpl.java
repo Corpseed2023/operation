@@ -976,20 +976,14 @@ public class ProjectPortalDetailServiceImpl
         List<ProjectPortalDetail> portalRequests;
 
         if (adminOrOperationHead) {
-            /*
-             * Admin and Operation Head see all requests raised
-             * by Technical department users.
-             */
+
             portalRequests =
-                    portalDetailRepo
-                            .findTechnicalPortalRequestsByStatus(
-                                    requestedStatus
-                            );
+                    portalDetailRepo.findAllActiveByStatus(
+                            requestedStatus
+                    );
+
         } else {
-            /*
-             * Technical manager sees only requests raised by users
-             * directly reporting to that manager.
-             */
+
             portalRequests =
                     portalDetailRepo
                             .findTechnicalPortalRequestsForManager(
