@@ -5,6 +5,7 @@ import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.*;
+import com.doc.dto.vendor.LeadVendorAssigneeDto;
 import com.doc.em.ProjectHistoryEventType;
 import com.doc.em.ProjectHistoryReferenceType;
 import com.doc.dto.project.sales.DepartmentWiseMilestoneDto;
@@ -150,105 +151,353 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public ProjectResponseDto createProject(ProjectRequestDto requestDto) {
-        logger.info("Creating project with projectNo: {}", requestDto.getProjectNo());
+
+        logger.info(
+                "[PROJECT-CREATE-START] projectNo={}, leadId={}, productId={}, companyId={}",
+                requestDto.getProjectNo(),
+                requestDto.getLeadId(),
+                requestDto.getProductId(),
+                requestDto.getCompanyId()
+        );
+
         projectRequestValidator.validate(requestDto);
 
-        // Duplicate checks
-        if (projectRepository.existsByProjectNoAndIsDeletedFalse(requestDto.getProjectNo().trim())) {
-            throw new ValidationException("Project with number " + requestDto.getProjectNo() + " already exists", "ERR_DUPLICATE_PROJECT_NO");
-        }
-        if (StringUtils.hasText(requestDto.getUnbilledNumber()) &&
-                projectRepository.existsByUnbilledNumberAndIsDeletedFalse(requestDto.getUnbilledNumber().trim())) {
-            throw new ValidationException("Unbilled number already exists", "ERR_DUPLICATE_UNBILLED_NO");
+        // =========================================================
+        // DUPLICATE VALIDATIONS
+        // =========================================================
+
+        if (projectRepository.existsByProjectNoAndIsDeletedFalse(
+                requestDto.getProjectNo().trim()
+        )) {
+
+            throw new ValidationException(
+                    "Project with number "
+                            + requestDto.getProjectNo()
+                            + " already exists",
+                    "ERR_DUPLICATE_PROJECT_NO"
+            );
         }
 
-        if (StringUtils.hasText(requestDto.getEstimateNumber()) &&
-                projectRepository.existsByEstimateNumberAndIsDeletedFalse(requestDto.getEstimateNumber().trim())) {
-            throw new ValidationException("Estimate number already exists", "ERR_DUPLICATE_ESTIMATE_NO");
+        if (StringUtils.hasText(requestDto.getUnbilledNumber())
+                && projectRepository.existsByUnbilledNumberAndIsDeletedFalse(
+                requestDto.getUnbilledNumber().trim()
+        )) {
+
+            throw new ValidationException(
+                    "Unbilled number already exists",
+                    "ERR_DUPLICATE_UNBILLED_NO"
+            );
         }
 
-        Product product = productRepository.findActiveUserById(requestDto.getProductId())
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found", "ERR_PRODUCT_NOT_FOUND"));
-        Company company = companyRepository.findByIdAndIsDeletedFalse(requestDto.getCompanyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Company not found or deleted", "ERR_COMPANY_NOT_FOUND"));
+        if (StringUtils.hasText(requestDto.getEstimateNumber())
+                && projectRepository.existsByEstimateNumberAndIsDeletedFalse(
+                requestDto.getEstimateNumber().trim()
+        )) {
+
+            throw new ValidationException(
+                    "Estimate number already exists",
+                    "ERR_DUPLICATE_ESTIMATE_NO"
+            );
+        }
+
+        // =========================================================
+        // MASTER DATA VALIDATION
+        // =========================================================
+
+        Product product =
+                productRepository.findActiveUserById(
+                                requestDto.getProductId()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Product not found",
+                                        "ERR_PRODUCT_NOT_FOUND"
+                                )
+                        );
+
+        Company company =
+                companyRepository.findByIdAndIsDeletedFalse(
+                                requestDto.getCompanyId()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Company not found or deleted",
+                                        "ERR_COMPANY_NOT_FOUND"
+                                )
+                        );
 
         CompanyUnit unit = null;
+
         if (requestDto.getUnitId() != null) {
-            unit = companyUnitRepository.findByIdAndCompanyIdAndIsDeletedFalse(requestDto.getUnitId(), requestDto.getCompanyId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Unit not found or doesn't belong to company", "ERR_UNIT_NOT_FOUND"));
-        }
-        Contact contact = contactRepository.findByIdAndDeleteStatusFalseAndIsActiveTrueAndIsDeletedFalse(requestDto.getContactId())
-                .orElseThrow(() -> new ResourceNotFoundException("Contact not found, inactive or deleted", "ERR_CONTACT_NOT_FOUND"));
-        User createdBy = userRepository.findActiveUserById(requestDto.getCreatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
-        User updatedBy = userRepository.findActiveUserById(requestDto.getUpdatedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
-        User approvedBy = userRepository.findActiveUserById(requestDto.getApprovedById())
-                .orElseThrow(() -> new ResourceNotFoundException("Approved by user not found", "ERR_APPROVED_BY_NOT_FOUND"));
-        PaymentType paymentType = paymentTypeRepository.findById(requestDto.getPaymentTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Payment type not found", "ERR_PAYMENT_TYPE_NOT_FOUND"));
 
-        List<ProductMilestoneMap> milestones = getMilestoneMaps(product.getId());
+            unit =
+                    companyUnitRepository
+                            .findByIdAndCompanyIdAndIsDeletedFalse(
+                                    requestDto.getUnitId(),
+                                    requestDto.getCompanyId()
+                            )
+                            .orElseThrow(() ->
+                                    new ResourceNotFoundException(
+                                            "Unit not found or doesn't belong to company",
+                                            "ERR_UNIT_NOT_FOUND"
+                                    )
+                            );
+        }
+
+        Contact contact =
+                contactRepository
+                        .findByIdAndDeleteStatusFalseAndIsActiveTrueAndIsDeletedFalse(
+                                requestDto.getContactId()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Contact not found, inactive or deleted",
+                                        "ERR_CONTACT_NOT_FOUND"
+                                )
+                        );
+
+        User createdBy =
+                userRepository
+                        .findActiveUserById(
+                                requestDto.getCreatedBy()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found",
+                                        "ERR_USER_NOT_FOUND"
+                                )
+                        );
+
+        User updatedBy =
+                userRepository
+                        .findActiveUserById(
+                                requestDto.getUpdatedBy()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found",
+                                        "ERR_USER_NOT_FOUND"
+                                )
+                        );
+
+        User approvedBy =
+                userRepository
+                        .findActiveUserById(
+                                requestDto.getApprovedById()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Approved by user not found",
+                                        "ERR_APPROVED_BY_NOT_FOUND"
+                                )
+                        );
+
+        PaymentType paymentType =
+                paymentTypeRepository
+                        .findById(
+                                requestDto.getPaymentTypeId()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Payment type not found",
+                                        "ERR_PAYMENT_TYPE_NOT_FOUND"
+                                )
+                        );
+
+        // =========================================================
+        // PRODUCT MILESTONES
+        // =========================================================
+
+        List<ProductMilestoneMap> milestones =
+                getMilestoneMaps(
+                        product.getId()
+                );
+
         if (milestones.isEmpty()) {
-            throw new ValidationException("No milestones defined for product ID " + product.getId(), "ERR_NO_MILESTONES");
+
+            throw new ValidationException(
+                    "No milestones defined for product ID "
+                            + product.getId(),
+                    "ERR_NO_MILESTONES"
+            );
         }
 
-        double totalAmount = requestDto.getTotalAmount();
-        double paidAmount = requestDto.getPaidAmount() != null ? requestDto.getPaidAmount() : 0.0;
-        double dueAmount = totalAmount - paidAmount;
+        // =========================================================
+        // PAYMENT CALCULATION
+        // =========================================================
 
-        String paymentTypeName = paymentType.getName();
-        validatePaymentRules(paymentTypeName, paidAmount, totalAmount);
+        double totalAmount =
+                requestDto.getTotalAmount();
 
-        Project project = new Project();
-        mapRequestDtoToProject(project, requestDto);
-        project.setProduct(product);
-        project.setCompany(company);
-        project.setContact(contact);
-        project.setCreatedBy(createdBy.getId());
-        project.setUpdatedBy(updatedBy.getId());
-        project.setCreatedDate(new Date());
-        project.setUpdatedDate(new Date());
-        project.setDeleted(false);
-        project.setSalesPersonId(requestDto.getSalesPersonId());
-        project.setSalesPersonName(requestDto.getSalesPersonName());
-        project.setActive(true);
-        project.setUnit(unit);
+        double paidAmount =
+                requestDto.getPaidAmount() != null
+                        ? requestDto.getPaidAmount()
+                        : 0.0;
 
+        double dueAmount =
+                totalAmount - paidAmount;
 
-        ProjectStatus openStatus = projectStatusRepository.findById(StatusConstants.PROJECT_OPEN_ID)
-                .orElseThrow(() -> new ResourceNotFoundException("System status OPEN (ID=1) not found", "ERR_SYSTEM_STATUS_MISSING"));
-        project.setStatus(openStatus);
+        String paymentTypeName =
+                paymentType.getName();
 
-        ProjectPaymentDetail paymentDetail = new ProjectPaymentDetail();
-        paymentDetail.setProject(project);
-        paymentDetail.setTotalAmount(totalAmount);
-        paymentDetail.setDueAmount(dueAmount);
-        paymentDetail.setPaymentType(paymentType);
-        paymentDetail.setApprovedBy(approvedBy);
-        paymentDetail.setCreatedBy(createdBy.getId());
-        paymentDetail.setUpdatedBy(updatedBy.getId());
-        paymentDetail.setCreatedDate(new Date());
-        paymentDetail.setUpdatedDate(new Date());
-        paymentDetail.setDate(LocalDate.now());
-        paymentDetail.setDeleted(false);
-
-        project.setPaymentDetail(paymentDetail);
-
-        Map<String, Object> solutionDetails = leadFeignClient.getSolutionByIdOnly(product.getId());
-
-        double professionalFee = extractProfessionalFee(solutionDetails);
-
-        ProjectPriority priority = calculateProjectPrioritySafely(
-                product.getId(),
-                company.getRating(),
+        validatePaymentRules(
+                paymentTypeName,
+                paidAmount,
                 totalAmount
         );
 
-        project.setPriority(priority);
+        // =========================================================
+        // CREATE PROJECT
+        // =========================================================
+
+        Project project =
+                new Project();
+
+        mapRequestDtoToProject(
+                project,
+                requestDto
+        );
+
+        project.setProduct(product);
+        project.setCompany(company);
+        project.setContact(contact);
+
+        project.setCreatedBy(
+                createdBy.getId()
+        );
+
+        project.setUpdatedBy(
+                updatedBy.getId()
+        );
+
+        project.setCreatedDate(
+                new Date()
+        );
+
+        project.setUpdatedDate(
+                new Date()
+        );
+
+        project.setDeleted(false);
+
+        project.setSalesPersonId(
+                requestDto.getSalesPersonId()
+        );
+
+        project.setSalesPersonName(
+                requestDto.getSalesPersonName()
+        );
+
+        project.setActive(true);
+
+        project.setUnit(unit);
+
+        // =========================================================
+        // PROJECT STATUS
+        // =========================================================
+
+        ProjectStatus openStatus =
+                projectStatusRepository
+                        .findById(
+                                StatusConstants.PROJECT_OPEN_ID
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "System status OPEN (ID=1) not found",
+                                        "ERR_SYSTEM_STATUS_MISSING"
+                                )
+                        );
+
+        project.setStatus(
+                openStatus
+        );
+
+        // =========================================================
+        // PAYMENT DETAIL
+        // =========================================================
+
+        ProjectPaymentDetail paymentDetail =
+                new ProjectPaymentDetail();
+
+        paymentDetail.setProject(
+                project
+        );
+
+        paymentDetail.setTotalAmount(
+                totalAmount
+        );
+
+        paymentDetail.setDueAmount(
+                dueAmount
+        );
+
+        paymentDetail.setPaymentType(
+                paymentType
+        );
+
+        paymentDetail.setApprovedBy(
+                approvedBy
+        );
+
+        paymentDetail.setCreatedBy(
+                createdBy.getId()
+        );
+
+        paymentDetail.setUpdatedBy(
+                updatedBy.getId()
+        );
+
+        paymentDetail.setCreatedDate(
+                new Date()
+        );
+
+        paymentDetail.setUpdatedDate(
+                new Date()
+        );
+
+        paymentDetail.setDate(
+                LocalDate.now()
+        );
+
+        paymentDetail.setDeleted(false);
+
+        project.setPaymentDetail(
+                paymentDetail
+        );
+
+        // =========================================================
+        // SOLUTION / PROFESSIONAL FEE
+        // =========================================================
+
+        Map<String, Object> solutionDetails =
+                leadFeignClient.getSolutionByIdOnly(
+                        product.getId()
+                );
+
+        double professionalFee =
+                extractProfessionalFee(
+                        solutionDetails
+                );
+
+        // =========================================================
+        // PROJECT PRIORITY
+        // =========================================================
+
+        ProjectPriority priority =
+                calculateProjectPrioritySafely(
+                        product.getId(),
+                        company.getRating(),
+                        totalAmount
+                );
+
+        project.setPriority(
+                priority
+        );
 
         logger.info(
-                "Project priority calculated. companyId={}, rating={}, solutionId={}, professionalFee={}, totalAmount={}, priority={}",
+                "Project priority calculated. " +
+                        "companyId={}, rating={}, solutionId={}, " +
+                        "professionalFee={}, totalAmount={}, priority={}",
                 company.getId(),
                 company.getRating(),
                 product.getId(),
@@ -257,12 +506,26 @@ public class ProjectServiceImpl implements ProjectService {
                 priority
         );
 
+        // =========================================================
+        // SAVE PROJECT
+        // =========================================================
 
-        project = projectRepository.save(project);
+        project =
+                projectRepository.save(
+                        project
+                );
+
+        logger.info(
+                "[PROJECT-CREATED] projectId={}, projectNo={}, leadId={}",
+                project.getId(),
+                project.getProjectNo(),
+                project.getLeadId()
+        );
 
         // =========================================================
         // PROJECT HISTORY - PROJECT CREATED
         // =========================================================
+
         saveProjectHistory(
                 project,
                 null,
@@ -270,34 +533,78 @@ public class ProjectServiceImpl implements ProjectService {
                 "PROJECT",
                 project.getId(),
                 "Project created",
-                "Project " + project.getProjectNo() + " created successfully",
+                "Project "
+                        + project.getProjectNo()
+                        + " created successfully",
                 null,
                 null,
-                project.getStatus() != null ? project.getStatus().getName() : null,
+                project.getStatus() != null
+                        ? project.getStatus().getName()
+                        : null,
                 createdBy.getId(),
                 null,
                 null,
                 null
         );
 
+        // =========================================================
+        // PROJECT CREATED MAIL
+        // =========================================================
+
         try {
-            projectMailService.sendProjectCreatedMail(project, contact);
+
+            projectMailService.sendProjectCreatedMail(
+                    project,
+                    contact
+            );
+
         } catch (Exception e) {
-            logger.error("Failed to send project created mail to client contact: {}", contact.getEmail(), e);
+
+            logger.error(
+                    "Failed to send project created mail to client contact: {}",
+                    contact.getEmail(),
+                    e
+            );
         }
 
+        // =========================================================
+        // INITIAL PAYMENT TRANSACTION
+        // =========================================================
+
         if (paidAmount > 0) {
-            ProjectPaymentTransaction transaction = new ProjectPaymentTransaction();
-            transaction.setProject(project);
-            transaction.setAmount(paidAmount);
-            transaction.setTransactionDate(new Date());
-            transaction.setCreatedBy(createdBy.getId());
-            transaction.setCreatedDate(new Date());
-            projectPaymentTransactionRepository.save(transaction);
+
+            ProjectPaymentTransaction transaction =
+                    new ProjectPaymentTransaction();
+
+            transaction.setProject(
+                    project
+            );
+
+            transaction.setAmount(
+                    paidAmount
+            );
+
+            transaction.setTransactionDate(
+                    new Date()
+            );
+
+            transaction.setCreatedBy(
+                    createdBy.getId()
+            );
+
+            transaction.setCreatedDate(
+                    new Date()
+            );
+
+            transaction =
+                    projectPaymentTransactionRepository.save(
+                            transaction
+                    );
 
             // =====================================================
             // PROJECT HISTORY - INITIAL PAYMENT
             // =====================================================
+
             saveProjectHistory(
                     project,
                     null,
@@ -305,8 +612,10 @@ public class ProjectServiceImpl implements ProjectService {
                     "PAYMENT",
                     transaction.getId(),
                     "Payment received",
-                    "Initial payment of " + paidAmount
-                            + " received for project " + project.getProjectNo(),
+                    "Initial payment of "
+                            + paidAmount
+                            + " received for project "
+                            + project.getProjectNo(),
                     null,
                     String.valueOf(totalAmount),
                     String.valueOf(dueAmount),
@@ -317,27 +626,319 @@ public class ProjectServiceImpl implements ProjectService {
             );
         }
 
-        MilestoneStatus newStatus = milestoneStatusRepository.findById(StatusConstants.MILESTONE_NEW_ID)
-                .orElseThrow(() -> new ResourceNotFoundException("Milestone status NEW (ID=1) not found", "ERR_SYSTEM_STATUS_MISSING"));
+        // =========================================================
+        // MILESTONE NEW STATUS
+        // =========================================================
 
-        for (ProductMilestoneMap milestone : milestones) {
-            ProjectMilestoneAssignment assignment = new ProjectMilestoneAssignment();
-            assignment.setProject(project);
-            assignment.setProductMilestoneMap(milestone);
-            assignment.setMilestone(milestone.getMilestone());
-            assignment.setStatus(newStatus);
-            assignment.setCreatedBy(createdBy.getId());
-            assignment.setUpdatedBy(updatedBy.getId());
-            assignment.setCreatedDate(new Date());
-            assignment.setUpdatedDate(new Date());
-            assignment.setDate(LocalDate.now());
-            assignment.setDeleted(false);
-            projectMilestoneAssignmentRepository.save(assignment);
+        MilestoneStatus newStatus =
+                milestoneStatusRepository
+                        .findById(
+                                StatusConstants.MILESTONE_NEW_ID
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Milestone status NEW (ID=1) not found",
+                                        "ERR_SYSTEM_STATUS_MISSING"
+                                )
+                        );
+
+        // =========================================================
+        // PRE-SALES PROCUREMENT OWNER
+        // =========================================================
+        //
+        // Example:
+        //
+        // Lead 1001
+        //      ↓
+        // Vendor Request
+        //      ↓
+        // assignedUser = Rahul
+        //
+        // Project created from lead 1001
+        //      ↓
+        // Procurement milestone assigned to Rahul
+        //
+        // This lookup is performed ONCE, not once per milestone.
+        //
+        // If Lead Service is unavailable or no matching user is found,
+        // this will return null and the existing auto-assignment logic
+        // will continue normally.
+        // =========================================================
+
+        User inheritedProcurementUser =
+                resolveProcurementAssigneeFromLead(
+                        project.getLeadId()
+                );
+
+        if (inheritedProcurementUser != null) {
+
+            logger.info(
+                    "[PROCUREMENT-INHERIT-AVAILABLE] " +
+                            "projectId={}, projectNo={}, leadId={}, " +
+                            "userId={}, userName={}, email={}",
+                    project.getId(),
+                    project.getProjectNo(),
+                    project.getLeadId(),
+                    inheritedProcurementUser.getId(),
+                    inheritedProcurementUser.getFullName(),
+                    inheritedProcurementUser.getEmail()
+            );
+
+        } else {
+
+            logger.info(
+                    "[PROCUREMENT-INHERIT-NOT-AVAILABLE] " +
+                            "projectId={}, projectNo={}, leadId={} | " +
+                            "normal milestone auto-assignment will be used",
+                    project.getId(),
+                    project.getProjectNo(),
+                    project.getLeadId()
+            );
         }
 
-        updateMilestoneVisibilities(project, createdBy.getId());
-        return mapToResponseDto(project);
+        // =========================================================
+        // CREATE PROJECT MILESTONE ASSIGNMENTS
+        // =========================================================
+
+        for (ProductMilestoneMap milestone : milestones) {
+
+            ProjectMilestoneAssignment assignment =
+                    new ProjectMilestoneAssignment();
+
+            assignment.setProject(
+                    project
+            );
+
+            assignment.setProductMilestoneMap(
+                    milestone
+            );
+
+            assignment.setMilestone(
+                    milestone.getMilestone()
+            );
+
+            assignment.setStatus(
+                    newStatus
+            );
+
+            assignment.setCreatedBy(
+                    createdBy.getId()
+            );
+
+            assignment.setUpdatedBy(
+                    updatedBy.getId()
+            );
+
+            assignment.setCreatedDate(
+                    new Date()
+            );
+
+            assignment.setUpdatedDate(
+                    new Date()
+            );
+
+            assignment.setDate(
+                    LocalDate.now()
+            );
+
+            assignment.setDeleted(false);
+
+            // =====================================================
+            // CHECK PROCUREMENT MILESTONE
+            // =====================================================
+
+            boolean isProcurementMilestone =
+                    milestone.getMilestone() != null
+                            && StringUtils.hasText(
+                            milestone
+                                    .getMilestone()
+                                    .getName()
+                    )
+                            && "Procurement".equalsIgnoreCase(
+                            milestone
+                                    .getMilestone()
+                                    .getName()
+                                    .trim()
+                    );
+
+            // =====================================================
+            // INHERIT PRE-SALES VENDOR OWNER
+            // =====================================================
+
+            if (isProcurementMilestone
+                    && inheritedProcurementUser != null) {
+
+                assignment.setAssignedUser(
+                        inheritedProcurementUser
+                );
+
+                assignment.setStatusReason(
+                        "Inherited from pre-sales Vendor Request"
+                );
+
+                logger.info(
+                        "[PROCUREMENT-INHERIT-ASSIGN] " +
+                                "projectId={}, projectNo={}, leadId={}, " +
+                                "milestoneId={}, milestoneName={}, " +
+                                "assignedUserId={}, assignedUserName={}",
+                        project.getId(),
+                        project.getProjectNo(),
+                        project.getLeadId(),
+                        milestone.getMilestone().getId(),
+                        milestone.getMilestone().getName(),
+                        inheritedProcurementUser.getId(),
+                        inheritedProcurementUser.getFullName()
+                );
+            }
+
+            // =====================================================
+            // SAVE GENERAL MILESTONE ASSIGNMENT
+            // =====================================================
+
+            assignment =
+                    projectMilestoneAssignmentRepository.save(
+                            assignment
+                    );
+
+            logger.info(
+                    "[MILESTONE-CREATED] " +
+                            "projectId={}, assignmentId={}, milestoneId={}, " +
+                            "milestoneName={}, assignedUserId={}",
+                    project.getId(),
+                    assignment.getId(),
+                    milestone.getMilestone() != null
+                            ? milestone.getMilestone().getId()
+                            : null,
+                    milestone.getMilestone() != null
+                            ? milestone.getMilestone().getName()
+                            : null,
+                    assignment.getAssignedUser() != null
+                            ? assignment.getAssignedUser().getId()
+                            : null
+            );
+
+            // =====================================================
+            // PROCUREMENT ASSIGNMENT HISTORY
+            // =====================================================
+
+            if (isProcurementMilestone
+                    && inheritedProcurementUser != null) {
+
+                ProjectAssignmentHistory history =
+                        new ProjectAssignmentHistory();
+
+                history.setProject(
+                        project
+                );
+
+                history.setMilestoneAssignment(
+                        assignment
+                );
+
+                history.setAssignedUser(
+                        inheritedProcurementUser
+                );
+
+                history.setAssignmentReason(
+                        "Inherited from pre-sales Vendor Request"
+                                + (
+                                project.getLeadId() != null
+                                        ? " for leadId="
+                                        + project.getLeadId()
+                                        : ""
+                        )
+                );
+
+                history.setCreatedDate(
+                        new Date()
+                );
+
+                history.setUpdatedDate(
+                        new Date()
+                );
+
+                history.setCreatedBy(
+                        createdBy.getId()
+                );
+
+                history.setUpdatedBy(
+                        createdBy.getId()
+                );
+
+                history.setDeleted(false);
+
+                projectAssignmentHistoryRepository.save(
+                        history
+                );
+
+                // =================================================
+                // PROJECT HISTORY - PROCUREMENT ASSIGNED
+                // =================================================
+
+                saveProjectHistory(
+                        project,
+                        assignment,
+                        "MILESTONE_ASSIGNED",
+                        "MILESTONE",
+                        assignment.getId(),
+                        "Procurement milestone assigned",
+                        "Procurement milestone inherited from "
+                                + "pre-sales Vendor Request and assigned to "
+                                + inheritedProcurementUser.getFullName(),
+                        null,
+                        null,
+                        inheritedProcurementUser.getFullName(),
+                        createdBy.getId(),
+                        null,
+                        null,
+                        null
+                );
+
+                logger.info(
+                        "[PROCUREMENT-INHERIT-HISTORY-SAVED] " +
+                                "projectId={}, assignmentId={}, userId={}",
+                        project.getId(),
+                        assignment.getId(),
+                        inheritedProcurementUser.getId()
+                );
+            }
+        }
+
+        // =========================================================
+        // VISIBILITY + NORMAL AUTO ASSIGNMENT
+        // =========================================================
+        //
+        // Procurement inherited above already has assignedUser.
+        //
+        // Existing condition:
+        //
+        // assignment.getAssignedUser() == null
+        //
+        // therefore Procurement will NOT be auto-assigned to
+        // somebody else when Rahul was inherited.
+        //
+        // Other milestones continue to behave normally.
+        // =========================================================
+
+        updateMilestoneVisibilities(
+                project,
+                createdBy.getId()
+        );
+
+        logger.info(
+                "[PROJECT-CREATE-COMPLETE] " +
+                        "projectId={}, projectNo={}, leadId={}",
+                project.getId(),
+                project.getProjectNo(),
+                project.getLeadId()
+        );
+
+        return mapToResponseDto(
+                project
+        );
     }
+
+
     private ProjectPriority calculateProjectPrioritySafely(
             Long solutionId,
             String companyRating,
@@ -3901,6 +4502,140 @@ public class ProjectServiceImpl implements ProjectService {
                 referenceId,
                 performedByUserId
         );
+    }
+
+
+    private User resolveProcurementAssigneeFromLead(Long leadId) {
+
+        if (leadId == null || leadId <= 0) {
+
+            logger.debug(
+                    "[PROCUREMENT-INHERIT-SKIP] leadId is missing"
+            );
+
+            return null;
+        }
+
+        try {
+
+            logger.info(
+                    "[PROCUREMENT-INHERIT-START] leadId={}",
+                    leadId
+            );
+
+            LeadVendorAssigneeDto leadAssignee =
+                    leadFeignClient.getVendorAssigneeByLead(
+                            leadId
+                    );
+
+            if (leadAssignee == null) {
+
+                logger.warn(
+                        "[PROCUREMENT-INHERIT-SKIP] " +
+                                "leadId={} | Lead Service returned null",
+                        leadId
+                );
+
+                return null;
+            }
+
+            if (!leadAssignee.isFound()) {
+
+                logger.info(
+                        "[PROCUREMENT-INHERIT-NOT-FOUND] " +
+                                "leadId={} | no Vendor Request assignee found",
+                        leadId
+                );
+
+                return null;
+            }
+
+            if (!StringUtils.hasText(
+                    leadAssignee.getAssignedUserEmail()
+            )) {
+
+                logger.warn(
+                        "[PROCUREMENT-INHERIT-EMAIL-MISSING] " +
+                                "leadId={}, vendorRequestId={}, leadUserId={}",
+                        leadId,
+                        leadAssignee.getVendorRequestId(),
+                        leadAssignee.getAssignedUserId()
+                );
+
+                return null;
+            }
+
+            String email =
+                    leadAssignee
+                            .getAssignedUserEmail()
+                            .trim();
+
+            Optional<User> operationUserOptional =
+                    userRepository
+                            .findByEmailIgnoreCaseAndIsActiveTrueAndIsDeletedFalse(
+                                    email
+                            );
+
+            if (operationUserOptional.isEmpty()) {
+
+                logger.warn(
+                        "[PROCUREMENT-INHERIT-USER-NOT-FOUND] " +
+                                "leadId={}, vendorRequestId={}, " +
+                                "leadUserId={}, email={}",
+                        leadId,
+                        leadAssignee.getVendorRequestId(),
+                        leadAssignee.getAssignedUserId(),
+                        email
+                );
+
+                return null;
+            }
+
+            User operationUser =
+                    operationUserOptional.get();
+
+            logger.info(
+                    "[PROCUREMENT-INHERIT-SUCCESS] " +
+                            "leadId={}, vendorRequestId={}, " +
+                            "leadUserId={}, operationUserId={}, " +
+                            "userName={}, email={}",
+                    leadId,
+                    leadAssignee.getVendorRequestId(),
+                    leadAssignee.getAssignedUserId(),
+                    operationUser.getId(),
+                    operationUser.getFullName(),
+                    operationUser.getEmail()
+            );
+
+            return operationUser;
+
+        } catch (FeignException e) {
+
+            logger.error(
+                    "[PROCUREMENT-INHERIT-FEIGN-ERROR] " +
+                            "leadId={}, status={}, message={}",
+                    leadId,
+                    e.status(),
+                    e.getMessage()
+            );
+
+            /*
+             * Do not fail project creation.
+             *
+             * Existing AutoAssignmentService becomes fallback.
+             */
+            return null;
+
+        } catch (Exception e) {
+
+            logger.error(
+                    "[PROCUREMENT-INHERIT-ERROR] leadId={}",
+                    leadId,
+                    e
+            );
+
+            return null;
+        }
     }
 
 }

@@ -324,11 +324,31 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
                 if (count != null) {
 
+                    ProductMilestoneMap productMilestoneMap =
+                            assignment.getProductMilestoneMap();
+
+                    int executionTatMinutes = 0;
+
+                    if (productMilestoneMap != null
+                            && productMilestoneMap
+                            .isExecutionTatApplicable()
+                            && productMilestoneMap
+                            .getExecutionTatMinutes() != null) {
+
+                        executionTatMinutes =
+                                productMilestoneMap
+                                        .getExecutionTatMinutes();
+                    }
+
+                    /*
+                     * timeSpent is now maintained in minutes.
+                     *
+                     * Example:
+                     * 4 hours = 240 minutes.
+                     */
                     count.setTimeSpent(
                             count.getTimeSpent()
-                                    + assignment
-                                    .getProductMilestoneMap()
-                                    .getTatInDays()
+                                    + executionTatMinutes
                     );
 
                     count.setAssignmentCount(
@@ -340,16 +360,22 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
                     count.setLastUpdatedDate(new Date());
                     count.setUpdatedDate(new Date());
-                    count.setUpdatedBy(updateDto.getChangedById());
+                    count.setUpdatedBy(
+                            updateDto.getChangedById()
+                    );
 
                     userPerformanceCountRepository.save(count);
 
                     logger.info(
-                            "[MILESTONE-COMPLETION-PERFORMANCE-UPDATED] " +
-                                    "assignmentId={}, userId={}, assignmentCount={}, timeSpent={}",
+                            "[MILESTONE-COMPLETION-PERFORMANCE-UPDATED] "
+                                    + "assignmentId={}, userId={}, "
+                                    + "assignmentCount={}, "
+                                    + "executionTatMinutes={}, "
+                                    + "totalTimeSpentMinutes={}",
                             assignment.getId(),
                             oldUser.getId(),
                             count.getAssignmentCount(),
+                            executionTatMinutes,
                             count.getTimeSpent()
                     );
                 }
@@ -365,18 +391,23 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                                 .orElse(null);
 
                 if (userMap != null) {
+
                     userMap.setAssigned(false);
                     userMap.setUpdatedDate(new Date());
-                    userMap.setUpdatedBy(updateDto.getChangedById());
+                    userMap.setUpdatedBy(
+                            updateDto.getChangedById()
+                    );
 
                     userProductMapRepository.save(userMap);
 
                     logger.info(
-                            "[MILESTONE-COMPLETION-USER-PRODUCT-RELEASED] " +
-                                    "assignmentId={}, userId={}, productId={}",
+                            "[MILESTONE-COMPLETION-USER-PRODUCT-RELEASED] "
+                                    + "assignmentId={}, userId={}, productId={}",
                             assignment.getId(),
                             oldUser.getId(),
-                            assignment.getProject().getProduct().getId()
+                            assignment.getProject()
+                                    .getProduct()
+                                    .getId()
                     );
                 }
             }

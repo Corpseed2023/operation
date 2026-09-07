@@ -123,6 +123,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("departmentId") Long departmentId
     );
 
+    Optional<User>
+    findByEmailIgnoreCaseAndIsActiveTrueAndIsDeletedFalse(
+            String email
+    );
+
 
 
 }

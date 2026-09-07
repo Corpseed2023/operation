@@ -1,16 +1,21 @@
 package com.doc.dto.productMilestoneMap;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * DTO for creating or updating a ProductMilestoneMap.
+ * Request DTO for creating or updating a product milestone mapping.
+ *
+ * All TAT, reminder and escalation values are stored in minutes.
  */
 @Getter
 @Setter
@@ -18,102 +23,79 @@ import lombok.Setter;
 public class ProductMilestoneMapRequestDto {
 
     @NotNull(message = "Product ID cannot be null")
+    @Positive(message = "Product ID must be greater than zero")
     private Long productId;
 
     @NotNull(message = "Milestone ID cannot be null")
+    @Positive(message = "Milestone ID must be greater than zero")
     private Long milestoneId;
 
     @Min(value = 1, message = "Step order must be at least 1")
     private int order;
 
-    /**
-     * Old/default field.
-     * Keep for backward compatibility.
-     *
-     * Example:
-     * 2 means 2 days.
-     */
-    @DecimalMin(value = "0.0", message = "TAT in days cannot be negative")
-    private double tatInDays;
-
     // =====================================================================
-    // EXECUTION TAT - USER WISE
+    // EXECUTION TAT
     // =====================================================================
 
-    /**
-     * Whether user-wise execution TAT is applicable.
-     *
-     * true  -> User must complete milestone under TAT.
-     * false -> User-wise execution TAT is not applicable.
-     */
     private boolean executionTatApplicable = true;
 
     /**
-     * Old day-based execution TAT.
-     * Keep for backward compatibility.
+     * TAT provided to the assigned employee.
+     * Example: 4 hours = 240 minutes.
      */
-    @DecimalMin(value = "0.0", message = "Execution TAT in days cannot be negative")
-    private double executionTatInDays;
-
-    /**
-     * New recommended hour-based execution TAT.
-     *
-     * Example:
-     * 48 means 48 hours.
-     */
-    @DecimalMin(value = "0.0", message = "Execution TAT hours cannot be negative")
-    private Double executionTatHours;
+    @Min(
+            value = 0,
+            message = "Execution TAT minutes cannot be negative"
+    )
+    private Integer executionTatMinutes;
 
     // =====================================================================
     // DEPARTMENT TAT
     // =====================================================================
 
-    /**
-     * Whether department-level TAT is applicable.
-     */
     private boolean departmentTatApplicable = false;
 
-    @DecimalMin(value = "0.0", message = "Department TAT hours cannot be negative")
-    private Double departmentTatHours;
+    @Min(
+            value = 0,
+            message = "Department TAT minutes cannot be negative"
+    )
+    private Integer departmentTatMinutes;
 
     // =====================================================================
     // PERFORMANCE TAT
     // =====================================================================
 
-    /**
-     * Whether this milestone should affect employee performance.
-     */
     private boolean performanceTatApplicable = true;
 
-    @DecimalMin(value = "0.0", message = "Performance TAT hours cannot be negative")
-    private Double performanceTatHours;
+    @Min(
+            value = 0,
+            message = "Performance TAT minutes cannot be negative"
+    )
+    private Integer performanceTatMinutes;
 
     // =====================================================================
     // CUSTOMER / PROJECT SLA TAT
     // =====================================================================
 
-    /**
-     * Whether customer/project SLA TAT is applicable.
-     */
     private boolean customerTatApplicable = false;
 
-    @DecimalMin(value = "0.0", message = "Customer TAT hours cannot be negative")
-    private Double customerTatHours;
+    @Min(
+            value = 0,
+            message = "Customer TAT minutes cannot be negative"
+    )
+    private Integer customerTatMinutes;
 
     // =====================================================================
-    // ROLLBACK TAT
+    // ROLLBACK / REWORK TAT
     // =====================================================================
 
-    /**
-     * Whether rollback TAT is applicable.
-     */
     private boolean rollbackTatApplicable = false;
 
-    @DecimalMin(value = "0.0", message = "Rollback TAT in days cannot be negative")
-    private Double rollbackTatInDays;
-
-    @DecimalMin(value = "0.0", message = "Rollback TAT hours cannot be negative")
-    private Double rollbackTatHours;
+    @Min(
+            value = 0,
+            message = "Rollback TAT minutes cannot be negative"
+    )
+    private Integer rollbackTatMinutes;
 
     // =====================================================================
     // WORKFLOW RULES
@@ -123,41 +105,56 @@ public class ProductMilestoneMapRequestDto {
 
     private boolean allowRollback = false;
 
-    @Min(value = 0, message = "Max attempts cannot be negative")
+    @Min(value = 1, message = "Max attempts must be at least 1")
     private int maxAttempts = 1;
 
     private boolean isMandatory = true;
 
-    @DecimalMin(value = "0.0", message = "Payment percentage cannot be negative")
-    @DecimalMax(value = "100.0", message = "Single milestone payment percentage cannot exceed 100%")
+    @DecimalMin(
+            value = "0.0",
+            message = "Payment percentage cannot be negative"
+    )
+    @DecimalMax(
+            value = "100.0",
+            message = "Single milestone payment percentage cannot exceed 100%"
+    )
     private double paymentPercentage;
 
     private boolean isAutoGenerated = false;
 
     private boolean requiresPortalDetails = false;
 
-    /**
-     * If true, new assignee gets fresh execution TAT on reassignment.
-     */
     private boolean allowTatResetOnReassign = true;
 
-    /**
-     * If true, TAT calculation can skip Sundays/holidays/business off-hours.
-     */
     private boolean businessDaysEnabled = false;
 
     // =====================================================================
     // REMINDER / ESCALATION
     // =====================================================================
 
-    @Min(value = 0, message = "Reminder before due hours cannot be negative")
-    private Integer reminderBeforeDueHours;
+    /**
+     * Example: send reminder one hour before due time = 60 minutes.
+     */
+    @Min(
+            value = 0,
+            message = "Reminder before due minutes cannot be negative"
+    )
+    private Integer reminderBeforeDueMinutes;
 
-    @Min(value = 0, message = "Manager escalation hours cannot be negative")
-    private Integer managerEscalationAfterDueHours;
+    /**
+     * Example: escalate 30 minutes after due time = 30 minutes.
+     */
+    @Min(
+            value = 0,
+            message = "Manager escalation after due minutes cannot be negative"
+    )
+    private Integer managerEscalationAfterDueMinutes;
 
-    @Min(value = 0, message = "HOD escalation hours cannot be negative")
-    private Integer hodEscalationAfterDueHours;
+    @Min(
+            value = 0,
+            message = "HOD escalation after due minutes cannot be negative"
+    )
+    private Integer hodEscalationAfterDueMinutes;
 
     private boolean isActive = true;
 
@@ -165,51 +162,67 @@ public class ProductMilestoneMapRequestDto {
     // CONDITIONAL VALIDATIONS
     // =====================================================================
 
-    @AssertTrue(message = "Execution TAT hours or execution TAT in days is required when execution TAT is applicable")
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(
+            message = "Execution TAT minutes must be greater than zero when execution TAT is applicable"
+    )
     public boolean isExecutionTatValid() {
-        if (!executionTatApplicable) {
-            return true;
-        }
-
-        return (executionTatHours != null && executionTatHours > 0)
-                || executionTatInDays > 0
-                || tatInDays > 0;
+        return !executionTatApplicable
+                || (executionTatMinutes != null
+                && executionTatMinutes > 0);
     }
 
-    @AssertTrue(message = "Department TAT hours is required when department TAT is applicable")
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(
+            message = "Department TAT minutes must be greater than zero when department TAT is applicable"
+    )
     public boolean isDepartmentTatValid() {
-        if (!departmentTatApplicable) {
-            return true;
-        }
-
-        return departmentTatHours != null && departmentTatHours > 0;
+        return !departmentTatApplicable
+                || (departmentTatMinutes != null
+                && departmentTatMinutes > 0);
     }
 
-    @AssertTrue(message = "Performance TAT hours is required when performance TAT is applicable")
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(
+            message = "Performance TAT minutes must be greater than zero when performance TAT is applicable"
+    )
     public boolean isPerformanceTatValid() {
-        if (!performanceTatApplicable) {
-            return true;
-        }
-
-        return performanceTatHours != null && performanceTatHours > 0;
+        return !performanceTatApplicable
+                || (performanceTatMinutes != null
+                && performanceTatMinutes > 0);
     }
 
-    @AssertTrue(message = "Customer TAT hours is required when customer TAT is applicable")
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(
+            message = "Customer TAT minutes must be greater than zero when customer TAT is applicable"
+    )
     public boolean isCustomerTatValid() {
-        if (!customerTatApplicable) {
-            return true;
-        }
-
-        return customerTatHours != null && customerTatHours > 0;
+        return !customerTatApplicable
+                || (customerTatMinutes != null
+                && customerTatMinutes > 0);
     }
 
-    @AssertTrue(message = "Rollback TAT hours or rollback TAT in days is required when rollback TAT is applicable")
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(
+            message = "Rollback TAT minutes must be greater than zero when rollback TAT is applicable"
+    )
     public boolean isRollbackTatValid() {
-        if (!rollbackTatApplicable) {
-            return true;
-        }
+        return !rollbackTatApplicable
+                || (rollbackTatMinutes != null
+                && rollbackTatMinutes > 0);
+    }
 
-        return (rollbackTatHours != null && rollbackTatHours > 0)
-                || (rollbackTatInDays != null && rollbackTatInDays > 0);
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(
+            message = "Rollback TAT cannot be enabled when rollback is not allowed"
+    )
+    public boolean isRollbackConfigurationValid() {
+        return allowRollback || !rollbackTatApplicable;
     }
 }

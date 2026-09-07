@@ -1,6 +1,7 @@
 package com.doc.feign;
 
 import com.doc.dto.legalDashbaord.CompanyLegalClientDto;
+import com.doc.dto.vendor.LeadVendorAssigneeDto;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,4 +22,20 @@ public interface LeadFeignClient {
     List<CompanyLegalClientDto> getPendingCompanyLegalRequests(
             @RequestParam("userId") Long userId
     );
+
+
+    /*
+     * Fetches the user who handled the latest Vendor Request
+     * for the supplied Lead.
+     *
+     * Used by Operation Service to maintain pre-sales ->
+     * project Procurement ownership continuity.
+     */
+    @GetMapping("/internal/vendors/assignee/by-lead/{leadId}")
+    LeadVendorAssigneeDto getVendorAssigneeByLead(
+            @PathVariable("leadId") Long leadId
+    );
+
+
+
 }
