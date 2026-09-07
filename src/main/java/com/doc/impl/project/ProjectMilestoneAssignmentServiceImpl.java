@@ -1,6 +1,7 @@
 package com.doc.impl.project;
 
 import com.doc.constants.StatusConstants;
+import com.doc.em.ApprovalStatus;
 import com.doc.dto.ProjectMilestoneassignment.*;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.milestone.MilestoneStatus;
@@ -8,6 +9,7 @@ import com.doc.entity.milestone.MilestoneStatusHistory;
 import com.doc.entity.product.Product;
 import com.doc.entity.product.ProductMilestoneMap;
 import com.doc.entity.project.*;
+import com.doc.entity.project.activity.ProjectExpense;
 import com.doc.entity.department.Department;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
@@ -22,6 +24,7 @@ import com.doc.notification.*;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
 import com.doc.repository.projectRepo.ProjectStatusRepository;
+import com.doc.repository.projectRepo.activity.ProjectExpenseRepository;
 import com.doc.repository.vendor.ProcurementPaymentRequestRepository;
 import com.doc.repository.vendor.PurchaseOrderRepository;
 import com.doc.service.*;
@@ -46,6 +49,7 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -71,6 +75,8 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     private final PurchaseOrderRepository purchaseOrderRepository;
 
     private final ProcurementPaymentRequestRepository procurementPaymentRequestRepository;
+
+    private final ProjectExpenseRepository projectExpenseRepository;
 
 
     private final DocumentStatusRepository documentStatusRepository;
@@ -104,6 +110,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             DocumentStatusRepository documentStatusRepository,
             PurchaseOrderRepository purchaseOrderRepository,
             ProcurementPaymentRequestRepository procurementPaymentRequestRepository,
+            ProjectExpenseRepository projectExpenseRepository,
             MilestoneOnHoldApprovalService milestoneOnHoldApprovalService,
             ProjectHistoryEventService historyEventService
 
@@ -127,6 +134,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         this.documentStatusRepository = documentStatusRepository;
         this.purchaseOrderRepository=purchaseOrderRepository;
         this.procurementPaymentRequestRepository=procurementPaymentRequestRepository;
+        this.projectExpenseRepository = projectExpenseRepository;
         this.milestoneOnHoldApprovalService = milestoneOnHoldApprovalService;
         this.historyEventService = historyEventService;
 
@@ -916,6 +924,15 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
     ) {
 
         // =========================================================
+        // PROCUREMENT EXPENSE APPROVAL VALIDATION
+        // =========================================================
+        // If Procurement has raised any expense for this project,
+        // every active Procurement expense must be APPROVED or REJECTED.
+        // PENDING, ON_HOLD, CANCELLED, null, or any other status blocks
+        // Procurement milestone completion.
+        validateProcurementExpensesBeforeCompletion(assignment);
+
+        // =========================================================
         // 1. PROCUREMENT ASSIGNMENT
         // =========================================================
 
@@ -1120,6 +1137,137 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
          * Procurement milestone can now be COMPLETED.
          */
     }
+
+
+    private void validateProcurementExpensesBeforeCompletion(
+            ProjectMilestoneAssignment assignment
+    ) {
+
+        if (assignment == null
+                || assignment.getProject() == null
+                || assignment.getProject().getId() == null) {
+
+            throw new ValidationException(
+                    "Project information is missing for Procurement milestone",
+                    "ERR_PROJECT_NOT_FOUND_FOR_PROCUREMENT_EXPENSE_VALIDATION"
+            );
+        }
+
+        Long projectId = assignment.getProject().getId();
+
+        List<ProjectExpense> projectExpenses =
+                projectExpenseRepository
+                        .findByProjectIdOrderByExpenseDateDesc(projectId);
+
+        if (projectExpenses == null || projectExpenses.isEmpty()) {
+
+            logger.info(
+                    "[PROCUREMENT-EXPENSE-VALIDATION] projectId={} | no project expenses found",
+                    projectId
+            );
+
+            return;
+        }
+
+        /*
+         * Only active expenses raised by the Procurement department
+         * participate in Procurement milestone completion validation.
+         */
+        List<ProjectExpense> procurementExpenses =
+                projectExpenses.stream()
+                        .filter(expense ->
+                                expense != null
+
+                        )
+                        .filter(expense ->
+                                expense.getRaisedDepartmentName() != null
+                                        && "PROCUREMENT".equalsIgnoreCase(
+                                        expense.getRaisedDepartmentName().trim()
+                                )
+                        )
+                        .toList();
+
+        if (procurementExpenses.isEmpty()) {
+
+            logger.info(
+                    "[PROCUREMENT-EXPENSE-VALIDATION] projectId={} | no Procurement expenses found",
+                    projectId
+            );
+
+            return;
+        }
+
+        /*
+         * User-required final statuses:
+         *
+         * APPROVED -> resolved
+         * REJECTED -> resolved
+         *
+         * Everything else blocks milestone completion:
+         * PENDING, ON_HOLD, CANCELLED, null, etc.
+         */
+        List<ProjectExpense> unresolvedExpenses =
+                procurementExpenses.stream()
+                        .filter(expense -> {
+
+                            ApprovalStatus status =
+                                    expense.getApprovalStatus();
+
+                            return status == null
+                                    || (
+                                    status != ApprovalStatus.APPROVED
+                                            && status != ApprovalStatus.REJECTED
+                            );
+                        })
+                        .toList();
+
+        if (!unresolvedExpenses.isEmpty()) {
+
+            String unresolvedExpenseDetails =
+                    unresolvedExpenses.stream()
+                            .map(expense ->
+                                    "ExpenseId="
+                                            + expense.getId()
+                                            + ", Status="
+                                            + (
+                                            expense.getApprovalStatus() != null
+                                                    ? expense.getApprovalStatus()
+                                                    : "NULL"
+                                    )
+                                            + ", Stage="
+                                            + (
+                                            expense.getApprovalStage() != null
+                                                    ? expense.getApprovalStage()
+                                                    : "NULL"
+                                    )
+                            )
+                            .collect(Collectors.joining("; "));
+
+            logger.warn(
+                    "[PROCUREMENT-COMPLETION-BLOCKED-BY-EXPENSE] "
+                            + "projectId={} | unresolvedCount={} | expenses={}",
+                    projectId,
+                    unresolvedExpenses.size(),
+                    unresolvedExpenseDetails
+            );
+
+            throw new ValidationException(
+                    "Procurement milestone cannot be completed because "
+                            + unresolvedExpenses.size()
+                            + " Procurement expense request(s) are not finalized. "
+                            + "Every Procurement expense must be APPROVED or REJECTED before completing the milestone.",
+                    "ERR_PROCUREMENT_EXPENSE_PENDING_APPROVAL"
+            );
+        }
+
+        logger.info(
+                "[PROCUREMENT-EXPENSE-VALIDATION-SUCCESS] "
+                        + "projectId={} | totalProcurementExpenses={}",
+                projectId,
+                procurementExpenses.size()
+        );
+    }
+
 
     private boolean isProcurementEligibleForMilestoneCompletion(
             ProcurementStatus status

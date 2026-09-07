@@ -151,7 +151,6 @@ public class ProjectExpenseController {
         );
     }
 
-
     /**
      * Step 5B: Accounts approves or rejects Technical's payment proof. The
      * Account Service PAYMENT voucher is created only for APPROVED.

@@ -284,40 +284,15 @@ public class ProductMilestoneMapServiceImpl
     // =====================================================================
 
     @Override
-    @Transactional(readOnly = true)
-    public List<ProductMilestoneMapResponseDto>
-    getProductMilestoneMapsByUserAndProduct(
-            Long userId,
-            Long productId
-    ) {
-        logger.info(
-                "Fetching product-milestone mappings. userId={}, productId={}",
-                userId,
-                productId
-        );
+    public List<ProductMilestoneMapResponseDto> getProductMilestoneMapsByUserAndProduct(Long userId, Long productId) {
+        logger.info("Fetching product-milestone mappings for user ID: {} and product ID: {}", userId, productId);
 
-        if (userId == null || userId <= 0) {
-            throw new IllegalArgumentException(
-                    "User ID must be greater than zero"
-            );
-        }
+        // Fetch mappings by product ID
+        List<ProductMilestoneMap> mappings = productMilestoneMapRepository.findByProductId(productId);
 
-        findActiveProduct(productId);
+        mappings.sort((a, b) -> Integer.compare(a.getOrder(), b.getOrder()));
 
-        /*
-         * The existing repository does not provide a user-product
-         * authorization query. Therefore userId is validated here,
-         * but actual access verification must be added separately.
-         */
-        return productMilestoneMapRepository
-                .findByProductId(productId)
-                .stream()
-                .filter(mapping -> !mapping.isDeleted())
-                .sorted(
-                        Comparator.comparingInt(
-                                ProductMilestoneMap::getOrder
-                        )
-                )
+        return mappings.stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
     }
