@@ -875,6 +875,7 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
                 "ERR_CLIENT_PAYMENT_PROOF_REQUIRED"
         );
     }
+
     private void processCrtRejection(ProjectExpense expense) {
         expense.setExpensePaidBy(null);
         clearClientFundingDetails(expense);

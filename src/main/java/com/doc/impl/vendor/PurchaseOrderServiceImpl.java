@@ -111,8 +111,27 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         BigDecimal requestedPoAmount =
                 amountBreakup.getGrandTotal();
 
-        boolean exceedsFinalizedAmount =
-                requestedPoAmount.compareTo(vendorFinalizedAmount) > 0;
+        // NEW: hard stop — PO amount can never exceed the vendor's finalized amount.
+        if (requestedPoAmount.compareTo(vendorFinalizedAmount) > 0) {
+            logger.warn(
+                    "PO amount exceeds vendor finalized amount. procurementAssignmentId={}, "
+                            + "vendorId={}, finalizedAmount={}, requestedPoAmount={}",
+                    procurement.getId(),
+                    vendor.getId(),
+                    vendorFinalizedAmount,
+                    requestedPoAmount
+            );
+
+            throw new ValidationException(
+                    String.format(
+                            "Purchase Order amount (%s) cannot exceed the vendor's finalized amount (%s) "
+                                    + "for this procurement assignment.",
+                            requestedPoAmount,
+                            vendorFinalizedAmount
+                    ),
+                    "ERR_PO_AMOUNT_EXCEEDS_FINALIZED_AMOUNT"
+            );
+        }
 
         boolean exceedsProjectValue = isPoValueExceedingProjectValue(
                 amountBreakup.getGrandTotal(),
@@ -120,25 +139,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 procurement
         );
 
-        boolean adminApprovalRequired =
-                exceedsFinalizedAmount || exceedsProjectValue;
-
-        BigDecimal excessAmount = exceedsFinalizedAmount
-                ? requestedPoAmount.subtract(vendorFinalizedAmount)
-                .setScale(2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        boolean adminApprovalRequired = exceedsProjectValue;
 
         logger.info(
                 "PO amount validation. procurementAssignmentId={}, vendorId={}, "
-                        + "finalizedAmount={}, requestedPoAmount={}, excessAmount={}, "
-                        + "exceedsFinalizedAmount={}, exceedsProjectValue={}, "
-                        + "adminApprovalRequired={}",
+                        + "finalizedAmount={}, requestedPoAmount={}, "
+                        + "exceedsProjectValue={}, adminApprovalRequired={}",
                 procurement.getId(),
                 vendor.getId(),
                 vendorFinalizedAmount,
                 requestedPoAmount,
-                excessAmount,
-                exceedsFinalizedAmount,
                 exceedsProjectValue,
                 adminApprovalRequired
         );

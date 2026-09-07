@@ -397,6 +397,9 @@ public class ProductMilestoneMapServiceImpl implements ProductMilestoneMapServic
 
         // Fetch mappings by product ID
         List<ProductMilestoneMap> mappings = productMilestoneMapRepository.findByProductId(productId);
+
+        mappings.sort((a, b) -> Integer.compare(a.getOrder(), b.getOrder()));
+
         return mappings.stream()
                 .map(this::mapToResponseDto)
                 .collect(Collectors.toList());
