@@ -26,7 +26,7 @@ public class DirectoryDocumentRequestDto {
 
     @NotBlank(message = "File format is required")
     @Pattern(
-            regexp = "(?i)pdf|jpg|jpeg|png",
+            regexp = "(?i)pdf|jpg|jpeg|png|zip|rar",
             message = "Only pdf, jpg, jpeg and png are allowed"
     )
     private String fileFormat;

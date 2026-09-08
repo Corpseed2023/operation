@@ -223,7 +223,7 @@ public class ProjectDocumentUploadServiceImpl implements ProjectDocumentUploadSe
             );
         }
 
-        if (!fileFormat.matches("pdf|jpg|jpeg|png")) {
+        if (!fileFormat.matches("pdf|jpg|jpeg|png|zip|rar")) {
             throw new ValidationException(
                     "Only pdf, jpg, jpeg, png allowed",
                     "INVALID_FILE_FORMAT"

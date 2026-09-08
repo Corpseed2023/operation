@@ -42,7 +42,7 @@ public class ProjectDocumentUploadRequestDto {
     private Integer fileSizeKb;
 
     @NotBlank(message = "File format is required")
-    @Pattern(regexp = "pdf|jpg|jpeg|png", message = "Only pdf, jpg, jpeg, png allowed")
+    @Pattern(regexp = "pdf|jpg|jpeg|png|zip|rar", message = "Only pdf, jpg, jpeg, png allowed")
     private String fileFormat;
 
     private String remarks;
