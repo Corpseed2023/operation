@@ -69,10 +69,11 @@ public class TechnicalResearchCaseServiceImpl
                     TechnicalResearchCaseStatus.CANCELLED
             ),
 
-            TechnicalResearchCaseStatus.ASSIGNED,
+            TechnicalResearchCaseStatus.IN_PROGRESS,
             EnumSet.of(
-                    TechnicalResearchCaseStatus.IN_PROGRESS,
                     TechnicalResearchCaseStatus.AWAITING_INFORMATION,
+                    TechnicalResearchCaseStatus.UNDER_REVIEW,
+                    TechnicalResearchCaseStatus.COMPLETED,
                     TechnicalResearchCaseStatus.CANCELLED
             ),
 
@@ -804,7 +805,6 @@ public class TechnicalResearchCaseServiceImpl
                 .map(this::mapToResponseDto);
     }
 
-
     @Override
     @Transactional
     public TechnicalResearchCaseResponseDto updateStatus(
@@ -812,24 +812,68 @@ public class TechnicalResearchCaseServiceImpl
             TechnicalResearchCaseStatusUpdateRequestDto request
     ) {
         logger.info(
-                "Updating research case status. caseId={}, "
-                        + "newStatus={}, updatedByUserId={}",
+                "Research status update started. caseId={}, requestedStatus={}, "
+                        + "updatedByUserId={}",
                 caseId,
-                request.getStatus(),
-                request.getUpdatedByUserId()
+                request != null ? request.getStatus() : null,
+                request != null ? request.getUpdatedByUserId() : null
+        );
+
+        if (request == null) {
+            logger.warn(
+                    "Research status update failed because request is null. "
+                            + "caseId={}",
+                    caseId
+            );
+
+            throw new ValidationException(
+                    "Status update request is required",
+                    "ERR_RESEARCH_STATUS_REQUEST_REQUIRED"
+            );
+        }
+
+        logger.info(
+                "Fetching technical research case with lock. caseId={}",
+                caseId
         );
 
         TechnicalResearchCase researchCase =
                 researchCaseRepository
                         .findByIdForStatusUpdate(caseId)
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Technical research case not found",
-                                "ERR_RESEARCH_CASE_NOT_FOUND"
-                        ));
+                        .orElseThrow(() -> {
+                            logger.warn(
+                                    "Technical research case not found. caseId={}",
+                                    caseId
+                            );
+
+                            return new ResourceNotFoundException(
+                                    "Technical research case not found",
+                                    "ERR_RESEARCH_CASE_NOT_FOUND"
+                            );
+                        });
+
+        logger.info(
+                "Research case loaded. caseId={}, caseNumber={}, "
+                        + "currentStatus={}, currentAssigneeUserId={}",
+                researchCase.getId(),
+                researchCase.getCaseNumber(),
+                researchCase.getStatus(),
+                researchCase.getCurrentAssignee() != null
+                        ? researchCase.getCurrentAssignee().getId()
+                        : null
+        );
 
         User updatedBy = getActiveUser(
                 request.getUpdatedByUserId(),
                 "Status updating user"
+        );
+
+        logger.info(
+                "Status updating user validated. caseId={}, "
+                        + "updatedByUserId={}, updatedByName={}",
+                caseId,
+                updatedBy.getId(),
+                updatedBy.getFullName()
         );
 
         TechnicalResearchCaseStatus currentStatus =
@@ -840,7 +884,48 @@ public class TechnicalResearchCaseServiceImpl
 
         String reason = trimToNull(request.getReason());
 
-        validateStatusTransition(currentStatus, newStatus);
+        if (newStatus == null) {
+            logger.warn(
+                    "Research status update rejected because new status is null. "
+                            + "caseId={}, updatedByUserId={}",
+                    caseId,
+                    updatedBy.getId()
+            );
+
+            throw new ValidationException(
+                    "New status is required",
+                    "ERR_RESEARCH_STATUS_REQUIRED"
+            );
+        }
+
+        logger.info(
+                "Validating research case status transition. "
+                        + "caseId={}, currentStatus={}, newStatus={}",
+                caseId,
+                currentStatus,
+                newStatus
+        );
+
+        validateStatusTransition(
+                currentStatus,
+                newStatus
+        );
+
+        logger.info(
+                "Status transition validated successfully. "
+                        + "caseId={}, currentStatus={}, newStatus={}",
+                caseId,
+                currentStatus,
+                newStatus
+        );
+
+        logger.info(
+                "Validating status update authority. "
+                        + "caseId={}, updatedByUserId={}, newStatus={}",
+                caseId,
+                updatedBy.getId(),
+                newStatus
+        );
 
         validateStatusUpdateAuthority(
                 researchCase,
@@ -848,11 +933,29 @@ public class TechnicalResearchCaseServiceImpl
                 newStatus
         );
 
+        logger.info(
+                "Status update authority validated. "
+                        + "caseId={}, updatedByUserId={}, newStatus={}",
+                caseId,
+                updatedBy.getId(),
+                newStatus
+        );
+
         /*
-         * Completion, rejection and cancellation require a reason.
+         * Reason is mandatory when the case is moved to any final status.
          */
         if (CLOSED_STATUSES.contains(newStatus)
                 && reason == null) {
+
+            logger.warn(
+                    "Research case closure rejected because reason is missing. "
+                            + "caseId={}, currentStatus={}, newStatus={}, "
+                            + "updatedByUserId={}",
+                    caseId,
+                    currentStatus,
+                    newStatus,
+                    updatedBy.getId()
+            );
 
             throw new ValidationException(
                     "Reason is required when completing, "
@@ -866,38 +969,142 @@ public class TechnicalResearchCaseServiceImpl
         researchCase.setStatus(newStatus);
         researchCase.setUpdatedBy(updatedBy);
 
+        logger.info(
+                "Applying status-specific changes. "
+                        + "caseId={}, newStatus={}",
+                caseId,
+                newStatus
+        );
+
         switch (newStatus) {
             case IN_PROGRESS -> {
                 if (researchCase.getWorkStartedAt() == null) {
                     researchCase.setWorkStartedAt(now);
+
+                    logger.info(
+                            "Research work started timestamp recorded. "
+                                    + "caseId={}, workStartedAt={}",
+                            caseId,
+                            now
+                    );
+                } else {
+                    logger.info(
+                            "Research work was already started. "
+                                    + "caseId={}, existingWorkStartedAt={}",
+                            caseId,
+                            researchCase.getWorkStartedAt()
+                    );
                 }
             }
 
+            case AWAITING_INFORMATION -> logger.info(
+                    "Research case is waiting for additional information. "
+                            + "caseId={}",
+                    caseId
+            );
+
             case UNDER_REVIEW -> {
                 researchCase.setSubmittedAt(now);
+
+                logger.info(
+                        "Research case submitted for review. "
+                                + "caseId={}, submittedAt={}",
+                        caseId,
+                        now
+                );
             }
 
-            case COMPLETED, REJECTED, CANCELLED -> {
+            case REVISION_REQUIRED -> logger.info(
+                    "Research case sent back for revision. caseId={}",
+                    caseId
+            );
+
+            case COMPLETED -> {
                 researchCase.setClosedAt(now);
                 researchCase.setClosedBy(updatedBy);
                 researchCase.setClosureReason(reason);
+
+                /*
+                 * When directly completing from IN_PROGRESS,
+                 * treat the same time as the submission time if the
+                 * case was never submitted for review.
+                 */
+                if (researchCase.getSubmittedAt() == null) {
+                    researchCase.setSubmittedAt(now);
+                }
+
+                logger.info(
+                        "Research case completed. caseId={}, "
+                                + "closedByUserId={}, closedAt={}, "
+                                + "closureReasonProvided={}",
+                        caseId,
+                        updatedBy.getId(),
+                        now,
+                        true
+                );
             }
 
-            default -> {
-                // No additional field changes required.
+            case REJECTED -> {
+                researchCase.setClosedAt(now);
+                researchCase.setClosedBy(updatedBy);
+                researchCase.setClosureReason(reason);
+
+                logger.info(
+                        "Research case rejected. caseId={}, "
+                                + "closedByUserId={}, closedAt={}, "
+                                + "closureReasonProvided={}",
+                        caseId,
+                        updatedBy.getId(),
+                        now,
+                        true
+                );
             }
+
+            case CANCELLED -> {
+                researchCase.setClosedAt(now);
+                researchCase.setClosedBy(updatedBy);
+                researchCase.setClosureReason(reason);
+
+                logger.info(
+                        "Research case cancelled. caseId={}, "
+                                + "closedByUserId={}, closedAt={}, "
+                                + "closureReasonProvided={}",
+                        caseId,
+                        updatedBy.getId(),
+                        now,
+                        true
+                );
+            }
+
+            default -> logger.info(
+                    "No additional fields required for status. "
+                            + "caseId={}, newStatus={}",
+                    caseId,
+                    newStatus
+            );
         }
+
+        logger.info(
+                "Saving research case status update. "
+                        + "caseId={}, previousStatus={}, newStatus={}",
+                caseId,
+                currentStatus,
+                newStatus
+        );
 
         TechnicalResearchCase savedCase =
                 researchCaseRepository.save(researchCase);
 
         logger.info(
-                "Research case status updated. caseId={}, "
-                        + "previousStatus={}, newStatus={}, updatedByUserId={}",
-                caseId,
+                "Research case status update completed successfully. "
+                        + "caseId={}, caseNumber={}, previousStatus={}, "
+                        + "newStatus={}, updatedByUserId={}, closedAt={}",
+                savedCase.getId(),
+                savedCase.getCaseNumber(),
                 currentStatus,
-                newStatus,
-                updatedBy.getId()
+                savedCase.getStatus(),
+                updatedBy.getId(),
+                savedCase.getClosedAt()
         );
 
         return mapToResponseDto(savedCase);
@@ -907,7 +1114,19 @@ public class TechnicalResearchCaseServiceImpl
             TechnicalResearchCaseStatus currentStatus,
             TechnicalResearchCaseStatus newStatus
     ) {
+        logger.debug(
+                "Checking status transition. currentStatus={}, newStatus={}",
+                currentStatus,
+                newStatus
+        );
+
         if (currentStatus == null) {
+            logger.warn(
+                    "Status transition rejected because current status is null. "
+                            + "newStatus={}",
+                    newStatus
+            );
+
             throw new ValidationException(
                     "Current research case status is unavailable",
                     "ERR_RESEARCH_CURRENT_STATUS_MISSING"
@@ -915,6 +1134,12 @@ public class TechnicalResearchCaseServiceImpl
         }
 
         if (currentStatus == newStatus) {
+            logger.warn(
+                    "Status transition rejected because status is unchanged. "
+                            + "status={}",
+                    currentStatus
+            );
+
             throw new ValidationException(
                     "Research case is already in status: "
                             + newStatus.getDisplayName(),
@@ -923,9 +1148,16 @@ public class TechnicalResearchCaseServiceImpl
         }
 
         if (CLOSED_STATUSES.contains(currentStatus)) {
+            logger.warn(
+                    "Status transition rejected because case is already closed. "
+                            + "currentStatus={}, requestedStatus={}",
+                    currentStatus,
+                    newStatus
+            );
+
             throw new ValidationException(
-                    "Status of a completed, rejected or cancelled case "
-                            + "cannot be changed",
+                    "Status of a completed, rejected or cancelled "
+                            + "research case cannot be changed",
                     "ERR_RESEARCH_CASE_ALREADY_CLOSED"
             );
         }
@@ -937,6 +1169,15 @@ public class TechnicalResearchCaseServiceImpl
                 );
 
         if (!allowedStatuses.contains(newStatus)) {
+            logger.warn(
+                    "Invalid research case status transition. "
+                            + "currentStatus={}, requestedStatus={}, "
+                            + "allowedStatuses={}",
+                    currentStatus,
+                    newStatus,
+                    allowedStatuses
+            );
+
             throw new ValidationException(
                     "Status cannot be changed from "
                             + currentStatus.getDisplayName()
@@ -945,6 +1186,13 @@ public class TechnicalResearchCaseServiceImpl
                     "ERR_INVALID_RESEARCH_STATUS_TRANSITION"
             );
         }
+
+        logger.debug(
+                "Research status transition allowed. "
+                        + "currentStatus={}, newStatus={}",
+                currentStatus,
+                newStatus
+        );
     }
 
     private void validateStatusUpdateAuthority(
@@ -956,10 +1204,6 @@ public class TechnicalResearchCaseServiceImpl
                 hasAdminRole(updatedBy)
                         || hasOperationHeadRole(updatedBy);
 
-        if (adminOrOperationHead) {
-            return;
-        }
-
         boolean currentAssignee =
                 researchCase.getCurrentAssignee() != null
                         && Objects.equals(
@@ -969,9 +1213,7 @@ public class TechnicalResearchCaseServiceImpl
 
         boolean assigneeManager =
                 researchCase.getCurrentAssignee() != null
-                        && researchCase
-                        .getCurrentAssignee()
-                        .getManager() != null
+                        && researchCase.getCurrentAssignee().getManager() != null
                         && Objects.equals(
                         researchCase
                                 .getCurrentAssignee()
@@ -987,18 +1229,46 @@ public class TechnicalResearchCaseServiceImpl
                         updatedBy.getId()
                 );
 
+        logger.debug(
+                "Status authority details. caseId={}, updatedByUserId={}, "
+                        + "newStatus={}, adminOrOperationHead={}, "
+                        + "currentAssignee={}, assigneeManager={}, raisedByUser={}",
+                researchCase.getId(),
+                updatedBy.getId(),
+                newStatus,
+                adminOrOperationHead,
+                currentAssignee,
+                assigneeManager,
+                raisedByUser
+        );
+
+        if (adminOrOperationHead) {
+            return;
+        }
+
         /*
-         * Technical assignee can perform working status changes.
+         * Assigned technical user can perform the complete working flow,
+         * including direct completion from IN_PROGRESS.
          */
         if (newStatus == TechnicalResearchCaseStatus.IN_PROGRESS
                 || newStatus
                 == TechnicalResearchCaseStatus.AWAITING_INFORMATION
                 || newStatus
-                == TechnicalResearchCaseStatus.UNDER_REVIEW) {
+                == TechnicalResearchCaseStatus.UNDER_REVIEW
+                || newStatus
+                == TechnicalResearchCaseStatus.COMPLETED) {
 
             if (currentAssignee) {
                 return;
             }
+
+            logger.warn(
+                    "Status update denied because user is not current assignee. "
+                            + "caseId={}, updatedByUserId={}, newStatus={}",
+                    researchCase.getId(),
+                    updatedBy.getId(),
+                    newStatus
+            );
 
             throw new ValidationException(
                     "Only the current assignee can update "
@@ -1007,33 +1277,40 @@ public class TechnicalResearchCaseServiceImpl
             );
         }
 
-        /*
-         * Review decisions can only be performed by the
-         * assignee's manager, Operation Head or Admin.
-         */
         if (newStatus == TechnicalResearchCaseStatus.REVISION_REQUIRED
-                || newStatus == TechnicalResearchCaseStatus.COMPLETED
                 || newStatus == TechnicalResearchCaseStatus.REJECTED) {
 
             if (assigneeManager) {
                 return;
             }
 
+            logger.warn(
+                    "Review decision denied. caseId={}, "
+                            + "updatedByUserId={}, newStatus={}",
+                    researchCase.getId(),
+                    updatedBy.getId(),
+                    newStatus
+            );
+
             throw new ValidationException(
                     "Only the assignee's manager, Operation Head "
-                            + "or Admin can perform this status update",
+                            + "or Admin can perform this review decision",
                     "ERR_RESEARCH_REVIEW_ACCESS_DENIED"
             );
         }
 
-        /*
-         * The salesperson who raised the case may cancel it.
-         * Managers, Operation Heads and Admins are already allowed above.
-         */
         if (newStatus == TechnicalResearchCaseStatus.CANCELLED
-                && raisedByUser) {
+                && (raisedByUser || currentAssignee || assigneeManager)) {
             return;
         }
+
+        logger.warn(
+                "Research status update access denied. "
+                        + "caseId={}, updatedByUserId={}, newStatus={}",
+                researchCase.getId(),
+                updatedBy.getId(),
+                newStatus
+        );
 
         throw new ValidationException(
                 "You are not authorized to update this research case status",
