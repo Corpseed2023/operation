@@ -1815,134 +1815,238 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
         // DETERMINE ACCESS
         // =========================================================
 
-        boolean admin = isAdministrator(user);
+        boolean administrator = isAdministrator(user);
+
+        boolean operationHead =
+                hasRoleContaining(user, "OPERATION_HEAD")
+                        || hasRoleContaining(user, "OPERATION HEAD");
+
+        boolean departmentManager = isDepartmentManager(user);
 
         boolean crtApprover =
-                admin
+                administrator
+                        || operationHead
                         || hasRoleContaining(user, "CRT")
                         || hasDepartmentContaining(user, "CRT")
-                        || hasDepartmentContaining(user, "CUSTOMER RELATIONSHIP");
+                        || hasDepartmentContaining(
+                        user,
+                        "CUSTOMER RELATIONSHIP"
+                );
 
         boolean accountsApprover =
-                admin
+                administrator
+                        || operationHead
                         || hasRoleContaining(user, "ACCOUNT")
                         || hasRoleContaining(user, "FINANCE")
                         || hasDepartmentContaining(user, "ACCOUNT")
                         || hasDepartmentContaining(user, "FINANCE");
 
         /*
-         * Important:
+         * Global access:
          *
-         * Do NOT depend on role name "TECHNICAL" for viewing.
+         * ADMIN and OPERATION_HEAD can see every expense.
          *
-         * Any user who is not an approver can still view
-         * expenses created by himself.
+         * CRT approvers can see the complete CRT queue.
          *
-         * Example:
-         * userId = 157 raises expense
-         * -> user 157 can see that expense
-         * -> but cannot approve it.
+         * Accounts approvers can see the complete Accounts queue.
+         *
+         * For the COMPLETED queue, both approval teams can see
+         * the complete queue.
          */
         boolean canViewFullQueue = switch (approvalStage) {
 
-            case CRT_REVIEW -> crtApprover;
+            case CRT_REVIEW ->
+                    administrator
+                            || operationHead
+                            || crtApprover;
 
-            case ACCOUNTS_REVIEW -> accountsApprover;
+            case ACCOUNTS_REVIEW ->
+                    administrator
+                            || operationHead
+                            || accountsApprover;
 
             case COMPLETED ->
-                    admin || crtApprover || accountsApprover;
+                    administrator
+                            || operationHead
+                            || crtApprover
+                            || accountsApprover;
         };
 
         // =========================================================
         // FETCH EXPENSES
         // =========================================================
 
-        List<ProjectExpense> expenses;
+        List<ProjectExpense> expenses =
+                fetchExpenseApprovalQueue(
+                        approvalStage,
+                        approvalStatus
+                );
 
-        if (approvalStatus == null) {
+        // =========================================================
+        // ADMIN / OPERATION HEAD / APPROVER
+        // =========================================================
 
-            expenses =
-                    expenseRepository
-                            .findByApprovalStageOrderByExpenseDateDesc(
-                                    approvalStage
-                            );
+        if (canViewFullQueue) {
 
-        } else {
+            List<ProjectExpenseResponseDto> response =
+                    expenses.stream()
+                            .map(this::mapToExpenseDto)
+                            .toList();
 
-            expenses = switch (approvalStage) {
+            log.info(
+                    "[EXPENSE-APPROVAL-QUEUE-FULL] userId={} | " +
+                            "approvalStage={} | approvalStatus={} | " +
+                            "administrator={} | operationHead={} | recordCount={}",
+                    userId,
+                    approvalStage,
+                    approvalStatus,
+                    administrator,
+                    operationHead,
+                    response.size()
+            );
 
-                case CRT_REVIEW ->
-                        expenseRepository
-                                .findByApprovalStageAndCrtApprovalStatusOrderByExpenseDateDesc(
-                                        ExpenseApprovalStage.CRT_REVIEW,
-                                        approvalStatus
-                                );
-
-                case ACCOUNTS_REVIEW ->
-                        expenseRepository
-                                .findByApprovalStageAndAccountsApprovalStatusOrderByExpenseDateDesc(
-                                        ExpenseApprovalStage.ACCOUNTS_REVIEW,
-                                        approvalStatus
-                                );
-
-                case COMPLETED ->
-                        expenseRepository
-                                .findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
-                                        ExpenseApprovalStage.COMPLETED,
-                                        approvalStatus
-                                );
-            };
+            return response;
         }
 
         // =========================================================
-        // NORMAL / TECHNICAL USER
+        // DEPARTMENT MANAGER
         // =========================================================
         //
-        // If user is not an authorized approver,
-        // return ONLY expenses created by that user.
-        //
-        // DO NOT throw authorization exception.
+        // A manager can see:
+        // 1. Expenses raised from any department assigned to manager.
+        // 2. Expenses personally created by manager.
         // =========================================================
 
-        if (!canViewFullQueue) {
+        if (departmentManager) {
 
-            List<ProjectExpenseResponseDto> ownExpenses =
+            List<ProjectExpenseResponseDto> departmentExpenses =
                     expenses.stream()
                             .filter(expense ->
                                     Objects.equals(
                                             expense.getCreatedByUserId(),
                                             userId
                                     )
+                                            || isExpenseFromUserDepartment(
+                                            expense,
+                                            user
+                                    )
                             )
                             .map(this::mapToExpenseDto)
                             .toList();
 
             log.info(
-                    "[EXPENSE-APPROVAL-QUEUE-OWN] userId={} | approvalStage={} | approvalStatus={} | recordCount={}",
+                    "[EXPENSE-APPROVAL-QUEUE-DEPARTMENT] userId={} | " +
+                            "approvalStage={} | approvalStatus={} | recordCount={}",
                     userId,
                     approvalStage,
                     approvalStatus,
-                    ownExpenses.size()
+                    departmentExpenses.size()
             );
 
-            return ownExpenses;
+            return departmentExpenses;
         }
 
         // =========================================================
-        // APPROVER / ADMIN
+        // NORMAL USER
+        // =========================================================
+        //
+        // A normal user can only see expenses created by himself.
+        // Do not throw an authorization exception.
         // =========================================================
 
+        List<ProjectExpenseResponseDto> ownExpenses =
+                expenses.stream()
+                        .filter(expense ->
+                                Objects.equals(
+                                        expense.getCreatedByUserId(),
+                                        userId
+                                )
+                        )
+                        .map(this::mapToExpenseDto)
+                        .toList();
+
         log.info(
-                "[EXPENSE-APPROVAL-QUEUE-FULL] userId={} | approvalStage={} | approvalStatus={} | recordCount={}",
+                "[EXPENSE-APPROVAL-QUEUE-OWN] userId={} | " +
+                        "approvalStage={} | approvalStatus={} | recordCount={}",
                 userId,
                 approvalStage,
                 approvalStatus,
-                expenses.size()
+                ownExpenses.size()
         );
 
-        return expenses.stream()
-                .map(this::mapToExpenseDto)
-                .toList();
+        return ownExpenses;
+    }
+
+    private List<ProjectExpense> fetchExpenseApprovalQueue(
+            ExpenseApprovalStage approvalStage,
+            ApprovalStatus approvalStatus
+    ) {
+
+        if (approvalStatus == null) {
+            return expenseRepository
+                    .findByApprovalStageOrderByExpenseDateDesc(
+                            approvalStage
+                    );
+        }
+
+        return switch (approvalStage) {
+
+            case CRT_REVIEW ->
+                    expenseRepository
+                            .findByApprovalStageAndCrtApprovalStatusOrderByExpenseDateDesc(
+                                    ExpenseApprovalStage.CRT_REVIEW,
+                                    approvalStatus
+                            );
+
+            case ACCOUNTS_REVIEW ->
+                    expenseRepository
+                            .findByApprovalStageAndAccountsApprovalStatusOrderByExpenseDateDesc(
+                                    ExpenseApprovalStage.ACCOUNTS_REVIEW,
+                                    approvalStatus
+                            );
+
+            case COMPLETED ->
+                    expenseRepository
+                            .findByApprovalStageAndApprovalStatusOrderByExpenseDateDesc(
+                                    ExpenseApprovalStage.COMPLETED,
+                                    approvalStatus
+                            );
+        };
+    }
+
+    private boolean isDepartmentManager(User user) {
+
+        if (user == null) {
+            return false;
+        }
+
+        return Boolean.TRUE.equals(user.getManager());
+    }
+
+    private boolean isExpenseFromUserDepartment(
+            ProjectExpense expense,
+            User user
+    ) {
+
+        if (expense == null
+                || expense.getRaisedDepartmentId() == null
+                || user == null
+                || user.getDepartments() == null) {
+            return false;
+        }
+
+        return user.getDepartments()
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(department -> !department.isDeleted())
+                .map(Department::getId)
+                .filter(Objects::nonNull)
+                .anyMatch(departmentId ->
+                        Objects.equals(
+                                departmentId,
+                                expense.getRaisedDepartmentId()
+                        )
+                );
     }
 
     // =========================================================
