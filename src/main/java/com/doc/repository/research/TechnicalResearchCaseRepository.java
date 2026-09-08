@@ -76,4 +76,16 @@ public interface TechnicalResearchCaseRepository
     );
 
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT researchCase
+        FROM TechnicalResearchCase researchCase
+        WHERE researchCase.id = :caseId
+          AND researchCase.deleted = false
+        """)
+    Optional<TechnicalResearchCase> findByIdForStatusUpdate(
+            @Param("caseId") Long caseId
+    );
+
+
 }

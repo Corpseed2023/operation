@@ -44,5 +44,10 @@ public interface TechnicalResearchCaseService {
     );
 
 
+    TechnicalResearchCaseResponseDto updateStatus(
+            Long caseId,
+            TechnicalResearchCaseStatusUpdateRequestDto request
+    );
+
 
 }

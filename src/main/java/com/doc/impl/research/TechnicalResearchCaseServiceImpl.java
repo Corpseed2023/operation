@@ -59,6 +59,52 @@ public class TechnicalResearchCaseServiceImpl
             TechnicalResearchCaseStatus.CANCELLED
     );
 
+    private static final Map<
+            TechnicalResearchCaseStatus,
+            Set<TechnicalResearchCaseStatus>
+            > ALLOWED_STATUS_TRANSITIONS = Map.of(
+
+            TechnicalResearchCaseStatus.PENDING_ASSIGNMENT,
+            EnumSet.of(
+                    TechnicalResearchCaseStatus.CANCELLED
+            ),
+
+            TechnicalResearchCaseStatus.ASSIGNED,
+            EnumSet.of(
+                    TechnicalResearchCaseStatus.IN_PROGRESS,
+                    TechnicalResearchCaseStatus.AWAITING_INFORMATION,
+                    TechnicalResearchCaseStatus.CANCELLED
+            ),
+
+            TechnicalResearchCaseStatus.IN_PROGRESS,
+            EnumSet.of(
+                    TechnicalResearchCaseStatus.AWAITING_INFORMATION,
+                    TechnicalResearchCaseStatus.UNDER_REVIEW,
+                    TechnicalResearchCaseStatus.CANCELLED
+            ),
+
+            TechnicalResearchCaseStatus.AWAITING_INFORMATION,
+            EnumSet.of(
+                    TechnicalResearchCaseStatus.IN_PROGRESS,
+                    TechnicalResearchCaseStatus.CANCELLED
+            ),
+
+            TechnicalResearchCaseStatus.UNDER_REVIEW,
+            EnumSet.of(
+                    TechnicalResearchCaseStatus.REVISION_REQUIRED,
+                    TechnicalResearchCaseStatus.COMPLETED,
+                    TechnicalResearchCaseStatus.REJECTED,
+                    TechnicalResearchCaseStatus.CANCELLED
+            ),
+
+            TechnicalResearchCaseStatus.REVISION_REQUIRED,
+            EnumSet.of(
+                    TechnicalResearchCaseStatus.IN_PROGRESS,
+                    TechnicalResearchCaseStatus.UNDER_REVIEW,
+                    TechnicalResearchCaseStatus.CANCELLED
+            )
+    );
+
 
     private final TechnicalResearchCaseRepository researchCaseRepository;
     private final UserRepository userRepository;
@@ -756,6 +802,243 @@ public class TechnicalResearchCaseServiceImpl
                         pageable
                 )
                 .map(this::mapToResponseDto);
+    }
+
+
+    @Override
+    @Transactional
+    public TechnicalResearchCaseResponseDto updateStatus(
+            Long caseId,
+            TechnicalResearchCaseStatusUpdateRequestDto request
+    ) {
+        logger.info(
+                "Updating research case status. caseId={}, "
+                        + "newStatus={}, updatedByUserId={}",
+                caseId,
+                request.getStatus(),
+                request.getUpdatedByUserId()
+        );
+
+        TechnicalResearchCase researchCase =
+                researchCaseRepository
+                        .findByIdForStatusUpdate(caseId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Technical research case not found",
+                                "ERR_RESEARCH_CASE_NOT_FOUND"
+                        ));
+
+        User updatedBy = getActiveUser(
+                request.getUpdatedByUserId(),
+                "Status updating user"
+        );
+
+        TechnicalResearchCaseStatus currentStatus =
+                researchCase.getStatus();
+
+        TechnicalResearchCaseStatus newStatus =
+                request.getStatus();
+
+        String reason = trimToNull(request.getReason());
+
+        validateStatusTransition(currentStatus, newStatus);
+
+        validateStatusUpdateAuthority(
+                researchCase,
+                updatedBy,
+                newStatus
+        );
+
+        /*
+         * Completion, rejection and cancellation require a reason.
+         */
+        if (CLOSED_STATUSES.contains(newStatus)
+                && reason == null) {
+
+            throw new ValidationException(
+                    "Reason is required when completing, "
+                            + "rejecting or cancelling a research case",
+                    "ERR_RESEARCH_CLOSURE_REASON_REQUIRED"
+            );
+        }
+
+        Instant now = Instant.now();
+
+        researchCase.setStatus(newStatus);
+        researchCase.setUpdatedBy(updatedBy);
+
+        switch (newStatus) {
+            case IN_PROGRESS -> {
+                if (researchCase.getWorkStartedAt() == null) {
+                    researchCase.setWorkStartedAt(now);
+                }
+            }
+
+            case UNDER_REVIEW -> {
+                researchCase.setSubmittedAt(now);
+            }
+
+            case COMPLETED, REJECTED, CANCELLED -> {
+                researchCase.setClosedAt(now);
+                researchCase.setClosedBy(updatedBy);
+                researchCase.setClosureReason(reason);
+            }
+
+            default -> {
+                // No additional field changes required.
+            }
+        }
+
+        TechnicalResearchCase savedCase =
+                researchCaseRepository.save(researchCase);
+
+        logger.info(
+                "Research case status updated. caseId={}, "
+                        + "previousStatus={}, newStatus={}, updatedByUserId={}",
+                caseId,
+                currentStatus,
+                newStatus,
+                updatedBy.getId()
+        );
+
+        return mapToResponseDto(savedCase);
+    }
+
+    private void validateStatusTransition(
+            TechnicalResearchCaseStatus currentStatus,
+            TechnicalResearchCaseStatus newStatus
+    ) {
+        if (currentStatus == null) {
+            throw new ValidationException(
+                    "Current research case status is unavailable",
+                    "ERR_RESEARCH_CURRENT_STATUS_MISSING"
+            );
+        }
+
+        if (currentStatus == newStatus) {
+            throw new ValidationException(
+                    "Research case is already in status: "
+                            + newStatus.getDisplayName(),
+                    "ERR_RESEARCH_STATUS_ALREADY_SET"
+            );
+        }
+
+        if (CLOSED_STATUSES.contains(currentStatus)) {
+            throw new ValidationException(
+                    "Status of a completed, rejected or cancelled case "
+                            + "cannot be changed",
+                    "ERR_RESEARCH_CASE_ALREADY_CLOSED"
+            );
+        }
+
+        Set<TechnicalResearchCaseStatus> allowedStatuses =
+                ALLOWED_STATUS_TRANSITIONS.getOrDefault(
+                        currentStatus,
+                        Collections.emptySet()
+                );
+
+        if (!allowedStatuses.contains(newStatus)) {
+            throw new ValidationException(
+                    "Status cannot be changed from "
+                            + currentStatus.getDisplayName()
+                            + " to "
+                            + newStatus.getDisplayName(),
+                    "ERR_INVALID_RESEARCH_STATUS_TRANSITION"
+            );
+        }
+    }
+
+    private void validateStatusUpdateAuthority(
+            TechnicalResearchCase researchCase,
+            User updatedBy,
+            TechnicalResearchCaseStatus newStatus
+    ) {
+        boolean adminOrOperationHead =
+                hasAdminRole(updatedBy)
+                        || hasOperationHeadRole(updatedBy);
+
+        if (adminOrOperationHead) {
+            return;
+        }
+
+        boolean currentAssignee =
+                researchCase.getCurrentAssignee() != null
+                        && Objects.equals(
+                        researchCase.getCurrentAssignee().getId(),
+                        updatedBy.getId()
+                );
+
+        boolean assigneeManager =
+                researchCase.getCurrentAssignee() != null
+                        && researchCase
+                        .getCurrentAssignee()
+                        .getManager() != null
+                        && Objects.equals(
+                        researchCase
+                                .getCurrentAssignee()
+                                .getManager()
+                                .getId(),
+                        updatedBy.getId()
+                );
+
+        boolean raisedByUser =
+                researchCase.getRaisedBy() != null
+                        && Objects.equals(
+                        researchCase.getRaisedBy().getId(),
+                        updatedBy.getId()
+                );
+
+        /*
+         * Technical assignee can perform working status changes.
+         */
+        if (newStatus == TechnicalResearchCaseStatus.IN_PROGRESS
+                || newStatus
+                == TechnicalResearchCaseStatus.AWAITING_INFORMATION
+                || newStatus
+                == TechnicalResearchCaseStatus.UNDER_REVIEW) {
+
+            if (currentAssignee) {
+                return;
+            }
+
+            throw new ValidationException(
+                    "Only the current assignee can update "
+                            + "the case to this status",
+                    "ERR_RESEARCH_STATUS_ACCESS_DENIED"
+            );
+        }
+
+        /*
+         * Review decisions can only be performed by the
+         * assignee's manager, Operation Head or Admin.
+         */
+        if (newStatus == TechnicalResearchCaseStatus.REVISION_REQUIRED
+                || newStatus == TechnicalResearchCaseStatus.COMPLETED
+                || newStatus == TechnicalResearchCaseStatus.REJECTED) {
+
+            if (assigneeManager) {
+                return;
+            }
+
+            throw new ValidationException(
+                    "Only the assignee's manager, Operation Head "
+                            + "or Admin can perform this status update",
+                    "ERR_RESEARCH_REVIEW_ACCESS_DENIED"
+            );
+        }
+
+        /*
+         * The salesperson who raised the case may cancel it.
+         * Managers, Operation Heads and Admins are already allowed above.
+         */
+        if (newStatus == TechnicalResearchCaseStatus.CANCELLED
+                && raisedByUser) {
+            return;
+        }
+
+        throw new ValidationException(
+                "You are not authorized to update this research case status",
+                "ERR_RESEARCH_STATUS_ACCESS_DENIED"
+        );
     }
 
 

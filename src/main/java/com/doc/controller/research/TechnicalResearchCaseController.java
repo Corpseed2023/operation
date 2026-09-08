@@ -180,5 +180,20 @@ public class TechnicalResearchCaseController {
     }
 
 
+    @PutMapping("/{caseId}/status")
+    public ResponseEntity<TechnicalResearchCaseResponseDto> updateStatus(
+            @PathVariable
+            @Positive(message = "Case ID must be greater than zero")
+            Long caseId,
+
+            @Valid
+            @RequestBody
+            TechnicalResearchCaseStatusUpdateRequestDto request
+    ) {
+        return ResponseEntity.ok(
+                researchCaseService.updateStatus(caseId, request)
+        );
+    }
+
 
 }
