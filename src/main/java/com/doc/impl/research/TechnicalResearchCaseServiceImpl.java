@@ -69,11 +69,9 @@ public class TechnicalResearchCaseServiceImpl
                     TechnicalResearchCaseStatus.CANCELLED
             ),
 
-            TechnicalResearchCaseStatus.IN_PROGRESS,
+            TechnicalResearchCaseStatus.ASSIGNED,
             EnumSet.of(
-                    TechnicalResearchCaseStatus.AWAITING_INFORMATION,
-                    TechnicalResearchCaseStatus.UNDER_REVIEW,
-                    TechnicalResearchCaseStatus.COMPLETED,
+                    TechnicalResearchCaseStatus.IN_PROGRESS,
                     TechnicalResearchCaseStatus.CANCELLED
             ),
 
@@ -81,6 +79,7 @@ public class TechnicalResearchCaseServiceImpl
             EnumSet.of(
                     TechnicalResearchCaseStatus.AWAITING_INFORMATION,
                     TechnicalResearchCaseStatus.UNDER_REVIEW,
+                    TechnicalResearchCaseStatus.COMPLETED,
                     TechnicalResearchCaseStatus.CANCELLED
             ),
 
