@@ -1,5 +1,7 @@
 package com.doc.controller.project;
 
+import com.doc.dto.LegalRequestDto.LegalRequestRaiseDto;
+import com.doc.dto.LegalRequestDto.LegalRequestResolveDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
@@ -9,6 +11,7 @@ import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
+import com.doc.em.LegalRequestStatus;
 import com.doc.service.project.ProjectSearchService;
 import com.doc.service.project.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -329,6 +332,46 @@ public class ProjectController {
                 projectService.getProjectsByUnitId(unitId);
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/legal-requests")
+    @Operation(
+            summary = "Get all projects with an active legal request",
+            description = "Returns all projects whose legal request status is not NONE. " +
+                    "Optionally filter by a specific status (e.g. RAISED, UNDER_REVIEW)."
+    )
+    public ResponseEntity<Page<ProjectResponseDto>> getAllLegalRequests(
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) LegalRequestStatus status
+    ) {
+        if (page < 1 || size < 1) {
+            throw new IllegalArgumentException("Invalid pagination parameters");
+        }
+
+        Page<ProjectResponseDto> response =
+                projectService.getAllLegalRequests(userId, page - 1, size, status);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{projectId}/legal-request")
+    @Operation(summary = "Raise a legal request for a project")
+    public ResponseEntity<ProjectResponseDto> raiseLegalRequest(
+            @PathVariable Long projectId,
+            @RequestParam Long userId,
+            @Valid @RequestBody LegalRequestRaiseDto dto) {
+        return ResponseEntity.ok(projectService.raiseLegalRequest(projectId, userId, dto));
+    }
+
+    @PatchMapping("/{projectId}/legal-request/resolve")
+    @Operation(summary = "Legal resolves an active legal request")
+    public ResponseEntity<ProjectResponseDto> resolveLegalRequest(
+            @PathVariable Long projectId,
+            @RequestParam Long userId,
+            @Valid @RequestBody LegalRequestResolveDto dto) {
+        return ResponseEntity.ok(projectService.resolveLegalRequest(projectId, userId, dto));
     }
 
 }

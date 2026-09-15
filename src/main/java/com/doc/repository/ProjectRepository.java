@@ -1,6 +1,7 @@
 package com.doc.repository;
 
 import com.doc.dto.project.dashboard.ProjectStatusCountDto;
+import com.doc.em.LegalRequestStatus;
 import com.doc.entity.project.Project;
 import com.doc.repository.projection.ProjectActivityProjection;
 import jakarta.persistence.LockModeType;
@@ -1039,6 +1040,16 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     """)
     List<ProjectActivityProjection> findRecentProjectStatusChangesForUsers(
             @Param("userIds") List<Long> userIds,
+            Pageable pageable
+    );
+
+    Page<Project> findByLegalRequestStatusNotAndIsDeletedFalse(
+            LegalRequestStatus status,
+            Pageable pageable
+    );
+
+    Page<Project> findByLegalRequestStatusAndIsDeletedFalse(
+            LegalRequestStatus status,
             Pageable pageable
     );
 
