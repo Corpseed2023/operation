@@ -438,19 +438,6 @@ public class TechnicalResearchCaseServiceImpl
     }
 
 
-
-    private String normalizeRoleName(String roleName) {
-        String normalized = roleName
-                .trim()
-                .toUpperCase(Locale.ROOT);
-
-        if (normalized.startsWith("ROLE_")) {
-            normalized = normalized.substring(5);
-        }
-
-        return normalized;
-    }
-
     @Override
     @Transactional(readOnly = true)
     public Page<TechnicalResearchCaseResponseDto> getCasesForUser(

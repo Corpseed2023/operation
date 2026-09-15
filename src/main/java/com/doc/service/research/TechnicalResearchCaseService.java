@@ -12,8 +12,6 @@ public interface TechnicalResearchCaseService {
             TechnicalResearchCaseCreateRequestDto request
     );
 
-
-
     TechnicalResearchCaseResponseDto getCaseById(Long caseId);
 
     Page<TechnicalResearchCaseResponseDto> getCases(
