@@ -81,6 +81,19 @@ public class ProjectResponseDto {
     private String currentAssignedUserEmail;
     private String currentAssignedUserMobile;
 
+    private String legalRequestStatus;
+    private String legalRequestTitle;
+    private Long legalRequestMilestoneAssignmentId;
+    private String legalRequestMilestoneName;
+    private Long legalRequestAssignedToLegalId;
+    private String legalRequestAssignedToLegalName;
+    private String legalRequestNotes;
+    private String legalRequestStatusReason;
+    private Long legalRequestCreatedById;
+    private Date legalRequestCreatedDate;
+    private Long legalRequestResolvedById;
+    private Date legalRequestResolvedDate;
+
     // NEW
     private List<ProjectMilestoneListDto> milestones = new ArrayList<>();
 }

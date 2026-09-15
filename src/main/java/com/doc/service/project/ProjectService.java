@@ -1,11 +1,14 @@
 package com.doc.service.project;
 
+import com.doc.dto.LegalRequestDto.LegalRequestRaiseDto;
+import com.doc.dto.LegalRequestDto.LegalRequestResolveDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
 import com.doc.dto.transaction.ProjectPaymentTransactionDto;
+import com.doc.em.LegalRequestStatus;
 import com.doc.entity.project.Project;
 import org.springframework.data.domain.Page;
 
@@ -58,4 +61,8 @@ public interface ProjectService {
     String getProjectStatusByProjectNumber(String projectNumber);
 
     List<ProjectResponseDto> getProjectsByUnitId(Long unitId);
+
+    ProjectResponseDto raiseLegalRequest(Long projectId, Long userId, LegalRequestRaiseDto dto);
+    ProjectResponseDto resolveLegalRequest(Long projectId, Long userId, LegalRequestResolveDto dto);
+    Page<ProjectResponseDto> getAllLegalRequests(Long userId, int page, int size, LegalRequestStatus status);
 }

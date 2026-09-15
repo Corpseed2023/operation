@@ -1,10 +1,12 @@
 package com.doc.entity.project;
 
+import com.doc.em.LegalRequestStatus;
 import com.doc.entity.client.Company;
 import com.doc.entity.client.CompanyUnit;
 import com.doc.entity.client.Contact;
 import com.doc.entity.document.ApplicantType;
 import com.doc.entity.product.Product;
+import com.doc.entity.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -150,6 +152,33 @@ public class Project {
     @Column(name = "created_from_advance_invoice", nullable = false)
     private boolean createdFromAdvanceInvoice = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "legal_request_status")
+    private LegalRequestStatus legalRequestStatus = LegalRequestStatus.NONE;
 
+    @Column(name = "legal_request_title", length = 255)
+    private String legalRequestTitle;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "legal_request_milestone_assignment_id")
+    private ProjectMilestoneAssignment legalRequestMilestoneAssignment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "legal_request_assigned_to")
+    private User legalRequestAssignedToLegal;
+
+    private Long legalRequestCreatedById;
+
+    private Date legalRequestCreatedDate;
+
+    @Column(name = "legal_request_notes", length = 1000)
+    private String legalRequestNotes;
+
+    @Column(name = "legal_request_status_reason", length = 500)
+    private String legalRequestStatusReason;
+
+    private Long legalRequestResolvedById;
+
+    private Date legalRequestResolvedDate;
 
 }

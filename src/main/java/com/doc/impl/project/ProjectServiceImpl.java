@@ -1,6 +1,9 @@
 package com.doc.impl.project;
 
 import com.doc.constants.StatusConstants;
+import com.doc.dto.LegalRequestDto.LegalRequestDto;
+import com.doc.dto.LegalRequestDto.LegalRequestRaiseDto;
+import com.doc.dto.LegalRequestDto.LegalRequestResolveDto;
 import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
@@ -61,6 +64,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.BinaryOperator;
 import java.util.stream.Collectors;
+
+import com.doc.em.LegalRequestStatus;
 
 @Service
 public class ProjectServiceImpl implements ProjectService {
@@ -2875,6 +2880,30 @@ public class ProjectServiceImpl implements ProjectService {
         dto.setStatusId(project.getStatus() != null ? project.getStatus().getId() : null);
         dto.setStatusName(project.getStatus() != null ? project.getStatus().getName() : null);
 
+        dto.setLegalRequestStatus(
+                project.getLegalRequestStatus() != null
+                        ? project.getLegalRequestStatus().name()
+                        : null
+        );
+        dto.setLegalRequestTitle(project.getLegalRequestTitle());
+
+        if (project.getLegalRequestMilestoneAssignment() != null) {
+            dto.setLegalRequestMilestoneAssignmentId(project.getLegalRequestMilestoneAssignment().getId());
+            dto.setLegalRequestMilestoneName(getProjectMilestoneName(project.getLegalRequestMilestoneAssignment()));
+        }
+
+        if (project.getLegalRequestAssignedToLegal() != null) {
+            dto.setLegalRequestAssignedToLegalId(project.getLegalRequestAssignedToLegal().getId());
+            dto.setLegalRequestAssignedToLegalName(project.getLegalRequestAssignedToLegal().getFullName());
+        }
+
+        dto.setLegalRequestNotes(project.getLegalRequestNotes());
+        dto.setLegalRequestStatusReason(project.getLegalRequestStatusReason());
+        dto.setLegalRequestCreatedById(project.getLegalRequestCreatedById());
+        dto.setLegalRequestCreatedDate(project.getLegalRequestCreatedDate());
+        dto.setLegalRequestResolvedById(project.getLegalRequestResolvedById());
+        dto.setLegalRequestResolvedDate(project.getLegalRequestResolvedDate());
+
         /*
          * PO Billing Eligibility:
          *
@@ -4636,6 +4665,189 @@ public class ProjectServiceImpl implements ProjectService {
 
             return null;
         }
+    }
+
+    private boolean belongsToDepartment(User user, String departmentName) {
+        return user.getDepartments() != null
+                && user.getDepartments().stream()
+                .filter(Objects::nonNull)
+                .map(Department::getName)
+                .filter(Objects::nonNull)
+                .anyMatch(name -> departmentName.equalsIgnoreCase(name.trim()));
+    }
+
+    @Override
+    @Transactional
+    public ProjectResponseDto raiseLegalRequest(Long projectId, Long userId, LegalRequestRaiseDto dto) {
+
+        User requestingUser = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = hasRole(requestingUser, "ADMIN");
+        boolean isOperationHead = hasRole(requestingUser, "OPERATION_HEAD");
+        boolean isCrt = belongsToDepartment(requestingUser, "CRT");
+
+        if (!isAdmin && !isOperationHead && !isCrt) {
+            throw new ValidationException(
+                    "You are not authorized to raise a legal request",
+                    "ERR_UNAUTHORIZED_LEGAL_REQUEST_RAISE"
+            );
+        }
+
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        if (project.getLegalRequestStatus() != null
+                && project.getLegalRequestStatus() != LegalRequestStatus.NONE
+                ) {
+            throw new ValidationException(
+                    "A legal request is already active for this project",
+                    "ERR_LEGAL_REQUEST_ALREADY_ACTIVE"
+            );
+        }
+
+        if (dto.getProjectMilestoneAssignmentId() != null) {
+            ProjectMilestoneAssignment assignment = projectMilestoneAssignmentRepository
+                    .findById(dto.getProjectMilestoneAssignmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Milestone assignment not found", "ERR_MILESTONE_ASSIGNMENT_NOT_FOUND"));
+            project.setLegalRequestMilestoneAssignment(assignment);
+        } else {
+            project.setLegalRequestMilestoneAssignment(null);
+        }
+
+        if (dto.getAssignedToLegal() != null) {
+            User legalUser = userRepository.findActiveUserById(dto.getAssignedToLegal())
+                    .orElseThrow(() -> new ResourceNotFoundException("Legal user not found", "ERR_USER_NOT_FOUND"));
+            project.setLegalRequestAssignedToLegal(legalUser);
+        } else {
+            project.setLegalRequestAssignedToLegal(null);
+        }
+
+        project.setLegalRequestStatus(LegalRequestStatus.RAISED);
+        project.setLegalRequestTitle(dto.getLegalRequestTitle());
+        project.setLegalRequestNotes(dto.getNotes());
+        project.setLegalRequestStatusReason(null);
+        project.setLegalRequestCreatedById(requestingUser.getId());
+        project.setLegalRequestCreatedDate(new Date());
+        project.setLegalRequestResolvedById(null);
+        project.setLegalRequestResolvedDate(null);
+        project.setUpdatedDate(new Date());
+
+        projectRepository.save(project);
+
+        saveProjectHistory(
+                project, project.getLegalRequestMilestoneAssignment(),
+                "LEGAL_REQUEST_RAISED", "PROJECT", project.getId(),
+                "Legal request raised",
+                "Legal request '" + dto.getLegalRequestTitle() + "' raised by " + requestingUser.getFullName(),
+                dto.getNotes(),
+                LegalRequestStatus.NONE.name(),
+                LegalRequestStatus.RAISED.name(),
+                requestingUser.getId(),
+                null, null,
+                project.getLegalRequestAssignedToLegal()
+        );
+
+        return mapToResponseDto(project);
+    }
+
+    @Override
+    @Transactional
+    public ProjectResponseDto resolveLegalRequest(Long projectId, Long userId, LegalRequestResolveDto dto) {
+
+        User requestingUser = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = hasRole(requestingUser, "ADMIN");
+        boolean isOperationHead = hasRole(requestingUser, "OPERATION_HEAD");
+        boolean isLegal = belongsToDepartment(requestingUser, "LEGAL");
+
+        if (!isAdmin && !isOperationHead && !isLegal) {
+            throw new ValidationException(
+                    "You are not authorized to resolve legal requests",
+                    "ERR_UNAUTHORIZED_LEGAL_REQUEST_RESOLVE"
+            );
+        }
+
+        Project project = projectRepository.findActiveUserById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found", "ERR_PROJECT_NOT_FOUND"));
+
+        if (project.getLegalRequestStatus() == null
+                || project.getLegalRequestStatus() == LegalRequestStatus.NONE) {
+            throw new ValidationException("No active legal request to resolve", "ERR_NO_LEGAL_REQUEST");
+        }
+
+        String previousStatus = project.getLegalRequestStatus().name();
+
+        project.setLegalRequestStatus(dto.getStatus());
+        project.setLegalRequestStatusReason(dto.getStatusReason());
+        project.setLegalRequestResolvedById(requestingUser.getId());
+        project.setLegalRequestResolvedDate(new Date());
+        project.setUpdatedDate(new Date());
+
+        projectRepository.save(project);
+
+        saveProjectHistory(
+                project, project.getLegalRequestMilestoneAssignment(),
+                "LEGAL_REQUEST_RESOLVED", "PROJECT", project.getId(),
+                "Legal request resolved",
+                "Legal request resolved as " + dto.getStatus() + " by " + requestingUser.getFullName(),
+                dto.getStatusReason(),
+                previousStatus,
+                dto.getStatus().name(),
+                requestingUser.getId(),
+                null, null, null
+        );
+
+        return mapToResponseDto(project);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProjectResponseDto> getAllLegalRequests(Long userId, int page, int size, LegalRequestStatus status) {
+
+        User requestingUser = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = hasRole(requestingUser, "ADMIN");
+        boolean isOperationHead = hasRole(requestingUser, "OPERATION_HEAD");
+        boolean isLegal = belongsToDepartment(requestingUser, "LEGAL");
+
+        if (!isAdmin && !isOperationHead && !isLegal) {
+            throw new ValidationException(
+                    "You are not authorized to view legal requests",
+                    "ERR_UNAUTHORIZED_LEGAL_REQUEST_VIEW"
+            );
+        }
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "legalRequestCreatedDate")
+        );
+
+        Page<Project> projectPage;
+
+        if (status != null) {
+            projectPage = projectRepository.findByLegalRequestStatusAndIsDeletedFalse(status, pageable);
+        } else {
+            projectPage = projectRepository.findByLegalRequestStatusNotAndIsDeletedFalse(
+                    LegalRequestStatus.NONE,
+                    pageable
+            );
+        }
+
+        logger.info(
+                "[GET-LEGAL-REQUESTS] requestedBy={} | statusFilter={} | page={} | size={} | totalFound={}",
+                userId,
+                status,
+                page,
+                size,
+                projectPage.getTotalElements()
+        );
+
+        return projectPage.map(this::mapToResponseDto);
     }
 
 }

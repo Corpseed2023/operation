@@ -1,6 +1,8 @@
 package com.doc.entity.product;
 
+import com.doc.em.LegalRequestStatus;
 import com.doc.entity.document.ProductDocumentMapping;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.user.User;
 import com.doc.entity.user.UserProductMap;
 import jakarta.persistence.*;
