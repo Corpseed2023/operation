@@ -1,5 +1,6 @@
 package com.doc.dto.ProjectMilestoneassignment;
 
+import com.doc.em.CertificateValidityType;
 import com.doc.em.CertificationTenureUnit;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -30,28 +31,52 @@ public class UpdateMilestoneStatusDto {
 
     /*
      * Optional acknowledgement/supporting document.
-     *
-     * Example:
-     * https://erp-corpseed.s3.ap-south-1.amazonaws.com/
-     * milestone-acknowledgement.pdf
      */
     private String acknowledgementAttachmentUrl;
 
     /*
      * Optional original/display filename.
-     *
-     * Example:
-     * FSSAI_Submission_Acknowledgement.pdf
      */
     private String acknowledgementAttachmentName;
 
+    /*
+     * FIXED_TERM or LIFETIME.
+     *
+     * Required only when Certification milestone
+     * is being completed.
+     */
+    private CertificateValidityType certificateValidityType;
 
+    /*
+     * Certificate issue/effective date.
+     *
+     * Required for both FIXED_TERM and LIFETIME.
+     */
+    private LocalDate certificateIssueDate;
+
+    /*
+     * Required only for FIXED_TERM.
+     *
+     * Example:
+     * 5 YEARS
+     */
     private Integer certificationTenure;
 
+    /*
+     * Required only for FIXED_TERM.
+     */
     private CertificationTenureUnit certificationTenureUnit;
 
+    /*
+     * Required only for FIXED_TERM.
+     *
+     * Must be null for LIFETIME.
+     */
     private LocalDate certificateExpiryDate;
 
+    /*
+     * Required while completing Certification milestone.
+     */
     private String certificationAttachmentUrl;
 
 

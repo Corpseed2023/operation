@@ -3,6 +3,7 @@ package com.doc.impl.project;
 import com.doc.constants.StatusConstants;
 import com.doc.em.ApprovalStatus;
 import com.doc.dto.ProjectMilestoneassignment.*;
+import com.doc.em.CertificateValidityType;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.milestone.MilestoneStatusHistory;
@@ -846,39 +847,50 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             ProjectMilestoneAssignment assignment
     ) {
 
-        if (updateDto.getCertificationTenure() == null
-                || updateDto.getCertificationTenure() <= 0) {
+        /*
+         * =========================================================
+         * 1. CERTIFICATE VALIDITY TYPE
+         * =========================================================
+         */
+        if (updateDto.getCertificateValidityType() == null) {
 
             throw new ValidationException(
-                    "Certification tenure is required and must be greater than zero",
-                    "ERR_CERTIFICATION_TENURE_REQUIRED"
+                    "Certificate validity type is required",
+                    "ERR_CERTIFICATE_VALIDITY_TYPE_REQUIRED"
             );
         }
 
-        if (updateDto.getCertificationTenureUnit() == null) {
+        /*
+         * =========================================================
+         * 2. CERTIFICATE ISSUE DATE
+         * =========================================================
+         */
+        if (updateDto.getCertificateIssueDate() == null) {
 
             throw new ValidationException(
-                    "Certification tenure unit is required",
-                    "ERR_CERTIFICATION_TENURE_UNIT_REQUIRED"
+                    "Certificate issue date is required",
+                    "ERR_CERTIFICATE_ISSUE_DATE_REQUIRED"
             );
         }
 
-        if (updateDto.getCertificateExpiryDate() == null) {
+        if (updateDto.getCertificateIssueDate().isAfter(LocalDate.now())) {
 
             throw new ValidationException(
-                    "Certification expiry date is required",
-                    "ERR_CERTIFICATE_EXPIRY_DATE_REQUIRED"
+                    "Certificate issue date cannot be in the future",
+                    "ERR_CERTIFICATE_ISSUE_DATE_IN_FUTURE"
             );
         }
 
-        if (updateDto.getCertificateExpiryDate().isBefore(LocalDate.now())) {
-
-            throw new ValidationException(
-                    "Certification expiry date cannot be in the past",
-                    "ERR_CERTIFICATE_EXPIRY_DATE_IN_PAST"
-            );
-        }
-
+        /*
+         * =========================================================
+         * 3. CERTIFICATE ATTACHMENT
+         * =========================================================
+         *
+         * Required for both:
+         *
+         * FIXED_TERM
+         * LIFETIME
+         */
         if (updateDto.getCertificationAttachmentUrl() == null
                 || updateDto.getCertificationAttachmentUrl().isBlank()) {
 
@@ -888,9 +900,138 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
+        CertificateValidityType validityType =
+                updateDto.getCertificateValidityType();
+
+        /*
+         * Save common certificate fields.
+         */
+        assignment.setCertificateValidityType(validityType);
+
+        assignment.setCertificateIssueDate(
+                updateDto.getCertificateIssueDate()
+        );
+
+        assignment.setCertificationAttachmentUrl(
+                updateDto.getCertificationAttachmentUrl().trim()
+        );
+
+        /*
+         * =========================================================
+         * 4. LIFETIME CERTIFICATE
+         * =========================================================
+         *
+         * Lifetime certificate:
+         *
+         * tenure = null
+         * tenureUnit = null
+         * expiryDate = null
+         * renewalDueDate = null
+         */
+        if (CertificateValidityType.LIFETIME == validityType) {
+
+            assignment.setCertificationTenure(null);
+
+            assignment.setCertificationTenureUnit(null);
+
+            assignment.setCertificateExpiryDate(null);
+
+            assignment.setRenewalDueDate(null);
+
+            logger.info(
+                    "[CERTIFICATION-LIFETIME-SAVED] " +
+                            "assignmentId={}, projectId={}, issueDate={}",
+                    assignment.getId(),
+                    assignment.getProject() != null
+                            ? assignment.getProject().getId()
+                            : null,
+                    updateDto.getCertificateIssueDate()
+            );
+
+            return;
+        }
+
+        /*
+         * =========================================================
+         * 5. FIXED TERM CERTIFICATE
+         * =========================================================
+         */
+
+        /*
+         * Existing validation retained.
+         */
+        if (updateDto.getCertificationTenure() == null
+                || updateDto.getCertificationTenure() <= 0) {
+
+            throw new ValidationException(
+                    "Certification tenure is required and must be greater than zero",
+                    "ERR_CERTIFICATION_TENURE_REQUIRED"
+            );
+        }
+
+        /*
+         * Existing validation retained.
+         */
+        if (updateDto.getCertificationTenureUnit() == null) {
+
+            throw new ValidationException(
+                    "Certification tenure unit is required",
+                    "ERR_CERTIFICATION_TENURE_UNIT_REQUIRED"
+            );
+        }
+
+        /*
+         * Existing validation retained.
+         */
+        if (updateDto.getCertificateExpiryDate() == null) {
+
+            throw new ValidationException(
+                    "Certification expiry date is required",
+                    "ERR_CERTIFICATE_EXPIRY_DATE_REQUIRED"
+            );
+        }
+
+        /*
+         * Existing validation retained.
+         */
+        if (updateDto.getCertificateExpiryDate().isBefore(LocalDate.now())) {
+
+            throw new ValidationException(
+                    "Certification expiry date cannot be in the past",
+                    "ERR_CERTIFICATE_EXPIRY_DATE_IN_PAST"
+            );
+        }
+
+        /*
+         * Expiry must be after certificate issue date.
+         */
+        if (!updateDto.getCertificateExpiryDate()
+                .isAfter(updateDto.getCertificateIssueDate())) {
+
+            throw new ValidationException(
+                    "Certificate expiry date must be after certificate issue date",
+                    "ERR_CERTIFICATE_EXPIRY_DATE_INVALID"
+            );
+        }
+
+        /*
+         * =========================================================
+         * 6. RENEWAL DATE
+         * =========================================================
+         *
+         * Existing behavior retained:
+         *
+         * renewalDueDate = certificateExpiryDate - 30 days
+         */
         LocalDate renewalDueDate =
                 updateDto.getCertificateExpiryDate()
                         .minusDays(DEFAULT_RENEWAL_LEAD_DAYS);
+
+        /*
+         * =========================================================
+         * 7. SAVE FIXED TERM DETAILS
+         * =========================================================
+         */
 
         assignment.setCertificationTenure(
                 updateDto.getCertificationTenure()
@@ -908,8 +1049,19 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 renewalDueDate
         );
 
-        assignment.setCertificationAttachmentUrl(
-                updateDto.getCertificationAttachmentUrl().trim()
+        logger.info(
+                "[CERTIFICATION-FIXED-TERM-SAVED] " +
+                        "assignmentId={}, projectId={}, issueDate={}, " +
+                        "tenure={}, tenureUnit={}, expiryDate={}, renewalDueDate={}",
+                assignment.getId(),
+                assignment.getProject() != null
+                        ? assignment.getProject().getId()
+                        : null,
+                updateDto.getCertificateIssueDate(),
+                updateDto.getCertificationTenure(),
+                updateDto.getCertificationTenureUnit(),
+                updateDto.getCertificateExpiryDate(),
+                renewalDueDate
         );
     }
 
