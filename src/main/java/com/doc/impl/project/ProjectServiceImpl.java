@@ -3652,37 +3652,100 @@ public class ProjectServiceImpl implements ProjectService {
         return maskedLocalPart + "@" + domainPrefix + "XXX" + tld;
     }
 
-    private AssignedMilestoneDto mapToAssignedMilestoneDto(ProjectMilestoneAssignment assignment) {
-        AssignedMilestoneDto dto = new AssignedMilestoneDto();
-        dto.setId(assignment.getId());
-        dto.setProjectId(assignment.getProject().getId());
-        dto.setProjectName(assignment.getProject().getName());
-        dto.setMilestoneId(assignment.getMilestone().getId());
-        dto.setMilestoneName(assignment.getMilestone().getName());
-        dto.setStatus(assignment.getStatus().getName());
-        dto.setStatusReason(assignment.getStatusReason());
-        dto.setVisibilityReason(assignment.getVisibilityReason());
-        dto.setReworkAttempts(assignment.getReworkAttempts());
-        dto.setVisibleDate(assignment.getVisibleDate());
-        dto.setStartedDate(assignment.getStartedDate());
-        dto.setCompletedDate(assignment.getCompletedDate());
+    private AssignedMilestoneDto mapToAssignedMilestoneDto(
+            ProjectMilestoneAssignment assignment
+    ) {
 
-        dto.setAssignedUser(mapToUserResponseDto(assignment.getAssignedUser()));
+        AssignedMilestoneDto dto =
+                new AssignedMilestoneDto();
 
-        Milestone milestone = assignment.getMilestone();
-        if (milestone != null && milestone.getDepartments() != null && !milestone.getDepartments().isEmpty()) {
-            Department dept = milestone.getDepartments().get(0);
-            dto.setDepartmentId(dept.getId());
-            dto.setDepartmentName(dept.getName());
+        /*
+         * Keep old ID for backward compatibility.
+         */
+        dto.setId(
+                assignment.getId()
+        );
 
-        } else {
-            dto.setDepartmentId(null);
-            dto.setDepartmentName(null);
+        /*
+         * Explicit milestone assignment ID.
+         */
+        dto.setMilestoneAssignmentId(
+                assignment.getId()
+        );
+
+        dto.setProjectId(
+                assignment.getProject().getId()
+        );
+
+        dto.setProjectName(
+                assignment.getProject().getName()
+        );
+
+        dto.setMilestoneId(
+                assignment.getMilestone().getId()
+        );
+
+        dto.setMilestoneName(
+                assignment.getMilestone().getName()
+        );
+
+        dto.setStatus(
+                assignment.getStatus().getName()
+        );
+
+        dto.setStatusReason(
+                assignment.getStatusReason()
+        );
+
+        dto.setVisibilityReason(
+                assignment.getVisibilityReason()
+        );
+
+        dto.setReworkAttempts(
+                assignment.getReworkAttempts()
+        );
+
+        dto.setVisibleDate(
+                assignment.getVisibleDate()
+        );
+
+        dto.setStartedDate(
+                assignment.getStartedDate()
+        );
+
+        dto.setCompletedDate(
+                assignment.getCompletedDate()
+        );
+
+        dto.setAssignedUser(
+                mapToUserResponseDto(
+                        assignment.getAssignedUser()
+                )
+        );
+
+        Milestone milestone =
+                assignment.getMilestone();
+
+        if (
+                milestone != null &&
+                        milestone.getDepartments() != null &&
+                        !milestone.getDepartments().isEmpty()
+        ) {
+
+            Department department =
+                    milestone.getDepartments().get(0);
+
+            dto.setDepartmentId(
+                    department.getId()
+            );
+
+            dto.setDepartmentName(
+                    department.getName()
+            );
         }
 
         return dto;
     }
-
     private UserResponseDto mapToUserResponseDto(User user) {
         if (user == null) {
             return null;
