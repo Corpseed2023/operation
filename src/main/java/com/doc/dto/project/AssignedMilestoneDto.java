@@ -13,6 +13,10 @@ import java.util.List;
 @AllArgsConstructor
 public class AssignedMilestoneDto {
     private Long id;
+
+    // Explicit project milestone assignment ID
+    private Long milestoneAssignmentId;
+
     private Long projectId;
     private String projectName;
     private Long milestoneId;
