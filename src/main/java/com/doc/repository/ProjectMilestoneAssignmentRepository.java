@@ -579,4 +579,20 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
             Pageable pageable
     );
 
+
+    @Query("""
+    SELECT pma FROM ProjectMilestoneAssignment pma
+    LEFT JOIN FETCH pma.project p
+    LEFT JOIN FETCH p.product
+    LEFT JOIN FETCH p.contact
+    LEFT JOIN FETCH p.company
+    WHERE pma.renewalDueDate IS NOT NULL
+      AND pma.renewalDueDate <= :thresholdDate
+      AND pma.renewalLeadCreated = false
+      AND pma.isDeleted = false
+    """)
+    List<ProjectMilestoneAssignment> findRenewalsDueForLeadCreation(
+            @Param("thresholdDate") LocalDate thresholdDate);
+
+
 }

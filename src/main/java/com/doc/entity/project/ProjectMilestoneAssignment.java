@@ -346,4 +346,8 @@ public class ProjectMilestoneAssignment {
             "Original/display name of the acknowledgement attachment"
     )
     private String acknowledgementAttachmentName;
+
+    @Column(name = "renewal_lead_created", nullable = false)
+    @Comment("True once a renewal lead has been created in the lead microservice for this certificate")
+    private boolean renewalLeadCreated = false;
 }
