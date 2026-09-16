@@ -32,7 +32,7 @@ public interface ProjectActivityService {
             CreateCommentRequestDto request
     );
 
-    ProjectActivityResponseDto addExpense(
+    ProjectActivityResponseDto  addExpense(
             Long projectId,
             CreateExpenseRequestDto request
     );
