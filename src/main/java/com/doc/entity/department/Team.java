@@ -19,7 +19,8 @@ import java.util.List;
 @Entity
 @Table(name = "teams", indexes = {
         @Index(name = "idx_team_name_dept_id", columnList = "name, department_id", unique = true),
-        @Index(name = "idx_department_id", columnList = "department_id")
+        @Index(name = "idx_department_id", columnList = "department_id"),
+        @Index(name = "idx_parent_team_id", columnList = "parent_team_id")
 })
 @Getter
 @Setter
@@ -74,6 +75,28 @@ public class Team {
     @Column(name = "is_temporary", nullable = false)
     @Comment("Flag indicating if the team is temporary (for auto-deletion scheduling)")
     private boolean isTemporary = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_team_id")
+    @Comment("If set, this team is a sub-team routed under this parent group-team")
+    private Team parentTeam;
+
+    @OneToMany(mappedBy = "parentTeam", fetch = FetchType.LAZY)
+    @OrderBy("sequence ASC")
+    @Comment("Sub-teams under this team when it acts as a routing group, in rotation order")
+    private List<Team> subTeams = new ArrayList<>();
+
+    @Column(name = "sequence")
+    @Comment("This team's position within its parent's rotation (null if top-level/non-subteam)")
+    private Integer sequence;
+
+    @Column(name = "last_assigned_user_id")
+    @Comment("Round-robin cursor: last user assigned when this team acts as a rotation group")
+    private Long lastAssignedUserId;
+
+    @Column(name = "is_group", nullable = false)
+    @Comment("Flag indicating this team acts as a routing group (has sub-teams or direct-member rotation)")
+    private boolean isGroup = false;
 
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "end_date")

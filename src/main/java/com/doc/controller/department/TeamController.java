@@ -1,5 +1,7 @@
 package com.doc.controller.department;
 
+import com.doc.dto.team.AssignmentRequest;
+import com.doc.dto.team.AssignmentResponse;
 import com.doc.dto.team.TeamRequest;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
@@ -100,9 +102,73 @@ public class TeamController {
             teamService.deleteTeam(id);
             logger.info("Team ID {} deleted successfully", id);
             return ResponseEntity.noContent().build();
+        } catch (ValidationException e) {
+            logger.error("Validation error deleting team ID {}: {}", id, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         } catch (ResourceNotFoundException e) {
             logger.error("Team ID {} not found: {}", id, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    @PostMapping("/{groupTeamId}/sub-teams/{subTeamId}")
+    public ResponseEntity<TeamRequest> addSubTeam(@PathVariable Long groupTeamId,
+                                                  @PathVariable Long subTeamId,
+                                                  @RequestParam Integer sequence) {
+        logger.info("API request to add sub-team ID {} to group team ID {} at sequence {}", subTeamId, groupTeamId, sequence);
+        try {
+            TeamRequest result = teamService.addSubTeam(groupTeamId, subTeamId, sequence);
+            return ResponseEntity.ok(result);
+        } catch (ValidationException e) {
+            logger.error("Validation error adding sub-team ID {} to group ID {}: {}", subTeamId, groupTeamId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Resource not found adding sub-team ID {} to group ID {}: {}", subTeamId, groupTeamId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @DeleteMapping("/{groupTeamId}/sub-teams/{subTeamId}")
+    public ResponseEntity<TeamRequest> removeSubTeam(@PathVariable Long groupTeamId,
+                                                     @PathVariable Long subTeamId) {
+        logger.info("API request to remove sub-team ID {} from group team ID {}", subTeamId, groupTeamId);
+        try {
+            TeamRequest result = teamService.removeSubTeam(groupTeamId, subTeamId);
+            return ResponseEntity.ok(result);
+        } catch (ValidationException e) {
+            logger.error("Validation error removing sub-team ID {} from group ID {}: {}", subTeamId, groupTeamId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Resource not found removing sub-team ID {} from group ID {}: {}", subTeamId, groupTeamId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @GetMapping("/{groupTeamId}/sub-teams")
+    public ResponseEntity<List<TeamRequest>> getSubTeams(@PathVariable Long groupTeamId) {
+        logger.info("API request to fetch sub-teams for group team ID {}", groupTeamId);
+        try {
+            List<TeamRequest> subTeams = teamService.getSubTeams(groupTeamId);
+            return ResponseEntity.ok(subTeams);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Group team ID {} not found: {}", groupTeamId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @PostMapping("/assign")
+    public ResponseEntity<AssignmentResponse> assignRoundRobin(@RequestBody AssignmentRequest request) {
+        logger.info("API request for round-robin assignment: group team ID {}, product ID {}", request.getGroupTeamId(), request.getProductId());
+        try {
+            AssignmentResponse response = teamService.assignRoundRobin(request);
+            logger.info("Assigned user ID {} for group team ID {}", response.getAssignedUserId(), request.getGroupTeamId());
+            return ResponseEntity.ok(response);
+        } catch (ValidationException e) {
+            logger.error("Validation error during round-robin assignment: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Resource not found during round-robin assignment: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
 }

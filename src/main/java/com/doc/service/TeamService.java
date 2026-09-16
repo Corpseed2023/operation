@@ -1,6 +1,7 @@
 package com.doc.service;
 
-
+import com.doc.dto.team.AssignmentRequest;
+import com.doc.dto.team.AssignmentResponse;
 import com.doc.dto.team.TeamRequest;
 import org.springframework.data.domain.Page;
 
@@ -19,4 +20,12 @@ public interface TeamService {
     Page<TeamRequest> getAllTeams(int page, int size);
 
     void deleteTeam(Long id);
+
+    TeamRequest addSubTeam(Long groupTeamId, Long subTeamId, Integer sequence);
+
+    TeamRequest removeSubTeam(Long groupTeamId, Long subTeamId);
+
+    List<TeamRequest> getSubTeams(Long groupTeamId);
+
+    AssignmentResponse assignRoundRobin(AssignmentRequest request);
 }

@@ -24,6 +24,10 @@ public class TeamRequest {
     private boolean isActive = true;
     private boolean isTemporary = false; // Indicates if team is temporary
     private Date endDate; // End date for temporary teams (optional)
+    private Long parentTeamId;        // set when creating/updating a sub-team
+    private Integer sequence;         // position within parent group
+    private boolean isGroup;          // true when this team is being created as a routing group
+    private List<Long> subTeamIds;    // optional: convenience for assigning sub-teams at group-creation time, in order
     private Long createdBy;
     private Long updatedBy;
     private Date createdDate;
