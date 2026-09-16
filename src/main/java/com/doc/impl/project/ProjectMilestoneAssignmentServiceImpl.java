@@ -282,12 +282,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 milestoneValidator.validateDocumentMilestone(assignment);
             }
 
-            if ("Legal Verification".equalsIgnoreCase(milestoneName)
-                    || "Legal Verfication".equalsIgnoreCase(milestoneName)) {
-
-                milestoneValidator.validateLegalMilestone(assignment);
-            }
-
             if (isFilingMilestone(milestoneName)) {
                 milestoneValidator.validateFillingMilestone(assignment);
             }
@@ -880,7 +874,6 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                     "ERR_CERTIFICATE_ISSUE_DATE_IN_FUTURE"
             );
         }
-
         /*
          * =========================================================
          * 3. CERTIFICATE ATTACHMENT

@@ -22,6 +22,7 @@ import com.doc.em.GovernmentPaymentVerificationStatus;
 import com.doc.entity.department.Department;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectActivity;
+import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.entity.project.activity.ProjectComment;
 import com.doc.entity.project.activity.ProjectExpense;
 import com.doc.entity.project.activity.ProjectNote;
@@ -30,6 +31,7 @@ import com.doc.entity.user.User;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
 import com.doc.repository.DepartmentRepository;
+import com.doc.repository.ProjectMilestoneAssignmentRepository;
 import com.doc.repository.ProjectRepository;
 import com.doc.repository.UserRepository;
 import com.doc.repository.projectRepo.activity.ProjectActivityRepository;
@@ -88,6 +90,8 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
     private final ProjectExpenseRepository expenseRepository;
 
     private final ExpenseAccountPostingService expenseAccountPostingService;
+    private final ProjectMilestoneAssignmentRepository
+            projectMilestoneAssignmentRepository;
 
     private static final Set<String> ALLOWED_CLIENT_PAYMENT_MODES = Set.of(
             "CASH",
@@ -381,12 +385,28 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
             );
         }
 
-        User user = validateActiveUser(request.getCreatedByUserId());
-        Project project = validateActiveProject(projectId);
+        User user =
+                validateActiveUser(
+                        request.getCreatedByUserId()
+                );
 
-        Department department = validateUserDepartment(
-                user,
-                request.getDepartmentId()
+        Project project =
+                validateActiveProject(projectId);
+
+        validateExpenseMilestoneStatus(
+                projectId,
+                request.getMilestoneAssignmentId()
+        );
+
+        Department department =
+                validateUserDepartment(
+                        user,
+                        request.getDepartmentId()
+                );
+
+        validateGovernmentFeeRaiser(
+                department,
+                request.getExpenseCategory()
         );
 
         validateGovernmentFeeRaiser(department, request.getExpenseCategory());
@@ -3457,4 +3477,78 @@ public class ProjectActivityServiceImpl implements ProjectActivityService {
 
         return normalized;
     }
+
+
+
+    private void validateExpenseMilestoneStatus(
+            Long projectId,
+            Long milestoneAssignmentId
+    ) {
+
+        ProjectMilestoneAssignment assignment =
+                projectMilestoneAssignmentRepository
+                        .findActiveUserById(milestoneAssignmentId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Milestone assignment not found",
+                                        "ERR_MILESTONE_ASSIGNMENT_NOT_FOUND"
+                                )
+                        );
+
+        /*
+         * Make sure this milestone belongs to the same project.
+         */
+        if (
+                assignment.getProject() == null ||
+                        assignment.getProject().getId() == null ||
+                        !assignment.getProject().getId().equals(projectId)
+        ) {
+
+            throw new ValidationException(
+                    "Milestone does not belong to this project",
+                    "ERR_MILESTONE_PROJECT_MISMATCH"
+            );
+        }
+
+        String milestoneStatus =
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null;
+
+        String milestoneName =
+                assignment.getMilestone() != null
+                        ? assignment.getMilestone().getName()
+                        : null;
+
+        log.info(
+                "[EXPENSE-MILESTONE-VALIDATION] " +
+                        "projectId={} | milestoneAssignmentId={} | milestone={} | status={}",
+                projectId,
+                milestoneAssignmentId,
+                milestoneName,
+                milestoneStatus
+        );
+
+        if ("COMPLETED".equalsIgnoreCase(milestoneStatus)) {
+
+            log.warn(
+                    "[EXPENSE-CREATE-BLOCKED] " +
+                            "projectId={} | milestoneAssignmentId={} | milestone={} | status={}",
+                    projectId,
+                    milestoneAssignmentId,
+                    milestoneName,
+                    milestoneStatus
+            );
+
+            throw new ValidationException(
+                    "Expense cannot be added because the milestone is already completed",
+                    "ERR_EXPENSE_NOT_ALLOWED_FOR_COMPLETED_MILESTONE"
+            );
+        }
+    }
+
+
+
+
+
 }

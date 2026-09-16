@@ -14,6 +14,8 @@ public class CreateExpenseRequestDto {
     @Positive(message = "Department ID must be greater than zero")
     private Long departmentId;
 
+    private Long milestoneAssignmentId;
+
     @NotNull(message = "Expense category is required")
     private ExpenseCategory expenseCategory;
 
