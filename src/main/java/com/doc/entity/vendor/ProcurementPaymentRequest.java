@@ -201,29 +201,6 @@ public class ProcurementPaymentRequest {
     @Column(name = "row_version", nullable = false)
     private Long rowVersion;
 
-    @PrePersist
-    void onCreate() {
-        Date now = new Date();
-        if (createdDate == null) {
-            createdDate = now;
-        }
-        updatedDate = now;
-        if (submissionDate == null) {
-            submissionDate = now;
-        }
-        if (status == null) {
-            status = PaymentRequestStatus.PENDING;
-        }
-        if (gstActive == null) {
-            gstActive = false;
-        }
-        if (tdsActive == null) {
-            tdsActive = false;
-        }
-    }
 
-    @PreUpdate
-    void onUpdate() {
-        updatedDate = new Date();
-    }
+
 }
