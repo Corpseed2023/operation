@@ -4052,7 +4052,7 @@ public class ProjectServiceImpl implements ProjectService {
                 ? project.getStatus().getName()
                 : null;
 
-        // 🔥 Find or create CANCELLED status
+        //  Find or create CANCELLED status
         ProjectStatus cancelledStatus = projectStatusRepository
                 .findByName("CANCELLED")
                 .orElseGet(() -> {

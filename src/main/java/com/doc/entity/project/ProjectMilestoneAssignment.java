@@ -346,4 +346,5 @@ public class ProjectMilestoneAssignment {
             "Original/display name of the acknowledgement attachment"
     )
     private String acknowledgementAttachmentName;
+
 }
