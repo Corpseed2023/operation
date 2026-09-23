@@ -132,4 +132,5 @@ public class PaymentTypeServiceImpl implements PaymentTypeService {
         dto.setUpdatedBy(paymentType.getUpdatedBy());
         return dto;
     }
+
 }

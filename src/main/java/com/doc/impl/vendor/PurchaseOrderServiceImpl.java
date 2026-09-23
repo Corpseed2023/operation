@@ -105,11 +105,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 gstRate
         );
 
-        BigDecimal vendorFinalizedAmount =
-                getVendorFinalizedAmount(procurement, vendor);
-
         BigDecimal requestedPoAmount =
                 amountBreakup.getGrandTotal();
+
+        BigDecimal vendorFinalizedAmount =
+                getVendorFinalizedAmount(
+                        procurement,
+                        vendor,
+                        requestedPoAmount
+                );
+
 
         // NEW: hard stop — PO amount can never exceed the vendor's finalized amount.
         if (requestedPoAmount.compareTo(vendorFinalizedAmount) > 0) {
@@ -366,7 +371,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
-    public PurchaseOrderResponseDto updatePurchaseOrder(Long poId, PurchaseOrderRequestDto dto) {
+    public PurchaseOrderResponseDto updatePurchaseOrder(
+            Long poId,
+            PurchaseOrderRequestDto dto
+    ) {
 
         logger.info("Updating Purchase Order id={}", poId);
 
@@ -392,16 +400,23 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         if (po.getStatus() != ProcurementOrderStatus.DRAFT) {
             throw new ValidationException(
-                    "Only DRAFT Purchase Order can be updated. Current status: " + po.getStatus(),
+                    "Only DRAFT Purchase Order can be updated. Current status: "
+                            + po.getStatus(),
                     "ERR_INVALID_PO_STATUS_FOR_UPDATE"
             );
         }
 
         validateUpdateRequest(dto);
 
-        ProcurementMilestoneAssignment procurementForValidation = po.getProcurementAssignment();
+        // =========================================================
+        // PROCUREMENT ASSIGNMENT
+        // =========================================================
+
+        ProcurementMilestoneAssignment procurementForValidation =
+                po.getProcurementAssignment();
 
         if (dto.getProcurementAssignmentId() != null) {
+
             procurementForValidation = procurementRepository
                     .findById(dto.getProcurementAssignmentId())
                     .orElseThrow(() -> new ResourceNotFoundException(
@@ -410,56 +425,127 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     ));
         }
 
+        if (procurementForValidation == null) {
+            throw new ValidationException(
+                    "Procurement assignment is required",
+                    "ERR_PROCUREMENT_ASSIGNMENT_REQUIRED"
+            );
+        }
+
+        // =========================================================
+        // VENDOR
+        // =========================================================
+
         Vendor vendorForCalculation = po.getVendor();
 
         if (dto.getVendorId() != null) {
-            vendorForCalculation = vendorRepository.findByIdAndIsDeletedFalse(dto.getVendorId())
+
+            vendorForCalculation = vendorRepository
+                    .findByIdAndIsDeletedFalse(dto.getVendorId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Vendor not found",
                             "ERR_VENDOR_NOT_FOUND"
                     ));
         }
 
-        validateSelectedVendor(procurementForValidation, vendorForCalculation);
+        if (vendorForCalculation == null) {
+            throw new ValidationException(
+                    "Vendor is required",
+                    "ERR_VENDOR_REQUIRED"
+            );
+        }
 
-        BigDecimal gstRate = resolveRequestedGstRate(dto);
-
-        PoAmountBreakup amountBreakup = calculatePoAmountBreakup(
-                vendorForCalculation,
-                dto.getFinalAmount(),
-                gstRate
+        validateSelectedVendor(
+                procurementForValidation,
+                vendorForCalculation
         );
+
+        // =========================================================
+        // GST + PO AMOUNT
+        // =========================================================
+
+        BigDecimal gstRate =
+                resolveRequestedGstRate(dto);
+
+        PoAmountBreakup amountBreakup =
+                calculatePoAmountBreakup(
+                        vendorForCalculation,
+                        dto.getFinalAmount(),
+                        gstRate
+                );
+
+        BigDecimal requestedPoAmount =
+                amountBreakup
+                        .getGrandTotal()
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP
+                        );
+
+        // =========================================================
+        // VENDOR FINALIZED AMOUNT
+        // =========================================================
+        //
+        // For project payment type PURCHASE_ORDER:
+        // getVendorFinalizedAmount() returns requestedPoAmount,
+        // therefore VendorFinalization does not block PO.
+        //
+        // For other payment types:
+        // actual vendor finalized amount is validated.
+        // =========================================================
 
         BigDecimal vendorFinalizedAmount =
                 getVendorFinalizedAmount(
                         procurementForValidation,
-                        vendorForCalculation
+                        vendorForCalculation,
+                        requestedPoAmount
                 );
 
-        BigDecimal requestedPoAmount = amountBreakup.getGrandTotal();
-
         boolean exceedsFinalizedAmount =
-                requestedPoAmount.compareTo(vendorFinalizedAmount) > 0;
+                requestedPoAmount.compareTo(
+                        vendorFinalizedAmount
+                ) > 0;
 
-        boolean exceedsProjectValue = isPoValueExceedingProjectValue(
-                amountBreakup.getGrandTotal(),
-                amountBreakup.getFinalAmount(),
-                procurementForValidation
-        );
+        // =========================================================
+        // PROJECT VALUE VALIDATION
+        // =========================================================
+
+        boolean exceedsProjectValue =
+                isPoValueExceedingProjectValue(
+                        amountBreakup.getGrandTotal(),
+                        amountBreakup.getFinalAmount(),
+                        procurementForValidation
+                );
+
+        // =========================================================
+        // ADMIN APPROVAL
+        // =========================================================
 
         boolean adminApprovalRequired =
-                exceedsFinalizedAmount || exceedsProjectValue;
+                exceedsFinalizedAmount
+                        || exceedsProjectValue;
 
-        BigDecimal excessAmount = exceedsFinalizedAmount
-                ? requestedPoAmount.subtract(vendorFinalizedAmount)
-                .setScale(2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal excessAmount =
+                exceedsFinalizedAmount
+                        ? requestedPoAmount
+                        .subtract(vendorFinalizedAmount)
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP
+                        )
+                        : BigDecimal.ZERO.setScale(
+                        2,
+                        RoundingMode.HALF_UP
+                );
 
         logger.info(
-                "PO update amount validation. poId={}, procurementAssignmentId={}, "
-                        + "vendorId={}, finalizedAmount={}, requestedPoAmount={}, "
-                        + "excessAmount={}, exceedsFinalizedAmount={}, "
-                        + "exceedsProjectValue={}, adminApprovalRequired={}",
+                "PO update amount validation. "
+                        + "poId={}, procurementAssignmentId={}, "
+                        + "vendorId={}, finalizedAmount={}, "
+                        + "requestedPoAmount={}, excessAmount={}, "
+                        + "exceedsFinalizedAmount={}, "
+                        + "exceedsProjectValue={}, "
+                        + "adminApprovalRequired={}",
                 poId,
                 procurementForValidation.getId(),
                 vendorForCalculation.getId(),
@@ -471,76 +557,206 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 adminApprovalRequired
         );
 
+        // =========================================================
+        // UPDATE PROCUREMENT ASSIGNMENT
+        // =========================================================
+
         if (dto.getProcurementAssignmentId() != null) {
-            po.setProcurementAssignment(procurementForValidation);
-            po.setProject(procurementForValidation.getProject());
+
+            po.setProcurementAssignment(
+                    procurementForValidation
+            );
+
+            po.setProject(
+                    procurementForValidation.getProject()
+            );
         }
+
+        // =========================================================
+        // UPDATE VENDOR
+        // =========================================================
 
         if (dto.getVendorId() != null) {
-            po.setVendor(vendorForCalculation);
-            po.setVendorGSTRegistrationType(vendorForCalculation.getGstRegistrationType());
+
+            po.setVendor(
+                    vendorForCalculation
+            );
+
+            po.setVendorGSTRegistrationType(
+                    vendorForCalculation.getGstRegistrationType()
+            );
         }
 
-        po.setPoReferenceNumber(dto.getPoReferenceNumber());
-        po.setPlaceOfSupplyStateCode(getConfiguredCompanyStateCode());
+        // =========================================================
+        // BASIC PO DETAILS
+        // =========================================================
 
-        po.setFinalAmount(amountBreakup.getFinalAmount());
-        po.setGstRate(amountBreakup.getGstRate());
-        po.setCgstAmount(amountBreakup.getCgstAmount());
-        po.setSgstAmount(amountBreakup.getSgstAmount());
-        po.setIgstAmount(amountBreakup.getIgstAmount());
-        po.setTotalTaxAmount(amountBreakup.getTotalTaxAmount());
-        po.setGrandTotal(amountBreakup.getGrandTotal());
-        po.setPaymentTerms(dto.getPaymentTerms());
-
-        po.setScopeOfWork(dto.getScopeOfWork());
-        po.setTermsAndConditions(dto.getTermsAndConditions());
-        po.setRemarks(dto.getRemarks());
-
-        if (dto.getAttachmentUrls() != null) {
-            po.setAttachmentUrls(dto.getAttachmentUrls());
-        }
-
-        Long updatedBy = dto.getUserId() != null ? dto.getUserId() : dto.getCreatedBy();
-
-        if (updatedBy != null) {
-            User updatedByUser = userRepository.findActiveUserById(updatedBy)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "UpdatedBy user not found",
-                            "ERR_USER_NOT_FOUND"
-                    ));
-
-            po.setUpdatedBy(updatedByUser.getId());
-        }
-
-        if (dto.getPaymentTypeName() != null && !dto.getPaymentTypeName().trim().isEmpty()) {
-            PaymentType paymentType = paymentTypeRepository
-                    .findByName(dto.getPaymentTypeName().trim())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Payment type not found: " + dto.getPaymentTypeName(),
-                            "ERR_PAYMENT_TYPE_NOT_FOUND"
-                    ));
-
-            po.setPaymentType(paymentType);
-        }
-
-        po.setStatus(adminApprovalRequired
-                ? ProcurementOrderStatus.ADMIN_APPROVAL_PENDING
-                : ProcurementOrderStatus.DRAFT);
-
-        po.setPoSubmittedForApprovalDate(
-                adminApprovalRequired ? new Date() : null
+        po.setPoReferenceNumber(
+                dto.getPoReferenceNumber()
         );
 
-        po.setUpdatedDate(new Date());
+        po.setPlaceOfSupplyStateCode(
+                getConfiguredCompanyStateCode()
+        );
 
-        ProcurementOrder savedPo = purchaseOrderRepository.save(po);
+        // =========================================================
+        // AMOUNT DETAILS
+        // =========================================================
 
-        logger.info("Purchase Order updated successfully. poNumber={}", savedPo.getPoNumber());
+        po.setFinalAmount(
+                amountBreakup.getFinalAmount()
+        );
 
-        return convertToPurchaseOrderResponseDto(savedPo);
+        po.setGstRate(
+                amountBreakup.getGstRate()
+        );
+
+        po.setCgstAmount(
+                amountBreakup.getCgstAmount()
+        );
+
+        po.setSgstAmount(
+                amountBreakup.getSgstAmount()
+        );
+
+        po.setIgstAmount(
+                amountBreakup.getIgstAmount()
+        );
+
+        po.setTotalTaxAmount(
+                amountBreakup.getTotalTaxAmount()
+        );
+
+        po.setGrandTotal(
+                amountBreakup.getGrandTotal()
+        );
+
+        // =========================================================
+        // COMMERCIAL DETAILS
+        // =========================================================
+
+        po.setPaymentTerms(
+                dto.getPaymentTerms()
+        );
+
+        po.setScopeOfWork(
+                dto.getScopeOfWork()
+        );
+
+        po.setTermsAndConditions(
+                dto.getTermsAndConditions()
+        );
+
+        po.setRemarks(
+                dto.getRemarks()
+        );
+
+        // =========================================================
+        // ATTACHMENTS
+        // =========================================================
+
+        if (dto.getAttachmentUrls() != null) {
+
+            po.setAttachmentUrls(
+                    dto.getAttachmentUrls()
+            );
+        }
+
+        // =========================================================
+        // UPDATED BY
+        // =========================================================
+
+        Long updatedBy =
+                dto.getUserId() != null
+                        ? dto.getUserId()
+                        : dto.getCreatedBy();
+
+        if (updatedBy != null) {
+
+            User updatedByUser =
+                    userRepository
+                            .findActiveUserById(updatedBy)
+                            .orElseThrow(() ->
+                                    new ResourceNotFoundException(
+                                            "UpdatedBy user not found",
+                                            "ERR_USER_NOT_FOUND"
+                                    )
+                            );
+
+            po.setUpdatedBy(
+                    updatedByUser.getId()
+            );
+        }
+
+        // =========================================================
+        // PAYMENT TYPE
+        // =========================================================
+
+        if (dto.getPaymentTypeName() != null
+                && !dto.getPaymentTypeName()
+                .trim()
+                .isEmpty()) {
+
+            PaymentType paymentType =
+                    paymentTypeRepository
+                            .findByName(
+                                    dto.getPaymentTypeName()
+                                            .trim()
+                            )
+                            .orElseThrow(() ->
+                                    new ResourceNotFoundException(
+                                            "Payment type not found: "
+                                                    + dto.getPaymentTypeName(),
+                                            "ERR_PAYMENT_TYPE_NOT_FOUND"
+                                    )
+                            );
+
+            po.setPaymentType(
+                    paymentType
+            );
+        }
+
+        // =========================================================
+        // STATUS
+        // =========================================================
+
+        Date currentDate = new Date();
+
+        po.setStatus(
+                adminApprovalRequired
+                        ? ProcurementOrderStatus.ADMIN_APPROVAL_PENDING
+                        : ProcurementOrderStatus.DRAFT
+        );
+
+        po.setPoSubmittedForApprovalDate(
+                adminApprovalRequired
+                        ? currentDate
+                        : null
+        );
+
+        po.setUpdatedDate(
+                currentDate
+        );
+
+        // =========================================================
+        // SAVE
+        // =========================================================
+
+        ProcurementOrder savedPo =
+                purchaseOrderRepository.save(po);
+
+        logger.info(
+                "Purchase Order updated successfully. "
+                        + "poId={}, poNumber={}, status={}",
+                savedPo.getId(),
+                savedPo.getPoNumber(),
+                savedPo.getStatus()
+        );
+
+        return convertToPurchaseOrderResponseDto(
+                savedPo
+        );
     }
-
     @Override
     public PurchaseOrderResponseDto rejectByAdmin(Long poId, Long adminUserId, String reason) {
 
@@ -1423,8 +1639,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private BigDecimal getVendorFinalizedAmount(
             ProcurementMilestoneAssignment procurement,
-            Vendor vendor
+            Vendor vendor,
+            BigDecimal requestedPoAmount
     ) {
+
+        // =========================================================
+        // BASIC VALIDATION
+        // =========================================================
+
         if (procurement == null || procurement.getId() == null) {
             throw new ValidationException(
                     "Procurement assignment is required",
@@ -1439,6 +1661,91 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
+        if (requestedPoAmount == null
+                || requestedPoAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Purchase Order amount must be greater than zero",
+                    "ERR_INVALID_PO_AMOUNT"
+            );
+        }
+
+
+        // =========================================================
+        // PURCHASE ORDER PAYMENT
+        // =========================================================
+        //
+        // PURCHASE_ORDER means the CLIENT has issued a Purchase Order
+        // to Corpseed and payment may be received later.
+        //
+        // Therefore procurement/vendor PO creation should NOT be
+        // blocked only because no VendorFinalization amount exists.
+        //
+        // Project value validation will still happen separately through
+        // isPoValueExceedingProjectValue().
+        // =========================================================
+
+        boolean purchaseOrderPayment = false;
+
+        if (procurement.getProject() != null
+                && procurement.getProject().getPaymentDetail() != null
+                && procurement.getProject().getPaymentDetail().getPaymentType() != null) {
+
+            PaymentType projectPaymentType =
+                    procurement.getProject()
+                            .getPaymentDetail()
+                            .getPaymentType();
+
+            purchaseOrderPayment =
+                    projectPaymentType.getCode() != null
+                            && "PURCHASE_ORDER".equalsIgnoreCase(
+                            projectPaymentType.getCode().trim()
+                    );
+        }
+
+
+        if (purchaseOrderPayment) {
+
+            logger.info(
+                    "Vendor finalized amount validation skipped for PURCHASE_ORDER payment type. " +
+                            "procurementAssignmentId={}, vendorId={}, requestedPoAmount={}",
+                    procurement.getId(),
+                    vendor.getId(),
+                    requestedPoAmount
+            );
+
+            /*
+             * Return requested PO amount itself.
+             *
+             * Existing caller performs:
+             *
+             * requestedPoAmount.compareTo(vendorFinalizedAmount) > 0
+             *
+             * Therefore returning the requested amount makes the
+             * vendor-finalization comparison pass while keeping the
+             * existing code unchanged.
+             *
+             * Project amount validation still runs separately.
+             */
+            return requestedPoAmount.setScale(
+                    2,
+                    RoundingMode.HALF_UP
+            );
+        }
+
+
+        // =========================================================
+        // NORMAL PAYMENT TYPES
+        // =========================================================
+        //
+        // FULL
+        // PARTIAL
+        // INSTALLMENT
+        //
+        // For these payment types, existing VendorFinalization
+        // validation remains unchanged.
+        // =========================================================
+
         BigDecimal finalizedAmount =
                 vendorFinalizationRepository.findTotalFinalizedAmount(
                         procurement.getId(),
@@ -1452,17 +1759,22 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         )
                 );
 
+
         if (finalizedAmount == null
                 || finalizedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
             throw new ValidationException(
                     "No finalized amount found for the selected vendor",
                     "ERR_VENDOR_FINALIZED_AMOUNT_NOT_FOUND"
             );
         }
 
-        return finalizedAmount.setScale(2, RoundingMode.HALF_UP);
-    }
 
+        return finalizedAmount.setScale(
+                2,
+                RoundingMode.HALF_UP
+        );
+    }
     private void validateAdminUser(User user) {
         boolean isAdmin = user != null
                 && user.getRoles() != null
@@ -1479,4 +1791,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
     }
+
+
+
+
 }

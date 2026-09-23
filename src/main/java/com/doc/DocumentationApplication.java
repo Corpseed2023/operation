@@ -13,33 +13,30 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.time.LocalDate;
 import java.util.Date;
 
 /**
- * Main application class for initializing the application and seeding initial data.
+ * Main application class for initializing Operation Service.
  */
 @SpringBootApplication
 @EnableFeignClients
-//@EnableScheduling
+// @EnableScheduling
 public class DocumentationApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(DocumentationApplication.class, args);
 	}
 
-
 	/**
-	 * Initializes predefined statuses and pay  ment types.
+	 * Initializes predefined statuses and payment types.
 	 *
 	 * IMPORTANT:
-	 * Uses explicit IDs to match StatusConstants.java.
-	 * NEVER CHANGE THESE IDs.
+	 * Explicit IDs are being used because existing ERP code may
+	 * depend on these IDs.
 	 *
-	 * This uses create-if-missing instead of count() == 0,
-	 * because later when we add a new status, existing DB should also receive it.
+	 * Do not change existing IDs after production deployment.
 	 */
 	@Bean
 	public CommandLineRunner initStatuses(
@@ -48,9 +45,13 @@ public class DocumentationApplication {
 			ProjectStatusRepository projectStatusRepository,
 			PaymentTypeRepository paymentTypeRepository
 	) {
+
 		return args -> {
 
-			// === MILESTONE STATUSES ===
+			// =========================================================
+			// MILESTONE STATUSES
+			// =========================================================
+
 			createMilestoneStatusIfMissing(
 					milestoneStatusRepository,
 					1L,
@@ -87,15 +88,10 @@ public class DocumentationApplication {
 			);
 
 
+			// =========================================================
+			// DOCUMENT STATUSES
+			// =========================================================
 
-			createProjectStatusIfMissing(
-					projectStatusRepository,
-					7L,
-					"FORCE_CLOSED",
-					"Project force-closed after ADMIN approval on CRT request"
-			);
-
-			// === DOCUMENT STATUSES ===
 			createDocumentStatusIfMissing(
 					documentStatusRepository,
 					1L,
@@ -124,7 +120,11 @@ public class DocumentationApplication {
 					"Document rejected"
 			);
 
-			// === PROJECT STATUSES ===
+
+			// =========================================================
+			// PROJECT STATUSES
+			// =========================================================
+
 			createProjectStatusIfMissing(
 					projectStatusRepository,
 					1L,
@@ -167,32 +167,62 @@ public class DocumentationApplication {
 					"Project reopened after manager approval due to mistake"
 			);
 
-			// === PAYMENT TYPES ===
+			createProjectStatusIfMissing(
+					projectStatusRepository,
+					7L,
+					"FORCE_CLOSED",
+					"Project force-closed after ADMIN approval on CRT request"
+			);
+
+
+			// =========================================================
+			// PAYMENT TYPES
+			// =========================================================
+			//
+			// IMPORTANT:
+			// Keep these codes aligned with Account Service.
+			//
+			// Account Service:
+			// FULL
+			// PARTIAL
+			// INSTALLMENT
+			// PURCHASE_ORDER
+			//
+
 			createPaymentTypeIfMissing(
 					paymentTypeRepository,
 					1L,
+					"FULL",
 					"Full Payment"
 			);
 
 			createPaymentTypeIfMissing(
 					paymentTypeRepository,
 					2L,
-					"Partial Payment (50%)"
+					"PARTIAL",
+					"Partial Payment"
 			);
 
 			createPaymentTypeIfMissing(
 					paymentTypeRepository,
 					3L,
-					"Installment Payment"
+					"INSTALLMENT",
+					"Installment / Milestone Payment"
 			);
 
 			createPaymentTypeIfMissing(
 					paymentTypeRepository,
 					4L,
+					"PURCHASE_ORDER",
 					"Purchase Order Payment"
 			);
 		};
 	}
+
+
+	// =========================================================
+	// MILESTONE STATUS
+	// =========================================================
 
 	private void createMilestoneStatusIfMissing(
 			MilestoneStatusRepository repo,
@@ -200,14 +230,24 @@ public class DocumentationApplication {
 			String name,
 			String description
 	) {
-		repo.findById(id).orElseGet(() -> {
-			MilestoneStatus status = new MilestoneStatus();
-			status.setId(id);
-			status.setName(name);
-			status.setDescription(description);
-			return repo.save(status);
-		});
+
+		repo.findById(id)
+				.orElseGet(() -> {
+
+					MilestoneStatus status = new MilestoneStatus();
+
+					status.setId(id);
+					status.setName(name);
+					status.setDescription(description);
+
+					return repo.save(status);
+				});
 	}
+
+
+	// =========================================================
+	// DOCUMENT STATUS
+	// =========================================================
 
 	private void createDocumentStatusIfMissing(
 			DocumentStatusRepository repo,
@@ -215,14 +255,24 @@ public class DocumentationApplication {
 			String name,
 			String description
 	) {
-		repo.findById(id).orElseGet(() -> {
-			DocumentStatus status = new DocumentStatus();
-			status.setId(id);
-			status.setName(name);
-			status.setDescription(description);
-			return repo.save(status);
-		});
+
+		repo.findById(id)
+				.orElseGet(() -> {
+
+					DocumentStatus status = new DocumentStatus();
+
+					status.setId(id);
+					status.setName(name);
+					status.setDescription(description);
+
+					return repo.save(status);
+				});
 	}
+
+
+	// =========================================================
+	// PROJECT STATUS
+	// =========================================================
 
 	private void createProjectStatusIfMissing(
 			ProjectStatusRepository repo,
@@ -230,29 +280,89 @@ public class DocumentationApplication {
 			String name,
 			String description
 	) {
-		repo.findById(id).orElseGet(() -> {
-			ProjectStatus status = new ProjectStatus();
-			status.setId(id);
-			status.setName(name);
-			status.setDescription(description);
-			return repo.save(status);
-		});
+
+		repo.findById(id)
+				.orElseGet(() -> {
+
+					ProjectStatus status = new ProjectStatus();
+
+					status.setId(id);
+					status.setName(name);
+					status.setDescription(description);
+
+					return repo.save(status);
+				});
 	}
+
+
+	// =========================================================
+	// PAYMENT TYPE
+	// =========================================================
 
 	private void createPaymentTypeIfMissing(
 			PaymentTypeRepository repo,
 			Long id,
+			String code,
 			String name
 	) {
-		repo.findById(id).orElseGet(() -> {
-			PaymentType paymentType = new PaymentType();
-			paymentType.setId(id);
-			paymentType.setName(name);
-			paymentType.setCreatedDate(new Date());
-			paymentType.setUpdatedDate(new Date());
-			paymentType.setDeleted(false);
-			paymentType.setDate(LocalDate.now());
-			return repo.save(paymentType);
-		});
+
+		PaymentType paymentType = repo.findById(id)
+				.orElse(null);
+
+		/*
+		 * Existing database record:
+		 *
+		 * Your current table already contains IDs 1-4 without code.
+		 * Therefore update the existing record with code/name instead
+		 * of only creating a new record.
+		 */
+		if (paymentType != null) {
+
+			boolean changed = false;
+
+			if (paymentType.getCode() == null
+					|| !paymentType.getCode().equalsIgnoreCase(code)) {
+
+				paymentType.setCode(code);
+				changed = true;
+			}
+
+			if (paymentType.getName() == null
+					|| !paymentType.getName().equals(name)) {
+
+				paymentType.setName(name);
+				changed = true;
+			}
+
+			if (paymentType.isDeleted()) {
+				paymentType.setDeleted(false);
+				changed = true;
+			}
+
+			if (changed) {
+				paymentType.setUpdatedDate(new Date());
+				repo.save(paymentType);
+			}
+
+			return;
+		}
+
+		/*
+		 * New database installation.
+		 */
+		PaymentType newPaymentType = new PaymentType();
+
+		newPaymentType.setId(id);
+		newPaymentType.setCode(code);
+		newPaymentType.setName(name);
+
+		newPaymentType.setDeleted(false);
+
+		newPaymentType.setCreatedDate(new Date());
+		newPaymentType.setUpdatedDate(new Date());
+
+		newPaymentType.setDate(LocalDate.now());
+
+		repo.save(newPaymentType);
 	}
 }

@@ -1,6 +1,5 @@
 package com.doc.repository;
 
-
 import com.doc.entity.client.PaymentType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,11 +9,16 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface PaymentTypeRepository extends JpaRepository<PaymentType, Long> {
+public interface PaymentTypeRepository
+        extends JpaRepository<PaymentType, Long> {
 
     boolean existsByNameAndIsDeletedFalse(String name);
 
+    boolean existsByCodeAndIsDeletedFalse(String code);
+
     Page<PaymentType> findByIsDeletedFalse(Pageable pageable);
 
-    Optional<PaymentType> findByName(String paymentTypeName);
+    Optional<PaymentType> findByName(String name);
+
+    Optional<PaymentType> findByCodeAndIsDeletedFalse(String code);
 }
