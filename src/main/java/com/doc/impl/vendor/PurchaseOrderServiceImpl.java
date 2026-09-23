@@ -1643,10 +1643,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             BigDecimal requestedPoAmount
     ) {
 
-        // =========================================================
-        // BASIC VALIDATION
-        // =========================================================
-
         if (procurement == null || procurement.getId() == null) {
             throw new ValidationException(
                     "Procurement assignment is required",
@@ -1670,82 +1666,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-
-        // =========================================================
-        // PURCHASE ORDER PAYMENT
-        // =========================================================
-        //
-        // PURCHASE_ORDER means the CLIENT has issued a Purchase Order
-        // to Corpseed and payment may be received later.
-        //
-        // Therefore procurement/vendor PO creation should NOT be
-        // blocked only because no VendorFinalization amount exists.
-        //
-        // Project value validation will still happen separately through
-        // isPoValueExceedingProjectValue().
-        // =========================================================
-
-        boolean purchaseOrderPayment = false;
-
-        if (procurement.getProject() != null
-                && procurement.getProject().getPaymentDetail() != null
-                && procurement.getProject().getPaymentDetail().getPaymentType() != null) {
-
-            PaymentType projectPaymentType =
-                    procurement.getProject()
-                            .getPaymentDetail()
-                            .getPaymentType();
-
-            purchaseOrderPayment =
-                    projectPaymentType.getCode() != null
-                            && "PURCHASE_ORDER".equalsIgnoreCase(
-                            projectPaymentType.getCode().trim()
-                    );
-        }
-
-
-        if (purchaseOrderPayment) {
-
-            logger.info(
-                    "Vendor finalized amount validation skipped for PURCHASE_ORDER payment type. " +
-                            "procurementAssignmentId={}, vendorId={}, requestedPoAmount={}",
-                    procurement.getId(),
-                    vendor.getId(),
-                    requestedPoAmount
-            );
-
-            /*
-             * Return requested PO amount itself.
-             *
-             * Existing caller performs:
-             *
-             * requestedPoAmount.compareTo(vendorFinalizedAmount) > 0
-             *
-             * Therefore returning the requested amount makes the
-             * vendor-finalization comparison pass while keeping the
-             * existing code unchanged.
-             *
-             * Project amount validation still runs separately.
-             */
-            return requestedPoAmount.setScale(
-                    2,
-                    RoundingMode.HALF_UP
-            );
-        }
-
-
-        // =========================================================
-        // NORMAL PAYMENT TYPES
-        // =========================================================
-        //
-        // FULL
-        // PARTIAL
-        // INSTALLMENT
-        //
-        // For these payment types, existing VendorFinalization
-        // validation remains unchanged.
-        // =========================================================
-
         BigDecimal finalizedAmount =
                 vendorFinalizationRepository.findTotalFinalizedAmount(
                         procurement.getId(),
@@ -1759,22 +1679,50 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         )
                 );
 
-
+        /*
+         * Vendor finalization amount is optional for Purchase Order creation.
+         *
+         * If no finalized amount exists, allow the PO to continue by using
+         * the requested PO amount as the effective finalized amount.
+         *
+         * This keeps the existing comparison logic working:
+         *
+         * requestedPoAmount.compareTo(vendorFinalizedAmount) > 0
+         *
+         * will be false when no finalized amount exists.
+         */
         if (finalizedAmount == null
                 || finalizedAmount.compareTo(BigDecimal.ZERO) <= 0) {
 
-            throw new ValidationException(
-                    "No finalized amount found for the selected vendor",
-                    "ERR_VENDOR_FINALIZED_AMOUNT_NOT_FOUND"
+            logger.info(
+                    "No vendor finalized amount found. Allowing Purchase Order. " +
+                            "procurementAssignmentId={}, vendorId={}, requestedPoAmount={}",
+                    procurement.getId(),
+                    vendor.getId(),
+                    requestedPoAmount
+            );
+
+            return requestedPoAmount.setScale(
+                    2,
+                    RoundingMode.HALF_UP
             );
         }
 
+        logger.info(
+                "Vendor finalized amount found. procurementAssignmentId={}, " +
+                        "vendorId={}, finalizedAmount={}, requestedPoAmount={}",
+                procurement.getId(),
+                vendor.getId(),
+                finalizedAmount,
+                requestedPoAmount
+        );
 
         return finalizedAmount.setScale(
                 2,
                 RoundingMode.HALF_UP
         );
     }
+
     private void validateAdminUser(User user) {
         boolean isAdmin = user != null
                 && user.getRoles() != null
