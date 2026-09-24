@@ -775,37 +775,26 @@ public class ProcurementPaymentRequestServiceImpl
         validateUser(userId);
 
         if (request == null) {
-
             throw new ValidationException(
                     "Payment release request is required",
                     "ERR_PAYMENT_RELEASE_REQUEST_REQUIRED"
             );
         }
 
-
         // ============================================================
         // 2. LOCK PAYMENT REQUEST
         // ============================================================
-        /*
-         * Prevent concurrent payment releases for the same
-         * Procurement Payment Request.
-         */
 
         ProcurementPaymentRequest paymentRequest =
-                getActivePaymentRequestForUpdate(
-                        paymentRequestId
-                );
-
+                getActivePaymentRequestForUpdate(paymentRequestId);
 
         // ============================================================
         // 3. STATUS VALIDATION
         // ============================================================
 
-        if (paymentRequest.getStatus()
-                != PaymentRequestStatus.APPROVED
-                &&
-                paymentRequest.getStatus()
-                        != PaymentRequestStatus.PAYMENT_PROCESSING) {
+        if (paymentRequest.getStatus() != PaymentRequestStatus.APPROVED
+                && paymentRequest.getStatus()
+                != PaymentRequestStatus.PAYMENT_PROCESSING) {
 
             throw new ValidationException(
                     "Only APPROVED or PAYMENT_PROCESSING payment request can be released. "
@@ -815,32 +804,46 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
-
         // ============================================================
-        // 4. VENDOR CONTEXT
+        // 4. VENDOR VALIDATION
         // ============================================================
 
         VendorSyncContext vendorContext =
-                resolveVendorSyncContext(
-                        paymentRequest
-                );
+                resolveVendorSyncContext(paymentRequest);
 
-        Vendor vendor =
-                vendorContext.vendor();
+        Vendor vendor = vendorContext.vendor();
 
-        if (vendor.getStatus()
-                != VendorStatus.ACTIVE) {
-
+        if (vendor.getStatus() != VendorStatus.ACTIVE) {
             throw new ValidationException(
                     "Payment can be released only for an ACTIVE vendor",
                     "ERR_VENDOR_NOT_ACTIVE"
             );
         }
 
+        // ============================================================
+        // 5. PAYMENT RELEASE INPUT VALIDATION
+        // ============================================================
 
-        // ============================================================
-        // 5. RELEASE INPUT VALIDATION
-        // ============================================================
+        /*
+         * IMPORTANT:
+         *
+         * This is ACTUAL cash/bank amount entered by Accounts.
+         *
+         * Example:
+         * Vendor net payable = 10,800
+         * Accounts enters    = 5,000
+         *
+         * Bank voucher MUST use 5,000.
+         */
+        if (request.getBankPaymentAmount() == null
+                || request.getBankPaymentAmount()
+                .compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ValidationException(
+                    "Bank payment amount must be greater than zero",
+                    "ERR_INVALID_BANK_PAYMENT_AMOUNT"
+            );
+        }
 
         if (request.getBankLedgerId() == null
                 || request.getBankLedgerId() <= 0) {
@@ -851,9 +854,7 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
-        if (!hasText(
-                request.getPaymentMode()
-        )) {
+        if (!hasText(request.getPaymentMode())) {
 
             throw new ValidationException(
                     "Payment mode is required for payment release",
@@ -861,38 +862,17 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
-
         // ============================================================
-        // 6. APPLY RELEASE-TIME TDS CONFIGURATION
+        // 6. RELEASE-TIME TDS CONFIGURATION
         // ============================================================
-        /*
-         * IMPORTANT FIX.
-         *
-         * Accounts may select:
-         *
-         * tdsActive=true
-         * tdsPercentage=10
-         *
-         * during payment release.
-         *
-         * These values MUST be copied to the persisted
-         * ProcurementPaymentRequest BEFORE calculatePayment().
-         *
-         * We deliberately DO NOT use:
-         *
-         * request.bankPaymentAmount
-         *
-         * Backend calculates the actual bank payment.
-         */
 
         applyReleaseTdsConfiguration(
                 paymentRequest,
                 request
         );
 
-
         // ============================================================
-        // 7. RESOLVE GST
+        // 7. GST
         // ============================================================
 
         GstPayload gstPayload =
@@ -901,10 +881,18 @@ public class ProcurementPaymentRequestServiceImpl
                         vendorContext.gstRegistrationType()
                 );
 
-
         // ============================================================
-        // 8. BACKEND AUTHORITATIVE CALCULATION
+        // 8. ORIGINAL FINANCIAL CALCULATION
         // ============================================================
+        /*
+         * IMPORTANT:
+         *
+         * calculatePayment() still calculates using:
+         *
+         * paymentRequest.amount = TAXABLE/BASIC amount
+         *
+         * We DO NOT modify that.
+         */
 
         PaymentCalculation calculation =
                 calculatePayment(
@@ -912,9 +900,53 @@ public class ProcurementPaymentRequestServiceImpl
                         gstPayload
                 );
 
+        // ============================================================
+        // 9. ACTUAL BANK PAYMENT FROM FRONTEND
+        // ============================================================
+
+        BigDecimal enteredBankPaymentAmount =
+                money(request.getBankPaymentAmount());
+
+        /*
+         * User cannot release more cash than the current
+         * vendor net payable.
+         */
+        if (enteredBankPaymentAmount.compareTo(
+                calculation.vendorNetPayableAmount()
+        ) > 0) {
+
+            throw new ValidationException(
+                    "Bank payment amount cannot exceed vendor net payable amount. "
+                            + "Vendor net payable: "
+                            + calculation.vendorNetPayableAmount()
+                            + ", entered bank payment: "
+                            + enteredBankPaymentAmount,
+                    "ERR_BANK_PAYMENT_EXCEEDS_VENDOR_PAYABLE"
+            );
+        }
+
+        /*
+         * Keep ALL existing calculated values.
+         *
+         * Replace ONLY bankPaymentAmount.
+         */
+        calculation =
+                new PaymentCalculation(
+                        calculation.basicAmount(),
+                        calculation.cgstAmount(),
+                        calculation.sgstAmount(),
+                        calculation.igstAmount(),
+                        calculation.totalGstAmount(),
+                        calculation.grossInvoiceAmount(),
+                        calculation.tdsAmount(),
+                        calculation.vendorNetPayableAmount(),
+
+                        // IMPORTANT
+                        enteredBankPaymentAmount
+                );
 
         // ============================================================
-        // 9. APPLY OPERATION CALCULATION
+        // 10. APPLY CALCULATION TO OPERATION ENTITY
         // ============================================================
 
         applyOperationCalculation(
@@ -922,9 +954,13 @@ public class ProcurementPaymentRequestServiceImpl
                 calculation
         );
 
+        /*
+         * applyOperationCalculation() now receives calculation where
+         * bankPaymentAmount is the amount entered by Accounts.
+         */
 
         // ============================================================
-        // 10. STORE ACTUAL PAYMENT INFORMATION
+        // 11. STORE PAYMENT INFORMATION
         // ============================================================
 
         paymentRequest.setBankLedgerId(
@@ -932,32 +968,28 @@ public class ProcurementPaymentRequestServiceImpl
         );
 
         paymentRequest.setPaymentMode(
-                request.getPaymentMode()
-                        .trim()
+                request.getPaymentMode().trim()
         );
 
+        if (request.getPaymentDate() != null) {
+            paymentRequest.setPaymentDate(
+                    request.getPaymentDate()
+            );
+        }
 
-        if (hasText(
-                request.getTransactionReference()
-        )) {
+        if (hasText(request.getTransactionReference())) {
 
             paymentRequest.setTransactionReference(
-                    request.getTransactionReference()
-                            .trim()
+                    request.getTransactionReference().trim()
             );
         }
 
-
-        if (hasText(
-                request.getPaymentProof()
-        )) {
+        if (hasText(request.getPaymentProof())) {
 
             paymentRequest.setPaymentProof(
-                    request.getPaymentProof()
-                            .trim()
+                    request.getPaymentProof().trim()
             );
         }
-
 
         if (request.getProofAttachmentUrls() != null) {
 
@@ -966,28 +998,21 @@ public class ProcurementPaymentRequestServiceImpl
             );
         }
 
-
-        if (hasText(
-                request.getComment()
-        )) {
+        if (hasText(request.getComment())) {
 
             paymentRequest.setCompletionRemarks(
-                    request.getComment()
-                            .trim()
+                    request.getComment().trim()
             );
         }
 
-
         /*
-         * Operation Service does not own vendor ledger resolution.
-         * Account Service owns vendor ledger selection.
+         * Account Service owns vendor ledger.
          */
         paymentRequest.setLedgerId(null);
         paymentRequest.setLedgerType(null);
 
-
         // ============================================================
-        // 11. MOVE TO PROCESSING
+        // 12. PROCESSING
         // ============================================================
 
         paymentRequest.setStatus(
@@ -998,43 +1023,31 @@ public class ProcurementPaymentRequestServiceImpl
                 new Date()
         );
 
-
         ProcurementPaymentRequest processing =
-                paymentRequestRepository
-                        .saveAndFlush(
-                                paymentRequest
-                        );
-
+                paymentRequestRepository.saveAndFlush(
+                        paymentRequest
+                );
 
         // ============================================================
-        // 12. CALCULATION LOG
+        // 13. LOG
         // ============================================================
 
         log.info(
                 "[VENDOR-PAYMENT-CALCULATED] "
                         + "paymentRequestId={} | vendorId={} | "
-                        + "tdsActive={} | tdsPercentage={} | "
-                        + "basic={} | cgst={} | sgst={} | igst={} | "
-                        + "totalGst={} | grossInvoice={} | "
-                        + "tds={} | vendorNetPayable={} | bankPayment={}",
+                        + "basic={} | gross={} | tds={} | "
+                        + "vendorNetPayable={} | enteredBankPayment={}",
                 processing.getId(),
                 vendor.getId(),
-                processing.getTdsActive(),
-                processing.getTdsPercentage(),
                 calculation.basicAmount(),
-                calculation.cgstAmount(),
-                calculation.sgstAmount(),
-                calculation.igstAmount(),
-                calculation.totalGstAmount(),
                 calculation.grossInvoiceAmount(),
                 calculation.tdsAmount(),
                 calculation.vendorNetPayableAmount(),
                 calculation.bankPaymentAmount()
         );
 
-
         // ============================================================
-        // 13. SEND AUTHORITATIVE CALCULATION TO ACCOUNT SERVICE
+        // 14. SEND TO ACCOUNT SERVICE
         // ============================================================
 
         AccountVendorSyncResponseDto accountResponse =
@@ -1047,22 +1060,17 @@ public class ProcurementPaymentRequestServiceImpl
                         calculation
                 );
 
-
         // ============================================================
-        // 14. CROSS-SERVICE CALCULATION VALIDATION
+        // 15. VALIDATE ACCOUNT CALCULATION
         // ============================================================
-        /*
-         * Operation and Account calculations must match.
-         */
 
         validateAccountCalculation(
                 calculation,
                 accountResponse
         );
 
-
         // ============================================================
-        // 15. APPLY ACCOUNT RESPONSE
+        // 16. APPLY ACCOUNT RESPONSE
         // ============================================================
 
         applyAccountCalculatedAmounts(
@@ -1070,24 +1078,22 @@ public class ProcurementPaymentRequestServiceImpl
                 accountResponse
         );
 
-
         /*
-         * Actual cash/bank payment calculated by Operation remains
-         * authoritative.
+         * MOST IMPORTANT FIX:
          *
-         * NEVER overwrite it using frontend bankPaymentAmount.
+         * Persist exact amount entered by Accounts.
+         *
+         * Do NOT set vendorNetPayable here.
          */
         processing.setBankPaymentAmount(
-                calculation.bankPaymentAmount()
+                enteredBankPaymentAmount
         );
 
-
         // ============================================================
-        // 16. FINAL RELEASE
+        // 17. FINAL RELEASE
         // ============================================================
 
-        Date releasedAt =
-                new Date();
+        Date releasedAt = new Date();
 
         processing.setPaymentReleasedBy(
                 userId
@@ -1105,39 +1111,29 @@ public class ProcurementPaymentRequestServiceImpl
                 PaymentRequestStatus.PAYMENT_RELEASED
         );
 
-
         ProcurementPaymentRequest saved =
-                paymentRequestRepository
-                        .saveAndFlush(
-                                processing
-                        );
-
+                paymentRequestRepository.saveAndFlush(
+                        processing
+                );
 
         // ============================================================
-        // 17. SUCCESS LOG
+        // 18. SUCCESS LOG
         // ============================================================
 
         log.info(
                 "[VENDOR-PAYMENT-RELEASED] "
                         + "paymentRequestId={} | vendorId={} | "
-                        + "tdsActive={} | tdsPercentage={} | "
-                        + "basicAmount={} | grossInvoice={} | "
-                        + "totalGst={} | tds={} | "
-                        + "bankPayment={} | "
-                        + "invoiceVoucherId={} | paymentVoucherId={}",
+                        + "basic={} | grossInvoice={} | "
+                        + "tds={} | vendorNetPayable={} | "
+                        + "actualBankPayment={}",
                 saved.getId(),
                 vendor.getId(),
-                saved.getTdsActive(),
-                saved.getTdsPercentage(),
                 saved.getAmount(),
                 saved.getInvoiceAmount(),
-                saved.getTotalGstAmount(),
                 saved.getTdsAmount(),
-                saved.getBankPaymentAmount(),
-                accountResponse.getVoucherId(),
-                accountResponse.getPaymentVoucherId()
+                saved.getPayableAmount(),
+                saved.getBankPaymentAmount()
         );
-
 
         return mapToResponse(saved);
     }

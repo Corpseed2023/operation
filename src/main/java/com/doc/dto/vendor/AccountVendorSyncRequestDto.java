@@ -88,28 +88,6 @@ public class AccountVendorSyncRequestDto {
      */
     private LocalDateTime operationUpdatedAt;
 
-    /*
-     * Null during normal vendor onboarding.
-     *
-     * Populated only when a procurement vendor payment
-     * request is approved.
-     *
-     * Operation Service sends only:
-     * - price
-     * - GST applicability and percentage
-     * - GST type/state
-     * - TDS applicability and percentage
-     *
-     * Account Service calculates:
-     * - CGST/SGST/IGST
-     * - total GST
-     * - TDS amount
-     * - net payment amount
-     *
-     * Account Service then creates:
-     * - AccountingVoucher
-     * - AccountingVoucherEntry
-     * - required system ledger entries
-     */
+
     private VendorPaymentApprovalRequestDto paymentApproval;
 }
