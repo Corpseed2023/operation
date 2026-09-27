@@ -1,8 +1,5 @@
 package com.doc.dto.productMilestoneMap;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -158,71 +155,5 @@ public class ProductMilestoneMapRequestDto {
 
     private boolean isActive = true;
 
-    // =====================================================================
-    // CONDITIONAL VALIDATIONS
-    // =====================================================================
 
-    @JsonIgnore
-    @Schema(hidden = true)
-    @AssertTrue(
-            message = "Execution TAT minutes must be greater than zero when execution TAT is applicable"
-    )
-    public boolean isExecutionTatValid() {
-        return !executionTatApplicable
-                || (executionTatMinutes != null
-                && executionTatMinutes > 0);
-    }
-
-    @JsonIgnore
-    @Schema(hidden = true)
-    @AssertTrue(
-            message = "Department TAT minutes must be greater than zero when department TAT is applicable"
-    )
-    public boolean isDepartmentTatValid() {
-        return !departmentTatApplicable
-                || (departmentTatMinutes != null
-                && departmentTatMinutes > 0);
-    }
-
-    @JsonIgnore
-    @Schema(hidden = true)
-    @AssertTrue(
-            message = "Performance TAT minutes must be greater than zero when performance TAT is applicable"
-    )
-    public boolean isPerformanceTatValid() {
-        return !performanceTatApplicable
-                || (performanceTatMinutes != null
-                && performanceTatMinutes > 0);
-    }
-
-    @JsonIgnore
-    @Schema(hidden = true)
-    @AssertTrue(
-            message = "Customer TAT minutes must be greater than zero when customer TAT is applicable"
-    )
-    public boolean isCustomerTatValid() {
-        return !customerTatApplicable
-                || (customerTatMinutes != null
-                && customerTatMinutes > 0);
-    }
-
-    @JsonIgnore
-    @Schema(hidden = true)
-    @AssertTrue(
-            message = "Rollback TAT minutes must be greater than zero when rollback TAT is applicable"
-    )
-    public boolean isRollbackTatValid() {
-        return !rollbackTatApplicable
-                || (rollbackTatMinutes != null
-                && rollbackTatMinutes > 0);
-    }
-
-    @JsonIgnore
-    @Schema(hidden = true)
-    @AssertTrue(
-            message = "Rollback TAT cannot be enabled when rollback is not allowed"
-    )
-    public boolean isRollbackConfigurationValid() {
-        return allowRollback || !rollbackTatApplicable;
-    }
 }

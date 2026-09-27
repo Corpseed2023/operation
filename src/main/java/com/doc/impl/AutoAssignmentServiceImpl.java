@@ -407,7 +407,7 @@ public class AutoAssignmentServiceImpl implements AutoAssignmentService {
             if (hasHistory) return true;
         }
 
-        if (online && onlineCount == 1) return true; // Lone wolf
+        if (online && onlineCount == 1) return true;
         return online;
     }
 

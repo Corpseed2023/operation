@@ -2,6 +2,7 @@ package com.doc.dto.ProjectMilestoneassignment;
 
 import com.doc.em.CertificateValidityType;
 import com.doc.em.CertificationTenureUnit;
+import com.doc.em.MilestoneCompletionSource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -78,6 +79,12 @@ public class UpdateMilestoneStatusDto {
      * Required while completing Certification milestone.
      */
     private String certificationAttachmentUrl;
+
+    private MilestoneCompletionSource completionSource;
+
+    private String completionRemark;
+
+    private LocalDate clientCompletionDate;
 
 
 }

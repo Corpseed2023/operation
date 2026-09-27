@@ -1,9 +1,8 @@
 package com.doc.impl.project;
 
 import com.doc.constants.StatusConstants;
-import com.doc.em.ApprovalStatus;
+import com.doc.em.*;
 import com.doc.dto.ProjectMilestoneassignment.*;
-import com.doc.em.CertificateValidityType;
 import com.doc.entity.document.DocumentStatus;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.milestone.MilestoneStatusHistory;
@@ -19,8 +18,6 @@ import com.doc.entity.vendor.ProcurementOrder;
 import com.doc.entity.vendor.ProcurementOrderStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
-import com.doc.em.ProjectHistoryEventType;
-import com.doc.em.ProjectHistoryReferenceType;
 import com.doc.notification.*;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ProjectDocumentUploadRepository;
@@ -197,16 +194,19 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                             );
                         });
 
-        String currentStatusName = assignment.getStatus() != null
-                ? assignment.getStatus().getName()
-                : null;
+        String currentStatusName =
+                assignment.getStatus() != null
+                        ? assignment.getStatus().getName()
+                        : null;
 
         String requestedStatusName = newStatus.getName();
 
         /*
-         * Once a milestone is COMPLETED, no further status change is allowed.
+         * Once a milestone is COMPLETED,
+         * no further status change is allowed.
          */
         if ("COMPLETED".equalsIgnoreCase(currentStatusName)) {
+
             throw new ValidationException(
                     "Completed milestone status cannot be changed again",
                     "COMPLETED_MILESTONE_STATUS_CHANGE_NOT_ALLOWED"
@@ -220,23 +220,24 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 && currentStatusName.equalsIgnoreCase(requestedStatusName)) {
 
             throw new ValidationException(
-                    "Milestone is already in " + requestedStatusName + " status",
+                    "Milestone is already in "
+                            + requestedStatusName
+                            + " status",
                     "MILESTONE_ALREADY_IN_REQUESTED_STATUS"
             );
         }
 
         /*
-         * ON_HOLD approval flow.
-         *
-         * Do not change the milestone status immediately.
-         * Create a pending request for the assigned user's manager.
+         * =========================================================
+         * ON HOLD APPROVAL FLOW
+         * =========================================================
          */
         if ("ON_HOLD".equalsIgnoreCase(requestedStatusName)) {
 
             logger.info(
-                    "[MILESTONE-ON-HOLD-APPROVAL-REQUEST] " +
-                            "assignmentId={}, projectId={}, requestedById={}, " +
-                            "currentStatus={}, reason={}",
+                    "[MILESTONE-ON-HOLD-APPROVAL-REQUEST] "
+                            + "assignmentId={}, projectId={}, requestedById={}, "
+                            + "currentStatus={}, reason={}",
                     assignment.getId(),
                     assignment.getProject() != null
                             ? assignment.getProject().getId()
@@ -249,48 +250,124 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             milestoneOnHoldApprovalService.requestOnHold(updateDto);
 
             logger.info(
-                    "[MILESTONE-ON-HOLD-APPROVAL-SUBMITTED] " +
-                            "assignmentId={}, requestedById={}",
+                    "[MILESTONE-ON-HOLD-APPROVAL-SUBMITTED] "
+                            + "assignmentId={}, requestedById={}",
                     assignment.getId(),
                     changedBy.getId()
             );
 
-            /*
-             * Important:
-             * Stop execution so ON_HOLD is not directly written below.
-             */
             return;
         }
 
         /*
-         * Business validation before starting Filing/Filling milestone.
+         * =========================================================
+         * MILESTONE NAME
+         * =========================================================
          */
-        String milestoneName = getMilestoneName(assignment);
+        String milestoneName =
+                getMilestoneName(assignment);
 
+        /*
+         * Business validation before starting Filing/Filling.
+         */
         if ("IN_PROGRESS".equalsIgnoreCase(newStatus.getName())
                 && isFilingMilestone(milestoneName)) {
 
-            milestoneValidator.validateFillingMilestone(assignment);
+            milestoneValidator.validateFillingMilestone(
+                    assignment
+            );
         }
 
         /*
-         * Business validations before marking the milestone COMPLETED.
+         * =========================================================
+         * CLIENT-END COMPLETION IDENTIFICATION
+         * =========================================================
+         *
+         * Existing/old requests may not send completionSource.
+         *
+         * Therefore:
+         *
+         * null         -> INTERNAL
+         * INTERNAL     -> normal old flow
+         * CLIENT_END   -> client completed milestone
          */
-        if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
+        boolean isCompleting =
+                "COMPLETED".equalsIgnoreCase(
+                        newStatus.getName()
+                );
 
-            if ("Documentation".equalsIgnoreCase(milestoneName)) {
-                milestoneValidator.validateDocumentMilestone(assignment);
+        boolean clientEndCompletion =
+                isCompleting
+                        && updateDto.getCompletionSource()
+                        == MilestoneCompletionSource.CLIENT_END;
+
+        /*
+         * =========================================================
+         * COMPLETION SOURCE VALIDATION
+         * =========================================================
+         */
+        if (clientEndCompletion) {
+
+            if (updateDto.getCompletionRemark() == null
+                    || updateDto.getCompletionRemark()
+                    .trim()
+                    .isEmpty()) {
+
+                throw new ValidationException(
+                        "Completion remark is required when milestone is completed from client end",
+                        "CLIENT_END_COMPLETION_REMARK_REQUIRED"
+                );
+            }
+        }
+
+        /*
+         * =========================================================
+         * EXISTING COMPLETION BUSINESS VALIDATIONS
+         * =========================================================
+         *
+         * IMPORTANT:
+         *
+         * Keep old validation for INTERNAL completion.
+         *
+         * CLIENT_END means Corpseed is not actually executing
+         * the activity, therefore milestone-specific execution
+         * validation is skipped.
+         */
+        if (isCompleting && !clientEndCompletion) {
+
+            if ("Documentation".equalsIgnoreCase(
+                    milestoneName
+            )) {
+
+                milestoneValidator
+                        .validateDocumentMilestone(
+                                assignment
+                        );
             }
 
-            if (isFilingMilestone(milestoneName)) {
-                milestoneValidator.validateFillingMilestone(assignment);
+            if (isFilingMilestone(
+                    milestoneName
+            )) {
+
+                milestoneValidator
+                        .validateFillingMilestone(
+                                assignment
+                        );
             }
 
-            if ("Procurement".equalsIgnoreCase(milestoneName)) {
-                validateProcurementMilestoneBeforeCompletion(assignment);
+            if ("Procurement".equalsIgnoreCase(
+                    milestoneName
+            )) {
+
+                validateProcurementMilestoneBeforeCompletion(
+                        assignment
+                );
             }
 
-            if (isCertificationMilestone(milestoneName)) {
+            if (isCertificationMilestone(
+                    milestoneName
+            )) {
+
                 validateAndSetCertificationDetails(
                         updateDto,
                         assignment
@@ -299,61 +376,90 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * Milestone REJECTED logic has been removed.
+         * =========================================================
+         * COMPLETION PERFORMANCE / ASSIGNMENT RELEASE
+         * =========================================================
          *
-         * REWORK should be used when milestone correction is required.
+         * OLD BEHAVIOUR:
+         *
+         * INTERNAL completion
+         * -> add execution TAT
+         * -> reduce assignment count
+         * -> release UserProductMap
+         *
+         * NEW:
+         *
+         * CLIENT_END
+         * -> DO NOT add execution TAT
+         * -> reduce assignment count
+         * -> release UserProductMap
          */
-
-        /*
-         * If the milestone is getting completed:
-         * 1. Reduce the assigned user's active assignment count.
-         * 2. Add time spent.
-         * 3. Mark the user-product mapping as unassigned.
-         */
-        if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
+        if (isCompleting) {
 
             if (assignment.getAssignedUser() != null) {
 
-                User oldUser = assignment.getAssignedUser();
+                User oldUser =
+                        assignment.getAssignedUser();
 
                 UserPerformanceCount count =
                         userPerformanceCountRepository
                                 .findByUserIdAndProductId(
                                         oldUser.getId(),
-                                        assignment.getProject()
+                                        assignment
+                                                .getProject()
                                                 .getProduct()
                                                 .getId()
                                 );
 
                 if (count != null) {
 
-                    ProductMilestoneMap productMilestoneMap =
-                            assignment.getProductMilestoneMap();
-
                     int executionTatMinutes = 0;
 
-                    if (productMilestoneMap != null
-                            && productMilestoneMap
-                            .isExecutionTatApplicable()
-                            && productMilestoneMap
-                            .getExecutionTatMinutes() != null) {
+                    /*
+                     * Only internal completion gets execution TAT.
+                     */
+                    if (!clientEndCompletion) {
 
-                        executionTatMinutes =
-                                productMilestoneMap
-                                        .getExecutionTatMinutes();
+                        ProductMilestoneMap productMilestoneMap =
+                                assignment
+                                        .getProductMilestoneMap();
+
+                        if (productMilestoneMap != null
+                                && productMilestoneMap
+                                .isExecutionTatApplicable()
+                                && productMilestoneMap
+                                .getExecutionTatMinutes()
+                                != null) {
+
+                            executionTatMinutes =
+                                    productMilestoneMap
+                                            .getExecutionTatMinutes();
+                        }
+
+                        /*
+                         * Existing behavior.
+                         */
+                        count.setTimeSpent(
+                                count.getTimeSpent()
+                                        + executionTatMinutes
+                        );
+
+                    } else {
+
+                        logger.info(
+                                "[CLIENT-END-COMPLETION-PERFORMANCE-SKIPPED] "
+                                        + "assignmentId={}, userId={}, milestone={}",
+                                assignment.getId(),
+                                oldUser.getId(),
+                                milestoneName
+                        );
                     }
 
                     /*
-                     * timeSpent is now maintained in minutes.
+                     * Assignment is closed in both cases.
                      *
-                     * Example:
-                     * 4 hours = 240 minutes.
+                     * INTERNAL or CLIENT_END.
                      */
-                    count.setTimeSpent(
-                            count.getTimeSpent()
-                                    + executionTatMinutes
-                    );
-
                     count.setAssignmentCount(
                             Math.max(
                                     0,
@@ -361,33 +467,45 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                             )
                     );
 
-                    count.setLastUpdatedDate(new Date());
-                    count.setUpdatedDate(new Date());
+                    count.setLastUpdatedDate(
+                            new Date()
+                    );
+
+                    count.setUpdatedDate(
+                            new Date()
+                    );
+
                     count.setUpdatedBy(
                             updateDto.getChangedById()
                     );
 
-                    userPerformanceCountRepository.save(count);
+                    userPerformanceCountRepository
+                            .save(count);
 
                     logger.info(
                             "[MILESTONE-COMPLETION-PERFORMANCE-UPDATED] "
                                     + "assignmentId={}, userId={}, "
-                                    + "assignmentCount={}, "
+                                    + "clientEnd={}, assignmentCount={}, "
                                     + "executionTatMinutes={}, "
                                     + "totalTimeSpentMinutes={}",
                             assignment.getId(),
                             oldUser.getId(),
+                            clientEndCompletion,
                             count.getAssignmentCount(),
                             executionTatMinutes,
                             count.getTimeSpent()
                     );
                 }
 
+                /*
+                 * Existing UserProductMap release.
+                 */
                 UserProductMap userMap =
                         userProductMapRepository
                                 .findByUserIdAndProductIdAndIsDeletedFalse(
                                         oldUser.getId(),
-                                        assignment.getProject()
+                                        assignment
+                                                .getProject()
                                                 .getProduct()
                                                 .getId()
                                 )
@@ -396,100 +514,302 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 if (userMap != null) {
 
                     userMap.setAssigned(false);
-                    userMap.setUpdatedDate(new Date());
+
+                    userMap.setUpdatedDate(
+                            new Date()
+                    );
+
                     userMap.setUpdatedBy(
                             updateDto.getChangedById()
                     );
 
-                    userProductMapRepository.save(userMap);
+                    userProductMapRepository
+                            .save(userMap);
 
                     logger.info(
                             "[MILESTONE-COMPLETION-USER-PRODUCT-RELEASED] "
-                                    + "assignmentId={}, userId={}, productId={}",
+                                    + "assignmentId={}, userId={}, productId={}, clientEnd={}",
                             assignment.getId(),
                             oldUser.getId(),
-                            assignment.getProject()
+                            assignment
+                                    .getProject()
                                     .getProduct()
-                                    .getId()
+                                    .getId(),
+                            clientEndCompletion
                     );
                 }
             }
         }
 
         /*
-         * Save milestone status history before changing the current status.
+         * =========================================================
+         * STATUS HISTORY
+         * =========================================================
          */
-        MilestoneStatusHistory history = new MilestoneStatusHistory();
 
-        history.setMilestoneAssignment(assignment);
-        history.setPreviousStatus(assignment.getStatus());
-        history.setNewStatus(newStatus);
-        history.setChangeReason(updateDto.getStatusReason());
+        String historyReason =
+                updateDto.getStatusReason();
+
+        /*
+         * For client-end completion make history clear.
+         */
+        if (clientEndCompletion) {
+
+            historyReason =
+                    "Completed from Client End"
+                            + (
+                            updateDto.getCompletionRemark() != null
+                                    && !updateDto
+                                    .getCompletionRemark()
+                                    .trim()
+                                    .isEmpty()
+                                    ? " - "
+                                    + updateDto
+                                    .getCompletionRemark()
+                                    .trim()
+                                    : ""
+                    );
+        }
+
+        MilestoneStatusHistory history =
+                new MilestoneStatusHistory();
+
+        history.setMilestoneAssignment(
+                assignment
+        );
+
+        history.setPreviousStatus(
+                assignment.getStatus()
+        );
+
+        history.setNewStatus(
+                newStatus
+        );
+
+        history.setChangeReason(
+                historyReason
+        );
+
         history.setAcknowledgementAttachmentUrl(
-                normalizeOptionalText(updateDto.getAcknowledgementAttachmentUrl())
+                normalizeOptionalText(
+                        updateDto
+                                .getAcknowledgementAttachmentUrl()
+                )
         );
+
         history.setAcknowledgementAttachmentName(
-                normalizeOptionalText(updateDto.getAcknowledgementAttachmentName())
+                normalizeOptionalText(
+                        updateDto
+                                .getAcknowledgementAttachmentName()
+                )
         );
-        history.setChangedBy(changedBy);
-        history.setChangeDate(new Date());
+
+        history.setChangedBy(
+                changedBy
+        );
+
+        history.setChangeDate(
+                new Date()
+        );
+
         history.setDeleted(false);
 
-        milestoneStatusHistoryRepository.save(history);
+        milestoneStatusHistoryRepository
+                .save(history);
 
         logger.info(
-                "[MILESTONE-STATUS-HISTORY-SAVED] " +
-                        "assignmentId={}, previousStatus={}, newStatus={}, changedById={}",
+                "[MILESTONE-STATUS-HISTORY-SAVED] "
+                        + "assignmentId={}, previousStatus={}, "
+                        + "newStatus={}, changedById={}, clientEnd={}",
                 assignment.getId(),
                 currentStatusName,
                 newStatus.getName(),
-                changedBy.getId()
+                changedBy.getId(),
+                clientEndCompletion
         );
 
         /*
-         * Update the milestone assignment status.
+         * =========================================================
+         * UPDATE ASSIGNMENT STATUS
+         * =========================================================
          */
-        assignment.setStatus(newStatus);
-        assignment.setStatusReason(updateDto.getStatusReason());
+        assignment.setStatus(
+                newStatus
+        );
 
-        if ("IN_PROGRESS".equalsIgnoreCase(newStatus.getName())) {
-            assignment.setStartedDate(new Date());
-        }
-
-        if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
-            assignment.setCompletedDate(new Date());
-            assignment.setAcknowledgementAttachmentUrl(
-                    normalizeOptionalText(updateDto.getAcknowledgementAttachmentUrl())
-            );
-            assignment.setAcknowledgementAttachmentName(
-                    normalizeOptionalText(updateDto.getAcknowledgementAttachmentName())
-            );
-        }
-
-        assignment.setUpdatedBy(updateDto.getChangedById());
-        assignment.setUpdatedDate(new Date());
-
-        assignment =
-                projectMilestoneAssignmentRepository.save(assignment);
+        assignment.setStatusReason(
+                historyReason
+        );
 
         /*
-         * Save the milestone status change in the common project timeline.
-         * Existing MilestoneStatusHistory above remains unchanged.
+         * =========================================================
+         * IN PROGRESS
+         * =========================================================
          */
+        if ("IN_PROGRESS".equalsIgnoreCase(
+                newStatus.getName()
+        )) {
+
+            assignment.setStartedDate(
+                    new Date()
+            );
+        }
+
+        /*
+         * =========================================================
+         * COMPLETED
+         * =========================================================
+         */
+        if (isCompleting) {
+
+            assignment.setCompletedDate(
+                    new Date()
+            );
+
+            assignment.setAcknowledgementAttachmentUrl(
+                    normalizeOptionalText(
+                            updateDto
+                                    .getAcknowledgementAttachmentUrl()
+                    )
+            );
+
+            assignment.setAcknowledgementAttachmentName(
+                    normalizeOptionalText(
+                            updateDto
+                                    .getAcknowledgementAttachmentName()
+                    )
+            );
+
+            /*
+             * =====================================================
+             * NEW - COMPLETION SOURCE
+             * =====================================================
+             *
+             * Backward compatibility:
+             *
+             * If frontend does not send completionSource,
+             * treat it as INTERNAL.
+             */
+            MilestoneCompletionSource completionSource =
+                    updateDto.getCompletionSource() != null
+                            ? updateDto.getCompletionSource()
+                            : MilestoneCompletionSource.INTERNAL;
+
+            assignment.setCompletionSource(
+                    completionSource
+            );
+
+            assignment.setCompletionRemark(
+                    normalizeOptionalText(
+                            updateDto
+                                    .getCompletionRemark()
+                    )
+            );
+
+            /*
+             * Client completion date is meaningful
+             * for CLIENT_END.
+             *
+             * If frontend does not provide it,
+             * use today's date.
+             */
+            if (clientEndCompletion) {
+
+                assignment.setClientCompletionDate(
+                        updateDto.getClientCompletionDate()
+                                != null
+                                ? updateDto
+                                .getClientCompletionDate()
+                                : LocalDate.now()
+                );
+
+            } else {
+
+                assignment.setClientCompletionDate(
+                        null
+                );
+            }
+
+            logger.info(
+                    "[MILESTONE-COMPLETION-SOURCE] "
+                            + "assignmentId={}, milestone={}, source={}, "
+                            + "clientCompletionDate={}, remark={}",
+                    assignment.getId(),
+                    milestoneName,
+                    completionSource,
+                    assignment.getClientCompletionDate(),
+                    assignment.getCompletionRemark()
+            );
+        }
+
+        assignment.setUpdatedBy(
+                updateDto.getChangedById()
+        );
+
+        assignment.setUpdatedDate(
+                new Date()
+        );
+
+        assignment =
+                projectMilestoneAssignmentRepository
+                        .save(assignment);
+
+        /*
+         * =========================================================
+         * PROJECT TIMELINE
+         * =========================================================
+         */
+
+        String eventTitle;
+        String eventDescription;
+
+        if (clientEndCompletion) {
+
+            eventTitle =
+                    "Milestone completed from Client End";
+
+            eventDescription =
+                    "Milestone "
+                            + getMilestoneName(assignment)
+                            + " completed from Client End";
+
+            if (assignment.getCompletionRemark() != null
+                    && !assignment
+                    .getCompletionRemark()
+                    .isBlank()) {
+
+                eventDescription =
+                        eventDescription
+                                + ". Remark: "
+                                + assignment
+                                .getCompletionRemark();
+            }
+
+        } else {
+
+            eventTitle =
+                    "Milestone status changed";
+
+            eventDescription =
+                    "Milestone "
+                            + getMilestoneName(assignment)
+                            + " status changed from "
+                            + currentStatusName
+                            + " to "
+                            + newStatus.getName();
+        }
+
         historyEventService.saveHistory(
                 assignment.getProject().getId(),
                 assignment.getId(),
-                ProjectHistoryEventType.MILESTONE_STATUS_CHANGED,
-                ProjectHistoryReferenceType.MILESTONE_ASSIGNMENT,
+                ProjectHistoryEventType
+                        .MILESTONE_STATUS_CHANGED,
+                ProjectHistoryReferenceType
+                        .MILESTONE_ASSIGNMENT,
                 assignment.getId(),
-                "Milestone status changed",
-                "Milestone "
-                        + getMilestoneName(assignment)
-                        + " status changed from "
-                        + currentStatusName
-                        + " to "
-                        + newStatus.getName(),
-                updateDto.getStatusReason(),
+                eventTitle,
+                eventDescription,
+                historyReason,
                 currentStatusName,
                 newStatus.getName(),
                 changedBy.getId(),
@@ -497,42 +817,55 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         );
 
         logger.info(
-                "[MILESTONE-STATUS-UPDATED] " +
-                        "assignmentId={}, previousStatus={}, newStatus={}, changedById={}, changedByName={}",
+                "[MILESTONE-STATUS-UPDATED] "
+                        + "assignmentId={}, previousStatus={}, "
+                        + "newStatus={}, changedById={}, "
+                        + "changedByName={}, completionSource={}",
                 assignment.getId(),
                 currentStatusName,
                 newStatus.getName(),
                 changedBy.getId(),
-                changedBy.getFullName()
+                changedBy.getFullName(),
+                assignment.getCompletionSource()
         );
 
-        Project project = assignment.getProject();
+        Project project =
+                assignment.getProject();
 
         /*
-         * After completing a milestone, recalculate the visibility of all
-         * milestones belonging to the project.
+         * =========================================================
+         * EXISTING VISIBILITY RECALCULATION
+         * =========================================================
          */
-        if ("COMPLETED".equalsIgnoreCase(newStatus.getName())) {
+        if ("COMPLETED".equalsIgnoreCase(
+                newStatus.getName()
+        )) {
 
-            projectService.updateMilestoneVisibilities(
-                    project,
-                    updateDto.getChangedById()
-            );
+            projectService
+                    .updateMilestoneVisibilities(
+                            project,
+                            updateDto.getChangedById()
+                    );
 
             logger.info(
-                    "[MILESTONE-VISIBILITY-RECALCULATED] projectId={}, assignmentId={}",
+                    "[MILESTONE-VISIBILITY-RECALCULATED] "
+                            + "projectId={}, assignmentId={}",
                     project.getId(),
                     assignment.getId()
             );
         }
 
         /*
-         * If a REWORK milestone has been completed again, automatically
-         * resume the immediately next milestone when that milestone was
-         * put ON_HOLD by this specific rework.
+         * =========================================================
+         * EXISTING REWORK FLOW
+         * =========================================================
          */
-        if ("REWORK".equalsIgnoreCase(currentStatusName)
-                && "COMPLETED".equalsIgnoreCase(newStatus.getName())) {
+        if ("REWORK".equalsIgnoreCase(
+                currentStatusName
+        )
+                && "COMPLETED".equalsIgnoreCase(
+                newStatus.getName()
+        )) {
 
             resumeNextMilestoneAfterReworkCompletion(
                     assignment,
@@ -541,7 +874,9 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         }
 
         /*
-         * Recalculate the overall project status.
+         * =========================================================
+         * EXISTING PROJECT STATUS RECALCULATION
+         * =========================================================
          */
         updateProjectStatus(
                 project,
@@ -549,17 +884,21 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
         );
 
         logger.info(
-                "[MILESTONE-STATUS-UPDATE-SUCCESS] " +
-                        "assignmentId={}, projectId={}, finalStatus={}, changedById={}",
+                "[MILESTONE-STATUS-UPDATE-SUCCESS] "
+                        + "assignmentId={}, projectId={}, "
+                        + "finalStatus={}, completionSource={}, "
+                        + "changedById={}",
                 assignment.getId(),
                 project.getId(),
                 assignment.getStatus() != null
-                        ? assignment.getStatus().getName()
+                        ? assignment
+                        .getStatus()
+                        .getName()
                         : null,
+                assignment.getCompletionSource(),
                 changedBy.getId()
         );
     }
-
 
     private void resumeNextMilestoneAfterReworkCompletion(
             ProjectMilestoneAssignment completedReworkAssignment,
