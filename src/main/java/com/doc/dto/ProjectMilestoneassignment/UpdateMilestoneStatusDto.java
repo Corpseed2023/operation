@@ -80,11 +80,18 @@ public class UpdateMilestoneStatusDto {
      */
     private String certificationAttachmentUrl;
 
+    /*
+     * INTERNAL / CLIENT_END
+     */
     private MilestoneCompletionSource completionSource;
 
+    /*
+     * Required for CLIENT_END completion.
+     */
     private String completionRemark;
 
+    /*
+     * Optional client-side completion date.
+     */
     private LocalDate clientCompletionDate;
-
-
 }

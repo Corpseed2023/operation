@@ -3,9 +3,11 @@ package com.doc.repository;
 import com.doc.entity.milestone.MilestoneStatus;
 import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.repository.projection.MilestoneActivityProjection;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -609,6 +611,39 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
     boolean existsActiveAssignmentForUser(
             @Param("projectId") Long projectId,
             @Param("userId") Long userId
+    );
+
+    @Query("""
+        SELECT assignment.id
+        FROM ProjectMilestoneAssignment assignment
+        WHERE assignment.isDeleted = false
+          AND assignment.renewalLeadCreated = false
+          AND assignment.renewalDueDate IS NOT NULL
+          AND assignment.certificateExpiryDate IS NOT NULL
+          AND assignment.renewalDueDate <= :today
+          AND assignment.status IS NOT NULL
+          AND UPPER(assignment.status.name) = 'COMPLETED'
+          AND assignment.milestone IS NOT NULL
+          AND UPPER(assignment.milestone.name) = 'CERTIFICATION'
+        ORDER BY assignment.renewalDueDate ASC,
+                 assignment.id ASC
+        """)
+    List<Long> findPendingCertificationRenewalLeadAssignmentIds(
+            @Param("today") LocalDate today
+    );
+
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT assignment
+        FROM ProjectMilestoneAssignment assignment
+        WHERE assignment.id = :assignmentId
+          AND assignment.isDeleted = false
+        """)
+    Optional<ProjectMilestoneAssignment>
+    findByIdForRenewalLeadProcessing(
+            @Param("assignmentId")
+            Long assignmentId
     );
 
 
