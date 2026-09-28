@@ -7,6 +7,7 @@ import com.doc.dto.project.AssignedProjectResponseDto;
 import com.doc.dto.project.ProjectMilestoneResponseDto;
 import com.doc.dto.project.ProjectRequestDto;
 import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.dashboard.LiaisoningDashboardResponseDto;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
@@ -372,6 +373,20 @@ public class ProjectController {
             @RequestParam Long userId,
             @Valid @RequestBody LegalRequestResolveDto dto) {
         return ResponseEntity.ok(projectService.resolveLegalRequest(projectId, userId, dto));
+    }
+
+    @GetMapping("/liaisoning-dashboard")
+    @Operation(
+            summary = "Get Liaisoning dashboard",
+            description = "Returns projects that have a Liaisoning milestone, grouped by milestone status, " +
+                    "with count and total project amount per status. Admins/Operation Heads see all data; " +
+                    "other users see only their own assigned milestones (and their team's, if they are a manager)."
+    )
+    public ResponseEntity<LiaisoningDashboardResponseDto> getLiaisoningDashboard(
+            @RequestParam Long userId
+    ) {
+        LiaisoningDashboardResponseDto response = projectService.getLiaisoningDashboard(userId);
+        return ResponseEntity.ok(response);
     }
 
 }
