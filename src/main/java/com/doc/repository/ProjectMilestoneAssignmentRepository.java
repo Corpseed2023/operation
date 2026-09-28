@@ -595,4 +595,23 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
             @Param("thresholdDate") LocalDate thresholdDate);
 
 
+
+    @Query("""
+        SELECT CASE
+                   WHEN COUNT(a.id) > 0 THEN true
+                   ELSE false
+               END
+        FROM ProjectMilestoneAssignment a
+        WHERE a.project.id = :projectId
+          AND a.assignedUser.id = :userId
+          AND a.isDeleted = false
+        """)
+    boolean existsActiveAssignmentForUser(
+            @Param("projectId") Long projectId,
+            @Param("userId") Long userId
+    );
+
+
+
+
 }
