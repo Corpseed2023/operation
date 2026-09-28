@@ -144,6 +144,19 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             @Param("userIds") List<Long> userIds
     );
 
+    @Query("SELECT a FROM ProjectMilestoneAssignment a " +
+            "JOIN FETCH a.project p " +
+            "LEFT JOIN FETCH p.paymentDetail " +
+            "JOIN FETCH a.status " +
+            "WHERE LOWER(a.milestone.name) = LOWER(:milestoneName) " +
+            "AND a.assignedUser.id IN :userIds " +
+            "AND a.isDeleted = false " +
+            "AND p.isDeleted = false")
+    List<ProjectMilestoneAssignment> findByMilestoneNameForDashboardByUserIds(
+            @Param("milestoneName") String milestoneName,
+            @Param("userIds") List<Long> userIds
+    );
+
     /**
      * For Regular Users: Get all VISIBLE milestones, including COMPLETED,
      * assigned to this specific user in a specific project.
@@ -350,6 +363,15 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
         @Param("assignedUserId") Long assignedUserId,
         @Param("projectId") Long projectId
 );
+    @Query("SELECT a FROM ProjectMilestoneAssignment a " +
+            "JOIN FETCH a.project p " +
+            "LEFT JOIN FETCH p.paymentDetail " +
+            "JOIN FETCH a.status " +
+            "WHERE LOWER(a.milestone.name) = LOWER(:milestoneName) " +
+            "AND a.isDeleted = false " +
+            "AND p.isDeleted = false")
+    List<ProjectMilestoneAssignment> findByMilestoneNameForDashboard(@Param("milestoneName") String milestoneName);
+
 
     /**
      * Returns visible milestones belonging to any of the manager's departments.

@@ -7,6 +7,8 @@ import com.doc.dto.LegalRequestDto.LegalRequestResolveDto;
 import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
+import com.doc.dto.project.dashboard.LiaisoningDashboardResponseDto;
+import com.doc.dto.project.dashboard.LiaisoningStatusSummaryDto;
 import com.doc.dto.project.projectHistory.*;
 import com.doc.dto.vendor.LeadVendorAssigneeDto;
 import com.doc.em.ProjectHistoryEventType;
@@ -4901,16 +4903,115 @@ public class ProjectServiceImpl implements ProjectService {
             );
         }
 
+        // =========================================================
+        // MAP + ENRICH WITH MILESTONE DATA
+        // =========================================================
+        //
+        // mapToResponseDto alone does not populate milestone fields
+        // (currentMilestone*, lastCompletedMilestone*, milestones).
+        // Those require a batch enrichment pass against the actual
+        // Project entities on this page, same as getAllProjects.
+        // =========================================================
+
+        List<Project> projects = projectPage.getContent();
+
+        List<ProjectResponseDto> responses = projects.stream()
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+
+        enrichWithMilestoneUserDetails(projects, responses);
+        enrichWithMilestones(projects, responses);
+
+        Page<ProjectResponseDto> responsePage = new PageImpl<>(
+                responses,
+                pageable,
+                projectPage.getTotalElements()
+        );
+
         logger.info(
                 "[GET-LEGAL-REQUESTS] requestedBy={} | statusFilter={} | page={} | size={} | totalFound={}",
                 userId,
                 status,
                 page,
                 size,
-                projectPage.getTotalElements()
+                responsePage.getTotalElements()
         );
 
-        return projectPage.map(this::mapToResponseDto);
+        return responsePage;
+    }
+    private static final String LIAISONING_MILESTONE_NAME = "Liaisoning"; // adjust to exact name in your Milestone table
+
+    @Override
+    @Transactional(readOnly = true)
+    public LiaisoningDashboardResponseDto getLiaisoningDashboard(Long userId) {
+
+        User user = userRepository.findActiveUserById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "ERR_USER_NOT_FOUND"));
+
+        boolean isAdmin = hasRole(user, "ADMIN");
+        boolean isOperationHead = hasRole(user, "OPERATION_HEAD");
+        boolean fullAccess = isAdmin || isOperationHead;
+
+        List<ProjectMilestoneAssignment> assignments;
+
+        if (fullAccess) {
+            assignments = projectMilestoneAssignmentRepository
+                    .findByMilestoneNameForDashboard(LIAISONING_MILESTONE_NAME);
+        } else {
+            // Same pattern as getProjectCount / getAllProjects:
+            // a manager also sees their direct reports' data.
+            List<Long> userIds = new ArrayList<>();
+            userIds.add(userId);
+
+            if (user.isManagerFlag()) {
+                List<User> subordinates = userRepository.findByManagerIdAndIsDeletedFalse(userId);
+                userIds.addAll(subordinates.stream().map(User::getId).toList());
+            }
+
+            assignments = projectMilestoneAssignmentRepository
+                    .findByMilestoneNameForDashboardByUserIds(LIAISONING_MILESTONE_NAME, userIds);
+        }
+
+        logger.info(
+                "[LIAISONING-DASHBOARD] userId={} | fullAccess={} | milestoneName={} | assignmentsFound={}",
+                userId,
+                fullAccess,
+                LIAISONING_MILESTONE_NAME,
+                assignments.size()
+        );
+
+        Map<String, List<ProjectMilestoneAssignment>> byStatus = assignments.stream()
+                .filter(a -> a.getStatus() != null)
+                .collect(Collectors.groupingBy(a -> a.getStatus().getName()));
+
+        List<LiaisoningStatusSummaryDto> summaries = byStatus.entrySet().stream()
+                .map(entry -> {
+                    List<ProjectMilestoneAssignment> group = entry.getValue();
+
+                    double amount = group.stream()
+                            .filter(a -> a.getProject() != null
+                                    && a.getProject().getPaymentDetail() != null)
+                            .mapToDouble(a -> a.getProject().getPaymentDetail().getTotalAmount())
+                            .sum();
+
+                    return LiaisoningStatusSummaryDto.builder()
+                            .statusName(entry.getKey())
+                            .projectCount(group.size())
+                            .totalAmount(amount)
+                            .build();
+                })
+                .sorted(Comparator.comparing(LiaisoningStatusSummaryDto::getStatusName))
+                .toList();
+
+        double totalAmount = summaries.stream()
+                .mapToDouble(LiaisoningStatusSummaryDto::getTotalAmount)
+                .sum();
+
+        return LiaisoningDashboardResponseDto.builder()
+                .totalProjects(assignments.size())
+                .totalProjectAmount(totalAmount)
+                .statusSummaries(summaries)
+                .build();
     }
 
 }

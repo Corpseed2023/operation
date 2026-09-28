@@ -4,6 +4,7 @@ import com.doc.dto.LegalRequestDto.LegalRequestRaiseDto;
 import com.doc.dto.LegalRequestDto.LegalRequestResolveDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
+import com.doc.dto.project.dashboard.LiaisoningDashboardResponseDto;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
 import com.doc.dto.project.sales.SalesProjectStatusResponseDto;
@@ -65,4 +66,6 @@ public interface ProjectService {
     ProjectResponseDto raiseLegalRequest(Long projectId, Long userId, LegalRequestRaiseDto dto);
     ProjectResponseDto resolveLegalRequest(Long projectId, Long userId, LegalRequestResolveDto dto);
     Page<ProjectResponseDto> getAllLegalRequests(Long userId, int page, int size, LegalRequestStatus status);
+
+    LiaisoningDashboardResponseDto getLiaisoningDashboard(Long userId);
 }

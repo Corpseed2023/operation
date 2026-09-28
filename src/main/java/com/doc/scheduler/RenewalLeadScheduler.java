@@ -42,7 +42,8 @@ public class RenewalLeadScheduler {
      * then creates a lead via the Lead Service for each.
      */
 //    @Scheduled(cron = "0 0 1 * * *")
-    @Scheduled(fixedRate = 10000)
+//    @Scheduled(fixedRate =
+//    10000)
     @Transactional
     public void checkRenewalsAndCreateLeads() {
 
