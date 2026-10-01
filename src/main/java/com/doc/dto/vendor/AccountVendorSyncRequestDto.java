@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 public class AccountVendorSyncRequestDto {
 
     /*
+
      * Vendor ID from Operation Service.
      */
     private Long operationVendorId;
