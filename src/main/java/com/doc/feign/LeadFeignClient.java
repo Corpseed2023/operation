@@ -1,8 +1,7 @@
 package com.doc.feign;
 
 import com.doc.dto.LeadDTO;
-import com.doc.dto.lead.CertificationRenewalLeadRequestDto;
-import com.doc.dto.lead.CertificationRenewalLeadResponseDto;
+import com.doc.dto.lead.*;
 import com.doc.dto.legalDashbaord.CompanyLegalClientDto;
 import com.doc.dto.vendor.LeadVendorAssigneeDto;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -41,14 +40,39 @@ public interface LeadFeignClient {
     @PostMapping(
             "/leadService/api/v1/internal/certification-renewal-leads"
     )
-    CertificationRenewalLeadResponseDto
+    default CertificationRenewalLeadResponseDto
     createCertificationRenewalLead(
             @RequestBody
             CertificationRenewalLeadRequestDto request
+    ) {
+        return null;
+    }
+
+    // =========================================================
+// NEW SCHEDULER RENEWAL -> RD API
+// =========================================================
+
+    @PostMapping(
+            "/leadService/api/v1/leads/certification/renewal"
+    )
+    ScheduledCertificationLeadResponseDto
+    createScheduledCertificationRenewalLead(
+            @RequestBody
+            ScheduledCertificationRenewalLeadRequestDto request
     );
 
 
+// =========================================================
+// NEW SCHEDULER RETURN -> RD API
+// =========================================================
 
-
+    @PostMapping(
+            "/leadService/api/v1/leads/certification/return"
+    )
+    ScheduledCertificationLeadResponseDto
+    createScheduledCertificateReturnLead(
+            @RequestBody
+            ScheduledCertificateReturnLeadRequestDto request
+    );
 
 }

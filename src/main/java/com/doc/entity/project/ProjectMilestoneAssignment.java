@@ -613,4 +613,41 @@ public class ProjectMilestoneAssignment {
             name = "client_completion_date"
     )
     private LocalDate clientCompletionDate;
+
+    @Column(
+            name = "return_lead_id"
+    )
+    @Comment(
+            "Return Lead ID returned by Lead Service"
+    )
+    private Long returnLeadId;
+
+
+    @Column(
+            name = "return_lead_attempt_count",
+            nullable = false
+    )
+    @Comment(
+            "Number of attempts made to create Return Lead"
+    )
+    private Integer returnLeadAttemptCount = 0;
+
+
+    @Column(
+            name = "return_lead_last_attempt_at"
+    )
+    @Comment(
+            "Last attempt timestamp for Return Lead creation"
+    )
+    private LocalDateTime returnLeadLastAttemptAt;
+
+
+    @Column(
+            name = "return_lead_error",
+            length = 1000
+    )
+    @Comment(
+            "Last error received while creating Return Lead"
+    )
+    private String returnLeadError;
 }

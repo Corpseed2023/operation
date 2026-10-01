@@ -1,266 +1,918 @@
 package com.doc.scheduler;
 
-import com.doc.dto.LeadDTO;
-import com.doc.entity.client.Company;
+import com.doc.dto.lead.ScheduledCertificationLeadResponseDto;
+import com.doc.dto.lead.ScheduledCertificationRenewalLeadRequestDto;
 import com.doc.entity.client.Contact;
 import com.doc.entity.project.Project;
 import com.doc.entity.project.ProjectMilestoneAssignment;
 import com.doc.feign.LeadFeignClient;
 import com.doc.repository.ProjectMilestoneAssignmentRepository;
+
 import feign.FeignException;
+
 import lombok.RequiredArgsConstructor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.EnableScheduling;
+
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+
 import java.util.Date;
 import java.util.List;
 
+
 @Component
 @RequiredArgsConstructor
-//@EnableScheduling
 public class RenewalLeadScheduler {
 
-    private static final Logger logger = LoggerFactory.getLogger(RenewalLeadScheduler.class);
 
-    private static final long RENEWAL_LOOKAHEAD_DAYS = 40L;
+    // =========================================================
+    // LOGGER
+    // =========================================================
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(
+                    RenewalLeadScheduler.class
+            );
 
 
-    private final ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+    // =========================================================
+    // CONSTANTS
+    // =========================================================
 
-    private final LeadFeignClient leadFeignClient;
+    private static final ZoneId INDIA_ZONE =
+            ZoneId.of(
+                    "Asia/Kolkata"
+            );
+
+
+    /**
+     * Scheduler will fetch certificates whose
+     * renewalDueDate is within next 40 days.
+     */
+    private static final long RENEWAL_LOOKAHEAD_DAYS =
+            40L;
+
+
+    /**
+     * Lead source sent to Lead Service.
+     */
+    private static final String RENEWAL_SOURCE =
+            "CERTIFICATE_RENEWAL";
+
+
+    /**
+     * This scheduler always routes the Lead
+     * to Renewal Desk.
+     *
+     * Lead Service will actually identify
+     * the RD user mapped with the Solution.
+     */
+    private static final String TARGET_WORK_FUNCTION =
+            "RD";
+
+
+    /**
+     * Operation-side source reference.
+     */
+    private static final String SOURCE_REFERENCE_TYPE =
+            "PROJECT_MILESTONE_ASSIGNMENT";
+
+
+    // =========================================================
+    // DEPENDENCIES
+    // =========================================================
+
+    private final ProjectMilestoneAssignmentRepository
+            projectMilestoneAssignmentRepository;
+
+
+    private final LeadFeignClient
+            leadFeignClient;
+
+
+    // =========================================================
+    // SCHEDULER
+    // =========================================================
 
     /**
      * Runs every night at 1:00 AM.
-     * Finds every active certificate whose renewalDueDate is within the next
-     * 40 days (or already past) and for which a lead hasn't been created yet,
-     * then creates a lead via the Lead Service for each.
+     *
+     * Operation Service:
+     *
+     * 1. Finds Renewal records.
+     * 2. Sends Project/Solution/Company information.
+     *
+     * Lead Service:
+     *
+     * 1. Finds Solution mapping.
+     * 2. Finds RD users.
+     * 3. Selects eligible RD.
+     * 4. Creates Lead directly for RD.
      */
-    @Scheduled(cron = "0 0 1 * * *")
-//    @Scheduled(fixedRate = 10000)
-    @Transactional
+    @Scheduled(
+            cron = "0 0 1 * * *"
+    )
     public void checkRenewalsAndCreateLeads() {
 
-        LocalDate thresholdDate = LocalDate.now().plusDays(RENEWAL_LOOKAHEAD_DAYS);
 
-        logger.info("[RENEWAL-LEAD-SCHEDULER-START] thresholdDate={}", thresholdDate);
+        LocalDate thresholdDate =
+                LocalDate
+                        .now(
+                                INDIA_ZONE
+                        )
+                        .plusDays(
+                                RENEWAL_LOOKAHEAD_DAYS
+                        );
 
-        List<ProjectMilestoneAssignment> candidates =
-                projectMilestoneAssignmentRepository.findRenewalsDueForLeadCreation(thresholdDate);
-
-        logger.info("[RENEWAL-LEAD-SCHEDULER-CANDIDATES] count={}", candidates.size());
-
-        int successCount = 0;
-        int failureCount = 0;
-
-        for (ProjectMilestoneAssignment assignment : candidates) {
-            try {
-                boolean created = processRenewal(assignment);
-                if (created) {
-                    successCount++;
-                } else {
-                    failureCount++;
-                }
-            } catch (Exception e) {
-                // One bad record must never stop the rest of the batch.
-                failureCount++;
-                logger.error(
-                        "[RENEWAL-LEAD-PROCESSING-ERROR] assignmentId={}, error={}",
-                        assignment.getId(), e.getMessage(), e
-                );
-            }
-        }
 
         logger.info(
-                "[RENEWAL-LEAD-SCHEDULER-COMPLETE] total={}, created={}, failed={}",
-                candidates.size(), successCount, failureCount
+                "[SCHEDULED-RENEWAL-LEAD-START] thresholdDate={}",
+                thresholdDate
         );
-    }
 
-    protected boolean processRenewal(ProjectMilestoneAssignment assignment) {
-        if (assignment.getRenewalDueDate() == null) {
-            logger.warn("[RENEWAL-LEAD-SKIPPED] assignmentId={} has no renewalDueDate", assignment.getId());
-            return false;
-        }
 
-        LeadDTO leadDTO = buildLeadDto(assignment);
-        boolean success = callCreateLead(leadDTO);
+        List<ProjectMilestoneAssignment> candidates =
+                projectMilestoneAssignmentRepository
+                        .findRenewalsDueForLeadCreation(
+                                thresholdDate
+                        );
 
-        if (success) {
-            assignment.setRenewalLeadCreated(true);
-            assignment.setUpdatedDate(new Date());
-            projectMilestoneAssignmentRepository.save(assignment);
+
+        if (candidates == null
+                || candidates.isEmpty()) {
+
 
             logger.info(
-                    "[RENEWAL-LEAD-FLAGGED] assignmentId={}, renewalDueDate={}",
-                    assignment.getId(), assignment.getRenewalDueDate()
+                    "[SCHEDULED-RENEWAL-LEAD-NO-CANDIDATES] thresholdDate={}",
+                    thresholdDate
             );
-        } else {
-            logger.warn(
-                    "[RENEWAL-LEAD-RETRY-NEXT-RUN] assignmentId={} will be retried on next scheduled run",
-                    assignment.getId()
-            );
-        }
 
-        return success;
-    }
 
-    /**
-     * Calls the Lead Service directly via Feign.
-     * Returns true only on a genuine 2xx/CREATED response — false on any
-     * 4xx/5xx or network failure, so the caller skips marking the renewal
-     * as processed and it gets retried on the next scheduled run.
-     */
-    private boolean callCreateLead(LeadDTO leadDTO) {
-        try {
-            ResponseEntity<Object> response = leadFeignClient.createLead(leadDTO);
-
-            if (response != null
-                    && (response.getStatusCode() == HttpStatus.CREATED
-                    || response.getStatusCode().is2xxSuccessful())) {
-
-                logger.info(
-                        "[RENEWAL-LEAD-CREATED] leadName={}, productId={}, status={}",
-                        leadDTO.getLeadName(), leadDTO.getProductId(), response.getStatusCode()
-                );
-                return true;
-            }
-
-            logger.warn(
-                    "[RENEWAL-LEAD-UNEXPECTED-STATUS] leadName={}, status={}",
-                    leadDTO.getLeadName(), response != null ? response.getStatusCode() : "null response"
-            );
-            return false;
-
-        } catch (FeignException e) {
-            logger.error(
-                    "[RENEWAL-LEAD-CALL-FAILED] leadName={}, productId={}, status={}, error={}",
-                    leadDTO.getLeadName(), leadDTO.getProductId(), e.status(), e.getMessage(), e
-            );
-            return false;
-
-        } catch (Exception e) {
-            logger.error(
-                    "[RENEWAL-LEAD-CALL-UNEXPECTED-ERROR] leadName={}, productId={}, error={}",
-                    leadDTO.getLeadName(), leadDTO.getProductId(), e.getMessage(), e
-            );
-            return false;
-        }
-    }
-
-    /**
-     * Maps a ProjectMilestoneAssignment (renewal-eligible certificate) to a LeadDTO.
-     * Adjust field sourcing below once you confirm what your Project entity
-     * exposes for client name/email/mobile (needed for validateContactInfo
-     * on the Lead Service side).
-     */
-    private LeadDTO buildLeadDto(ProjectMilestoneAssignment assignment) {
-        Project project = assignment.getProject();
-
-        LeadDTO dto = new LeadDTO();
-
-        dto.setName(project != null ? safeProjectName(project) : "Renewal Lead");
-        dto.setLeadName(project != null ? safeProjectName(project) : "Renewal Lead");
-        dto.setLeadDescription(
-                "Auto-generated renewal lead. Certificate expiring on "
-                        + assignment.getCertificateExpiryDate()
-                        + " (renewal due " + assignment.getRenewalDueDate() + ")"
-        );
-
-        dto.setSource("SYSTEM_RENEWAL");
-        dto.setProductId(project != null && project.getProduct() != null
-                ? project.getProduct().getId() : null);
-
-        // Resolve contact info: prefer the project's direct contact (unit-level person),
-        // fall back to company-level contact if the project has no contact assigned.
-        resolveContactInfo(dto, project);
-
-        dto.setAuto(true);
-        dto.setCreateDate(new Date());
-        dto.setLastUpdated(new Date());
-        dto.setDeleted(false);
-
-        return dto;
-    }
-
-    /**
-     * Populates email/mobile/name on the LeadDTO from the project's Contact,
-     * falling back to Company-level fields if no direct contact is set.
-     *
-     * NOTE: Adjust getter names below (getMobile, getPhone, etc.) to match
-     * your actual Contact/Company entity field names if they differ.
-     */
-    private void resolveContactInfo(LeadDTO dto, Project project) {
-        if (project == null) {
-            logger.warn("[RENEWAL-LEAD-NO-PROJECT] Cannot resolve contact info, project is null");
             return;
         }
 
-        Contact contact = project.getContact();
 
-        if (contact != null) {
-            dto.setEmail(safeTrim(contact.getEmail()));
-            dto.setMobileNo(safeTrim(contact.getContactNo()));
+        logger.info(
+                "[SCHEDULED-RENEWAL-LEAD-CANDIDATES] count={}",
+                candidates.size()
+        );
 
-            if (dto.getName() == null || dto.getName().isBlank()) {
-                dto.setName(safeTrim(contact.getName()));
-            }
 
-            logger.debug(
-                    "[RENEWAL-LEAD-CONTACT-RESOLVED] projectId={}, contactId={}, hasEmail={}, hasMobile={}",
-                    project.getId(), contact.getId(),
-                    dto.getEmail() != null, dto.getMobileNo() != null
-            );
-        }
+        int successCount =
+                0;
 
-        // Fallback to company-level contact info if the direct contact
-        // didn't give us an email or mobile
-        if ((dto.getEmail() == null || dto.getEmail().isBlank())
-                && (dto.getMobileNo() == null || dto.getMobileNo().isBlank())) {
 
-            Company company = project.getCompany();
+        int failureCount =
+                0;
 
-            if (company != null) {
-                dto.setEmail(safeTrim(contact.getEmail()));
-                dto.setMobileNo(safeTrim(contact.getContactNo()));
 
-                logger.debug(
-                        "[RENEWAL-LEAD-CONTACT-FALLBACK-COMPANY] projectId={}, companyId={}, hasEmail={}, hasMobile={}",
-                        project.getId(), company.getId(),
-                        dto.getEmail() != null, dto.getMobileNo() != null
+        // =====================================================
+        // PROCESS EACH RENEWAL SEPARATELY
+        //
+        // One failure must never stop remaining records.
+        // =====================================================
+
+        for (ProjectMilestoneAssignment assignment :
+                candidates) {
+
+
+            try {
+
+
+                boolean created =
+                        processRenewal(
+                                assignment
+                        );
+
+
+                if (created) {
+
+
+                    successCount++;
+
+
+                } else {
+
+
+                    failureCount++;
+                }
+
+
+            } catch (Exception exception) {
+
+
+                failureCount++;
+
+
+                logger.error(
+                        "[SCHEDULED-RENEWAL-LEAD-PROCESSING-ERROR] " +
+                                "assignmentId={}, error={}",
+
+                        assignment != null
+                                ? assignment.getId()
+                                : null,
+
+                        exception.getMessage(),
+
+                        exception
                 );
             }
         }
 
-        if ((dto.getEmail() == null || dto.getEmail().isBlank())
-                && (dto.getMobileNo() == null || dto.getMobileNo().isBlank())) {
+
+        logger.info(
+                "[SCHEDULED-RENEWAL-LEAD-COMPLETE] " +
+                        "total={}, success={}, failed={}",
+
+                candidates.size(),
+
+                successCount,
+
+                failureCount
+        );
+    }
+
+
+    // =========================================================
+    // PROCESS SINGLE RENEWAL
+    // =========================================================
+
+    protected boolean processRenewal(
+            ProjectMilestoneAssignment assignment
+    ) {
+
+
+        // =====================================================
+        // 1. VALIDATE ASSIGNMENT
+        // =====================================================
+
+        if (assignment == null) {
+
 
             logger.warn(
-                    "[RENEWAL-LEAD-MISSING-CONTACT] projectId={} has no email or mobile on contact or company — lead creation will fail validation",
-                    project.getId()
+                    "[SCHEDULED-RENEWAL-LEAD-SKIPPED] " +
+                            "reason=ASSIGNMENT_NULL"
             );
+
+
+            return false;
         }
-    }
 
-    private String safeTrim(String value) {
 
-        return value != null && !value.isBlank() ? value.trim() : null ;
-    }
+        // =====================================================
+        // 2. DUPLICATE PROTECTION
+        // =====================================================
 
-    private String safeProjectName(Project project) {
+        if (assignment.isRenewalLeadCreated()) {
+
+
+            logger.info(
+                    "[SCHEDULED-RENEWAL-LEAD-SKIPPED] " +
+                            "assignmentId={}, leadId={}, " +
+                            "reason=ALREADY_CREATED",
+
+                    assignment.getId(),
+
+                    assignment.getRenewalLeadId()
+            );
+
+
+            return true;
+        }
+
+
+        // =====================================================
+        // 3. RENEWAL DATE
+        // =====================================================
+
+        if (assignment.getRenewalDueDate() == null) {
+
+
+            logger.warn(
+                    "[SCHEDULED-RENEWAL-LEAD-SKIPPED] " +
+                            "assignmentId={}, " +
+                            "reason=RENEWAL_DUE_DATE_MISSING",
+
+                    assignment.getId()
+            );
+
+
+            return false;
+        }
+
+
+        // =====================================================
+        // 4. PROJECT
+        // =====================================================
+
+        Project project =
+                assignment.getProject();
+
+
+        if (project == null
+                || project.getId() == null) {
+
+
+            markScheduledRenewalFailure(
+                    assignment,
+                    "Project information is missing"
+            );
+
+
+            return false;
+        }
+
+
+        // =====================================================
+        // 5. PRODUCT / SOLUTION
+        // =====================================================
+
+        if (project.getProduct() == null
+                || project
+                .getProduct()
+                .getId() == null) {
+
+
+            markScheduledRenewalFailure(
+                    assignment,
+                    "Project Product/Solution information is missing"
+            );
+
+
+            return false;
+        }
+
+
+        // =====================================================
+        // 6. COMPANY
+        // =====================================================
+
+        if (project.getCompany() == null
+                || project
+                .getCompany()
+                .getId() == null) {
+
+
+            markScheduledRenewalFailure(
+                    assignment,
+                    "Project Company information is missing"
+            );
+
+
+            return false;
+        }
+
+
+        // =====================================================
+        // 7. REGISTER ATTEMPT
+        // =====================================================
+
+        Integer currentAttemptCount =
+                assignment
+                        .getRenewalLeadAttemptCount();
+
+
+        assignment.setRenewalLeadAttemptCount(
+
+                currentAttemptCount == null
+                        ? 1
+                        : currentAttemptCount + 1
+        );
+
+
+        assignment.setRenewalLeadLastAttemptAt(
+                LocalDateTime.now(
+                        INDIA_ZONE
+                )
+        );
+
+
+        assignment.setRenewalLeadError(
+                null
+        );
+
+
+        assignment.setUpdatedDate(
+                new Date()
+        );
+
+
+        projectMilestoneAssignmentRepository.save(
+                assignment
+        );
+
+
+        // =====================================================
+        // 8. BUILD REQUEST
+        // =====================================================
+
+        ScheduledCertificationRenewalLeadRequestDto request =
+                buildScheduledRenewalRequest(
+                        assignment,
+                        project
+                );
+
+
+        // =====================================================
+        // 9. CALL NEW LEAD SERVICE API
+        // =====================================================
+
         try {
-            return project.getName() != null && !project.getName().isBlank()
-                    ? project.getName().trim()
-                    : "Project-" + project.getId();
-        } catch (Exception e) {
-            return "Project-" + project.getId();
+
+
+            logger.info(
+                    "[SCHEDULED-RENEWAL-LEAD-REQUEST] " +
+                            "assignmentId={}, " +
+                            "projectId={}, " +
+                            "projectNo={}, " +
+                            "originalLeadId={}, " +
+                            "solutionId={}, " +
+                            "companyId={}, " +
+                            "renewalDueDate={}, " +
+                            "certificateExpiryDate={}, " +
+                            "targetWorkFunction={}",
+
+                    assignment.getId(),
+
+                    request.getProjectId(),
+
+                    request.getProjectNo(),
+
+                    request.getOriginalLeadId(),
+
+                    request.getSolutionId(),
+
+                    request.getCompanyId(),
+
+                    request.getRenewalDueDate(),
+
+                    request.getCertificateExpiryDate(),
+
+                    request.getTargetWorkFunction()
+            );
+
+
+            ScheduledCertificationLeadResponseDto response =
+                    leadFeignClient
+                            .createScheduledCertificationRenewalLead(
+                                    request
+                            );
+
+
+            // =================================================
+            // 10. EMPTY RESPONSE
+            // =================================================
+
+            if (response == null) {
+
+
+                markScheduledRenewalFailure(
+                        assignment,
+                        "Lead Service returned empty response"
+                );
+
+
+                return false;
+            }
+
+
+            // =================================================
+            // 11. VALIDATE LEAD ID
+            // =================================================
+
+            if (response.getLeadId() == null
+                    || response.getLeadId() <= 0) {
+
+
+                markScheduledRenewalFailure(
+                        assignment,
+                        "Lead Service returned invalid Lead ID"
+                );
+
+
+                return false;
+            }
+
+
+            // =================================================
+            // 12. SUCCESS
+            // =================================================
+
+            assignment.setRenewalLeadCreated(
+                    true
+            );
+
+
+            assignment.setRenewalLeadId(
+                    response.getLeadId()
+            );
+
+
+            assignment.setRenewalLeadCreatedAt(
+                    LocalDateTime.now(
+                            INDIA_ZONE
+                    )
+            );
+
+
+            assignment.setRenewalLeadLastAttemptAt(
+                    LocalDateTime.now(
+                            INDIA_ZONE
+                    )
+            );
+
+
+            assignment.setRenewalLeadError(
+                    null
+            );
+
+
+            assignment.setUpdatedDate(
+                    new Date()
+            );
+
+
+            projectMilestoneAssignmentRepository.save(
+                    assignment
+            );
+
+
+            logger.info(
+                    "[SCHEDULED-RENEWAL-LEAD-SUCCESS] " +
+                            "assignmentId={}, " +
+                            "projectId={}, " +
+                            "leadId={}, " +
+                            "solutionId={}, " +
+                            "assignedUserId={}, " +
+                            "assignedUserName={}, " +
+                            "workFunction={}, " +
+                            "existingLead={}",
+
+                    assignment.getId(),
+
+                    project.getId(),
+
+                    response.getLeadId(),
+
+                    response.getSolutionId(),
+
+                    response.getAssignedUserId(),
+
+                    response.getAssignedUserName(),
+
+                    response.getAssignmentWorkFunction(),
+
+                    response.isExistingLead()
+            );
+
+
+            return true;
+
+
+        } catch (FeignException exception) {
+
+
+            logger.error(
+                    "[SCHEDULED-RENEWAL-LEAD-FEIGN-ERROR] " +
+                            "assignmentId={}, projectId={}, " +
+                            "httpStatus={}, error={}",
+
+                    assignment.getId(),
+
+                    project.getId(),
+
+                    exception.status(),
+
+                    exception.getMessage(),
+
+                    exception
+            );
+
+
+            markScheduledRenewalFailure(
+                    assignment,
+
+                    "Lead Service HTTP "
+                            + exception.status()
+                            + ": "
+                            + exception.getMessage()
+            );
+
+
+            return false;
+
+
+        } catch (Exception exception) {
+
+
+            logger.error(
+                    "[SCHEDULED-RENEWAL-LEAD-ERROR] " +
+                            "assignmentId={}, projectId={}, error={}",
+
+                    assignment.getId(),
+
+                    project.getId(),
+
+                    exception.getMessage(),
+
+                    exception
+            );
+
+
+            markScheduledRenewalFailure(
+                    assignment,
+                    exception.getMessage()
+            );
+
+
+            return false;
         }
+    }
+
+
+    // =========================================================
+    // BUILD RENEWAL REQUEST
+    // =========================================================
+
+    private ScheduledCertificationRenewalLeadRequestDto
+    buildScheduledRenewalRequest(
+            ProjectMilestoneAssignment assignment,
+            Project project
+    ) {
+
+
+        Contact contact =
+                project.getContact();
+
+
+        return ScheduledCertificationRenewalLeadRequestDto
+                .builder()
+
+
+                // =================================================
+                // PROJECT
+                // =================================================
+
+                .projectId(
+                        project.getId()
+                )
+
+
+                .projectNo(
+                        project.getProjectNo()
+                )
+
+
+                .originalLeadId(
+                        project.getLeadId()
+                )
+
+
+                // =================================================
+                // SOLUTION
+                //
+                // Operation Product ID =
+                // Lead Service Solution ID
+                // =================================================
+
+                .solutionId(
+                        project
+                                .getProduct()
+                                .getId()
+                )
+
+
+                // =================================================
+                // COMPANY
+                // =================================================
+
+                .companyId(
+                        project
+                                .getCompany()
+                                .getId()
+                )
+
+
+                .companyName(
+                        project
+                                .getCompany()
+                                .getName()
+                )
+
+
+                // =================================================
+                // CONTACT
+                // =================================================
+
+                .contactId(
+                        contact != null
+                                ? contact.getId()
+                                : null
+                )
+
+
+                .contactName(
+                        contact != null
+                                ? safeTrim(
+                                contact.getName()
+                        )
+                                : null
+                )
+
+
+                .contactEmail(
+                        contact != null
+                                ? safeTrim(
+                                contact.getEmail()
+                        )
+                                : null
+                )
+
+
+                .contactMobile(
+                        contact != null
+                                ? safeTrim(
+                                contact.getContactNo()
+                        )
+                                : null
+                )
+
+
+                // =================================================
+                // OPERATION REFERENCE
+                // =================================================
+
+                .milestoneAssignmentId(
+                        assignment.getId()
+                )
+
+
+                .sourceReferenceType(
+                        SOURCE_REFERENCE_TYPE
+                )
+
+
+                .sourceReferenceId(
+                        assignment.getId()
+                )
+
+
+                // =================================================
+                // CERTIFICATE
+                // =================================================
+
+                .certificateIssueDate(
+                        assignment
+                                .getCertificateIssueDate()
+                )
+
+
+                .certificateExpiryDate(
+                        assignment
+                                .getCertificateExpiryDate()
+                )
+
+
+                .renewalDueDate(
+                        assignment
+                                .getRenewalDueDate()
+                )
+
+
+                // =================================================
+                // LEAD ROUTING
+                // =================================================
+
+                .source(
+                        RENEWAL_SOURCE
+                )
+
+
+                .targetWorkFunction(
+                        TARGET_WORK_FUNCTION
+                )
+
+
+                .build();
+    }
+
+
+    // =========================================================
+    // MARK FAILURE
+    // =========================================================
+
+    private void markScheduledRenewalFailure(
+            ProjectMilestoneAssignment assignment,
+            String errorMessage
+    ) {
+
+
+        if (assignment == null) {
+
+
+            return;
+        }
+
+
+        String error =
+                safeTrim(
+                        errorMessage
+                );
+
+
+        if (error == null) {
+
+
+            error =
+                    "Unknown scheduled Renewal Lead creation error";
+        }
+
+
+        if (error.length() > 1000) {
+
+
+            error =
+                    error.substring(
+                            0,
+                            1000
+                    );
+        }
+
+
+        assignment.setRenewalLeadCreated(
+                false
+        );
+
+
+        assignment.setRenewalLeadError(
+                error
+        );
+
+
+        assignment.setRenewalLeadLastAttemptAt(
+                LocalDateTime.now(
+                        INDIA_ZONE
+                )
+        );
+
+
+        assignment.setUpdatedDate(
+                new Date()
+        );
+
+
+        projectMilestoneAssignmentRepository.save(
+                assignment
+        );
+
+
+        logger.error(
+                "[SCHEDULED-RENEWAL-LEAD-FAILED] " +
+                        "assignmentId={}, error={}",
+
+                assignment.getId(),
+
+                error
+        );
+    }
+
+
+    // =========================================================
+    // SAFE STRING
+    // =========================================================
+
+    private String safeTrim(
+            String value
+    ) {
+
+
+        if (value == null) {
+
+
+            return null;
+        }
+
+
+        String normalized =
+                value.trim();
+
+
+        if (normalized.isEmpty()
+                || "NA".equalsIgnoreCase(
+                normalized
+        )) {
+
+
+            return null;
+        }
+
+
+        return normalized;
     }
 }
