@@ -39,6 +39,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private static final Logger logger =
             LogManager.getLogger(PurchaseOrderServiceImpl.class);
 
+    private static final int MONEY_SCALE = 0;
+    private static final int RATE_SCALE = 2;
+
+    private static final RoundingMode MONEY_ROUNDING =
+            RoundingMode.HALF_UP;
+
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final ProcurementMilestoneAssignmentRepository procurementRepository;
@@ -47,12 +53,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final PaymentTypeRepository paymentTypeRepository;
     private final String companyStateCode;
     private final VendorFinalizationRepository vendorFinalizationRepository;
-
-    private static final int MONEY_SCALE = 0;
-    private static final int RATE_SCALE = 0;
-
-    private static final RoundingMode MONEY_ROUNDING =
-            RoundingMode.HALF_UP;
 
     public PurchaseOrderServiceImpl(
             PurchaseOrderRepository purchaseOrderRepository,
@@ -481,7 +481,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 );
 
         BigDecimal requestedPoAmount =
-                roundMoney(amountBreakup.getGrandTotal());
+                roundMoney(
+                        amountBreakup.getGrandTotal()
+                );
 
         // =========================================================
         // VENDOR FINALIZED AMOUNT
@@ -1109,16 +1111,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     }
 
-    /**
-     * GST is supplied explicitly for the Purchase Order. When GST is not
-     * applicable, the backend always stores/calculates a zero GST rate.
-     */
+    /***
+     ** GST is supplied explicitly for the Purchase Order. When GST is not*
+     ** applicable, the backend always stores/calculates a zero GST rate.*
+     **/
     private BigDecimal resolveRequestedGstRate(PurchaseOrderRequestDto dto) {
         if (!Boolean.TRUE.equals(dto.getGstApplicable())) {
             return roundRate(BigDecimal.ZERO);
         }
 
-        return roundRate(dto.getGstPercentage());
+        return dto.getGstPercentage().setScale(2, RoundingMode.HALF_UP);
     }
 
     private void validateGstFields(PurchaseOrderRequestDto dto) {
@@ -1209,7 +1211,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         if (finalAmount == null
                 || finalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-
             throw new ValidationException(
                     "Final amount must be greater than zero",
                     "ERR_INVALID_AMOUNT"
@@ -1217,28 +1218,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         /*
-         * ============================================================
-         * BASIC AMOUNT
-         * ============================================================
-         *
-         * Business rule:
-         *
-         * 123.23 -> 123
-         * 123.49 -> 123
-         * 123.50 -> 124
-         * 123.60 -> 124
+         * Money is rounded to whole rupees.
+         * GST RATE is NOT rounded to a whole number.
+         * Example: 12.5% remains 12.50%.
          */
         BigDecimal baseAmount =
                 roundMoney(finalAmount);
 
-        /*
-         * GST RATE IS A PERCENTAGE.
-         *
-         * Round percentage to nearest whole number.
-         *
-         * Example:
-         * 12.50% becomes 13%.
-         */
         BigDecimal normalizedGstRate =
                 roundRate(
                         gstRate != null
@@ -1251,25 +1237,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         BigDecimal igstAmount = zeroMoney();
         BigDecimal totalTaxAmount = zeroMoney();
 
-        String vendorStateCode =
-                getVendorStateCode(
-                        vendor != null
-                                ? vendor.getGstNumber()
-                                : null
-                );
+        String vendorStateCode = getVendorStateCode(
+                vendor != null ? vendor.getGstNumber() : null
+        );
 
-        String buyerStateCode =
-                getConfiguredCompanyStateCode();
+        String buyerStateCode = getConfiguredCompanyStateCode();
 
-        /*
-         * ============================================================
-         * GST
-         * ============================================================
-         */
         if (normalizedGstRate.compareTo(BigDecimal.ZERO) > 0) {
 
             if (vendorStateCode == null) {
-
                 throw new ValidationException(
                         "Valid vendor GST number is required for GST calculation",
                         "ERR_VENDOR_GST_REQUIRED"
@@ -1277,15 +1253,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             }
 
             /*
-             * IMPORTANT:
-             *
-             * Calculate TOTAL GST first.
-             * Then round TOTAL GST to nearest rupee.
-             *
-             * Do not independently calculate/round CGST and SGST,
-             * otherwise:
-             *
-             * CGST + SGST may become different from total GST.
+             * Calculate total GST from the exact configured GST rate,
+             * then round only the MONEY result to whole rupees.
              */
             totalTaxAmount =
                     calculatePercentageAmount(
@@ -1293,23 +1262,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                             normalizedGstRate
                     );
 
-            /*
-             * ========================================================
-             * INTRA STATE
-             * ========================================================
-             */
             if (vendorStateCode.equals(buyerStateCode)) {
-
                 /*
-                 * Example:
-                 *
-                 * total GST = 123
-                 *
-                 * CGST = 62
-                 * SGST = 61
-                 *
-                 * Therefore:
-                 * 62 + 61 = 123
+                 * Split the already-rounded GST total so:
+                 * CGST + SGST == totalTaxAmount exactly.
                  */
                 cgstAmount =
                         totalTaxAmount.divide(
@@ -1320,33 +1276,17 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
                 sgstAmount =
                         roundMoney(
-                                totalTaxAmount.subtract(
-                                        cgstAmount
-                                )
+                                totalTaxAmount.subtract(cgstAmount)
                         );
 
             } else {
-
-                /*
-                 * ====================================================
-                 * INTER STATE
-                 * ====================================================
-                 */
-                igstAmount =
-                        totalTaxAmount;
+                igstAmount = totalTaxAmount;
             }
         }
 
-        /*
-         * ============================================================
-         * GRAND TOTAL
-         * ============================================================
-         */
         BigDecimal grandTotal =
                 roundMoney(
-                        baseAmount.add(
-                                totalTaxAmount
-                        )
+                        baseAmount.add(totalTaxAmount)
                 );
 
         return new PoAmountBreakup(
@@ -1365,11 +1305,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             BigDecimal percentage
     ) {
 
-        if (amount == null) {
-            return zeroMoney();
-        }
-
-        if (percentage == null) {
+        if (amount == null || percentage == null) {
             return zeroMoney();
         }
 
@@ -1382,47 +1318,32 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                                 MONEY_ROUNDING
                         );
 
-        return roundMoney(
-                calculatedAmount
-        );
+        return roundMoney(calculatedAmount);
     }
 
-    private BigDecimal roundMoney(
-            BigDecimal value
-    ) {
-
-        if (value == null) {
-            return zeroMoney();
-        }
-
-        return value.setScale(
+    private BigDecimal roundMoney(BigDecimal value) {
+        return value == null
+                ? zeroMoney()
+                : value.setScale(
                 MONEY_SCALE,
                 MONEY_ROUNDING
         );
     }
 
-
     private BigDecimal zeroMoney() {
-
         return BigDecimal.ZERO.setScale(
                 MONEY_SCALE,
                 MONEY_ROUNDING
         );
     }
 
-
-    private BigDecimal roundRate(
-            BigDecimal value
-    ) {
-
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(
-                    RATE_SCALE,
-                    MONEY_ROUNDING
-            );
-        }
-
-        return value.setScale(
+    private BigDecimal roundRate(BigDecimal value) {
+        return value == null
+                ? BigDecimal.ZERO.setScale(
+                RATE_SCALE,
+                MONEY_ROUNDING
+        )
+                : value.setScale(
                 RATE_SCALE,
                 MONEY_ROUNDING
         );
@@ -1471,12 +1392,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return poValue.compareTo(projectValue) > 0;
     }
 
-    private BigDecimal toBigDecimal(
-            Object value
-    ) {
+    private BigDecimal toBigDecimal(Object value) {
 
         if (value == null) {
-
             throw new ValidationException(
                     "Project total amount is required",
                     "ERR_PROJECT_TOTAL_AMOUNT_REQUIRED"
@@ -1484,25 +1402,17 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         if (value instanceof BigDecimal) {
-
-            return roundMoney(
-                    (BigDecimal) value
-            );
+            return roundMoney((BigDecimal) value);
         }
 
         if (value instanceof Number) {
-
             return roundMoney(
-                    BigDecimal.valueOf(
-                            ((Number) value).doubleValue()
-                    )
+                    BigDecimal.valueOf(((Number) value).doubleValue())
             );
         }
 
         return roundMoney(
-                new BigDecimal(
-                        value.toString()
-                )
+                new BigDecimal(value.toString())
         );
     }
 
@@ -1512,24 +1422,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return String.format("CORP-PO-%d-%05d", year, count);
     }
 
-    private PurchaseOrderResponseDto convertToPurchaseOrderResponseDto(
-            ProcurementOrder po
-    ) {
+    private PurchaseOrderResponseDto convertToPurchaseOrderResponseDto(ProcurementOrder po) {
 
-        PurchaseOrderResponseDto dto =
-                new PurchaseOrderResponseDto();
+        PurchaseOrderResponseDto dto = new PurchaseOrderResponseDto();
 
-        dto.setId(
-                po.getId()
-        );
-
-        dto.setPoNumber(
-                po.getPoNumber()
-        );
-
-        dto.setPoReferenceNumber(
-                po.getPoReferenceNumber()
-        );
+        dto.setId(po.getId());
+        dto.setPoNumber(po.getPoNumber());
+        dto.setPoReferenceNumber(po.getPoReferenceNumber());
 
         dto.setProcurementAssignmentId(
                 po.getProcurementAssignment() != null
@@ -1556,153 +1455,47 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         );
 
         if (po.getVendor() != null) {
+            Vendor vendor = po.getVendor();
 
-            Vendor vendor =
-                    po.getVendor();
-
-            dto.setVendorId(
-                    vendor.getId()
-            );
-
-            dto.setVendorName(
-                    vendor.getName()
-            );
-
-            dto.setVendorEmail(
-                    vendor.getEmail()
-            );
-
-            dto.setVendorMobile(
-                    vendor.getMobile()
-            );
-
-            dto.setVendorAddress(
-                    vendor.getFullAddress()
-            );
-
-            dto.setVendorCity(
-                    vendor.getCity()
-            );
-
-            dto.setVendorState(
-                    vendor.getState()
-            );
-
-            dto.setVendorCountry(
-                    vendor.getCountry()
-            );
-
-            dto.setVendorGSTNumber(
-                    vendor.getGstNumber()
-            );
-
-            dto.setVendorGSTRegistrationType(
-                    vendor.getGstRegistrationType()
-            );
-
-            dto.setVendorStateCode(
-                    getVendorStateCode(
-                            vendor.getGstNumber()
-                    )
-            );
-
-            dto.setVendorPANNumber(
-                    vendor.getPanNumber()
-            );
-
+            dto.setVendorId(vendor.getId());
+            dto.setVendorName(vendor.getName());
+            dto.setVendorEmail(vendor.getEmail());
+            dto.setVendorMobile(vendor.getMobile());
+            dto.setVendorAddress(vendor.getFullAddress());
+            dto.setVendorCity(vendor.getCity());
+            dto.setVendorState(vendor.getState());
+            dto.setVendorCountry(vendor.getCountry());
+            dto.setVendorGSTNumber(vendor.getGstNumber());
+            dto.setVendorGSTRegistrationType(vendor.getGstRegistrationType());
+            dto.setVendorStateCode(getVendorStateCode(vendor.getGstNumber()));
+            dto.setVendorPANNumber(vendor.getPanNumber());
         } else {
-
-            dto.setVendorGSTRegistrationType(
-                    po.getVendorGSTRegistrationType()
-            );
+            dto.setVendorGSTRegistrationType(po.getVendorGSTRegistrationType());
         }
 
-        dto.setPlaceOfSupplyStateCode(
-                po.getPlaceOfSupplyStateCode()
-        );
+        dto.setPlaceOfSupplyStateCode(po.getPlaceOfSupplyStateCode());
 
-        /*
-         * ============================================================
-         * MONEY -> WHOLE RUPEE
-         * ============================================================
-         */
+        dto.setFinalAmount(roundMoney(po.getFinalAmount()));
+        dto.setGstRate(roundRate(po.getGstRate()));
 
-        dto.setFinalAmount(
-                roundMoney(
-                        po.getFinalAmount()
-                )
-        );
+        dto.setCgstRate(getCgstRate(po));
+        dto.setSgstRate(getSgstRate(po));
+        dto.setIgstRate(getIgstRate(po));
 
-        /*
-         * Percentage is rounded to whole number using HALF_UP.
-         */
-        dto.setGstRate(
-                roundRate(
-                        po.getGstRate()
-                )
-        );
+        dto.setPaymentTerms(po.getPaymentTerms());
 
-        dto.setCgstRate(
-                getCgstRate(po)
-        );
+        dto.setCgstAmount(roundMoney(po.getCgstAmount()));
+        dto.setSgstAmount(roundMoney(po.getSgstAmount()));
+        dto.setIgstAmount(roundMoney(po.getIgstAmount()));
+        dto.setTotalTaxAmount(roundMoney(po.getTotalTaxAmount()));
 
-        dto.setSgstRate(
-                getSgstRate(po)
-        );
+        dto.setGrandTotal(roundMoney(po.getGrandTotal()));
 
-        dto.setIgstRate(
-                getIgstRate(po)
-        );
+        dto.setScopeOfWork(po.getScopeOfWork());
+        dto.setTermsAndConditions(po.getTermsAndConditions());
+        dto.setRemarks(po.getRemarks());
 
-        dto.setPaymentTerms(
-                po.getPaymentTerms()
-        );
-
-        dto.setCgstAmount(
-                roundMoney(
-                        po.getCgstAmount()
-                )
-        );
-
-        dto.setSgstAmount(
-                roundMoney(
-                        po.getSgstAmount()
-                )
-        );
-
-        dto.setIgstAmount(
-                roundMoney(
-                        po.getIgstAmount()
-                )
-        );
-
-        dto.setTotalTaxAmount(
-                roundMoney(
-                        po.getTotalTaxAmount()
-                )
-        );
-
-        dto.setGrandTotal(
-                roundMoney(
-                        po.getGrandTotal()
-                )
-        );
-
-        dto.setScopeOfWork(
-                po.getScopeOfWork()
-        );
-
-        dto.setTermsAndConditions(
-                po.getTermsAndConditions()
-        );
-
-        dto.setRemarks(
-                po.getRemarks()
-        );
-
-        dto.setStatus(
-                po.getStatus()
-        );
+        dto.setStatus(po.getStatus());
 
         dto.setPaymentTypeName(
                 po.getPaymentType() != null
@@ -1710,58 +1503,27 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         : null
         );
 
-        dto.setAttachmentUrls(
-                po.getAttachmentUrls()
-        );
+        dto.setAttachmentUrls(po.getAttachmentUrls());
 
-        dto.setPoCreatedDate(
-                po.getPoCreatedDate()
-        );
+        dto.setPoCreatedDate(po.getPoCreatedDate());
+        dto.setPoSubmittedForApprovalDate(po.getPoSubmittedForApprovalDate());
+        dto.setPoApprovedDate(po.getPoApprovedDate());
+        dto.setPoReleasedDate(po.getPoReleasedDate());
 
-        dto.setPoSubmittedForApprovalDate(
-                po.getPoSubmittedForApprovalDate()
-        );
-
-        dto.setPoApprovedDate(
-                po.getPoApprovedDate()
-        );
-
-        dto.setPoReleasedDate(
-                po.getPoReleasedDate()
-        );
-
-        dto.setCreatedBy(
-                po.getCreatedBy()
-        );
-
-        dto.setUpdatedBy(
-                po.getUpdatedBy()
-        );
-
-        dto.setApprovedBy(
-                po.getApprovedBy()
-        );
-
-        dto.setCreatedDate(
-                po.getCreatedDate()
-        );
-
-        dto.setUpdatedDate(
-                po.getUpdatedDate()
-        );
+        dto.setCreatedBy(po.getCreatedBy());
+        dto.setUpdatedBy(po.getUpdatedBy());
+        dto.setApprovedBy(po.getApprovedBy());
+        dto.setCreatedDate(po.getCreatedDate());
+        dto.setUpdatedDate(po.getUpdatedDate());
 
         return dto;
     }
-    private ProcurementOrderResponseDto mapToProcurementOrderResponseDto(
-            ProcurementOrder order
-    ) {
 
-        ProcurementOrderResponseDto dto =
-                new ProcurementOrderResponseDto();
+    private ProcurementOrderResponseDto mapToProcurementOrderResponseDto(ProcurementOrder order) {
 
-        dto.setId(
-                order.getId()
-        );
+        ProcurementOrderResponseDto dto = new ProcurementOrderResponseDto();
+
+        dto.setId(order.getId());
 
         dto.setProcurementAssignmentId(
                 order.getProcurementAssignment() != null
@@ -1805,97 +1567,29 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         : null
         );
 
-        dto.setPoNumber(
-                order.getPoNumber()
-        );
+        dto.setPoNumber(order.getPoNumber());
+        dto.setPoReferenceNumber(order.getPoReferenceNumber());
 
-        dto.setPoReferenceNumber(
-                order.getPoReferenceNumber()
-        );
+        dto.setFinalAmount(roundMoney(order.getFinalAmount()));
+        dto.setGstRate(roundRate(order.getGstRate()));
+        dto.setCgstAmount(roundMoney(order.getCgstAmount()));
+        dto.setSgstAmount(roundMoney(order.getSgstAmount()));
+        dto.setIgstAmount(roundMoney(order.getIgstAmount()));
+        dto.setTotalTaxAmount(roundMoney(order.getTotalTaxAmount()));
+        dto.setGrandTotal(roundMoney(order.getGrandTotal()));
 
-        /*
-         * MONEY
-         */
-        dto.setFinalAmount(
-                roundMoney(
-                        order.getFinalAmount()
-                )
-        );
+        dto.setScopeOfWork(order.getScopeOfWork());
+        dto.setTermsAndConditions(order.getTermsAndConditions());
+        dto.setRemarks(order.getRemarks());
 
-        /*
-         * RATE
-         */
-        dto.setGstRate(
-                roundRate(
-                        order.getGstRate()
-                )
-        );
+        dto.setAttachmentUrls(order.getAttachmentUrls());
 
-        dto.setCgstAmount(
-                roundMoney(
-                        order.getCgstAmount()
-                )
-        );
+        dto.setStatus(order.getStatus());
 
-        dto.setSgstAmount(
-                roundMoney(
-                        order.getSgstAmount()
-                )
-        );
-
-        dto.setIgstAmount(
-                roundMoney(
-                        order.getIgstAmount()
-                )
-        );
-
-        dto.setTotalTaxAmount(
-                roundMoney(
-                        order.getTotalTaxAmount()
-                )
-        );
-
-        dto.setGrandTotal(
-                roundMoney(
-                        order.getGrandTotal()
-                )
-        );
-
-        dto.setScopeOfWork(
-                order.getScopeOfWork()
-        );
-
-        dto.setTermsAndConditions(
-                order.getTermsAndConditions()
-        );
-
-        dto.setRemarks(
-                order.getRemarks()
-        );
-
-        dto.setAttachmentUrls(
-                order.getAttachmentUrls()
-        );
-
-        dto.setStatus(
-                order.getStatus()
-        );
-
-        dto.setPoCreatedDate(
-                order.getPoCreatedDate()
-        );
-
-        dto.setPoSubmittedForApprovalDate(
-                order.getPoSubmittedForApprovalDate()
-        );
-
-        dto.setPoApprovedDate(
-                order.getPoApprovedDate()
-        );
-
-        dto.setPoReleasedDate(
-                order.getPoReleasedDate()
-        );
+        dto.setPoCreatedDate(order.getPoCreatedDate());
+        dto.setPoSubmittedForApprovalDate(order.getPoSubmittedForApprovalDate());
+        dto.setPoApprovedDate(order.getPoApprovedDate());
+        dto.setPoReleasedDate(order.getPoReleasedDate());
 
         dto.setPaymentTypeId(
                 order.getPaymentType() != null
@@ -1909,28 +1603,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         : null
         );
 
-        dto.setCreatedBy(
-                order.getCreatedBy()
-        );
+        dto.setCreatedBy(order.getCreatedBy());
+        dto.setUpdatedBy(order.getUpdatedBy());
+        dto.setApprovedBy(order.getApprovedBy());
 
-        dto.setUpdatedBy(
-                order.getUpdatedBy()
-        );
-
-        dto.setApprovedBy(
-                order.getApprovedBy()
-        );
-
-        dto.setCreatedDate(
-                order.getCreatedDate()
-        );
-
-        dto.setUpdatedDate(
-                order.getUpdatedDate()
-        );
+        dto.setCreatedDate(order.getCreatedDate());
+        dto.setUpdatedDate(order.getUpdatedDate());
 
         return dto;
     }
+
     private String getVendorStateCode(String gstNumber) {
 
         if (gstNumber == null || gstNumber.trim().length() < 2) {
@@ -2048,18 +1730,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             BigDecimal requestedPoAmount
     ) {
 
-        if (procurement == null
-                || procurement.getId() == null) {
-
+        if (procurement == null || procurement.getId() == null) {
             throw new ValidationException(
                     "Procurement assignment is required",
                     "ERR_PROCUREMENT_ASSIGNMENT_REQUIRED"
             );
         }
 
-        if (vendor == null
-                || vendor.getId() == null) {
-
+        if (vendor == null || vendor.getId() == null) {
             throw new ValidationException(
                     "Vendor is required",
                     "ERR_VENDOR_REQUIRED"
@@ -2067,9 +1745,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         if (requestedPoAmount == null
-                || requestedPoAmount.compareTo(
-                BigDecimal.ZERO
-        ) <= 0) {
+                || requestedPoAmount.compareTo(BigDecimal.ZERO) <= 0) {
 
             throw new ValidationException(
                     "Purchase Order amount must be greater than zero",
@@ -2077,68 +1753,55 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
 
-        BigDecimal normalizedRequestedPoAmount =
-                roundMoney(
-                        requestedPoAmount
-                );
-
         BigDecimal finalizedAmount =
-                vendorFinalizationRepository
-                        .findTotalFinalizedAmount(
-                                procurement.getId(),
-                                vendor.getId(),
-                                EnumSet.of(
-                                        VendorFinalizationStatus.FINALIZED,
-                                        VendorFinalizationStatus.SENT_TO_ACCOUNTS,
-                                        VendorFinalizationStatus.ACCOUNTS_APPROVED,
-                                        VendorFinalizationStatus.ONBOARDING_STARTED,
-                                        VendorFinalizationStatus.ACTIVE_VENDOR_MAPPED
-                                )
-                        );
+                vendorFinalizationRepository.findTotalFinalizedAmount(
+                        procurement.getId(),
+                        vendor.getId(),
+                        EnumSet.of(
+                                VendorFinalizationStatus.FINALIZED,
+                                VendorFinalizationStatus.SENT_TO_ACCOUNTS,
+                                VendorFinalizationStatus.ACCOUNTS_APPROVED,
+                                VendorFinalizationStatus.ONBOARDING_STARTED,
+                                VendorFinalizationStatus.ACTIVE_VENDOR_MAPPED
+                        )
+                );
 
         /*
-         * No finalized amount exists.
+         * Vendor finalization amount is optional for Purchase Order creation.
          *
-         * Keep your existing business behaviour:
-         * allow PO using requested PO amount.
+         * If no finalized amount exists, allow the PO to continue by using
+         * the requested PO amount as the effective finalized amount.
+         *
+         * This keeps the existing comparison logic working:
+         *
+         * requestedPoAmount.compareTo(vendorFinalizedAmount) > 0
+         *
+         * will be false when no finalized amount exists.
          */
         if (finalizedAmount == null
-                || finalizedAmount.compareTo(
-                BigDecimal.ZERO
-        ) <= 0) {
+                || finalizedAmount.compareTo(BigDecimal.ZERO) <= 0) {
 
             logger.info(
-                    "No vendor finalized amount found. "
-                            + "Allowing Purchase Order. "
-                            + "procurementAssignmentId={}, "
-                            + "vendorId={}, requestedPoAmount={}",
+                    "No vendor finalized amount found. Allowing Purchase Order. " +
+                            "procurementAssignmentId={}, vendorId={}, requestedPoAmount={}",
                     procurement.getId(),
                     vendor.getId(),
-                    normalizedRequestedPoAmount
+                    requestedPoAmount
             );
 
-            return normalizedRequestedPoAmount;
+            return roundMoney(requestedPoAmount);
         }
 
-        BigDecimal normalizedFinalizedAmount =
-                roundMoney(
-                        finalizedAmount
-                );
-
         logger.info(
-                "Vendor finalized amount found. "
-                        + "procurementAssignmentId={}, "
-                        + "vendorId={}, finalizedAmount={}, "
-                        + "normalizedFinalizedAmount={}, "
-                        + "requestedPoAmount={}",
+                "Vendor finalized amount found. procurementAssignmentId={}, " +
+                        "vendorId={}, finalizedAmount={}, requestedPoAmount={}",
                 procurement.getId(),
                 vendor.getId(),
                 finalizedAmount,
-                normalizedFinalizedAmount,
-                normalizedRequestedPoAmount
+                requestedPoAmount
         );
 
-        return normalizedFinalizedAmount;
+        return roundMoney(finalizedAmount);
     }
 
     private void validateAdminUser(User user) {
@@ -2157,6 +1820,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             );
         }
     }
+
+
 
 
 }
