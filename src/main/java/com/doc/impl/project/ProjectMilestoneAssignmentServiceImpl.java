@@ -1232,6 +1232,70 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
             );
         }
 
+        /*
+         * =========================================================
+         * CERTIFICATE RETURN (applies to FIXED_TERM and LIFETIME)
+         * =========================================================
+         *
+         * ADDED: must run before the LIFETIME early return below.
+         */
+        String certificateReturn =
+                normalizeOptionalText(updateDto.getCertificateReturn());
+
+        if (certificateReturn == null) {
+
+            throw new ValidationException(
+                    "Certificate return (YES/NO) is required",
+                    "ERR_CERTIFICATE_RETURN_REQUIRED"
+            );
+        }
+
+        certificateReturn = certificateReturn.toUpperCase();
+
+        if ("YES".equals(certificateReturn)) {
+
+            String returnTenure =
+                    normalizeOptionalText(updateDto.getReturnTenure());
+
+            if (returnTenure == null) {
+
+                throw new ValidationException(
+                        "Return tenure is required when certificate return is YES",
+                        "ERR_RETURN_TENURE_REQUIRED"
+                );
+            }
+
+            if (updateDto.getReturnTenureExpirationDate() == null) {
+
+                throw new ValidationException(
+                        "Return tenure expiration date is required when certificate return is YES",
+                        "ERR_RETURN_TENURE_EXPIRATION_DATE_REQUIRED"
+                );
+            }
+
+            if (updateDto.getReturnTenureExpirationDate()
+                    .isBefore(LocalDate.now())) {
+
+                throw new ValidationException(
+                        "Return tenure expiration date cannot be in the past",
+                        "ERR_RETURN_TENURE_EXPIRATION_DATE_IN_PAST"
+                );
+            }
+
+            assignment.setCertificateReturn("YES");
+            assignment.setReturnTenure(returnTenure.toUpperCase());
+            assignment.setReturnTenureExpirationDate(
+                    updateDto.getReturnTenureExpirationDate()
+            );
+
+        } else {
+
+            // NO -> ignore/clear any tenure values that were sent
+            assignment.setCertificateReturn("NO");
+            assignment.setReturnTenure(null);
+            assignment.setReturnTenureExpirationDate(null);
+        }
+
         CertificateValidityType validityType =
                 updateDto.getCertificateValidityType();
 

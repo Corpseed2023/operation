@@ -181,6 +181,14 @@ public class ProjectMilestoneAssignment {
     @Comment("Visibility flag")
     private boolean isVisible = false;
 
+    @Column(name = "return_lead_created", nullable = false)
+    @Comment("True once a certificate return lead has been created")
+    private boolean returnLeadCreated = false;
+
+    @Column(name = "return_lead_created_at")
+    @Comment("Timestamp when the certificate return lead was created")
+    private LocalDateTime returnLeadCreatedAt;
+
 
     @Column(
             name = "visibility_reason",
@@ -357,6 +365,52 @@ public class ProjectMilestoneAssignment {
             "Certificate attachment URL"
     )
     private String certificationAttachmentUrl;
+
+
+    // =========================================================
+    // CERTIFICATE RETURN
+    // =========================================================
+
+    /**
+     * YES / NO.
+     *
+     * Set when the Certification milestone is completed.
+     */
+    @Column(
+            name = "certificate_return",
+            length = 3
+    )
+    @Comment(
+            "Certificate return: YES or NO"
+    )
+    private String certificateReturn;
+
+
+    /**
+     * WEEKLY / MONTHLY / QUARTERLY / YEARLY.
+     *
+     * Only populated when certificateReturn = YES.
+     */
+    @Column(
+            name = "return_tenure",
+            length = 20
+    )
+    @Comment(
+            "Return tenure: WEEKLY, MONTHLY, QUARTERLY or YEARLY"
+    )
+    private String returnTenure;
+
+
+    /**
+     * Only populated when certificateReturn = YES.
+     */
+    @Column(
+            name = "return_tenure_expiration_date"
+    )
+    @Comment(
+            "Return tenure expiration date"
+    )
+    private LocalDate returnTenureExpirationDate;
 
 
     // =========================================================

@@ -223,6 +223,17 @@ public interface ProjectMilestoneAssignmentRepository extends JpaRepository<Proj
             @Param("projectIds") List<Long> projectIds
     );
 
+    @Query("""
+    SELECT a FROM ProjectMilestoneAssignment a
+    WHERE a.isDeleted = false
+      AND a.certificateReturn = 'YES'
+      AND a.returnTenureExpirationDate IS NOT NULL
+      AND a.returnTenureExpirationDate <= :thresholdDate
+      AND a.returnLeadCreated = false
+""")
+    List<ProjectMilestoneAssignment> findCertificateReturnsDueForLeadCreation(
+            @Param("thresholdDate") LocalDate thresholdDate);
+
 
 
     @Query("""
