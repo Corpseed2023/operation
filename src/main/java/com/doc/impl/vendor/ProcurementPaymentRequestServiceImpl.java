@@ -33,7 +33,8 @@ import java.util.Optional;
 public class ProcurementPaymentRequestServiceImpl
         implements ProcurementPaymentRequestService {
 
-    private static final int MONEY_SCALE = 2;
+    private static final int MONEY_SCALE = 0;
+    private static final int RATE_SCALE = 2;
     private static final RoundingMode MONEY_ROUNDING = RoundingMode.HALF_UP;
 
     private final ProcurementPaymentRequestRepository paymentRequestRepository;
@@ -254,7 +255,7 @@ public class ProcurementPaymentRequestServiceImpl
             );
 
             effectiveGstPercentage =
-                    money(effectiveGstPercentage);
+                    rate(effectiveGstPercentage);
 
             if (!hasText(effectiveGstType)) {
 
@@ -293,7 +294,7 @@ public class ProcurementPaymentRequestServiceImpl
             );
 
             tdsPercentage =
-                    money(
+                    rate(
                             requestDto.getTdsPercentage()
                     );
         }
@@ -1888,10 +1889,10 @@ public class ProcurementPaymentRequestServiceImpl
                         Boolean.TRUE.equals(
                                 paymentRequest.getTdsActive()
                         )
-                                ? money(
+                                ? rate(
                                 paymentRequest.getTdsPercentage()
                         )
-                                : zeroMoney()
+                                : zeroRate()
                 )
 
                 .tdsAmount(
@@ -2025,7 +2026,7 @@ public class ProcurementPaymentRequestServiceImpl
 
         /*
          * Account response values are rounded to Operation's
-         * 2-decimal procurement precision before comparison.
+         * whole-rupee procurement precision before comparison.
          */
 
         validateAmountMatch(
@@ -2226,12 +2227,12 @@ public class ProcurementPaymentRequestServiceImpl
                     clean(
                             paymentRequest.getGstStateCode()
                     ),
-                    zeroMoney()
+                    zeroRate()
             );
         }
 
         BigDecimal gstPercentage =
-                money(
+                rate(
                         paymentRequest.getGstPercentage()
                 );
 
@@ -2407,17 +2408,20 @@ public class ProcurementPaymentRequestServiceImpl
             BigDecimal percentage
     ) {
 
-        return money(
-                money(amount)
-                        .multiply(
-                                percentage
-                        )
+        if (amount == null || percentage == null) {
+            return zeroMoney();
+        }
+
+        BigDecimal calculatedAmount =
+                amount
+                        .multiply(percentage)
                         .divide(
                                 BigDecimal.valueOf(100),
                                 8,
                                 MONEY_ROUNDING
-                        )
-        );
+                        );
+
+        return money(calculatedAmount);
     }
 
 
@@ -2469,6 +2473,28 @@ public class ProcurementPaymentRequestServiceImpl
 
         return BigDecimal.ZERO.setScale(
                 MONEY_SCALE,
+                MONEY_ROUNDING
+        );
+    }
+
+
+    private BigDecimal rate(
+            BigDecimal value
+    ) {
+
+        return value == null
+                ? null
+                : value.setScale(
+                RATE_SCALE,
+                MONEY_ROUNDING
+        );
+    }
+
+
+    private BigDecimal zeroRate() {
+
+        return BigDecimal.ZERO.setScale(
+                RATE_SCALE,
                 MONEY_ROUNDING
         );
     }
@@ -2557,193 +2583,140 @@ public class ProcurementPaymentRequestServiceImpl
         Vendor vendor =
                 request.getVendor();
 
+        BigDecimal bankPaymentAmount =
+                request.getBankPaymentAmount() != null
+                        ? money(request.getBankPaymentAmount())
+                        : null;
+
+        BigDecimal settlementAmount = null;
+
+        if (bankPaymentAmount != null) {
+            settlementAmount = money(
+                    bankPaymentAmount.add(
+                            request.getTdsAmount() != null
+                                    ? money(request.getTdsAmount())
+                                    : zeroMoney()
+                    )
+            );
+        }
+
         return ProcurementPaymentRequestResponseDto.builder()
 
-                .id(
-                        request.getId()
-                )
+                .id(request.getId())
 
                 .procurementOrderId(
-                        order != null
-                                ? order.getId()
-                                : null
+                        order != null ? order.getId() : null
                 )
 
                 .poNumber(
-                        order != null
-                                ? order.getPoNumber()
-                                : null
+                        order != null ? order.getPoNumber() : null
                 )
 
                 .projectId(
-                        project != null
-                                ? project.getId()
-                                : null
+                        project != null ? project.getId() : null
                 )
 
                 .projectName(
-                        project != null
-                                ? project.getName()
-                                : null
+                        project != null ? project.getName() : null
                 )
 
                 .projectNo(
-                        project != null
-                                ? project.getProjectNo()
-                                : null
+                        project != null ? project.getProjectNo() : null
                 )
 
                 .vendorId(
-                        vendor != null
-                                ? vendor.getId()
-                                : null
+                        vendor != null ? vendor.getId() : null
                 )
 
                 .vendorName(
-                        vendor != null
-                                ? vendor.getName()
-                                : null
+                        vendor != null ? vendor.getName() : null
                 )
 
                 .invoiceAmount(
-                        request.getInvoiceAmount()
+                        request.getInvoiceAmount() != null
+                                ? money(request.getInvoiceAmount())
+                                : null
                 )
 
                 .payableAmount(
-                        request.getPayableAmount()
-                )
-                .invoiceNumber(
-                        request.getInvoiceNumber()
-                )
-
-                .invoiceDate(
-                        request.getInvoiceDate()
+                        request.getPayableAmount() != null
+                                ? money(request.getPayableAmount())
+                                : null
                 )
 
+                .bankPaymentAmount(bankPaymentAmount)
+                .settlementAmount(settlementAmount)
+                .paymentDate(request.getPaymentDate())
+                .calculationVersion(request.getCalculationVersion())
 
-                .submissionDate(
-                        request.getSubmissionDate()
-                )
+                .invoiceNumber(request.getInvoiceNumber())
+                .invoiceDate(request.getInvoiceDate())
+                .submissionDate(request.getSubmissionDate())
+                .completionRemarks(request.getCompletionRemarks())
+                .proofAttachmentUrls(request.getProofAttachmentUrls())
+                .status(request.getStatus())
+                .approvedDate(request.getApprovedDate())
+                .paymentReleasedDate(request.getPaymentReleasedDate())
+                .createdBy(request.getCreatedBy())
+                .approvedBy(request.getApprovedBy())
+                .paymentReleasedBy(request.getPaymentReleasedBy())
+                .createdDate(request.getCreatedDate())
+                .updatedDate(request.getUpdatedDate())
 
-                .completionRemarks(
-                        request.getCompletionRemarks()
-                )
-
-                .proofAttachmentUrls(
-                        request.getProofAttachmentUrls()
-                )
-
-                .status(
-                        request.getStatus()
-                )
-
-                .approvedDate(
-                        request.getApprovedDate()
-                )
-
-                .paymentReleasedDate(
-                        request.getPaymentReleasedDate()
-                )
-
-                .createdBy(
-                        request.getCreatedBy()
-                )
-
-                .approvedBy(
-                        request.getApprovedBy()
-                )
-
-                .paymentReleasedBy(
-                        request.getPaymentReleasedBy()
-                )
-
-                .createdDate(
-                        request.getCreatedDate()
-                )
-
-                .updatedDate(
-                        request.getUpdatedDate()
-                )
-
-                .tdsActive(
-                        request.getTdsActive()
-                )
-
+                .tdsActive(request.getTdsActive())
                 .tdsPercentage(
-                        request.getTdsPercentage()
+                        request.getTdsPercentage() != null
+                                ? rate(request.getTdsPercentage())
+                                : null
                 )
-
                 .tdsAmount(
-                        request.getTdsAmount()
+                        request.getTdsAmount() != null
+                                ? money(request.getTdsAmount())
+                                : null
                 )
 
-                .gstActive(
-                        request.getGstActive()
-                )
-
-                .gstStateCode(
-                        request.getGstStateCode()
-                )
-
-                /*
-                 * FIX:
-                 * use payment request's actual stored GST percentage,
-                 * not order.getGstRate().
-                 */
+                .gstActive(request.getGstActive())
+                .gstStateCode(request.getGstStateCode())
                 .gstPercentage(
-                        request.getGstPercentage()
+                        request.getGstPercentage() != null
+                                ? rate(request.getGstPercentage())
+                                : null
                 )
-
-                .gstType(
-                        request.getGstType()
-                )
+                .gstType(request.getGstType())
 
                 .cgstAmount(
-                        request.getCgstAmount()
+                        request.getCgstAmount() != null
+                                ? money(request.getCgstAmount())
+                                : null
                 )
-
                 .sgstAmount(
-                        request.getSgstAmount()
+                        request.getSgstAmount() != null
+                                ? money(request.getSgstAmount())
+                                : null
                 )
-
                 .igstAmount(
-                        request.getIgstAmount()
+                        request.getIgstAmount() != null
+                                ? money(request.getIgstAmount())
+                                : null
                 )
-
                 .totalGstAmount(
-                        request.getTotalGstAmount()
+                        request.getTotalGstAmount() != null
+                                ? money(request.getTotalGstAmount())
+                                : null
                 )
 
-                /*
-                 * Taxable/basic amount.
-                 */
                 .amount(
-                        request.getAmount()
+                        request.getAmount() != null
+                                ? money(request.getAmount())
+                                : null
                 )
 
-                .paymentMode(
-                        request.getPaymentMode()
-                )
-
-                .bankLedgerId(
-                        request.getBankLedgerId()
-                )
-
-                .ledgerId(
-                        request.getLedgerId()
-                )
-
-                .ledgerType(
-                        request.getLedgerType()
-                )
-
-                .transactionReference(
-                        request.getTransactionReference()
-                )
-
-                .paymentProof(
-                        request.getPaymentProof()
-                )
+                .paymentMode(request.getPaymentMode())
+                .bankLedgerId(request.getBankLedgerId())
+                .ledgerId(request.getLedgerId())
+                .ledgerType(request.getLedgerType())
+                .transactionReference(request.getTransactionReference())
+                .paymentProof(request.getPaymentProof())
 
                 .build();
     }
@@ -2866,7 +2839,7 @@ public class ProcurementPaymentRequestServiceImpl
             paymentRequest.setTdsActive(true);
 
             paymentRequest.setTdsPercentage(
-                    money(requestedTdsPercentage)
+                    rate(requestedTdsPercentage)
             );
 
             /*
@@ -3005,21 +2978,21 @@ public class ProcurementPaymentRequestServiceImpl
         dto.setInvoiceNumber(payment.getInvoiceNumber());
         dto.setInvoiceDate(payment.getInvoiceDate());
 
-        dto.setTaxableAmount(payment.getAmount());
-        dto.setGstAmount(payment.getTotalGstAmount());
-        dto.setInvoiceAmount(payment.getInvoiceAmount());
-        dto.setTdsAmount(payment.getTdsAmount());
+        dto.setTaxableAmount(payment.getAmount() != null ? money(payment.getAmount()) : null);
+        dto.setGstAmount(payment.getTotalGstAmount() != null ? money(payment.getTotalGstAmount()) : null);
+        dto.setInvoiceAmount(payment.getInvoiceAmount() != null ? money(payment.getInvoiceAmount()) : null);
+        dto.setTdsAmount(payment.getTdsAmount() != null ? money(payment.getTdsAmount()) : null);
 
         BigDecimal bankPaid = payment.getBankPaymentAmount() != null
-                ? payment.getBankPaymentAmount()
-                : BigDecimal.ZERO;
+                ? money(payment.getBankPaymentAmount())
+                : zeroMoney();
 
         BigDecimal tds = payment.getTdsAmount() != null
-                ? payment.getTdsAmount()
-                : BigDecimal.ZERO;
+                ? money(payment.getTdsAmount())
+                : zeroMoney();
 
         dto.setAmountPaidToVendor(bankPaid);
-        dto.setSettlementAmount(bankPaid.add(tds));
+        dto.setSettlementAmount(money(bankPaid.add(tds)));
 
         dto.setPaymentDate(payment.getPaymentDate());
         dto.setPaymentMode(payment.getPaymentMode());
