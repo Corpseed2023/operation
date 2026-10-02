@@ -4,6 +4,7 @@ import com.doc.constants.StatusConstants;
 import com.doc.dto.LegalRequestDto.LegalRequestDto;
 import com.doc.dto.LegalRequestDto.LegalRequestRaiseDto;
 import com.doc.dto.LegalRequestDto.LegalRequestResolveDto;
+import com.doc.dto.CancelUnbilledAndEstimateRequestDto;
 import com.doc.dto.contact.ContactDetailsDto;
 import com.doc.dto.document.DocumentChecklistDTO;
 import com.doc.dto.project.*;
@@ -38,6 +39,7 @@ import com.doc.entity.vendor.ProcurementMilestoneAssignment;
 import com.doc.entity.vendor.VendorStatus;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.feign.AccountUnbilledFeignClient; // NEW
 import com.doc.feign.LeadFeignClient;
 import com.doc.repository.*;
 import com.doc.repository.documentRepo.ApplicantTypeRepository;
@@ -99,6 +101,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectMailService projectMailService;
     private final LeadFeignClient leadFeignClient;
     private final ProjectHistoryEventRepository projectHistoryEventRepository;
+    private final AccountUnbilledFeignClient accountUnbilledFeignClient; // NEW
 
     public ProjectServiceImpl(
             ProjectRepository projectRepository,
@@ -125,7 +128,8 @@ public class ProjectServiceImpl implements ProjectService {
             ProcurementMilestoneAssignmentRepository procurementMilestoneAssignmentRepository,
             ProjectMailService projectMailService,
             LeadFeignClient leadFeignClient,
-            ProjectHistoryEventRepository projectHistoryEventRepository
+            ProjectHistoryEventRepository projectHistoryEventRepository,
+            AccountUnbilledFeignClient accountUnbilledFeignClient // NEW
     ) {
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
@@ -152,6 +156,7 @@ public class ProjectServiceImpl implements ProjectService {
         this.projectMailService = projectMailService;
         this.leadFeignClient = leadFeignClient;
         this.projectHistoryEventRepository = projectHistoryEventRepository;
+        this.accountUnbilledFeignClient = accountUnbilledFeignClient; // NEW
     }
 
 
@@ -4764,7 +4769,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         if (project.getLegalRequestStatus() != null
                 && project.getLegalRequestStatus() != LegalRequestStatus.NONE
-                ) {
+        ) {
             throw new ValidationException(
                     "A legal request is already active for this project",
                     "ERR_LEGAL_REQUEST_ALREADY_ACTIVE"
@@ -4865,7 +4870,105 @@ public class ProjectServiceImpl implements ProjectService {
                 null, null, null
         );
 
+        // NEW: REFUND -> cancel project here, cancel unbilled + estimate in Account
+        if (dto.getStatus() == LegalRequestStatus.REFUND) {
+            cancelProjectAndAccountDocs(project, requestingUser, dto.getStatusReason());
+        }
+
         return mapToResponseDto(project);
+    }
+
+    // =========================================================
+    // NEW: LEGAL REFUND -> CANCEL PROJECT + ACCOUNT UNBILLED/ESTIMATE
+    // =========================================================
+
+    private void cancelProjectInternal(Project project, User user, String reason) {
+
+        String previousStatus = project.getStatus() != null
+                ? project.getStatus().getName()
+                : null;
+
+        ProjectStatus cancelledStatus = projectStatusRepository
+                .findByName("CANCELLED")
+                .orElseGet(() -> {
+                    ProjectStatus newStatus = new ProjectStatus();
+                    newStatus.setName("CANCELLED");
+                    newStatus.setDescription("Project has been cancelled");
+                    return projectStatusRepository.save(newStatus);
+                });
+
+        project.setCancelled(true);
+        project.setStatus(cancelledStatus);
+        project.setCancellerId(user.getId());
+        project.setUpdatedDate(new Date());
+
+        projectRepository.save(project);
+
+        saveProjectHistory(
+                project,
+                null,
+                "PROJECT_CANCELLED",
+                "PROJECT",
+                project.getId(),
+                "Project cancelled",
+                "Project " + project.getProjectNo()
+                        + " was cancelled by " + user.getFullName(),
+                reason,
+                previousStatus,
+                cancelledStatus.getName(),
+                user.getId(),
+                null,
+                null,
+                null
+        );
+    }
+
+    private void cancelProjectAndAccountDocs(Project project, User user, String reason) {
+
+        // 1. Operation: cancel project
+        if (!project.isCancelled()) {
+            cancelProjectInternal(project, user, "Legal refund: " + reason);
+        }
+
+        // 2. Account: cancel unbilled + estimate
+        if (!StringUtils.hasText(project.getUnbilledNumber())) {
+            logger.warn(
+                    "[LEGAL-REFUND] projectId={} has no unbilledNumber, Account step skipped",
+                    project.getId()
+            );
+            return;
+        }
+
+        CancelUnbilledAndEstimateRequestDto req = new CancelUnbilledAndEstimateRequestDto();
+        req.setCancelledByUserId(user.getId());
+        req.setReason("Legal refund: " + reason);
+
+        try {
+            accountUnbilledFeignClient.cancelUnbilledWithEstimate(
+                    project.getUnbilledNumber().trim(),
+                    req
+            );
+
+            logger.info(
+                    "[LEGAL-REFUND] Account cancel done | projectId={} | unbilledNumber={}",
+                    project.getId(),
+                    project.getUnbilledNumber()
+            );
+
+        } catch (FeignException e) {
+            logger.error(
+                    "[LEGAL-REFUND] Account cancel failed | projectId={} | status={} | message={}",
+                    project.getId(),
+                    e.status(),
+                    e.getMessage()
+            );
+
+            // Unchecked exception, so @Transactional rolls back project cancel + legal status
+            throw new ValidationException(
+                    "Could not cancel unbilled/estimate in Account Service. Please retry.",
+                    "ERR_ACCOUNT_CANCEL_FAILED"
+            );
+        }
     }
 
     @Override
