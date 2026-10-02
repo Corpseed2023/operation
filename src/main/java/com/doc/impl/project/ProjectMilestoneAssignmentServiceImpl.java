@@ -296,6 +296,21 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         newStatus.getName()
                 );
 
+        /*
+         * =========================================================
+         * STRICT MILESTONE COMPLETION ORDER VALIDATION
+         * =========================================================
+         *
+         * A milestone can be completed only when every configured
+         * milestone having a lower ProductMilestoneMap order is
+         * already COMPLETED.
+         *
+         * This applies to both INTERNAL and CLIENT_END completion.
+         */
+        if (isCompleting) {
+            validatePreviousMilestonesCompleted(assignment);
+        }
+
         boolean clientEndCompletion =
                 isCompleting
                         && updateDto.getCompletionSource()
@@ -897,6 +912,138 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                         : null,
                 assignment.getCompletionSource(),
                 changedBy.getId()
+        );
+    }
+
+    /**
+     * Enforces strict project milestone completion sequence.
+     *
+     * The current milestone may move to COMPLETED only when every active
+     * project milestone with a lower ProductMilestoneMap order is already
+     * COMPLETED. The first configured milestone has no predecessor and is
+     * therefore allowed to complete normally.
+     */
+    private void validatePreviousMilestonesCompleted(
+            ProjectMilestoneAssignment currentAssignment
+    ) {
+
+        if (currentAssignment == null) {
+            throw new ValidationException(
+                    "Milestone assignment is required for completion validation",
+                    "MILESTONE_ASSIGNMENT_REQUIRED"
+            );
+        }
+
+        Project project = currentAssignment.getProject();
+
+        if (project == null || project.getId() == null) {
+            throw new ValidationException(
+                    "Project is not configured for this milestone",
+                    "MILESTONE_PROJECT_NOT_CONFIGURED"
+            );
+        }
+
+        ProductMilestoneMap currentProductMilestoneMap =
+                currentAssignment.getProductMilestoneMap();
+
+        if (currentProductMilestoneMap == null) {
+            throw new ValidationException(
+                    "Product milestone mapping is not configured for this milestone",
+                    "PRODUCT_MILESTONE_MAPPING_NOT_CONFIGURED"
+            );
+        }
+
+        Integer currentOrderValue =
+                currentProductMilestoneMap.getOrder();
+
+        if (currentOrderValue == null || currentOrderValue <= 0) {
+            throw new ValidationException(
+                    "Milestone order is not configured for the current milestone",
+                    "MILESTONE_ORDER_NOT_CONFIGURED"
+            );
+        }
+
+        int currentOrder = currentOrderValue;
+
+        List<ProjectMilestoneAssignment> projectAssignments =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(project.getId());
+
+        if (projectAssignments == null || projectAssignments.isEmpty()) {
+            throw new ValidationException(
+                    "No milestones are configured for this project",
+                    "PROJECT_MILESTONES_NOT_CONFIGURED"
+            );
+        }
+
+        for (ProjectMilestoneAssignment previousAssignment : projectAssignments) {
+
+            if (previousAssignment == null
+                    || previousAssignment.getId() == null
+                    || previousAssignment.getId().equals(currentAssignment.getId())
+                    || previousAssignment.getProductMilestoneMap() == null) {
+                continue;
+            }
+
+            Integer previousOrderValue =
+                    previousAssignment
+                            .getProductMilestoneMap()
+                            .getOrder();
+
+            if (previousOrderValue == null
+                    || previousOrderValue <= 0
+                    || previousOrderValue >= currentOrder) {
+                continue;
+            }
+
+            String previousStatusName =
+                    previousAssignment.getStatus() != null
+                            ? previousAssignment.getStatus().getName()
+                            : null;
+
+            if (!"COMPLETED".equalsIgnoreCase(previousStatusName)) {
+
+                String previousMilestoneName =
+                        getMilestoneName(previousAssignment);
+
+                String currentMilestoneName =
+                        getMilestoneName(currentAssignment);
+
+                logger.warn(
+                        "[MILESTONE-COMPLETION-ORDER-BLOCKED] "
+                                + "projectId={}, currentAssignmentId={}, currentMilestone={}, "
+                                + "currentOrder={}, blockingAssignmentId={}, blockingMilestone={}, "
+                                + "blockingOrder={}, blockingStatus={}",
+                        project.getId(),
+                        currentAssignment.getId(),
+                        currentMilestoneName,
+                        currentOrder,
+                        previousAssignment.getId(),
+                        previousMilestoneName,
+                        previousOrderValue,
+                        previousStatusName
+                );
+
+                throw new ValidationException(
+                        "Cannot complete milestone '"
+                                + currentMilestoneName
+                                + "'. Previous milestone '"
+                                + previousMilestoneName
+                                + "' (Order "
+                                + previousOrderValue
+                                + ") must be COMPLETED first",
+                        "PREVIOUS_MILESTONE_NOT_COMPLETED"
+                );
+            }
+        }
+
+        logger.info(
+                "[MILESTONE-COMPLETION-ORDER-VALIDATED] "
+                        + "projectId={}, assignmentId={}, milestone={}, order={}",
+                project.getId(),
+                currentAssignment.getId(),
+                getMilestoneName(currentAssignment),
+                currentOrder
         );
     }
 
@@ -3542,30 +3689,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                 .build();
     }
 
-    private boolean isPreviousMilestoneHistory(
-            MilestoneStatusHistory history,
-            Integer currentMilestoneOrder
-    ) {
-        if (history == null
-                || history.getMilestoneAssignment() == null
-                || history
-                .getMilestoneAssignment()
-                .getProductMilestoneMap() == null
-                || currentMilestoneOrder == null) {
 
-            return false;
-        }
-
-        Integer historyMilestoneOrder =
-                history
-                        .getMilestoneAssignment()
-                        .getProductMilestoneMap()
-                        .getOrder();
-
-        return historyMilestoneOrder != null
-                && historyMilestoneOrder
-                < currentMilestoneOrder;
-    }
 
 
 }
