@@ -364,7 +364,7 @@ public class ProjectController {
             @RequestParam Long userId,
             @Valid @RequestBody LegalRequestRaiseDto dto) {
         return ResponseEntity.ok(projectService.raiseLegalRequest(projectId, userId, dto));
-    }
+            }
 
     @PatchMapping("/{projectId}/legal-request/resolve")
     @Operation(summary = "Legal resolves an active legal request")
