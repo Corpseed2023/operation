@@ -3,10 +3,7 @@ package com.doc.controller.project;
 import com.doc.dto.LegalRequestDto.LegalRequestRaiseDto;
 import com.doc.dto.LegalRequestDto.LegalRequestResolveDto;
 import com.doc.dto.document.DocumentChecklistDTO;
-import com.doc.dto.project.AssignedProjectResponseDto;
-import com.doc.dto.project.ProjectMilestoneResponseDto;
-import com.doc.dto.project.ProjectRequestDto;
-import com.doc.dto.project.ProjectResponseDto;
+import com.doc.dto.project.*;
 import com.doc.dto.project.dashboard.LiaisoningDashboardResponseDto;
 import com.doc.dto.project.projectHistory.MilestoneHistoryResponseDto;
 import com.doc.dto.project.projectHistory.ProjectHistoryResponseDto;
@@ -387,6 +384,30 @@ public class ProjectController {
     ) {
         LiaisoningDashboardResponseDto response = projectService.getLiaisoningDashboard(userId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/cancellation-eligibility/{unbilledNumber}")
+    @Operation(
+            summary = "Check whether the unbilled linked to a project can still be cancelled",
+            description = "Cancellation is blocked when the project is 100% complete " +
+                    "or its Certification milestone is completed."
+    )
+    public ResponseEntity<ProjectCancellationEligibilityDto> getCancellationEligibility(
+            @PathVariable String unbilledNumber
+    ) {
+        return ResponseEntity.ok(
+                projectService.getCancellationEligibilityByUnbilledNumber(unbilledNumber)
+        );
+    }
+
+    @PostMapping("/cancellation-eligibility/batch")
+    @Operation(summary = "Cancellation eligibility for several unbilled numbers (unbilleds without a project are omitted)")
+    public ResponseEntity<List<ProjectCancellationEligibilityDto>> getCancellationEligibilityBatch(
+            @RequestBody List<String> unbilledNumbers
+    ) {
+        return ResponseEntity.ok(
+                projectService.getCancellationEligibilityBatch(unbilledNumbers)
+        );
     }
 
 }

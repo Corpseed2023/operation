@@ -5117,4 +5117,117 @@ public class ProjectServiceImpl implements ProjectService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ProjectCancellationEligibilityDto getCancellationEligibilityByUnbilledNumber(
+            String unbilledNumber
+    ) {
+        if (unbilledNumber == null || unbilledNumber.trim().isEmpty()) {
+            throw new ValidationException(
+                    "Unbilled number is required",
+                    "ERR_UNBILLED_NUMBER_REQUIRED"
+            );
+        }
+
+        Project project = projectRepository
+                .findByUnbilledNumberAndIsDeletedFalse(unbilledNumber.trim())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found",
+                        "ERR_PROJECT_NOT_FOUND"
+                ));
+
+        List<ProjectMilestoneAssignment> assignments =
+                projectMilestoneAssignmentRepository
+                        .findByProjectIdAndIsDeletedFalse(project.getId());
+
+        long totalMilestones = assignments.size();
+
+        long completedMilestones = assignments.stream()
+                .filter(a -> isStatus(a, "COMPLETED"))
+                .count();
+
+        int percentage = totalMilestones > 0
+                ? (int) ((completedMilestones * 100) / totalMilestones)
+                : 0;
+
+        ProjectMilestoneAssignment certification = assignments.stream()
+                .filter(a -> a.getMilestone() != null
+                        && a.getMilestone().getName() != null
+                        && "Certification".equalsIgnoreCase(
+                        a.getMilestone().getName().trim()))
+                .findFirst()
+                .orElse(null);
+
+        boolean certificationPresent = certification != null;
+        boolean certificationCompleted =
+                certificationPresent && isStatus(certification, "COMPLETED");
+
+        String projectStatus = project.getStatus() != null
+                ? project.getStatus().getName()
+                : null;
+
+        boolean fullyComplete =
+                percentage >= 100
+                        || "COMPLETED".equalsIgnoreCase(projectStatus);
+
+        String blockReason = null;
+
+        if (certificationCompleted) {
+            blockReason = "Certification milestone is already completed for project "
+                    + project.getProjectNo()
+                    + ", so cancellation cannot be requested";
+        } else if (fullyComplete) {
+            blockReason = "Project " + project.getProjectNo()
+                    + " is 100% complete, so cancellation cannot be requested";
+        }
+
+        logger.info(
+                "[CANCELLATION-ELIGIBILITY] unbilled={} | projectId={} | percentage={} | certificationCompleted={} | allowed={}",
+                unbilledNumber,
+                project.getId(),
+                percentage,
+                certificationCompleted,
+                blockReason == null
+        );
+
+        return ProjectCancellationEligibilityDto.builder()
+                .projectId(project.getId())
+                .unbilledNumber(project.getUnbilledNumber())
+                .projectNo(project.getProjectNo())
+                .projectStatus(projectStatus)
+                .milestoneCompletionPercentage(percentage)
+                .totalMilestones(totalMilestones)
+                .completedMilestones(completedMilestones)
+                .certificationMilestonePresent(certificationPresent)
+                .certificationCompleted(certificationCompleted)
+                .cancellationAllowed(blockReason == null)
+                .blockReason(blockReason)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectCancellationEligibilityDto> getCancellationEligibilityBatch(
+            List<String> unbilledNumbers
+    ) {
+        if (unbilledNumbers == null || unbilledNumbers.isEmpty()) {
+            return List.of();
+        }
+
+        return unbilledNumbers.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .map(number -> {
+                    try {
+                        return getCancellationEligibilityByUnbilledNumber(number);
+                    } catch (ResourceNotFoundException ex) {
+                        // no project for this unbilled yet
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
 }

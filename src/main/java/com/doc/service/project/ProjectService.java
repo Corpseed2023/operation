@@ -68,4 +68,7 @@ public interface ProjectService {
     Page<ProjectResponseDto> getAllLegalRequests(Long userId, int page, int size, LegalRequestStatus status);
 
     LiaisoningDashboardResponseDto getLiaisoningDashboard(Long userId);
+
+    ProjectCancellationEligibilityDto getCancellationEligibilityByUnbilledNumber(String unbilledNumber);
+    List<ProjectCancellationEligibilityDto> getCancellationEligibilityBatch(List<String> unbilledNumbers);
 }
