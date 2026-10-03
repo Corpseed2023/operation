@@ -39,9 +39,13 @@ public class ProductDocumentMappingServiceImpl implements ProductDocumentMapping
 
         validateAssignRequest(request);
 
-        Product product = productRepository.findActiveUserById(request.getProductId())
+        Product product = productRepository
+                .findByIdAndIsActiveTrueAndIsDeletedFalse(request.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Product not found with ID: " + request.getProductId(), "ERR_PRODUCT_NOT_FOUND"));
+                        "Product not found, inactive or deleted with ID: "
+                                + request.getProductId(),
+                        "ERR_PRODUCT_NOT_FOUND"
+                ));
 
         ApplicantType applicantType = resolveApplicantType(request.getApplicantTypeId());
 
