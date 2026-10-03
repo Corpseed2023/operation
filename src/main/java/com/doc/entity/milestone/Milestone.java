@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Comment;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.util.List;
 
@@ -21,6 +23,8 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
+@SQLDelete(sql = "UPDATE milestones SET deleted = true WHERE id = ?")
+@Where(clause = "deleted = false")
 public class Milestone {
 
     @Id
@@ -40,6 +44,7 @@ public class Milestone {
     private List<Department> departments;
 
 
+    private boolean deleted = false;
 
 
 }
