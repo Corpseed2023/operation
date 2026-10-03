@@ -398,14 +398,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
          * OLD BEHAVIOUR:
          *
          * INTERNAL completion
-         * -> add execution TAT
+         * -> add closure TAT
          * -> reduce assignment count
          * -> release UserProductMap
          *
          * NEW:
          *
          * CLIENT_END
-         * -> DO NOT add execution TAT
+         * -> DO NOT add closure TAT
          * -> reduce assignment count
          * -> release UserProductMap
          */
@@ -428,10 +428,10 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
                 if (count != null) {
 
-                    int executionTatMinutes = 0;
+                    int closureTatMinutes = 0;
 
                     /*
-                     * Only internal completion gets execution TAT.
+                     * Only internal completion gets closure TAT.
                      */
                     if (!clientEndCompletion) {
 
@@ -441,14 +441,14 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
 
                         if (productMilestoneMap != null
                                 && productMilestoneMap
-                                .isExecutionTatApplicable()
+                                .isClosureTatApplicable()
                                 && productMilestoneMap
-                                .getExecutionTatMinutes()
+                                .getClosureTatMinutes()
                                 != null) {
 
-                            executionTatMinutes =
+                            closureTatMinutes =
                                     productMilestoneMap
-                                            .getExecutionTatMinutes();
+                                            .getClosureTatMinutes();
                         }
 
                         /*
@@ -456,7 +456,7 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                          */
                         count.setTimeSpent(
                                 count.getTimeSpent()
-                                        + executionTatMinutes
+                                        + closureTatMinutes
                         );
 
                     } else {
@@ -501,13 +501,13 @@ public class ProjectMilestoneAssignmentServiceImpl implements ProjectMilestoneAs
                             "[MILESTONE-COMPLETION-PERFORMANCE-UPDATED] "
                                     + "assignmentId={}, userId={}, "
                                     + "clientEnd={}, assignmentCount={}, "
-                                    + "executionTatMinutes={}, "
+                                    + "closureTatMinutes={}, "
                                     + "totalTimeSpentMinutes={}",
                             assignment.getId(),
                             oldUser.getId(),
                             clientEndCompletion,
                             count.getAssignmentCount(),
-                            executionTatMinutes,
+                            closureTatMinutes,
                             count.getTimeSpent()
                     );
                 }
