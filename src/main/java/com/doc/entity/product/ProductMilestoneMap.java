@@ -28,6 +28,7 @@ import java.util.Date;
  * Master configuration that maps a product with its milestones.
  *
  * All TAT, reminder and escalation values are stored in minutes.
+ * Only Closure, Performance and Rollback TATs are supported.
  *
  * This table stores template configuration. Actual project-specific due dates
  * should be stored in ProjectMilestoneAssignment.
@@ -97,34 +98,19 @@ public class ProductMilestoneMap {
     private int order;
 
     // =====================================================================
-    // EXECUTION TAT
+    // CLOSURE TAT
     // =====================================================================
 
     @Column(
-            name = "execution_tat_applicable",
+            name = "closure_tat_applicable",
             nullable = false
     )
-    @Comment("Whether execution TAT applies to the assigned employee")
-    private boolean executionTatApplicable = true;
+    @Comment("Whether closure TAT is applicable")
+    private boolean closureTatApplicable = true;
 
-    @Column(name = "execution_tat_minutes")
-    @Comment("Execution TAT provided to assignee in minutes")
-    private Integer executionTatMinutes;
-
-    // =====================================================================
-    // DEPARTMENT TAT
-    // =====================================================================
-
-    @Column(
-            name = "department_tat_applicable",
-            nullable = false
-    )
-    @Comment("Whether department-level TAT is applicable")
-    private boolean departmentTatApplicable = false;
-
-    @Column(name = "department_tat_minutes")
-    @Comment("Department-level TAT in minutes")
-    private Integer departmentTatMinutes;
+    @Column(name = "closure_tat_minutes")
+    @Comment("Closure TAT in minutes")
+    private Integer closureTatMinutes;
 
     // =====================================================================
     // PERFORMANCE TAT
@@ -140,21 +126,6 @@ public class ProductMilestoneMap {
     @Column(name = "performance_tat_minutes")
     @Comment("Employee performance TAT threshold in minutes")
     private Integer performanceTatMinutes;
-
-    // =====================================================================
-    // CUSTOMER / PROJECT SLA TAT
-    // =====================================================================
-
-    @Column(
-            name = "customer_tat_applicable",
-            nullable = false
-    )
-    @Comment("Whether customer/project SLA TAT is applicable")
-    private boolean customerTatApplicable = false;
-
-    @Column(name = "customer_tat_minutes")
-    @Comment("Customer/project SLA TAT in minutes")
-    private Integer customerTatMinutes;
 
     // =====================================================================
     // ROLLBACK / REWORK TAT
@@ -263,20 +234,12 @@ public class ProductMilestoneMap {
             this.maxAttempts = 1;
         }
 
-        if (!this.executionTatApplicable) {
-            this.executionTatMinutes = null;
-        }
-
-        if (!this.departmentTatApplicable) {
-            this.departmentTatMinutes = null;
+        if (!this.closureTatApplicable) {
+            this.closureTatMinutes = null;
         }
 
         if (!this.performanceTatApplicable) {
             this.performanceTatMinutes = null;
-        }
-
-        if (!this.customerTatApplicable) {
-            this.customerTatMinutes = null;
         }
 
         if (!this.allowRollback) {
@@ -307,17 +270,10 @@ public class ProductMilestoneMap {
             );
         }
 
-        if (this.executionTatApplicable
-                && !isPositive(this.executionTatMinutes)) {
+        if (this.closureTatApplicable
+                && !isPositive(this.closureTatMinutes)) {
             throw new IllegalStateException(
-                    "Execution TAT minutes is required when execution TAT is applicable"
-            );
-        }
-
-        if (this.departmentTatApplicable
-                && !isPositive(this.departmentTatMinutes)) {
-            throw new IllegalStateException(
-                    "Department TAT minutes is required when department TAT is applicable"
+                    "Closure TAT minutes is required when closure TAT is applicable"
             );
         }
 
@@ -325,13 +281,6 @@ public class ProductMilestoneMap {
                 && !isPositive(this.performanceTatMinutes)) {
             throw new IllegalStateException(
                     "Performance TAT minutes is required when performance TAT is applicable"
-            );
-        }
-
-        if (this.customerTatApplicable
-                && !isPositive(this.customerTatMinutes)) {
-            throw new IllegalStateException(
-                    "Customer TAT minutes is required when customer TAT is applicable"
             );
         }
 

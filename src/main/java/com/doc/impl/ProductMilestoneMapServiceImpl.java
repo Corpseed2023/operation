@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
  * Service implementation for managing product-milestone mappings.
  *
  * All TAT, reminder and escalation values are stored in minutes.
+ * Only Closure, Performance and Rollback TATs are supported.
  */
 @Service
 @Transactional
@@ -349,20 +350,12 @@ public class ProductMilestoneMapServiceImpl
         mapping.setMilestone(milestone);
         mapping.setOrder(requestDto.getOrder());
 
-        // Execution TAT
-        mapping.setExecutionTatApplicable(
-                requestDto.isExecutionTatApplicable()
+        // Closure TAT
+        mapping.setClosureTatApplicable(
+                requestDto.isClosureTatApplicable()
         );
-        mapping.setExecutionTatMinutes(
-                requestDto.getExecutionTatMinutes()
-        );
-
-        // Department TAT
-        mapping.setDepartmentTatApplicable(
-                requestDto.isDepartmentTatApplicable()
-        );
-        mapping.setDepartmentTatMinutes(
-                requestDto.getDepartmentTatMinutes()
+        mapping.setClosureTatMinutes(
+                requestDto.getClosureTatMinutes()
         );
 
         // Performance TAT
@@ -371,14 +364,6 @@ public class ProductMilestoneMapServiceImpl
         );
         mapping.setPerformanceTatMinutes(
                 requestDto.getPerformanceTatMinutes()
-        );
-
-        // Customer / Project SLA TAT
-        mapping.setCustomerTatApplicable(
-                requestDto.isCustomerTatApplicable()
-        );
-        mapping.setCustomerTatMinutes(
-                requestDto.getCustomerTatMinutes()
         );
 
         // Rollback / Rework TAT
@@ -457,20 +442,12 @@ public class ProductMilestoneMapServiceImpl
 
         dto.setOrder(mapping.getOrder());
 
-        // Execution TAT
-        dto.setExecutionTatApplicable(
-                mapping.isExecutionTatApplicable()
+        // Closure TAT
+        dto.setClosureTatApplicable(
+                mapping.isClosureTatApplicable()
         );
-        dto.setExecutionTatMinutes(
-                mapping.getExecutionTatMinutes()
-        );
-
-        // Department TAT
-        dto.setDepartmentTatApplicable(
-                mapping.isDepartmentTatApplicable()
-        );
-        dto.setDepartmentTatMinutes(
-                mapping.getDepartmentTatMinutes()
+        dto.setClosureTatMinutes(
+                mapping.getClosureTatMinutes()
         );
 
         // Performance TAT
@@ -479,14 +456,6 @@ public class ProductMilestoneMapServiceImpl
         );
         dto.setPerformanceTatMinutes(
                 mapping.getPerformanceTatMinutes()
-        );
-
-        // Customer / Project SLA TAT
-        dto.setCustomerTatApplicable(
-                mapping.isCustomerTatApplicable()
-        );
-        dto.setCustomerTatMinutes(
-                mapping.getCustomerTatMinutes()
         );
 
         // Rollback / Rework TAT

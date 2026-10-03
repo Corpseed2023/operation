@@ -25,21 +25,13 @@ public class ProductMilestoneMapResponseDto {
 
     private int order;
 
-    // Execution TAT
-    private boolean executionTatApplicable;
-    private Integer executionTatMinutes;
-
-    // Department TAT
-    private boolean departmentTatApplicable;
-    private Integer departmentTatMinutes;
+    // Closure TAT
+    private boolean closureTatApplicable;
+    private Integer closureTatMinutes;
 
     // Performance TAT
     private boolean performanceTatApplicable;
     private Integer performanceTatMinutes;
-
-    // Customer / Project SLA TAT
-    private boolean customerTatApplicable;
-    private Integer customerTatMinutes;
 
     // Rollback / Rework TAT
     private boolean rollbackTatApplicable;

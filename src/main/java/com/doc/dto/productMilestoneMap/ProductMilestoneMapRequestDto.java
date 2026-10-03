@@ -13,6 +13,7 @@ import lombok.Setter;
  * Request DTO for creating or updating a product milestone mapping.
  *
  * All TAT, reminder and escalation values are stored in minutes.
+ * Only Closure, Performance and Rollback TATs are supported.
  */
 @Getter
 @Setter
@@ -31,32 +32,20 @@ public class ProductMilestoneMapRequestDto {
     private int order;
 
     // =====================================================================
-    // EXECUTION TAT
+    // CLOSURE TAT
     // =====================================================================
 
-    private boolean executionTatApplicable = true;
+    private boolean closureTatApplicable = true;
 
     /**
-     * TAT provided to the assigned employee.
+     * TAT provided to close the milestone.
      * Example: 4 hours = 240 minutes.
      */
     @Min(
             value = 0,
-            message = "Execution TAT minutes cannot be negative"
+            message = "Closure TAT minutes cannot be negative"
     )
-    private Integer executionTatMinutes;
-
-    // =====================================================================
-    // DEPARTMENT TAT
-    // =====================================================================
-
-    private boolean departmentTatApplicable = false;
-
-    @Min(
-            value = 0,
-            message = "Department TAT minutes cannot be negative"
-    )
-    private Integer departmentTatMinutes;
+    private Integer closureTatMinutes;
 
     // =====================================================================
     // PERFORMANCE TAT
@@ -69,18 +58,6 @@ public class ProductMilestoneMapRequestDto {
             message = "Performance TAT minutes cannot be negative"
     )
     private Integer performanceTatMinutes;
-
-    // =====================================================================
-    // CUSTOMER / PROJECT SLA TAT
-    // =====================================================================
-
-    private boolean customerTatApplicable = false;
-
-    @Min(
-            value = 0,
-            message = "Customer TAT minutes cannot be negative"
-    )
-    private Integer customerTatMinutes;
 
     // =====================================================================
     // ROLLBACK / REWORK TAT
