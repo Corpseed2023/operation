@@ -175,6 +175,24 @@ public class ProductDocumentMappingController {
         return ResponseEntity.ok("Required documents updated successfully");
     }
 
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document mapping removed successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or mapping does not belong to product"),
+            @ApiResponse(responseCode = "404", description = "Mapping not found or already removed")
+    })
+    @DeleteMapping("/{productId}/documents/map/{mappingId}")
+    public ResponseEntity<String> deleteDocumentMapping(
+            @PathVariable @Parameter(description = "Product ID") Long productId,
+            @PathVariable @Parameter(description = "Mapping ID") Long mappingId,
+            @RequestParam @Parameter(description = "User performing the delete") Long updatedBy) {
+
+        logger.info("Delete document mapping API called. productId={}, mappingId={}, updatedBy={}",
+                productId, mappingId, updatedBy);
+
+        mappingService.deleteDocumentMapping(productId, mappingId, updatedBy);
+
+        return ResponseEntity.ok("Document mapping removed successfully");
+    }
 
 
 }

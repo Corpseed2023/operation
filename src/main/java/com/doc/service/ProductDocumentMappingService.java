@@ -13,7 +13,6 @@ public interface ProductDocumentMappingService {
 
     void updateDocuments(ProductDocumentMappingRequestDto request);
 
-
-
+    void deleteDocumentMapping(Long productId, Long mappingId, Long updatedBy);
 
 }

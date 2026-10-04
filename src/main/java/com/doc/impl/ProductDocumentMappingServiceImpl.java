@@ -363,6 +363,56 @@ public class ProductDocumentMappingServiceImpl
         );
     }
 
+    @Override
+    @Transactional
+    public void deleteDocumentMapping(Long productId, Long mappingId, Long updatedBy) {
+
+        logger.info("Deleting document mapping. productId={}, mappingId={}, updatedBy={}",
+                productId, mappingId, updatedBy);
+
+        if (productId == null || productId <= 0) {
+            throw new ValidationException(
+                    "A valid Product ID is required.", "ERR_INVALID_PRODUCT_ID");
+        }
+        if (mappingId == null || mappingId <= 0) {
+            throw new ValidationException(
+                    "A valid mapping ID is required.", "ERR_INVALID_MAPPING_ID");
+        }
+        if (updatedBy == null || updatedBy <= 0) {
+            throw new ValidationException(
+                    "Updated By user ID is required.", "ERR_MISSING_UPDATED_BY");
+        }
+
+        ProductDocumentMapping mapping = mappingRepository.findById(mappingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Document mapping with ID " + mappingId + " was not found.",
+                        "ERR_MAPPING_NOT_FOUND"));
+
+        if (mapping.getProduct() == null
+                || !productId.equals(mapping.getProduct().getId())) {
+
+            logger.warn("Mapping/product mismatch on delete. mappingId={}, productId={}",
+                    mappingId, productId);
+
+            throw new ValidationException(
+                    "Mapping " + mappingId + " does not belong to product " + productId + ".",
+                    "ERR_MAPPING_PRODUCT_MISMATCH");
+        }
+
+        if (!mapping.isActive()) {
+            throw new ResourceNotFoundException(
+                    "Document mapping with ID " + mappingId + " is already removed.",
+                    "ERR_MAPPING_ALREADY_REMOVED");
+        }
+
+        mapping.setActive(false);
+        mapping.setUpdatedBy(updatedBy);
+        mappingRepository.saveAndFlush(mapping);
+
+        logger.info("Document mapping deactivated. mappingId={}, productId={}",
+                mappingId, productId);
+    }
+
 
 
     // =====================================================================
