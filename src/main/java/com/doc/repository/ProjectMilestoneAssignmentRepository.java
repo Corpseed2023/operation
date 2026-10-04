@@ -681,5 +681,6 @@ List<UserMilestonePerformanceProjection> findUserProjectPerformance(
 
 
 
+    boolean existsByMilestoneIdAndIsDeletedFalse(Long milestoneId);
 
 }

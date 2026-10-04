@@ -40,6 +40,6 @@ public interface ProductMilestoneMapRepository extends JpaRepository<ProductMile
      */
     List<ProductMilestoneMap> findByProductId(Long productId);
 
-
+    boolean existsByMilestoneId(Long milestoneId);
 
 }

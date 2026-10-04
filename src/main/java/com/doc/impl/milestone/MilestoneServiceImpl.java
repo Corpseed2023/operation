@@ -7,16 +7,20 @@ import com.doc.entity.milestone.Milestone;
 import com.doc.entity.department.Department;
 import com.doc.repository.DepartmentRepository;
 import com.doc.repository.MilestoneRepository;
+import com.doc.repository.ProductMilestoneMapRepository;
+import com.doc.repository.ProjectMilestoneAssignmentRepository;
 import com.doc.service.MilestoneService;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -34,22 +38,39 @@ public class MilestoneServiceImpl implements MilestoneService {
     @Autowired
     private DepartmentRepository departmentRepository;
 
+    @Autowired
+    private ProductMilestoneMapRepository productMilestoneMapRepository;
+
+    @Autowired
+    private ProjectMilestoneAssignmentRepository projectMilestoneAssignmentRepository;
+
     @Override
     public MilestoneResponseDto createMilestone(MilestoneRequestDto requestDto) {
-        logger.info("Creating milestone with name: {}", requestDto.getName());
-        if (milestoneRepository.existsByName(requestDto.getName())) {
-            logger.error("Milestone with name {} already exists", requestDto.getName());
-            throw new IllegalArgumentException("Milestone with name " + requestDto.getName() + " already exists");
+        String name = requestDto.getName().trim();
+        logger.info("Creating milestone with name: {}", name);
+
+        Optional<Milestone> existing = milestoneRepository.findAnyByName(name);
+        logger.info("Existing lookup for '{}': present={}, deleted={}",
+                name, existing.isPresent(),
+                existing.map(Milestone::isDeleted).orElse(null));
+
+        Milestone milestone;
+        if (existing.isPresent()) {
+            if (!existing.get().isDeleted()) {
+                throw new IllegalArgumentException("Milestone with name " + name + " already exists");
+            }
+            // Restore the soft-deleted row so old references (same id) stay valid
+            milestone = existing.get();
+            milestone.setDeleted(false);
+        } else {
+            milestone = new Milestone();
         }
 
-        Milestone milestone = new Milestone();
-        milestone.setName(requestDto.getName().trim());
+        milestone.setName(name);
         milestone.setDescription(requestDto.getDescription());
 
-        // Set departments if provided
         List<Department> departments = new ArrayList<>();
         if (requestDto.getDepartmentIds() != null && !requestDto.getDepartmentIds().isEmpty()) {
-            logger.info("Associating milestone with department IDs: {}", requestDto.getDepartmentIds());
             departments = requestDto.getDepartmentIds().stream()
                     .map(id -> departmentRepository.findById(id)
                             .orElseThrow(() -> new EntityNotFoundException("Department not found with ID: " + id)))
@@ -57,8 +78,6 @@ public class MilestoneServiceImpl implements MilestoneService {
                     .collect(Collectors.toList());
             milestone.setDepartments(departments);
 
-
-            // Update the Department side of the relationship
             for (Department dept : departments) {
                 List<Milestone> deptMilestones = dept.getMilestones();
                 if (deptMilestones == null) {
@@ -73,11 +92,15 @@ public class MilestoneServiceImpl implements MilestoneService {
             milestone.setDepartments(departments);
         }
 
-        Milestone savedMilestone = milestoneRepository.save(milestone);
-        logger.info("Milestone created with ID: {}", savedMilestone.getId());
-        return mapToResponseDto(savedMilestone);
+        try {
+            Milestone saved = milestoneRepository.save(milestone);
+            logger.info("Milestone saved with ID: {}", saved.getId());
+            return mapToResponseDto(saved);
+        } catch (DataIntegrityViolationException ex) {
+            logger.error("Duplicate milestone name {}", name, ex);
+            throw new IllegalArgumentException("Milestone with name " + name + " already exists");
+        }
     }
-
     @Override
     public MilestoneResponseDto updateMilestone(Long id, MilestoneRequestDto requestDto) {
         logger.info("Updating milestone with ID: {}", id);

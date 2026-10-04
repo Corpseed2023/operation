@@ -5,7 +5,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import java.util.Optional;
 /**
  * Repository interface for managing {@link Milestone} entities.
  */
@@ -28,4 +30,10 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
      * @return a page of milestones associated with the department
      */
     Page<Milestone> findByDepartmentsId(Long departmentId, Pageable pageable);
+
+
+
+    @Query(value = "SELECT * FROM milestones WHERE name = :name LIMIT 1",
+            nativeQuery = true)
+    Optional<Milestone> findAnyByName(@Param("name") String name);
 }
