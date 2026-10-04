@@ -14,22 +14,19 @@ public class ProductDocumentMappingRequestDto {
     private Long productId;
 
     /*
-     * Multiple applicant types can be selected in one request.
+     * Optional.
      *
-     * Example:
-     * Brand Owner = 4
-     * Importer    = 5
+     * null / empty:
+     * document is global for the product.
      *
-     * applicantTypeIds = [4, 5]
+     * [4]:
+     * document belongs to applicant type 4.
+     *
+     * [4, 5]:
+     * document belongs to applicant types 4 and 5.
      */
     private List<Long> applicantTypeIds;
 
-    /*
-     * Multiple documents can be selected.
-     *
-     * These documents will be mapped with every
-     * selected applicant type.
-     */
     private List<Long> requiredDocumentIds;
 
     private Long updatedBy;

@@ -34,55 +34,78 @@ public interface ProductDocumentMappingRepository
               AND m.applicantType.id = :applicantTypeId
               AND m.isActive = true
             """)
-    List<ProductDocumentMapping> findByProductIdAndApplicantTypeIdAndIsActiveTrue(
+    List<ProductDocumentMapping>
+    findByProductIdAndApplicantTypeIdAndIsActiveTrue(
             @Param("productId") Long productId,
             @Param("applicantTypeId") Long applicantTypeId
     );
 
-    List<ProductDocumentMapping> findByProductIdAndIsActiveTrue(
+    List<ProductDocumentMapping>
+    findByProductIdAndIsActiveTrue(
             Long productId
     );
 
     /*
-     * Exact mapping lookup when applicant type is available.
+     * IMPORTANT:
      *
-     * Unique combination:
-     *
-     * Product
-     * + Required Document
-     * + Applicant Type
+     * Includes active + inactive mappings.
+     * Required by update/reactivation flow.
+     */
+    List<ProductDocumentMapping>
+    findByProductId(
+            Long productId
+    );
+
+    /*
+     * Exact applicant-specific combination.
      */
     @Query("""
             SELECT m
             FROM ProductDocumentMapping m
             WHERE m.product.id = :productId
-              AND m.requiredDocument.id = :requiredDocumentId
+              AND m.requiredDocument.id = :documentId
               AND m.applicantType.id = :applicantTypeId
             """)
     Optional<ProductDocumentMapping> findExactMapping(
             @Param("productId") Long productId,
-            @Param("requiredDocumentId") Long requiredDocumentId,
+            @Param("documentId") Long documentId,
             @Param("applicantTypeId") Long applicantTypeId
     );
 
     /*
-     * Exact mapping lookup for a global document
-     * where applicant_type_id is NULL.
+     * Exact GLOBAL combination.
+     *
+     * applicantType IS NULL.
      */
     @Query("""
             SELECT m
             FROM ProductDocumentMapping m
             WHERE m.product.id = :productId
-              AND m.requiredDocument.id = :requiredDocumentId
+              AND m.requiredDocument.id = :documentId
               AND m.applicantType IS NULL
             """)
     Optional<ProductDocumentMapping> findExactGlobalMapping(
             @Param("productId") Long productId,
-            @Param("requiredDocumentId") Long requiredDocumentId
+            @Param("documentId") Long documentId
     );
 
 
-    List<ProductDocumentMapping> findByProductId(Long productId);
+    @Query("""
+        SELECT m
+        FROM ProductDocumentMapping m
+        WHERE m.product.id = :productId
+          AND m.isActive = true
+          AND (
+                m.applicantType IS NULL
+                OR m.applicantType.id = :applicantTypeId
+              )
+        """)
+    List<ProductDocumentMapping>
+    findActiveByProductIdAndApplicantTypeIncludingGlobal(
+            @Param("productId") Long productId,
+            @Param("applicantTypeId") Long applicantTypeId
+    );
+
 
 
 }

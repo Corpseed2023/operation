@@ -436,15 +436,12 @@ public class ProductDocumentMappingServiceImpl
 
         List<ProductDocumentMapping> mappings;
 
-        /*
-         * Existing behaviour retained:
-         *
-         * if applicantTypeId is not supplied,
-         * return all active mappings for the product.
-         */
-        if (applicantTypeId == null
-                || applicantTypeId == -1) {
+        if (applicantTypeId == null || applicantTypeId == -1) {
 
+            /*
+             * No applicant filter:
+             * return all active mappings for the product.
+             */
             mappings =
                     mappingRepository
                             .findByProductIdAndIsActiveTrue(
@@ -454,14 +451,22 @@ public class ProductDocumentMappingServiceImpl
         } else {
 
             /*
-             * Validate applicant type so frontend receives proper 404
-             * instead of silently receiving empty data for an invalid ID.
+             * Validate applicant.
              */
-            resolveApplicantType(applicantTypeId);
+            resolveApplicantType(
+                    applicantTypeId
+            );
 
+            /*
+             * Return:
+             *
+             * GLOBAL documents
+             * +
+             * documents mapped specifically to this applicant.
+             */
             mappings =
                     mappingRepository
-                            .findByProductIdAndApplicantTypeIdAndIsActiveTrue(
+                            .findActiveByProductIdAndApplicantTypeIncludingGlobal(
                                     productId,
                                     applicantTypeId
                             );
@@ -491,6 +496,7 @@ public class ProductDocumentMappingServiceImpl
         return response;
     }
 
+
     // =====================================================================
     // FIND EXACT MAPPING
     // =====================================================================
@@ -501,6 +507,11 @@ public class ProductDocumentMappingServiceImpl
             Long applicantTypeId
     ) {
 
+        /*
+         * No applicant selected:
+         *
+         * search GLOBAL mapping.
+         */
         if (applicantTypeId == null) {
 
             return mappingRepository
@@ -510,6 +521,11 @@ public class ProductDocumentMappingServiceImpl
                     );
         }
 
+        /*
+         * Applicant selected:
+         *
+         * search only that exact applicant.
+         */
         return mappingRepository
                 .findExactMapping(
                         productId,

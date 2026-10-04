@@ -157,22 +157,77 @@ public class ProductDocumentMappingController {
 
 
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Documents updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Product ID mismatch or invalid request"),
-            @ApiResponse(responseCode = "404", description = "Product or required documents not found")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Documents updated successfully"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid document mapping request"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Product, applicant type or required document not found"
+            )
     })
     @PutMapping("/{productId}/documents/map")
     public ResponseEntity<String> updateDocuments(
-            @PathVariable @Parameter(description = "Product ID") Long productId,
-            @Valid @RequestBody ProductDocumentMappingRequestDto request) {
 
-        if (!productId.equals(request.getProductId())) {
-            return ResponseEntity.badRequest()
-                    .body("Product ID in path (" + productId + ") must match body (" + request.getProductId() + ")");
+            @PathVariable
+            @Parameter(description = "Product ID")
+            Long productId,
+
+            @Valid
+            @RequestBody
+            ProductDocumentMappingRequestDto request
+    ) {
+
+        logger.info(
+                "Update document mapping API called. "
+                        + "pathProductId={}, bodyProductId={}, "
+                        + "applicantTypeIds={}, requiredDocumentIds={}, updatedBy={}",
+                productId,
+                request.getProductId(),
+                request.getApplicantTypeIds(),
+                request.getRequiredDocumentIds(),
+                request.getUpdatedBy()
+        );
+
+        if (request.getProductId() == null
+                || !productId.equals(request.getProductId())) {
+
+            logger.warn(
+                    "Product ID mismatch during document mapping update. "
+                            + "pathProductId={}, bodyProductId={}",
+                    productId,
+                    request.getProductId()
+            );
+
+            throw new ValidationException(
+                    "Product ID in URL ("
+                            + productId
+                            + ") does not match Product ID in request body ("
+                            + request.getProductId()
+                            + "). Please use the same Product ID in both places.",
+                    "ERR_PRODUCT_ID_MISMATCH"
+            );
         }
 
-        mappingService.updateDocuments(request);
-        return ResponseEntity.ok("Required documents updated successfully");
+        mappingService.updateDocuments(
+                request
+        );
+
+        logger.info(
+                "Document mapping update completed successfully. "
+                        + "productId={}, applicantTypeIds={}, requiredDocumentIds={}",
+                productId,
+                request.getApplicantTypeIds(),
+                request.getRequiredDocumentIds()
+        );
+
+        return ResponseEntity.ok(
+                "Required documents updated successfully."
+        );
     }
 
     @ApiResponses({
