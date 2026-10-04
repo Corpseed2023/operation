@@ -11,4 +11,9 @@ public interface ProductDocumentMappingService {
 
     List<ProductDocumentMappingResponseDto> getRequiredDocuments(Long productId, Long applicantTypeId);
 
+    void updateDocuments(ProductDocumentMappingRequestDto request);
+
+
+
+
 }
