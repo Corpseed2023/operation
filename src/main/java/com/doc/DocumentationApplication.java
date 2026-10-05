@@ -274,6 +274,7 @@ public class DocumentationApplication {
 	// PROJECT STATUS
 	// =========================================================
 
+
 	private void createProjectStatusIfMissing(
 			ProjectStatusRepository repo,
 			Long id,
