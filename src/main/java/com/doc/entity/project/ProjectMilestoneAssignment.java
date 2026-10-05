@@ -128,6 +128,7 @@ public class ProjectMilestoneAssignment {
             nullable = false
     )
     @Comment("Associated milestone")
+    @org.hibernate.annotations.NotFound(action = org.hibernate.annotations.NotFoundAction.IGNORE)
     private Milestone milestone;
 
 

@@ -31,9 +31,6 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
      */
     Page<Milestone> findByDepartmentsId(Long departmentId, Pageable pageable);
 
-
-
-    @Query(value = "SELECT * FROM milestones WHERE name = :name LIMIT 1",
-            nativeQuery = true)
+    @Query(value = "SELECT * FROM milestones WHERE name = :name LIMIT 1", nativeQuery = true)
     Optional<Milestone> findAnyByName(@Param("name") String name);
 }

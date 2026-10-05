@@ -107,6 +107,18 @@ public class DepartmentController {
         );
     }
 
+    @GetMapping("/legal/users")
+    public ResponseEntity<List<UserResponseDto>> getLegalDepartmentUsers() {
+
+        List<UserResponseDto> users =
+                departmentService.getLegalDepartmentUsers();
+
+        return new ResponseEntity<>(
+                users,
+                HttpStatus.OK
+        );
+    }
+
     @GetMapping("/{id}/users")
     public ResponseEntity<List<UserResponseDto>> getUsersByDepartmentId(
             @PathVariable Long id
@@ -119,4 +131,6 @@ public class DepartmentController {
                 HttpStatus.OK
         );
     }
+
+
 }

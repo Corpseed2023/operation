@@ -91,6 +91,7 @@ public class ProductMilestoneMap {
             nullable = false
     )
     @Comment("Associated milestone")
+    @org.hibernate.annotations.NotFound(action = org.hibernate.annotations.NotFoundAction.IGNORE)
     private Milestone milestone;
 
     @Column(name = "step_order", nullable = false)

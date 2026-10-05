@@ -21,4 +21,6 @@ public interface DepartmentService {
     DepartmentResponseDto createMasterDepartment(DepartmentRequestDto requestDto);
 
     List<UserResponseDto> getUsersByDepartmentId(Long id);
+
+    List<UserResponseDto> getLegalDepartmentUsers();
 }

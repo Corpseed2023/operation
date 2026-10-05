@@ -78,6 +78,25 @@ public class DepartmentServiceImpl implements DepartmentService {
         return mapToResponseDto(department);
     }
 
+    private static final String LEGAL_DEPARTMENT_NAME = "LEGAL";
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponseDto> getLegalDepartmentUsers() {
+
+        Department legalDepartment =
+                departmentRepository
+                        .findByNameIgnoreCaseAndIsDeletedFalse(LEGAL_DEPARTMENT_NAME)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Legal department not found",
+                                        "LEGAL_DEPARTMENT_NOT_FOUND"
+                                )
+                        );
+
+        return getUsersByDepartmentId(legalDepartment.getId());
+    }
+
     @Override
     public DepartmentResponseDto getDepartmentById(Long id) {
 

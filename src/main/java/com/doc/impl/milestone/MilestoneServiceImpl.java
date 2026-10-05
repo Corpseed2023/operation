@@ -5,6 +5,7 @@ import com.doc.dto.milestone.MilestoneRequestDto;
 import com.doc.dto.milestone.MilestoneResponseDto;
 import com.doc.entity.milestone.Milestone;
 import com.doc.entity.department.Department;
+import com.doc.exception.ValidationException;
 import com.doc.repository.DepartmentRepository;
 import com.doc.repository.MilestoneRepository;
 import com.doc.repository.ProductMilestoneMapRepository;
@@ -47,21 +48,18 @@ public class MilestoneServiceImpl implements MilestoneService {
     @Override
     public MilestoneResponseDto createMilestone(MilestoneRequestDto requestDto) {
         String name = requestDto.getName().trim();
-        logger.info("Creating milestone with name: {}", name);
 
         Optional<Milestone> existing = milestoneRepository.findAnyByName(name);
         logger.info("Existing lookup for '{}': present={}, deleted={}",
-                name, existing.isPresent(),
-                existing.map(Milestone::isDeleted).orElse(null));
+                name, existing.isPresent(), existing.map(Milestone::isDeleted).orElse(null));
 
         Milestone milestone;
         if (existing.isPresent()) {
             if (!existing.get().isDeleted()) {
                 throw new IllegalArgumentException("Milestone with name " + name + " already exists");
             }
-            // Restore the soft-deleted row so old references (same id) stay valid
             milestone = existing.get();
-            milestone.setDeleted(false);
+            milestone.setDeleted(false);   // restore, same id
         } else {
             milestone = new Milestone();
         }
@@ -94,10 +92,8 @@ public class MilestoneServiceImpl implements MilestoneService {
 
         try {
             Milestone saved = milestoneRepository.save(milestone);
-            logger.info("Milestone saved with ID: {}", saved.getId());
             return mapToResponseDto(saved);
         } catch (DataIntegrityViolationException ex) {
-            logger.error("Duplicate milestone name {}", name, ex);
             throw new IllegalArgumentException("Milestone with name " + name + " already exists");
         }
     }
@@ -165,11 +161,20 @@ public class MilestoneServiceImpl implements MilestoneService {
 
     @Override
     public void deleteMilestone(Long id) {
-        logger.info("Deleting milestone with ID: {}", id);
         Milestone milestone = milestoneRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Milestone not found with ID: " + id));
 
-        // Clear department associations on the Department side
+        if (productMilestoneMapRepository.existsByMilestoneId(id)) {
+            throw new ValidationException(
+                    "Cannot delete milestone '" + milestone.getName() + "' because it is mapped to one or more products.",
+                    "ERR_MILESTONE_IN_USE");
+        }
+        if (projectMilestoneAssignmentRepository.existsByMilestoneIdAndIsDeletedFalse(id)) {
+            throw new ValidationException(
+                    "Cannot delete milestone '" + milestone.getName() + "' because it is used in project milestone assignments.",
+                    "ERR_MILESTONE_IN_USE");
+        }
+
         List<Department> departments = milestone.getDepartments();
         if (departments != null) {
             for (Department dept : departments) {
@@ -178,10 +183,7 @@ public class MilestoneServiceImpl implements MilestoneService {
         }
 
         milestoneRepository.delete(milestone);
-        logger.info("Milestone deleted with ID: {}", id);
     }
-
-
     private MilestoneResponseDto mapToResponseDto(Milestone milestone) {
 
         MilestoneResponseDto milestoneResponseDto = new MilestoneResponseDto();

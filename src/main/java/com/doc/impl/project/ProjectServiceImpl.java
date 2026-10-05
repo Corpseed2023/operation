@@ -1677,6 +1677,7 @@ public class ProjectServiceImpl implements ProjectService {
             }
         } else if ("Purchase Order Payment".equalsIgnoreCase(paymentTypeName)) {
             boolean allNonCertCompleted = projectMilestoneAssignmentRepository.findByProjectIdAndIsDeletedFalse(projectId).stream()
+                    .filter(a -> a.getMilestone() != null)
                     .filter(a -> !a.getMilestone().getName().equalsIgnoreCase("Certification"))
                     .allMatch(a -> StatusConstants.MILESTONE_COMPLETED_ID.equals(a.getStatus().getId()));
             if (!allNonCertCompleted) {
@@ -1764,7 +1765,7 @@ public class ProjectServiceImpl implements ProjectService {
         MilestoneHistoryResponseDto dto = new MilestoneHistoryResponseDto();
 
         dto.setMilestoneAssignmentId(assignment.getId());
-        dto.setMilestoneName(assignment.getMilestone().getName());
+        dto.setMilestoneName(getProjectMilestoneName(assignment));
         dto.setOrder(assignment.getProductMilestoneMap().getOrder());
         dto.setCreatedDate(assignment.getCreatedDate());
 
@@ -3689,11 +3690,13 @@ public class ProjectServiceImpl implements ProjectService {
         );
 
         dto.setMilestoneId(
-                assignment.getMilestone().getId()
+                assignment.getMilestone() != null
+                        ? assignment.getMilestone().getId()
+                        : null
         );
 
         dto.setMilestoneName(
-                assignment.getMilestone().getName()
+                getProjectMilestoneName(assignment)
         );
 
         dto.setStatus(
@@ -3904,8 +3907,8 @@ public class ProjectServiceImpl implements ProjectService {
 
     private MilestoneHistoryDto mapToMilestoneHistoryDto(ProjectMilestoneAssignment assignment) {
         MilestoneHistoryDto dto = new MilestoneHistoryDto();
-        dto.setMilestoneId(assignment.getMilestone().getId());
-        dto.setMilestoneName(assignment.getMilestone().getName());
+        dto.setMilestoneId(assignment.getMilestone() != null ? assignment.getMilestone().getId() : null);
+        dto.setMilestoneName(getProjectMilestoneName(assignment));
         dto.setOrder(assignment.getProductMilestoneMap().getOrder());
         dto.setAssignmentCreatedDate(assignment.getCreatedDate());
 
