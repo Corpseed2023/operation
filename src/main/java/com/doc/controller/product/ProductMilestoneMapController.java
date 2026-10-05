@@ -1,5 +1,7 @@
 package com.doc.controller.product;
 
+import com.doc.dto.milestone.BulkDeleteProductMilestoneMapRequestDto;
+import com.doc.dto.milestone.BulkDeleteProductMilestoneMapResponseDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapRequestDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
 import com.doc.service.ProductMilestoneMapService;
@@ -103,6 +105,16 @@ public class ProductMilestoneMapController {
                 productMilestoneMapService.getMilestonesByProductId(productId);
 
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<BulkDeleteProductMilestoneMapResponseDto> deleteProductMilestoneMaps(
+            @Valid @RequestBody BulkDeleteProductMilestoneMapRequestDto requestDto) {
+
+        BulkDeleteProductMilestoneMapResponseDto response =
+                productMilestoneMapService.deleteProductMilestoneMaps(requestDto.getIds());
+
+        return ResponseEntity.ok(response);
     }
 
 

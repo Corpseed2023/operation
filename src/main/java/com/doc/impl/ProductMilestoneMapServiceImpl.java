@@ -1,5 +1,6 @@
 package com.doc.impl;
 
+import com.doc.dto.milestone.BulkDeleteProductMilestoneMapResponseDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapRequestDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
 import com.doc.entity.milestone.Milestone;
@@ -16,8 +17,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -225,6 +228,67 @@ public class ProductMilestoneMapServiceImpl
         }
 
         return mapToResponseDto(mapping);
+    }
+
+
+    @Override
+    @Transactional
+    public BulkDeleteProductMilestoneMapResponseDto deleteProductMilestoneMaps(List<Long> ids) {
+
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("At least one mapping ID is required");
+        }
+
+        List<Long> distinctIds = ids.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        logger.info("Bulk deleting product-milestone mappings. mappingIds={}", distinctIds);
+
+        List<ProductMilestoneMap> toDelete = new ArrayList<>();
+        List<String> problems = new ArrayList<>();
+
+        // Validate everything first so a failure deletes nothing.
+        for (Long id : distinctIds) {
+            ProductMilestoneMap mapping;
+            try {
+                mapping = findMappingById(id);
+            } catch (EntityNotFoundException ex) {
+                problems.add("ID " + id + ": not found");
+                continue;
+            }
+
+            if (mapping.isDeleted()) {
+                problems.add("ID " + id + ": already deleted");
+                continue;
+            }
+
+            if (projectMilestoneAssignmentRepository.existsByProductMilestoneMapId(id)) {
+                problems.add("ID " + id + ": already used in project milestone assignments");
+                continue;
+            }
+
+            toDelete.add(mapping);
+        }
+
+        if (!problems.isEmpty()) {
+            logger.warn("Bulk delete blocked. problems={}", problems);
+            throw new IllegalStateException(
+                    "Cannot delete the selected milestone mappings. " + String.join("; ", problems)
+            );
+        }
+
+        // Hard delete, same reason as the single delete (unique constraints).
+        productMilestoneMapRepository.deleteAll(toDelete);
+
+        List<Long> deletedIds = toDelete.stream()
+                .map(ProductMilestoneMap::getId)
+                .collect(Collectors.toList());
+
+        logger.info("Bulk delete done. deletedCount={}, deletedIds={}", deletedIds.size(), deletedIds);
+
+        return new BulkDeleteProductMilestoneMapResponseDto(deletedIds.size(), deletedIds);
     }
 
     // =====================================================================

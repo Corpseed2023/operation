@@ -1,5 +1,6 @@
 package com.doc.service;
 
+import com.doc.dto.milestone.BulkDeleteProductMilestoneMapResponseDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapRequestDto;
 import com.doc.dto.productMilestoneMap.ProductMilestoneMapResponseDto;
 import org.springframework.data.domain.Page;
@@ -54,4 +55,6 @@ public interface ProductMilestoneMapService {
     List<ProductMilestoneMapResponseDto> getProductMilestoneMapsByUserAndProduct(Long userId, Long productId);
 
     List<ProductMilestoneMapResponseDto> getMilestonesByProductId(Long productId);
+
+    BulkDeleteProductMilestoneMapResponseDto deleteProductMilestoneMaps(List<Long> ids);
 }
