@@ -13,4 +13,8 @@ public interface ProductRequiredDocumentService {
     List<ProductRequiredDocumentResponseDto> importFromS3(String s3Url, Long createdBy);
 
     void softDelete(Long id);
+
+    List<ProductRequiredDocumentResponseDto> getAllActive(Long userId);
+
+
 }

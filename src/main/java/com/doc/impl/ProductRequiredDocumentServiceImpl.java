@@ -605,4 +605,25 @@ public class ProductRequiredDocumentServiceImpl implements ProductRequiredDocume
                     "ERR_DUPLICATE_NAME");
         }
     }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductRequiredDocumentResponseDto> getAllActive(Long userId) {
+
+        userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found",
+                        "USER_NOT_FOUND"
+                ));
+
+        return productRequiredDocumentRepository
+                .findAllActiveDocuments()
+                .stream()
+                .map(this::mapToResponseDto)
+                .toList();
+    }
+
+
+
 }

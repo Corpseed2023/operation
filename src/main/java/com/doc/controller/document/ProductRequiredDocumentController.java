@@ -85,6 +85,16 @@ public class ProductRequiredDocumentController {
         return ResponseEntity.ok().build();   // 200 OK with no content
     }
 
+    @Operation(summary = "Get all active required documents without pagination")
+    @GetMapping("/active-all/{userId}")
+    public ResponseEntity<List<ProductRequiredDocumentResponseDto>> getAllActive(
+            @PathVariable Long userId) {
+
+        return ResponseEntity.ok(
+                productRequiredDocumentService.getAllActive(userId)
+        );
+    }
+
 
 
 }

@@ -49,4 +49,7 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     @Query("SELECT CASE WHEN COUNT(t) > 0 THEN true ELSE false END FROM Team t JOIN t.members m JOIN ProjectMilestoneAssignment pma " +
             "WHERE t.teamLead.id = :userId AND pma.project.id = :projectId AND pma.assignedUser.id = m.id AND t.isDeleted = false")
     boolean isTeamLeadForProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
+
+
+
 }
