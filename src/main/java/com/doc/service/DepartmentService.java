@@ -23,4 +23,6 @@ public interface DepartmentService {
     List<UserResponseDto> getUsersByDepartmentId(Long id);
 
     List<UserResponseDto> getLegalDepartmentUsers();
+
+
 }

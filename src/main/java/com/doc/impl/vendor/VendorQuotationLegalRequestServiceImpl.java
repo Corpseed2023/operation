@@ -4,13 +4,15 @@ import com.doc.dto.vendor.*;
 import com.doc.entity.vendor.*;
 import com.doc.exception.ResourceNotFoundException;
 import com.doc.exception.ValidationException;
+import com.doc.repository.vendor.VendorFinalizationRepository;
+import com.doc.repository.vendor.VendorOnboardingDocumentRepository;
+import com.doc.repository.vendor.VendorOnboardingRepository;
 import com.doc.repository.vendor.VendorQuotationLegalRequestRepository;
 import com.doc.repository.vendor.VendorQuotationRepository;
 import com.doc.service.vendor.VendorQuotationLegalRequestService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.doc.entity.vendor.VendorQuotationLegalRequestStatus;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -22,6 +24,12 @@ public class VendorQuotationLegalRequestServiceImpl
 
     private final VendorQuotationRepository vendorQuotationRepository;
     private final VendorQuotationLegalRequestRepository legalRequestRepository;
+
+    // NEW: needed so Legal sees the NDA + Vendor Registration Form that
+    // Procurement uploaded during onboarding.
+    private final VendorFinalizationRepository vendorFinalizationRepository;
+    private final VendorOnboardingRepository vendorOnboardingRepository;
+    private final VendorOnboardingDocumentRepository vendorOnboardingDocumentRepository;
 
 
     @Override
@@ -36,19 +44,12 @@ public class VendorQuotationLegalRequestServiceImpl
                         "ERR_VENDOR_QUOTATION_NOT_FOUND"
                 ));
 
-        /*
-         * FIX (issue #4): block duplicate/concurrent legal requests for the
-         * same quotation, mirroring the check already done in
-         * VendorOnboardingServiceImpl.sendOnboardingForm. Only block if an
-         * existing request hasn't yet reached a terminal decision — this
-         * still allows a fresh request to be raised after a DISAGREED
-         * outcome if your process wants a second round with Legal.
-         */
         boolean hasOpenLegalRequest = legalRequestRepository
                 .findTopByVendorQuotation_IdAndIsDeletedFalseOrderByCreatedDateDesc(
                         requestDto.getVendorQuotationId()
                 )
-                .filter(existing -> existing.getStatus() != VendorQuotationLegalRequestStatus.AGREEMENT_DISAGREED)
+                .filter(existing -> existing.getStatus()
+                        != VendorQuotationLegalRequestStatus.AGREEMENT_DISAGREED)
                 .isPresent();
 
         if (hasOpenLegalRequest) {
@@ -81,19 +82,11 @@ public class VendorQuotationLegalRequestServiceImpl
     @Transactional(readOnly = true)
     public List<VendorQuotationLegalResponseDto> getAllLegalRequests(Long assignedToLegal) {
 
-        List<VendorQuotationLegalRequest> legalRequests;
-
-        if (assignedToLegal != null) {
-            legalRequests =
-                    legalRequestRepository
-                            .findByAssignedToLegalAndIsDeletedFalseOrderByCreatedDateDesc(
-                                    assignedToLegal
-                            );
-        } else {
-            legalRequests =
-                    legalRequestRepository
-                            .findByIsDeletedFalseOrderByCreatedDateDesc();
-        }
+        List<VendorQuotationLegalRequest> legalRequests = (assignedToLegal != null)
+                ? legalRequestRepository
+                .findByAssignedToLegalAndIsDeletedFalseOrderByCreatedDateDesc(assignedToLegal)
+                : legalRequestRepository
+                .findByIsDeletedFalseOrderByCreatedDateDesc();
 
         List<VendorQuotationLegalResponseDto> responseList = new ArrayList<>();
 
@@ -125,17 +118,11 @@ public class VendorQuotationLegalRequestServiceImpl
             );
         }
 
-        /*
-         * FIX (issue #3): mirror the guard already present in
-         * agreementDecision — once a decision has been made, this
-         * request should not be re-sent to procurement (which would
-         * silently reset an AGREED/DISAGREED request back to
-         * AGREEMENT_SENT_TO_PROCUREMENT).
-         */
         if (legalRequest.getStatus() == VendorQuotationLegalRequestStatus.AGREEMENT_AGREED
                 || legalRequest.getStatus() == VendorQuotationLegalRequestStatus.AGREEMENT_DISAGREED) {
             throw new ValidationException(
-                    "A decision has already been made on this legal request; it cannot be re-sent to procurement",
+                    "A decision has already been made on this legal request; "
+                            + "it cannot be re-sent to procurement",
                     "ERR_LEGAL_REQUEST_ALREADY_DECIDED"
             );
         }
@@ -215,7 +202,6 @@ public class VendorQuotationLegalRequestServiceImpl
             return List.of();
         }
 
-        // De-duplicate by id, keep the first name seen, preserve request order.
         Map<Long, String> nameById = new LinkedHashMap<>();
 
         for (LegalUserWorkloadRequestDto.LegalUserDto user : requestDto.getUsers()) {
@@ -243,9 +229,6 @@ public class VendorQuotationLegalRequestServiceImpl
 
         List<LegalUserWorkloadResponseDto> response = new ArrayList<>();
 
-        // Merge back against the requested list so users with no open
-        // requests still come back with 0 — GROUP BY only returns rows
-        // that exist, so they'd otherwise silently vanish.
         for (Map.Entry<Long, String> entry : nameById.entrySet()) {
             LegalUserWorkloadResponseDto dto = new LegalUserWorkloadResponseDto();
 
@@ -262,8 +245,7 @@ public class VendorQuotationLegalRequestServiceImpl
     private VendorQuotationLegalResponseDto mapToResponse(
             VendorQuotationLegalRequest legalRequest
     ) {
-        VendorQuotationLegalResponseDto response =
-                new VendorQuotationLegalResponseDto();
+        VendorQuotationLegalResponseDto response = new VendorQuotationLegalResponseDto();
 
         response.setId(legalRequest.getId());
 
@@ -278,6 +260,7 @@ public class VendorQuotationLegalRequestServiceImpl
                 response.setVendorName(quotation.getVendor().getName());
             }
 
+            // Quotation PDFs stored in vendor_quotation_documents
             if (quotation.getDocuments() != null) {
                 List<VendorQuotationDocumentResponseDto> documentDtos =
                         quotation.getDocuments()
@@ -293,6 +276,7 @@ public class VendorQuotationLegalRequestServiceImpl
                                     dto.setFileUrl(document.getFileUrl());
                                     dto.setFileType(document.getFileType());
                                     dto.setFileSizeKb(document.getFileSizeKb());
+                                    dto.setCreatedBy(document.getCreatedBy());   // FIX: was missing
                                     dto.setCreatedDate(document.getCreatedDate());
                                     dto.setDeleted(document.isDeleted());
 
@@ -302,6 +286,13 @@ public class VendorQuotationLegalRequestServiceImpl
 
                 response.setDocuments(documentDtos);
             }
+
+            // NDA, Vendor Registration Form, etc. stored in
+            // vendor_onboarding_documents - a different table from the
+            // quotation PDF. Legal needs these to review the vendor.
+            response.setOnboardingDocuments(
+                    loadOnboardingDocuments(quotation.getId())
+            );
         }
 
         response.setLegalRequestTitle(legalRequest.getLegalRequestTitle());
@@ -328,6 +319,70 @@ public class VendorQuotationLegalRequestServiceImpl
         return response;
     }
 
+    private List<VendorOnboardingDocumentResponseDto> loadOnboardingDocuments(
+            Long quotationId
+    ) {
+        List<VendorFinalization> finalizations =
+                vendorFinalizationRepository.findByQuotation_IdAndIsDeletedFalse(quotationId);
+
+        if (finalizations.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> onboardingIds = new ArrayList<>();
+        Map<Long, String> onboardingNumberById = new HashMap<>();
+
+        for (VendorFinalization finalization : finalizations) {
+            vendorOnboardingRepository
+                    .findByVendorFinalization_IdAndIsDeletedFalse(finalization.getId())
+                    .ifPresent(onboarding -> {
+                        onboardingIds.add(onboarding.getId());
+                        onboardingNumberById.put(
+                                onboarding.getId(),
+                                onboarding.getOnboardingNumber()
+                        );
+                    });
+        }
+
+        if (onboardingIds.isEmpty()) {
+            return List.of();
+        }
+
+        return vendorOnboardingDocumentRepository
+                .findByVendorOnboarding_IdInAndIsDeletedFalseOrderByUploadedDateAsc(onboardingIds)
+                .stream()
+                .map(doc -> {
+                    VendorOnboardingDocumentResponseDto dto =
+                            new VendorOnboardingDocumentResponseDto();
+
+                    Long onboardingId = doc.getVendorOnboarding() != null
+                            ? doc.getVendorOnboarding().getId()
+                            : null;
+
+                    dto.setId(doc.getId());
+                    dto.setOnboardingId(onboardingId);
+                    dto.setOnboardingNumber(
+                            onboardingId != null
+                                    ? onboardingNumberById.get(onboardingId)
+                                    : null
+                    );
+                    dto.setDocumentType(
+                            doc.getDocumentType() != null
+                                    ? doc.getDocumentType().name()
+                                    : null
+                    );
+                    dto.setFileName(doc.getFileName());
+                    dto.setFileUrl(doc.getFileUrl());
+                    dto.setRemarks(doc.getRemarks());
+                    dto.setUploadedBy(doc.getUploadedBy());
+                    dto.setUploadedDate(doc.getUploadedDate());
+                    dto.setDeleted(doc.isDeleted());
+
+                    return dto;
+                })
+                .toList();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public VendorLegalSummaryResponseDto getSummary(Long userId) {
@@ -344,12 +399,12 @@ public class VendorQuotationLegalRequestServiceImpl
                 .toList();
 
         long totalPending = statusCounts.stream()
-                .filter(s -> VendorQuotationLegalRequestStatus.SERVICE_AGREEMENT_REQUESTED.name().equals(s.getStatus()))
+                .filter(s -> VendorQuotationLegalRequestStatus.SERVICE_AGREEMENT_REQUESTED
+                        .name().equals(s.getStatus()))
                 .mapToLong(VendorLegalStatusCountDto::getCount)
                 .findFirst()
                 .orElse(0L);
 
         return new VendorLegalSummaryResponseDto(totalPending, statusCounts);
     }
-
 }

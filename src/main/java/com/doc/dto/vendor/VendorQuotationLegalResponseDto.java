@@ -39,5 +39,9 @@ public class VendorQuotationLegalResponseDto {
     private String agreementFileUrl;
 
     private List<VendorQuotationDocumentResponseDto> documents;
-}
 
+    // NEW: NDA, Vendor Registration Form, etc. uploaded by procurement during onboarding
+    private List<VendorOnboardingDocumentResponseDto> onboardingDocuments;
+
+
+}

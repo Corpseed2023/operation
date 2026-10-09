@@ -14,6 +14,8 @@ import java.util.Optional;
 public interface ProductRequiredDocumentRepository
         extends JpaRepository<ProductRequiredDocuments, Long> {
 
+
+
     Optional<ProductRequiredDocuments> findByIdAndIsDeletedFalse(Long id);
 
     // Existing paginated API
